@@ -1,0 +1,87 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Virtual environments and local dependency folders
+.venv/
+venv/
+env/
+ENV/
+site/
+node_modules/
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Generated logs, reports, and temporary outputs
+logs/
+tmp/
+temp/
+output/
+outputs/
+reports/
+results/
+artifacts/
+*.log
+*.out
+*.err
+
+# Generated simulation and benchmark data
+*.npz
+*.npy
+*.pkl
+*.pickle
+*.mat
+*.csv.tmp
+*.jsonl
+route_report*.json
+benchmark_report*.json
+simulation_report*.json
+
+# Local notebooks and notebook checkpoints
+.ipynb_checkpoints/
+
+# Archive is kept locally for historical reference only.
+# The active CFDC runtime must not import or depend on these files.
+archive/
+
+# Local PDFs and large research scratch files.
+# Keep canonical paper copies outside git unless intentionally added.
+*.pdf
+!docs/**/*.pdf
+
+# Codex / agent local metadata
+.agents/
+.codex/

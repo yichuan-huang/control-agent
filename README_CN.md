@@ -1,0 +1,367 @@
+# Control Agent
+
+[English README](README.md)
+
+Control Agent 是一个面向非专家用户的控制系统自动化设计研究原型。当前实现聚焦 **Core-Feature-Driven Control (CFDC)**：从自然语言系统描述出发，完成结构化诊断、安全实验设计、确定性核心特征提取、保守控制器合成、在线增益微调和软件仿真验证。
+
+这个项目不是硬件部署包。它目前适合用于结构化软件实验、合成 benchmark，以及 CFDC 工作流的早期验证。
+
+## 项目状态清单
+
+已勾选项目表示当前已有可执行的软件证据和自动化测试覆盖，不代表已经完成全部目标指标复现或真实硬件验证。
+
+### 已完成
+
+- [x] Stage 0 八字段结构化诊断和信息不足时的澄清问题生成。
+- [x] 五类 archetype 分类，以及结构化 required features 和安全约束输出。
+- [x] 面向 operator 的 free-decay、ramp/step、pulse、hover-thrust、bounded-scan 安全实验计划。
+- [x] step、modal、pulse、hover-thrust、inverse-response 和 coupling 特征的确定性提取。
+- [x] Class I-V 保守控制器合成，以及明确的 tunable gain names。
+- [x] 结构化 go/no-go 校验、bounded trial report、rollback 和 freeze 行为。
+- [x] Cartpole 稳定演示：只使用自然频率的归一化能量摆起和非线性在线 PD 搜索。
+- [x] VTOL position 稳定演示：带符号横向耦合和经过二次试验验证的垂向增益更新。
+- [x] VTOL NMP boundary 演示：实际欠冲计算、候选历史和回退到上一组安全横向增益。
+- [x] 7-case feature-chain 冒烟 benchmark，并明确标记 `closed_loop_executed=false`。
+- [x] `python main.py --validate-demo` 对 Cartpole、VTOL position、VTOL boundary 的确定性验证。
+- [x] 统一的软件仿真性能摘要，覆盖最终误差、超调、稳定时间、饱和、捕获、分通道状态、边界和违规原因。
+- [x] Python 3.11/3.13 CI、`.[test]` editable 安装和自动化回归测试。
+
+### 未完成
+
+- [ ] 完整的 Cartpole 外环位置 NMP 搜索，以及 19-20% 的目标欠冲边界。
+- [ ] 两个案例的 full-model LQR baseline 和公平的 CFDC/LQR 数值对比。
+- [ ] 复现 VTOL 目标结果：14% undershoot 和 3.1 s settling time。
+- [ ] 长期 natural-frequency FLL tracking 和每 30 s 的 `k_theta` RLS 更新。
+- [ ] 显式 payload-change 仿真，以及 hover-thrust、垂向增益和横向环的在线重调。
+- [ ] `vtol-altitude` 和 `vtol-hover` 的默认稳定验证。
+- [ ] 所有 synthetic benchmark case 的闭环仿真，以及独立的 Class V MIMO plant。
+- [ ] 噪声、扰动、参数扫描、重复试验和消融实验。
+- [ ] 真实实验 CSV/JSON 导入、硬件审批、actuator deployment 和物理验证。
+
+### 需要改进
+
+- [ ] 在保持直立 handoff 和轨道边界的同时，降低 Cartpole actuator saturation。
+- [ ] 改善 VTOL position settling time，并增加明确的 settling-time 验收阈值。
+- [ ] 将手工给定的 boundary candidate 序列替换为可复用的约束搜索策略。
+- [ ] 通过重复试验、滤波校验和数据质量拒绝规则强化 confidence interval。
+- [ ] 让实验幅值和持续时间真正依赖 diagnosis、time-scale hint、forbidden actions 和 safety bounds。
+- [ ] 增加持久化多轮诊断状态，并评估 deterministic 与 LLM-assisted diagnosis 的准确率。
+- [ ] 增加 evidence ledger，包括原始数据哈希、配置版本和 claim-boundary summary。
+- [ ] 为所有稳定和实验性 route 生成紧凑的机器可读报告与 operator-facing 报告。
+
+## 设计原则
+
+- LLM 只负责 Stage 0 的语言理解和结构化诊断。
+- 数值控制逻辑全部由确定性 Python 代码实现。
+- 运行时接口使用 Pydantic model 和 JSON-compatible dictionary，不依赖自由文本。
+- 不做完整参数辨识，只提取 CFDC 当前 route 所需的 scalar core features。
+- 每条 route 都输出可审计 artifact，例如 `go_no_go`、`evidence_boundary`、features、controller candidate 和 trial report。
+
+## CFDC 流程
+
+当前 runtime 遵循六段式闭环：
+
+1. **Stage 0: AI Diagnostic Engine and Language Understanding**
+   - 读取非专家自然语言系统描述。
+   - 如果信息不足，生成澄清问题。
+   - 填写八个结构诊断字段：`open_loop_stability`, `minimum_phase`, `significant_delay`, `relative_degree`, `controllability_observability`, `nonlinearity_strength`, `coupling_severity`, `uncertainty_magnitude`。
+
+2. **Stage 1: Structural Diagnosis and Archetype Classification**
+   - 将系统映射到五类 CFDC canonical class。
+   - 输出推荐控制架构、required core features 和安全约束。
+
+3. **Stage 2: Safe Experiment Design**
+   - 生成面向 operator 的安全实验说明。
+   - 支持 free decay、ramp/step、pulse、hover-thrust、bounded scan 等实验 primitive。
+
+4. **Stage 3: Core Feature Extraction**
+   - 从结构化实验 trace 中提取 scalar core features。
+   - 使用 matched-filter-style frequency lock、low-pass steady-state detection、pulse integration、ratio estimation 等确定性估计器。
+   - 输出 feature value、confidence bounds 和 data-quality flags。
+
+5. **Stage 4: Conservative Controller Synthesis**
+   - 根据提取到的 features 合成保守初始 controller。
+   - 按 canonical class 使用 de-tuning、saturation、cascaded architecture、online gain search 或 MIMO pairing。
+
+6. **Online Optimization and Adaptation**
+   - 每次只做 5-10% 小幅 gain refinement。
+   - 监测 overshoot、settling time、integral absolute error、high-frequency control RMS、actuator saturation 和 inverse-response undershoot。
+   - 违反约束时 rollback 并 freeze。
+   - 提供 tracked feature 平滑更新工具，但默认演示 route 不再注入虚假的 payload 变化。
+
+## 项目结构
+
+```text
+.
+├── cfdc/
+│   ├── diagnosis/
+│   ├── experiments/
+│   ├── features/
+│   ├── controllers/
+│   ├── online/
+│   ├── runtime/
+│   ├── sim/
+│   ├── models/
+│   ├── performance.py
+│   ├── pipeline.py
+│   └── validation.py
+├── tests/
+├── main.py
+├── pyproject.toml
+├── requirements.txt
+├── README.md
+└── README_CN.md
+```
+
+## 主要模块
+
+### `cfdc/models/`
+
+`cfdc/models/schemas.py` 定义项目中的公开结构化 artifact：
+
+- `SystemDescription`: 用户描述、观测量、执行器和安全边界。
+- `StructuralDiagnosis`: Stage 0 诊断字段和澄清问题。
+- `ArchetypeClassification`: canonical class、控制架构、required features 和 constraints。
+- `ExperimentPlan`, `ExperimentInstruction`: 安全实验计划。
+- `ExperimentTrace`, `ExperimentResult`: 结构化实验数据。
+- `CoreFeatureArtifact`: 带 confidence 和 data-quality metadata 的 scalar feature 输出。
+- `ControllerCandidate`: controller architecture、gains、明确的 tunable gain names、feedforward、saturation 和 constraints。
+- `OnlineTuningState`, `SafeGainSearchState`, `FeatureTrackingUpdate`: online refinement 和 adaptation 状态。
+- `TrialReport`: bounded safe trial 执行报告。
+- `ChannelPerformanceMetrics`, `SimulationPerformanceSummary`: 类型化的分通道与 route 级性能报告。
+- `CartpoleSimulationResult`, `VtolSimulationResult`: 保留兼容 `metrics` 并新增结构化 `performance` 输出的软件仿真结果。
+- `CFDCRunReport`: `run_cfdc_route()` 的端到端 route report。
+- `GoNoGoDecision`: route、class、required features 的 deterministic validation 结果。
+
+所有模型都继承自 `CFDCModel`，默认禁止额外字段和非有限浮点数，并支持 JSON round trip。
+
+### `cfdc/diagnosis/`
+
+这一层实现 Stage 0 和 Stage 1。
+
+- `engine.py` 通过 `infer_structural_diagnosis()` 提供本地 deterministic diagnostic adapter。
+- `classify_archetype()` 将八个诊断字段映射到 CFDC canonical classes。
+- `llm.py` 提供 `OpenAICompatibleDiagnosticAdapter`，通过 OpenAI Python SDK 调用 OpenAI-compatible `/chat/completions` API，并要求模型返回严格 JSON。它只用于语言诊断，不负责数值 controller synthesis。
+
+LLM 环境变量：
+
+```bash
+export CFDC_LLM_BASE_URL="https://api.openai.com/v1"
+export CFDC_LLM_MODEL="gpt-4o-mini"
+export CFDC_LLM_API_KEY="..."
+```
+
+### `cfdc/experiments/`
+
+`planner.py` 通过 `plan_safe_experiments()` 实现 Stage 2。每个 `ExperimentInstruction` 包含 primitive、operator steps、需要记录的信号、要估计的 features、stop conditions 和 safety note。
+
+### `cfdc/features/`
+
+这一层用确定性的 NumPy/SciPy/Python extractor 实现 Stage 3。低通递推、periodogram 和衰减峰检测使用 SciPy；CFDC 特定的 matched-filter refinement、特征公式、confidence bounds 和 data-quality rules 仍在项目中显式实现。
+
+核心函数包括：
+
+- `estimate_natural_frequency()`
+- `estimate_damping_ratio()`
+- `estimate_step_features()`
+- `estimate_dead_time()`
+- `estimate_inverse_response_severity()`
+- `estimate_pulse_input_gain()`
+- `estimate_hover_thrust()`
+- `estimate_coupling_gain()`
+
+`dispatcher.py` 会把 `ExperimentResult` 分发到对应 extractor，并处理常见信号别名。
+
+### `cfdc/controllers/`
+
+`synthesis.py` 通过 `synthesize_controller()` 实现 Stage 4。
+
+当前支持的 synthesis 分支：
+
+- Class I: `detuned_PI`
+- Class II: `detuned_PD`
+- Class III: `small_saturated_PD`
+- Class IV stable inverse-response process: `detuned_PI_with_NMP_undershoot_guard`
+- Class IV unstable pendulum-like process: `safe_online_gain_search`
+- Class IV VTOL-like process: `cascaded_PD_with_hover_feedforward`
+- Class V: `conservative_mimo_pairing`
+
+controller synthesis 前会先校验 required features，因此不完整输入会返回结构化错误，而不是运行时 `KeyError`。
+Class V loop pairing 使用 SciPy 的全局最大权重 linear assignment，不再逐行贪心选择，并会把未配对通道标记为需要 centralized review。
+
+### `cfdc/online/`
+
+`refinement.py` 复用统一的 channel-performance 计算，并实现保守 gain increments、rollback/freeze、unstable plant 的 safe gain search，以及 tracked-feature adaptation。
+
+### `cfdc/runtime/`
+
+这一层把 Stage 0-4、online refinement 和 simulation 连接成可执行 route。
+
+- `trial.py`: `SafeTrialRunner`，bounded software trial executor。
+- `safety.py`: sample-level safety checks。
+- `orchestrator.py`: `run_cfdc_route()`，端到端 route 入口。
+
+稳定演示 route：
+
+- `cartpole`
+- `vtol-position`
+- `vtol-boundary`
+
+实验性 route：
+
+- `generic`
+- `vtol-altitude`
+- `vtol-hover`
+
+### `cfdc/validation.py`
+
+这个模块提供 deterministic gates：
+
+- `validate_route_compatibility()`
+- `validate_required_features()`
+- `merge_go_no_go()`
+
+这些 gate 会把 route/class mismatch 和 missing features 保持为结构化 no-go report。
+
+### `cfdc/sim/`
+
+这一层包含软件 plant 和 synthetic benchmarks。
+
+- `cartpole.py`: cartpole / inverted-pendulum 软件 plant。
+- `vtol.py`: planar VTOL 软件 plant。横向输出采用相对质心有固定偏置的测量点，使软件对象能够呈现 boundary 演示所需的 RHP-zero 反向响应。
+- `benchmarks.py`: 7 个 synthetic benchmark case。
+- `integrators.py`: control input 保持不变时使用的共享 fixed-step RK4 积分器。
+- `traces.py`: 共享的 synthetic step、modal、pulse、hover 和 coupling trace。
+
+Cartpole reference LQR 路径使用 SciPy 求解 continuous algebraic Riccati equation，不再手工恢复 Hamiltonian stable eigenspace。
+
+每个 Cartpole 和 VTOL 仿真都会输出主通道字段，包括 `final_error`、`abs_final_error`、`overshoot`、`settling_time_s`、`final_output`、`saturation_fraction` 和 `success`。结构化 `performance` 还会给出全部输出通道、各执行器饱和比例、状态边界、配置限制、捕获状态和违规原因。响应未稳定时使用 `settled=false` 和 `settling_time_s=null`。
+
+## 使用 Conda 安装
+
+conda 只用于创建和激活 Python 环境。所有 Python 包统一使用 pip 安装。
+
+```bash
+conda create -n control-agent python=3.11 -y
+conda activate control-agent
+python -m pip install --upgrade pip
+python -m pip install -e '.[test]'
+```
+
+项目要求 Python 3.11 或更高版本。
+
+## 快速检查
+
+```bash
+python -m compileall cfdc tests main.py
+python -m pytest
+python main.py --benchmark
+python main.py --validate-demo
+```
+
+## CLI 示例
+
+运行 benchmark suite：
+
+```bash
+python main.py --benchmark
+```
+
+该 benchmark 是 7-case feature-chain 冒烟测试，不执行闭环性能验证。
+
+验证稳定软件演示 route：
+
+```bash
+python main.py --validate-demo
+```
+
+运行 route-level simulation：
+
+```bash
+python main.py --run-route cartpole
+python main.py --run-route vtol-position
+python main.py --run-route vtol-boundary
+```
+
+运行 generic pipeline：
+
+```bash
+python main.py \
+  --description "A first order temperature process settles after a small heater change." \
+  --observed-output temperature \
+  --actuator heater
+```
+
+运行 LLM-assisted diagnosis：
+
+```bash
+python main.py \
+  --use-llm \
+  --description "A rod on a cart falls over when upright. I can measure cart position and rod angle." \
+  --observed-output "cart position" \
+  --observed-output "rod angle" \
+  --actuator "cart motor force"
+```
+
+输出完整 route report：
+
+```bash
+python main.py --run-route cartpole --full-report
+```
+
+包含模拟 trajectory 输出：
+
+```bash
+python main.py --run-route cartpole --include-trajectory
+```
+
+## 测试
+
+测试覆盖：
+
+- Pydantic model round trip、diagnosis 和 classification。
+- 安全实验设计、feature extraction、不完整 feature 的 no-go behavior。
+- controller de-tuning、safe gain search、rollback/freeze、feature tracking 和 MIMO pairing。
+- runtime safety check 和 `SafeTrialRunner`。
+- cartpole 和 VTOL route reports。
+- 7-case benchmark integration。
+
+运行测试：
+
+```bash
+python -m pytest
+```
+
+## 当前验证快照
+
+最近的软件原型本地验证快照：
+
+```text
+python -m compileall cfdc tests main.py
+tests passed=60
+
+cartpole      completed go True upright_handoff_window_reached
+vtol-position completed go True accepted
+vtol-boundary completed go True boundary_triggered / nmp_undershoot
+demo          3 / 3 stable routes passed
+benchmark     7 / 7 feature-chain smoke cases passed
+```
+
+这说明稳定演示 route 可以确定性复现，但不代表已经完成全部目标指标复现或真实硬件验证。
+
+## 已知边界
+
+- `vtol-altitude` 和 `vtol-hover` route 可以运行 CFDC controller，但默认仿真 metric 仍可能返回 `metric_limit`。
+- 默认 VTOL route 不再伪造 payload 变化；长期 hover-thrust 与 `k_theta` tracking 仍属于后续场景。
+- natural-frequency continuous tracking 还不是完整长期 small-dither FLL 实现。
+- VTOL `k_theta` RLS tracking 还没有集成为长期 route-level closed loop。
+- MIMO 当前有 pairing 和 decoupling synthesis，但还没有专门的 MIMO plant simulation。
+- 真实实验日志导入、硬件审批和 actuator command deployment 尚未实现。
+
+## 建议下一步
+
+1. 增加 Cartpole 外环 20% NMP 边界搜索和 LQR 对照。
+2. 复现 VTOL 14% undershoot / 3.1 s settling 及 LQR 对照。
+3. 增加显式 payload-change 场景和长期 hover-thrust、`k_theta` tracking。
+4. 增加噪声、扰动、参数扫描和重复统计实验。
+5. 将真实实验 CSV/JSON 日志导入 `ExperimentResult`。
