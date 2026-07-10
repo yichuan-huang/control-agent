@@ -27,7 +27,9 @@ Checked items have executable software evidence and automated test coverage. The
 - [x] Full-model Cartpole and full-state VTOL LQR baselines with matched plant, initial condition, reference, horizon, and actuator limits.
 - [x] Strict final-error, settling-time, saturation, state-boundary, and post-rollback validation gates for the main channels.
 - [x] Seven-case generic closed-loop benchmark from typed `BenchmarkRouteIR` through experiments, features, controller synthesis, simulation, and performance judgment.
-- [x] Feature-scaled Class II/III PD synthesis and delay-aware Class I PI de-tuning.
+- [x] Canonical three-value delay assessment, delay/dead-time release invariants, and adapter-equivalence coverage.
+- [x] Feature-scaled Class II/III PD synthesis and uncertainty-aware Class I ordinary PI, delay-detuned PI, and large-delay refusal branches.
+- [x] CLI ingress for repeated safety bounds, positive time-scale hints, and complementary `ExperimentResult` JSON traces.
 - [x] Offline diagnosis evaluation with eight prompt cases, four complex cases, saved deterministic responses, and archive-style feature precision/minimality, constraint isolation, dangerous false-positive, evidence, executability, testability, and missing-information audits.
 - [x] Adapter-independent diagnostic safety normalization and release gating for explicit delay ambiguity, operating-point dependence, underactuated energy exchange, and strong MIMO/NMP evidence.
 - [x] Frozen 12-case diagnostic specification with a versioned SHA-256 fingerprint, deterministic/LLM response snapshots, and metric-by-metric comparison tooling.
@@ -45,7 +47,7 @@ Checked items have executable software evidence and automated test coverage. The
 - [ ] Stable default validation for `vtol-altitude` and `vtol-hover`.
 - [ ] Dedicated Class V MIMO plant and closed-loop controller validation.
 - [ ] Noise, disturbance, parameter-sweep, and repeated-trial experiments beyond the initial feature ablations.
-- [ ] Real experiment CSV/JSON import, hardware approval, actuator deployment, and physical validation.
+- [ ] Real experiment CSV import, hardware approval, actuator deployment, and physical validation.
 - [ ] A real LLM response snapshot; the live comparison command is implemented, but no API credentials are present in the repository or default environment.
 
 ### Needs Improvement
@@ -198,7 +200,9 @@ Important functions include:
 
 Supported synthesis branches include:
 
-- Class I: `detuned_PI`
+- Class I with `rho_high < 0.1`: `detuned_PI`
+- Class I with `0.1 <= rho_high < 1.0`: `delay_detuned_PI`
+- Class I with `rho_high >= 1.0`: `large_delay_compensation_required` refusal
 - Class II: `detuned_PD`
 - Class III: `small_saturated_PD`
 - Class IV stable inverse-response process: `detuned_PI_with_NMP_undershoot_guard`
@@ -207,7 +211,7 @@ Supported synthesis branches include:
 - Class V: `conservative_mimo_pairing`
 
 Required features are validated before synthesis so incomplete inputs return structured errors instead of runtime `KeyError` failures.
-Class II and III PD gains are scaled by measured `input_gain`; Class I controllers use `dead_time/time_constant` for additional delay-aware de-tuning when delay is present.
+Class II and III PD gains are scaled by measured `input_gain`. Class I selection uses conservative uncertainty bounds for `rho = dead_time/time_constant`; large-delay uncertainty fails closed until a dedicated compensator is implemented and validated.
 Class V loop pairing uses SciPy's global maximum-weight linear assignment rather than row-by-row greedy selection, and reports unmatched channels for centralized review.
 
 ### `cfdc/online/`
@@ -329,6 +333,21 @@ python main.py \
   --observed-output temperature \
   --actuator heater
 ```
+
+Supply safety metadata and one or more complementary experiment traces:
+
+```bash
+python main.py \
+  --description "A delayed oven process settles after a heater change." \
+  --observed-output "internal temperature" \
+  --actuator "heater power setting" \
+  --time-scale-hint-s 300 \
+  --safety-bound output_min=20 \
+  --safety-bound output_max=250 \
+  --experiment-result oven-step-01.json
+```
+
+Each experiment file must contain one validated `ExperimentResult` JSON object. Duplicate safety keys and overlapping feature estimates are rejected instead of silently overriding or discarding input.
 
 Opt in to supplemental mechanism-card labels:
 

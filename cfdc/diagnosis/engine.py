@@ -7,7 +7,9 @@ from cfdc.diagnosis.safety import enforce_shared_diagnostic_safety_rules
 from cfdc.models import (
     ArchetypeClass,
     ArchetypeClassification,
+    DelayAssessment,
     DiagnosticField,
+    SignificantDelayField,
     StructuralDiagnosis,
     SystemDescription,
 )
@@ -19,6 +21,22 @@ def _contains(text: str, terms: Iterable[str]) -> bool:
 
 def _field(status: str, value: str, confidence: float, evidence: list[str]) -> DiagnosticField:
     return DiagnosticField(status=status, value=value, confidence=confidence, evidence=evidence)
+
+
+def _delay_field(
+    status: str,
+    value: str,
+    assessment: DelayAssessment,
+    confidence: float,
+    evidence: list[str],
+) -> SignificantDelayField:
+    return SignificantDelayField(
+        status=status,
+        value=value,
+        assessment=assessment,
+        confidence=confidence,
+        evidence=evidence,
+    )
 
 
 def _question_pool(description: SystemDescription, diagnosis: dict[str, DiagnosticField]) -> list[str]:
@@ -74,13 +92,37 @@ def infer_structural_diagnosis(description: SystemDescription) -> StructuralDiag
         fields["minimum_phase"] = _field("unknown", "not enough information", 0.2, [])
 
     if _contains(text, ["dead time", "delay", "transport", "noticeable pause"]):
-        fields["significant_delay"] = _field("known", "significant delay likely", 0.82, ["delay is explicitly mentioned"])
+        fields["significant_delay"] = _delay_field(
+            "known",
+            "significant delay likely",
+            DelayAssessment.SIGNIFICANT,
+            0.82,
+            ["delay is explicitly mentioned"],
+        )
     elif _contains(text, ["fast actuator", "reacts instantly", "no delay"]) or pendulum or vtol:
-        fields["significant_delay"] = _field("known", "no significant delay reported", 0.7, ["fast response is stated or typical for the described benchmark"])
+        fields["significant_delay"] = _delay_field(
+            "known",
+            "no significant delay reported",
+            DelayAssessment.NOT_SIGNIFICANT,
+            0.7,
+            ["fast response is stated or typical for the described benchmark"],
+        )
     elif first_order or oscillator or integrator:
-        fields["significant_delay"] = _field("inferred", "no significant delay reported", 0.55, ["description does not mention a visible pause before motion"])
+        fields["significant_delay"] = _delay_field(
+            "inferred",
+            "no significant delay reported",
+            DelayAssessment.NOT_SIGNIFICANT,
+            0.55,
+            ["description does not mention a visible pause before motion"],
+        )
     else:
-        fields["significant_delay"] = _field("unknown", "not enough information", 0.2, [])
+        fields["significant_delay"] = _delay_field(
+            "unknown",
+            "not enough information",
+            DelayAssessment.UNKNOWN,
+            0.2,
+            [],
+        )
 
     if vtol:
         fields["relative_degree"] = _field("inferred", "2 for vertical/attitude channels and high relative degree for lateral motion", 0.82, ["hovering vehicle uses cascaded attitude-to-position motion"])
@@ -154,7 +196,6 @@ def classify_archetype(diagnosis: StructuralDiagnosis) -> ArchetypeClassificatio
     rel_degree = diagnosis.relative_degree.value.lower()
     nonlinear = diagnosis.nonlinearity_strength.value.lower()
     coupling = diagnosis.coupling_severity.value.lower()
-    delay = diagnosis.significant_delay.value.lower()
     pendulum_like = "rod angle" in rel_degree or "angle stabilization" in rel_degree
 
     if "significant multivariable" in coupling:
@@ -222,7 +263,7 @@ def classify_archetype(diagnosis: StructuralDiagnosis) -> ArchetypeClassificatio
             rationale="The dominant low-order behavior is a damped oscillatory mode.",
         )
     features = ["static_gain", "time_constant"]
-    if "significant delay likely" in delay:
+    if diagnosis.significant_delay.assessment == DelayAssessment.SIGNIFICANT.value:
         features.append("dead_time")
     return ArchetypeClassification(
         primary_class=ArchetypeClass.CLASS_I_FIRST_ORDER_LAG,

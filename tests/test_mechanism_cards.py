@@ -1,7 +1,11 @@
 import json
 import sys
 
-from cfdc.diagnosis import DiagnosticEngine, load_mechanism_card_catalog
+from cfdc.diagnosis import (
+    DiagnosticEngine,
+    load_mechanism_card_catalog,
+    select_supplemental_mechanism_cards,
+)
 from cfdc.models import ArchetypeClassification, CoreFeatureArtifact, SystemDescription
 from cfdc.pipeline import run_cfdc_pipeline
 from cfdc.runtime import run_cfdc_route
@@ -154,6 +158,31 @@ def test_no_reported_delay_does_not_select_delay_card():
 
     assert classification is not None
     assert classification.supplemental_mechanism_cards == ["self_regulating_process"]
+
+
+def test_delay_explanation_text_cannot_trigger_unrelated_mechanism_cards():
+    description = SystemDescription(
+        text="A self-regulating first order process settles after a small input change.",
+        observed_outputs=["output"],
+        actuators=["input"],
+    )
+    diagnosis, classification = DiagnosticEngine().run(description)
+    assert classification is not None
+    poisoned_delay = diagnosis.significant_delay.model_copy(
+        update={
+            "value": "hover vtol coupled mimo with unstable non-minimum phase behavior",
+            "evidence": ["payload mass variation and actuator saturation"],
+        }
+    )
+    poisoned_diagnosis = diagnosis.model_copy(
+        update={"significant_delay": poisoned_delay}
+    )
+
+    assert select_supplemental_mechanism_cards(
+        description,
+        poisoned_diagnosis,
+        classification,
+    ) == ["self_regulating_process"]
 
 
 def test_enabling_cards_does_not_change_canonical_route_or_controller():

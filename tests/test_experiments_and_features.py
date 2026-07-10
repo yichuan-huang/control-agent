@@ -256,3 +256,43 @@ def test_pipeline_rejects_incomplete_stage_three_features_without_keyerror():
     assert result["go_no_go"]["decision"] == "no_go"
     assert result["go_no_go"]["missing_features"] == ["time_constant"]
     assert "controller" not in result
+
+
+def test_significant_delay_pipeline_requires_measured_dead_time():
+    description = SystemDescription(
+        text="A first order temperature process settles after a heater change with noticeable dead time.",
+        observed_outputs=["temperature"],
+        actuators=["heater"],
+    )
+
+    result = run_cfdc_pipeline(
+        description,
+        features=[feature("static_gain", 2.0), feature("time_constant", 10.0)],
+    )
+
+    assert result["status"] == "experiments_required"
+    assert result["go_no_go"]["decision"] == "no_go"
+    assert result["go_no_go"]["missing_features"] == ["dead_time"]
+
+
+def test_large_delay_pipeline_returns_refusal_and_no_go():
+    description = SystemDescription(
+        text="A first order temperature process settles after a heater change with noticeable dead time.",
+        observed_outputs=["temperature"],
+        actuators=["heater"],
+    )
+
+    result = run_cfdc_pipeline(
+        description,
+        features=[
+            feature("static_gain", 2.0),
+            feature("time_constant", 10.0),
+            feature("dead_time", 10.0),
+        ],
+    )
+
+    assert result["status"] == "rejected"
+    assert result["go_no_go"]["decision"] == "no_go"
+    assert result["controller"]["status"] == "refuse"
+    assert result["controller"]["architecture"] == "large_delay_compensation_required"
+    assert "large_delay_compensation_required" in result["go_no_go"]["reasons"][0]

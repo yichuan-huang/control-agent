@@ -7,10 +7,10 @@ from urllib.parse import urlparse
 
 from openai import OpenAI
 
-from cfdc.models import StructuralDiagnosis, SystemDescription
+from cfdc.models import DelayAssessment, StructuralDiagnosis, SystemDescription
 
 
-PROMPT_VERSION = "cfdc-stage0-v2-shared-safety"
+PROMPT_VERSION = "cfdc-stage0-v3-normalized-delay"
 
 
 class DiagnosticAdapter(Protocol):
@@ -36,7 +36,7 @@ def build_diagnostic_prompt(description: SystemDescription) -> str:
         "{\n"
         '  "open_loop_stability": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
         '  "minimum_phase": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
-        '  "significant_delay": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
+        '  "significant_delay": {"status": "known|inferred|unknown", "value": "...", "assessment": "significant|not_significant|unknown", "confidence": 0.0, "evidence": ["..."]},\n'
         '  "relative_degree": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
         '  "controllability_observability": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
         '  "nonlinearity_strength": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
@@ -47,6 +47,8 @@ def build_diagnostic_prompt(description: SystemDescription) -> str:
         "}\n\n"
         "Rules:\n"
         "- Fill all eight diagnostic fields.\n"
+        "- significant_delay.assessment must be exactly significant, not_significant, or unknown.\n"
+        "- significant_delay status=unknown if and only if assessment=unknown.\n"
         "- If any field is unknown, set complete=false and ask 2-4 plain-language clarification questions.\n"
         "- If all fields are known or reasonably inferred, set complete=true and use an empty clarification_questions list.\n"
         "- An explicitly unobserved or unknown delay must remain unknown; absence of a delay statement is not evidence of zero delay.\n"
@@ -60,6 +62,58 @@ def build_diagnostic_prompt(description: SystemDescription) -> str:
     )
 
 
+def normalize_legacy_delay_assessment(value: str) -> DelayAssessment:
+    """Normalize recognized legacy wording only at the structured adapter boundary."""
+
+    normalized = " ".join(
+        value.lower().replace("_", " ").replace("-", " ").split()
+    )
+    negative_patterns = (
+        "no significant delay",
+        "not significant delay",
+        "negligible delay",
+        "without significant delay",
+        "no noticeable delay",
+        "no dead time",
+        "reacts instantly",
+        "no delay",
+    )
+    positive_patterns = (
+        "significant delay",
+        "noticeable dead time",
+        "dead time present",
+        "transport delay",
+        "noticeable pause",
+    )
+    unknown_patterns = (
+        "not enough information",
+        "unknown delay",
+        "delay unknown",
+        "dead time unknown",
+        "timing has not been observed",
+        "timing has not been measured",
+    )
+
+    matched_negative = any(pattern in normalized for pattern in negative_patterns)
+    positive_remainder = normalized
+    for pattern in negative_patterns:
+        positive_remainder = positive_remainder.replace(pattern, " ")
+    matched_positive = any(
+        pattern in positive_remainder for pattern in positive_patterns
+    )
+    matched_unknown = any(pattern in normalized for pattern in unknown_patterns)
+    match_count = sum((matched_negative, matched_positive, matched_unknown))
+    if match_count > 1:
+        raise ValueError(f"contradictory significant_delay value: {value!r}")
+    if matched_negative:
+        return DelayAssessment.NOT_SIGNIFICANT
+    if matched_positive:
+        return DelayAssessment.SIGNIFICANT
+    if matched_unknown:
+        return DelayAssessment.UNKNOWN
+    raise ValueError(f"unrecognized significant_delay value: {value!r}")
+
+
 def validate_agent_payload(payload: Any) -> StructuralDiagnosis:
     """Reject free text and parse only dictionary-like diagnostic payloads."""
 
@@ -67,7 +121,20 @@ def validate_agent_payload(payload: Any) -> StructuralDiagnosis:
         raise ValueError("Agent output must be a dictionary or JSON object, not free text")
     if not isinstance(payload, dict):
         raise ValueError("Agent output must be a dictionary")
-    return StructuralDiagnosis.model_validate(payload)
+    normalized_payload = dict(payload)
+    delay_payload = normalized_payload.get("significant_delay")
+    if not isinstance(delay_payload, dict):
+        raise ValueError("significant_delay must be a dictionary")
+    normalized_delay = dict(delay_payload)
+    if "assessment" not in normalized_delay:
+        value = normalized_delay.get("value")
+        if not isinstance(value, str):
+            raise ValueError(
+                "legacy significant_delay payload requires a string value"
+            )
+        normalized_delay["assessment"] = normalize_legacy_delay_assessment(value)
+    normalized_payload["significant_delay"] = normalized_delay
+    return StructuralDiagnosis.model_validate(normalized_payload)
 
 
 class DeterministicDiagnosticAdapter:

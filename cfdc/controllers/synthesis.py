@@ -43,6 +43,8 @@ def synthesize_controller(
     if archetype == ArchetypeClass.CLASS_I_FIRST_ORDER_LAG.value:
         gain = fmap["static_gain"]
         tau = fmap["time_constant"]
+        if tau.value <= 0.0 or tau.upper_bound <= 0.0:
+            raise ValueError("time_constant must be positive for Class I synthesis")
         rel = _relative_uncertainty(gain)
         kc = 0.1 / max(abs(gain.value), 1e-9) / (1.0 + 3.0 * rel)
         if gain.value < 0:
@@ -53,17 +55,58 @@ def synthesize_controller(
             "stable-plant nominal gains reduced by a factor of 10",
             "integral action slowed by 5x time constant",
         ]
+        architecture = "detuned_PI"
+        design_parameters: dict[str, float] = {}
         if "dead_time" in fmap:
-            dead_time = max(fmap["dead_time"].value, 0.0)
-            delay_ratio = dead_time / max(tau.value, 1e-6)
-            delay_detune = 1.0 + delay_ratio
-            kc /= delay_detune
-            ti *= delay_detune
+            dead_time = fmap["dead_time"]
+            epsilon = 1e-9
+            rho_nominal = max(dead_time.value, 0.0) / max(tau.value, epsilon)
+            rho_low = max(dead_time.lower_bound, 0.0) / max(
+                tau.upper_bound,
+                epsilon,
+            )
+            rho_high = max(dead_time.upper_bound, 0.0) / max(
+                tau.lower_bound,
+                epsilon,
+            )
+            design_parameters = {
+                "rho_nominal": rho_nominal,
+                "rho_low": rho_low,
+                "rho_high": rho_high,
+            }
             source_features.append("dead_time")
-            constraints.append("gain and integral speed are detuned by 1 + dead_time/time_constant")
+            if rho_high >= 1.0:
+                return ControllerCandidate(
+                    architecture="large_delay_compensation_required",
+                    gains={},
+                    design_parameters=design_parameters,
+                    tunable_gain_names=[],
+                    saturation={
+                        "output_min": _limit("output_min", safety, -1e12),
+                        "output_max": _limit("output_max", safety, 1e12),
+                    },
+                    constraints=[
+                        *constraints,
+                        "do not release ordinary or delay-detuned PI when rho_high is at least 1",
+                    ],
+                    source_features=source_features,
+                    status="refuse",
+                    notes=[
+                        "A Smith predictor, delay-robust PID, or MPC requires a separately validated implementation."
+                    ],
+                )
+            if rho_high >= 0.1:
+                architecture = "delay_detuned_PI"
+                delay_detune = 1.0 + rho_nominal
+                kc /= delay_detune
+                ti *= delay_detune
+                constraints.append(
+                    "gain and integral speed are detuned by 1 + dead_time/time_constant"
+                )
         return ControllerCandidate(
-            architecture="detuned_PI",
+            architecture=architecture,
             gains={"kp": kc, "ki": kc / ti, "integral_time": ti},
+            design_parameters=design_parameters,
             tunable_gain_names=["kp", "ki"],
             saturation={"output_min": _limit("output_min", safety, -1e12), "output_max": _limit("output_max", safety, 1e12)},
             constraints=constraints,

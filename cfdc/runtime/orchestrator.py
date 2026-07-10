@@ -373,6 +373,7 @@ def _no_go_report(
     run_id: str | None,
     features: list[CoreFeatureArtifact] | None = None,
     experiment_results: list[ExperimentResult] | None = None,
+    controller: ControllerCandidate | None = None,
     status: Literal["experiments_required", "rejected"] = "rejected",
 ) -> CFDCRunReport:
     return CFDCRunReport(
@@ -385,9 +386,14 @@ def _no_go_report(
         experiment_plan=plan,
         experiment_results=list(experiment_results or []),
         features=list(features or []),
+        controller=controller,
         go_no_go=go_no_go,
         notes=[
-            "CFDC deterministic validator returned no-go before controller synthesis or route-specific simulation.",
+            (
+                "CFDC controller synthesis returned a refusal candidate before route-specific simulation."
+                if controller is not None
+                else "CFDC deterministic validator returned no-go before controller synthesis or route-specific simulation."
+            ),
             *go_no_go.reasons,
             *[f"missing required feature: {feature_id}" for feature_id in go_no_go.missing_features],
         ],
@@ -488,6 +494,27 @@ def run_cfdc_route(
         )
 
     controller = synthesize_controller(classification, resolved_features, safety_limits or description.safety_bounds)
+    if controller.status == "refuse":
+        controller_gate = GoNoGoDecision(
+            decision="no_go",
+            reasons=[
+                f"Controller synthesis refused release for architecture '{controller.architecture}'.",
+                *controller.notes,
+            ],
+        )
+        return _no_go_report(
+            route_id,
+            description,
+            diagnosis,
+            classification,
+            plan,
+            merge_go_no_go(go_no_go, controller_gate),
+            run_id,
+            features=resolved_features,
+            experiment_results=resolved_results,
+            controller=controller,
+            status="rejected",
+        )
     trial_reports: list[TrialReport] = []
     safe_search_state = None
     tuning_state = None

@@ -27,7 +27,9 @@ Control Agent 是一个面向非专家用户的控制系统自动化设计研究
 - [x] Cartpole full-model 与 VTOL full-state LQR baseline，并统一 plant、初态、参考、时域和 actuator limits。
 - [x] 主要通道的 final error、settling time、saturation、state boundary 和 rollback 后复验严格 gate。
 - [x] 7-case 通用闭环 benchmark：typed `BenchmarkRouteIR` -> 实验 -> 特征 -> 控制器 -> 仿真 -> 性能裁判。
-- [x] Class II/III 基于 `input_gain` 的 PD 定尺度，以及 Class I delay-aware PI de-tuning。
+- [x] 规范化三值 delay assessment、delay/dead-time 发布不变量和 adapter 一致性覆盖。
+- [x] Class II/III 基于 `input_gain` 的 PD 定尺度，以及基于不确定性上界的 Class I 普通 PI、delay-detuned PI 和大时延拒绝分支。
+- [x] CLI 支持重复 safety bounds、正数 time-scale hint 和互补的 `ExperimentResult` JSON 轨迹输入。
 - [x] 8 个 prompt case + 4 个复杂 case 的离线诊断评测，包含保存响应，以及 archive 风格的 feature precision/minimality、constraint isolation、dangerous false-positive、evidence、executability、testability 和 missing-information 审计。
 - [x] adapter 无关的诊断安全纠正和 release gate，覆盖显式 delay ambiguity、operating-point dependence、underactuated energy exchange 与强 MIMO/NMP 证据。
 - [x] 带版本和 SHA-256 指纹的冻结 12-case 诊断规范，以及 deterministic/LLM response snapshot 与逐指标对比工具。
@@ -45,7 +47,7 @@ Control Agent 是一个面向非专家用户的控制系统自动化设计研究
 - [ ] `vtol-altitude` 和 `vtol-hover` 的默认稳定验证。
 - [ ] 独立 Class V MIMO plant 及其闭环 controller validation。
 - [ ] 在初始 feature ablation 之外增加噪声、扰动、参数扫描和重复试验。
-- [ ] 真实实验 CSV/JSON 导入、硬件审批、actuator deployment 和物理验证。
+- [ ] 真实实验 CSV 导入、硬件审批、actuator deployment 和物理验证。
 - [ ] 真实 LLM response snapshot；live comparison 命令已经实现，但仓库和默认环境中没有 API 凭据。
 
 ### 需要改进
@@ -198,7 +200,9 @@ export CFDC_LLM_API_KEY="..."
 
 当前支持的 synthesis 分支：
 
-- Class I: `detuned_PI`
+- Class I，`rho_high < 0.1`：`detuned_PI`
+- Class I，`0.1 <= rho_high < 1.0`：`delay_detuned_PI`
+- Class I，`rho_high >= 1.0`：拒绝并返回 `large_delay_compensation_required`
 - Class II: `detuned_PD`
 - Class III: `small_saturated_PD`
 - Class IV stable inverse-response process: `detuned_PI_with_NMP_undershoot_guard`
@@ -207,7 +211,7 @@ export CFDC_LLM_API_KEY="..."
 - Class V: `conservative_mimo_pairing`
 
 controller synthesis 前会先校验 required features，因此不完整输入会返回结构化错误，而不是运行时 `KeyError`。
-Class II/III 的 PD gains 使用实测 `input_gain` 定尺度；Class I 在存在 delay 时使用 `dead_time/time_constant` 进一步降调。
+Class II/III 的 PD gains 使用实测 `input_gain` 定尺度。Class I 使用 `rho = dead_time/time_constant` 的保守不确定性上界选择架构；在专用补偿器完成实现和验证前，大时延不确定性会 fail closed。
 Class V loop pairing 使用 SciPy 的全局最大权重 linear assignment，不再逐行贪心选择，并会把未配对通道标记为需要 centralized review。
 
 ### `cfdc/online/`
@@ -329,6 +333,21 @@ python main.py \
   --observed-output temperature \
   --actuator heater
 ```
+
+传入安全元数据和一份或多份互补实验轨迹：
+
+```bash
+python main.py \
+  --description "A delayed oven process settles after a heater change." \
+  --observed-output "internal temperature" \
+  --actuator "heater power setting" \
+  --time-scale-hint-s 300 \
+  --safety-bound output_min=20 \
+  --safety-bound output_max=250 \
+  --experiment-result oven-step-01.json
+```
+
+每个实验文件必须包含一个通过校验的 `ExperimentResult` JSON 对象。重复 safety key 或相互重叠的 feature estimates 会直接报错，不会静默覆盖或丢弃输入。
 
 显式启用 supplemental mechanism-card labels：
 

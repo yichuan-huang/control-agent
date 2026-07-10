@@ -11,7 +11,12 @@ from cfdc.diagnosis.safety import (
 from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.experiments import plan_safe_experiments
 from cfdc.features import extract_features_from_results
-from cfdc.models import CoreFeatureArtifact, ExperimentResult, SystemDescription
+from cfdc.models import (
+    CoreFeatureArtifact,
+    ExperimentResult,
+    GoNoGoDecision,
+    SystemDescription,
+)
 from cfdc.validation import validate_required_features
 
 
@@ -83,9 +88,22 @@ def run_cfdc_pipeline(
                 "Stage 3 feature set is incomplete; run the Stage 2 experiments for the missing features before Stage 4.",
             ]
             return result
-        result["status"] = "controller_candidate_ready"
         controller = synthesize_controller(classification, resolved_features, safety_limits or description.safety_bounds)
         result["controller"] = controller.model_dump()
+        if controller.status == "refuse":
+            result["status"] = "rejected"
+            result["go_no_go"] = GoNoGoDecision(
+                decision="no_go",
+                reasons=[
+                    f"Controller synthesis refused release for architecture '{controller.architecture}'.",
+                    *controller.notes,
+                ],
+            ).model_dump()
+            result["notes"] = [
+                "Stage 4 returned a refusal candidate and failed closed before controller release."
+            ]
+            return result
+        result["status"] = "controller_candidate_ready"
     else:
         feature_gate = validate_required_features(classification, [])
         result["status"] = "experiments_required"

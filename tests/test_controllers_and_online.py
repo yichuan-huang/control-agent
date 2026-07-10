@@ -30,6 +30,19 @@ def feature(fid, value):
     )
 
 
+def bounded_feature(fid, value, lower, upper):
+    return CoreFeatureArtifact(
+        feature_id=fid,
+        value=value,
+        lower_bound=lower,
+        upper_bound=upper,
+        confidence=0.85,
+        units="unit",
+        method="test",
+        source_experiment=ExperimentPrimitive.PULSE,
+    )
+
+
 def test_stable_plant_controller_is_detuned():
     classification = ArchetypeClassification(
         primary_class=ArchetypeClass.CLASS_I_FIRST_ORDER_LAG,
@@ -145,6 +158,70 @@ def test_first_order_dead_time_detunes_gain_and_integral_speed():
     assert delayed.gains["ki"] < nominal.gains["ki"]
     assert delayed.gains["integral_time"] > nominal.gains["integral_time"]
     assert delayed.source_features == ["static_gain", "time_constant", "dead_time"]
+
+
+def test_first_order_delay_strategy_uses_conservative_uncertainty_boundaries():
+    classification = ArchetypeClassification(
+        primary_class=ArchetypeClass.CLASS_I_FIRST_ORDER_LAG,
+        control_architecture="delay-aware PI selection",
+        required_core_features=["static_gain", "time_constant", "dead_time"],
+        safety_constraints=[],
+        rationale="test",
+    )
+    gain = bounded_feature("static_gain", 2.0, 1.9, 2.1)
+    tau = bounded_feature("time_constant", 10.0, 10.0, 10.0)
+
+    ordinary = synthesize_controller(
+        classification,
+        [gain, tau, bounded_feature("dead_time", 0.5, 0.4, 0.999)],
+    )
+    at_delay_threshold = synthesize_controller(
+        classification,
+        [gain, tau, bounded_feature("dead_time", 0.5, 0.4, 1.0)],
+    )
+    below_refusal = synthesize_controller(
+        classification,
+        [gain, tau, bounded_feature("dead_time", 5.0, 4.0, 9.999)],
+    )
+    at_refusal = synthesize_controller(
+        classification,
+        [gain, tau, bounded_feature("dead_time", 5.0, 4.0, 10.0)],
+    )
+
+    assert ordinary.architecture == "detuned_PI"
+    assert ordinary.design_parameters["rho_high"] == 0.0999
+    assert at_delay_threshold.architecture == "delay_detuned_PI"
+    assert below_refusal.architecture == "delay_detuned_PI"
+    assert at_refusal.architecture == "large_delay_compensation_required"
+    assert at_refusal.status == "refuse"
+    assert at_refusal.gains == {}
+    assert at_refusal.design_parameters == {
+        "rho_nominal": 0.5,
+        "rho_low": 0.4,
+        "rho_high": 1.0,
+    }
+
+
+def test_delay_uncertainty_crossing_threshold_fails_closed():
+    classification = ArchetypeClassification(
+        primary_class=ArchetypeClass.CLASS_I_FIRST_ORDER_LAG,
+        control_architecture="delay-aware PI selection",
+        required_core_features=["static_gain", "time_constant", "dead_time"],
+        safety_constraints=[],
+        rationale="test",
+    )
+    controller = synthesize_controller(
+        classification,
+        [
+            bounded_feature("static_gain", 2.0, 1.9, 2.1),
+            bounded_feature("time_constant", 10.0, 8.0, 12.0),
+            bounded_feature("dead_time", 6.0, 4.0, 8.0),
+        ],
+    )
+
+    assert controller.design_parameters["rho_nominal"] == 0.6
+    assert controller.design_parameters["rho_high"] == 1.0
+    assert controller.status == "refuse"
 
 
 def test_unstable_safe_gain_search_accepts_then_freezes_on_violation():

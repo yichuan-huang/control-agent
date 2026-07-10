@@ -5,8 +5,10 @@ from typing import Any
 
 from cfdc.models import (
     ArchetypeClassification,
+    DelayAssessment,
     DiagnosticField,
     GoNoGoDecision,
+    SignificantDelayField,
     StructuralDiagnosis,
     SystemDescription,
 )
@@ -131,6 +133,22 @@ def _field(
     )
 
 
+def _delay_field(
+    status: str,
+    value: str,
+    assessment: DelayAssessment,
+    confidence: float,
+    evidence: str,
+) -> SignificantDelayField:
+    return SignificantDelayField(
+        status=status,
+        value=value,
+        assessment=assessment,
+        confidence=confidence,
+        evidence=[evidence],
+    )
+
+
 def _clarification_questions(
     description: SystemDescription,
     payload: dict[str, Any],
@@ -206,9 +224,10 @@ def enforce_shared_diagnostic_safety_rules(
                     0.72,
                     "the controlled coordinate moves through an actuated coordinate and energy exchange",
                 ),
-                "significant_delay": _field(
+                "significant_delay": _delay_field(
                     "inferred",
                     "no significant delay reported",
+                    DelayAssessment.NOT_SIGNIFICANT,
                     0.58,
                     "the description presents a direct mechanical torque path and no transport delay",
                 ),
@@ -288,9 +307,10 @@ def enforce_shared_diagnostic_safety_rules(
         )
 
     if has_explicit_delay_ambiguity(description):
-        updates["significant_delay"] = _field(
+        updates["significant_delay"] = _delay_field(
             "unknown",
             "not enough information about first-motion delay",
+            DelayAssessment.UNKNOWN,
             0.18,
             "the description explicitly says first-motion timing has not been observed",
         )
@@ -360,6 +380,7 @@ def validate_diagnostic_controller_release(
     if has_strong_mimo_interaction(description):
         reasons.append("Strong MIMO interaction requires a local gain matrix and pairing evidence before controller release.")
     unsupported: list[str] = []
+    missing_features: list[str] = []
     if classification is not None:
         unsupported = [
             feature_id
@@ -372,11 +393,23 @@ def validate_diagnostic_controller_release(
                 + ", ".join(unsupported)
                 + "."
             )
+        if (
+            diagnosis.significant_delay.assessment
+            == DelayAssessment.SIGNIFICANT.value
+            and "dead_time" not in classification.required_core_features
+        ):
+            reasons.append(
+                "A significant-delay diagnosis requires dead_time before controller release."
+            )
+            missing_features.append("dead_time")
+    missing_features.extend(
+        feature for feature in unsupported if feature not in missing_features
+    )
     if reasons:
         return GoNoGoDecision(
             decision="no_go",
             reasons=reasons,
-            missing_features=unsupported,
-            feature_complete=not unsupported,
+            missing_features=missing_features,
+            feature_complete=not missing_features,
         )
     return GoNoGoDecision(decision="go")

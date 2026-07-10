@@ -242,3 +242,28 @@ def test_route_missing_required_features_returns_structured_no_go():
     assert report.go_no_go.decision == "no_go"
     assert report.go_no_go.missing_features == ["time_constant"]
     assert report.controller is None
+
+
+def test_generic_route_rejects_large_delay_without_releasing_pi():
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text="A first order temperature process settles after a heater change with noticeable dead time.",
+            observed_outputs=["temperature"],
+            actuators=["heater"],
+        ),
+        features=[
+            feature("static_gain", 2.0),
+            feature("time_constant", 10.0),
+            feature("dead_time", 10.0),
+        ],
+        run_id="large-delay-refusal-test",
+    )
+
+    assert report.status == "rejected"
+    assert report.go_no_go is not None
+    assert report.go_no_go.decision == "no_go"
+    assert report.controller is not None
+    assert report.controller.status == "refuse"
+    assert report.controller.architecture == "large_delay_compensation_required"
+    assert "large_delay_compensation_required" in report.go_no_go.reasons[0]

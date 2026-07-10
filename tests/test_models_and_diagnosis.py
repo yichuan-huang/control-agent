@@ -1,6 +1,7 @@
 import pytest
 
 from cfdc.diagnosis import DiagnosticEngine, validate_agent_payload
+from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.diagnosis.llm import (
     OpenAICompatibleDiagnosticAdapter,
     build_diagnostic_prompt,
@@ -9,9 +10,11 @@ from cfdc.diagnosis.llm import (
 from cfdc.models import (
     ArchetypeClass,
     CoreFeatureArtifact,
+    DelayAssessment,
     ExperimentPrimitive,
     ExperimentResult,
     ExperimentTrace,
+    SignificantDelayField,
     SystemDescription,
 )
 
@@ -44,6 +47,78 @@ def test_experiment_result_json_roundtrip():
     payload = result.model_dump_json()
     restored = ExperimentResult.model_validate_json(payload)
     assert restored == result
+
+
+def test_significant_delay_field_roundtrip_and_consistency():
+    field = SignificantDelayField(
+        status="known",
+        value="noticeable pause before first motion",
+        assessment=DelayAssessment.SIGNIFICANT,
+        confidence=0.9,
+        evidence=["operator observed a pause"],
+    )
+
+    assert SignificantDelayField.model_validate_json(field.model_dump_json()) == field
+    with pytest.raises(ValueError, match="unknown"):
+        SignificantDelayField(
+            status="unknown",
+            value="delay unknown",
+            assessment=DelayAssessment.SIGNIFICANT,
+            confidence=0.2,
+        )
+
+
+@pytest.mark.parametrize(
+    ("phrase", "status", "expected"),
+    [
+        ("significant delay likely", "known", "significant"),
+        ("significant delay present", "inferred", "significant"),
+        ("noticeable dead time", "known", "significant"),
+        ("no significant delay reported", "known", "not_significant"),
+        ("negligible delay", "inferred", "not_significant"),
+        ("delay unknown", "unknown", "unknown"),
+        ("not enough information about first-motion delay", "unknown", "unknown"),
+    ],
+)
+def test_legacy_delay_synonyms_are_normalized_at_adapter_boundary(
+    phrase,
+    status,
+    expected,
+):
+    description = SystemDescription(
+        text="A first order process settles after a small pump change with dead time.",
+        observed_outputs=["level"],
+        actuators=["pump"],
+    )
+    payload = infer_structural_diagnosis(description).model_dump()
+    payload["significant_delay"].pop("assessment")
+    payload["significant_delay"].update(status=status, value=phrase)
+    payload["complete"] = status != "unknown"
+    payload["clarification_questions"] = (
+        []
+        if payload["complete"]
+        else ["Is there a pause before motion?", "What is a safe test input?"]
+    )
+
+    diagnosis = validate_agent_payload(payload)
+
+    assert diagnosis.significant_delay.assessment == expected
+
+
+def test_contradictory_legacy_delay_phrase_is_rejected():
+    description = SystemDescription(
+        text="A first order process settles after a small pump change with dead time.",
+        observed_outputs=["level"],
+        actuators=["pump"],
+    )
+    payload = infer_structural_diagnosis(description).model_dump()
+    payload["significant_delay"].pop("assessment")
+    payload["significant_delay"]["value"] = (
+        "no significant delay reported but significant delay present"
+    )
+
+    with pytest.raises(ValueError, match="contradictory"):
+        validate_agent_payload(payload)
 
 
 def test_agent_output_rejects_free_text():
@@ -223,4 +298,5 @@ def test_diagnostic_prompt_contains_required_fields():
         "uncertainty_magnitude",
     ]:
         assert field in prompt
+    assert '"assessment": "significant|not_significant|unknown"' in prompt
     assert "Return ONLY one JSON object" in prompt

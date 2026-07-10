@@ -261,13 +261,16 @@ def extract_features_from_result(result: ExperimentResult) -> list[CoreFeatureAr
 
 
 def extract_features_from_results(results: list[ExperimentResult]) -> list[CoreFeatureArtifact]:
-    """Dispatch a sequence of experiment results and preserve first occurrence by feature id."""
+    """Dispatch complementary results without silently discarding duplicate estimates."""
 
     features: list[CoreFeatureArtifact] = []
     seen: set[str] = set()
     for result in results:
+        duplicates = seen.intersection(result.estimates)
+        if duplicates:
+            duplicate = sorted(duplicates)[0]
+            raise ValueError(f"duplicate experiment estimate '{duplicate}'")
         for feature in extract_features_from_result(result):
-            if feature.feature_id not in seen:
-                features.append(feature)
-                seen.add(feature.feature_id)
+            features.append(feature)
+            seen.add(feature.feature_id)
     return features

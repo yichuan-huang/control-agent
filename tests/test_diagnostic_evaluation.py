@@ -13,7 +13,9 @@ from cfdc.diagnosis import (
 )
 from cfdc.diagnosis.evaluation import build_diagnostic_response_snapshot
 from cfdc.diagnosis.engine import infer_structural_diagnosis
-from cfdc.models import SystemDescription
+from cfdc.diagnosis.safety import validate_diagnostic_controller_release
+from cfdc.experiments import plan_safe_experiments
+from cfdc.models import ArchetypeClassification, SystemDescription
 from cfdc.pipeline import run_cfdc_pipeline
 
 
@@ -185,6 +187,82 @@ def test_shared_safety_rules_override_unsafe_adapter_delay_release():
     assert diagnosis.significant_delay.status == "unknown"
     assert classification is None
     assert any("noticeable pause" in question for question in diagnosis.clarification_questions)
+
+
+def test_llm_like_and_deterministic_adapters_make_same_delay_decisions():
+    description = SystemDescription(
+        text="A first order heater settles after a valve step with noticeable dead time.",
+        observed_outputs=["temperature"],
+        actuators=["valve"],
+    )
+
+    class LegacyPhraseAdapter:
+        def diagnose(self, supplied_description):
+            payload = infer_structural_diagnosis(supplied_description).model_dump()
+            payload["significant_delay"].pop("assessment")
+            payload["significant_delay"]["value"] = "significant delay present"
+            return payload
+
+    deterministic_engine = DiagnosticEngine()
+    llm_like_engine = DiagnosticEngine(adapter=LegacyPhraseAdapter())
+    deterministic_diagnosis, deterministic_classification = deterministic_engine.run(
+        description
+    )
+    llm_diagnosis, llm_classification = llm_like_engine.run(description)
+
+    assert deterministic_classification is not None
+    assert llm_classification is not None
+    assert llm_diagnosis.significant_delay.assessment == (
+        deterministic_diagnosis.significant_delay.assessment
+    )
+    assert llm_classification.primary_class == deterministic_classification.primary_class
+    assert (
+        llm_classification.required_core_features
+        == deterministic_classification.required_core_features
+    )
+    assert [
+        instruction.estimates
+        for instruction in plan_safe_experiments(llm_diagnosis, llm_classification).instructions
+    ] == [
+        instruction.estimates
+        for instruction in plan_safe_experiments(
+            deterministic_diagnosis,
+            deterministic_classification,
+        ).instructions
+    ]
+    assert validate_diagnostic_controller_release(
+        description,
+        llm_diagnosis,
+        llm_classification,
+    ) == validate_diagnostic_controller_release(
+        description,
+        deterministic_diagnosis,
+        deterministic_classification,
+    )
+
+
+def test_release_gate_rejects_significant_delay_without_dead_time_requirement():
+    description = SystemDescription(
+        text="A first order heater settles after a valve step with noticeable dead time.",
+        observed_outputs=["temperature"],
+        actuators=["valve"],
+    )
+    diagnosis = DiagnosticEngine().diagnose(description)
+    inconsistent = ArchetypeClassification(
+        primary_class="class_i_first_order_lag",
+        control_architecture="detuned PI",
+        required_core_features=["static_gain", "time_constant"],
+        rationale="deliberately inconsistent test fixture",
+    )
+
+    decision = validate_diagnostic_controller_release(
+        description,
+        diagnosis,
+        inconsistent,
+    )
+
+    assert decision.decision == "no_go"
+    assert decision.missing_features == ["dead_time"]
 
 
 @pytest.mark.parametrize(

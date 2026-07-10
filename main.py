@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 from cfdc.diagnosis import OpenAICompatibleDiagnosticAdapter
@@ -11,7 +12,7 @@ from cfdc.diagnosis import (
     run_saved_llm_diagnostic_comparison,
 )
 from cfdc.demo import run_demo_validation
-from cfdc.models import CFDCRunReport, SystemDescription
+from cfdc.models import CFDCRunReport, ExperimentResult, SystemDescription
 from cfdc.pipeline import run_cfdc_pipeline
 from cfdc.runtime import run_cfdc_route
 from cfdc.sim import (
@@ -56,11 +57,78 @@ def compact_route_report(report: CFDCRunReport) -> dict:
     return payload
 
 
-def parse_args() -> argparse.Namespace:
+def _positive_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0.0:
+        raise argparse.ArgumentTypeError("must be a finite number greater than zero")
+    return parsed
+
+
+def parse_safety_bounds(values: list[str]) -> dict[str, float]:
+    bounds: dict[str, float] = {}
+    for item in values:
+        key, separator, raw_value = item.partition("=")
+        key = key.strip()
+        if not separator or not key or not raw_value.strip():
+            raise SystemExit(
+                f"invalid --safety-bound {item!r}; expected KEY=FLOAT"
+            )
+        if key in bounds:
+            raise SystemExit(f"duplicate --safety-bound key '{key}'")
+        try:
+            value = float(raw_value)
+        except ValueError:
+            raise SystemExit(
+                f"invalid --safety-bound {item!r}; value must be a float"
+            ) from None
+        if not math.isfinite(value):
+            raise SystemExit(
+                f"invalid --safety-bound {item!r}; value must be finite"
+            )
+        bounds[key] = value
+    return bounds
+
+
+def load_experiment_results(paths: list[Path]) -> list[ExperimentResult]:
+    results: list[ExperimentResult] = []
+    seen_estimates: set[str] = set()
+    for path in paths:
+        try:
+            result = ExperimentResult.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"invalid --experiment-result {path}: {exc}") from None
+        duplicates = seen_estimates.intersection(result.estimates)
+        if duplicates:
+            duplicate = sorted(duplicates)[0]
+            raise SystemExit(f"duplicate experiment estimate '{duplicate}'")
+        seen_estimates.update(result.estimates)
+        results.append(result)
+    return results
+
+
+def _uses_builtin_experiment_inputs(args: argparse.Namespace) -> bool:
+    return bool(
+        args.benchmark
+        or args.feature_ablation
+        or args.diagnostic_eval
+        or args.diagnostic_eval_current
+        or args.diagnostic_eval_llm
+        or args.diagnostic_eval_llm_saved
+        or args.validate_demo
+        or args.cartpole_swingup
+        or args.vtol_sim
+        or args.run_route not in (None, "generic")
+    )
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the independent CFDC framework.")
     parser.add_argument("--description", type=str, help="Plain-language system description.")
     parser.add_argument("--observed-output", action="append", default=[], help="Measured output name. Can be repeated.")
     parser.add_argument("--actuator", action="append", default=[], help="Actuator or input name. Can be repeated.")
+    parser.add_argument("--safety-bound", action="append", default=[], metavar="KEY=FLOAT", help="Safety bound. Can be repeated.")
+    parser.add_argument("--time-scale-hint-s", type=_positive_float, default=None, help="Positive process time-scale hint in seconds.")
+    parser.add_argument("--experiment-result", action="append", type=Path, default=[], help="Path to an ExperimentResult JSON object. Can be repeated.")
     parser.add_argument("--benchmark", action="store_true", help="Run the built-in CFDC synthetic benchmark chain.")
     parser.add_argument("--feature-ablation", action="store_true", help="Run minimal/noisy/full-model feature ablations.")
     parser.add_argument("--diagnostic-eval", action="store_true", help="Score the saved 8+4 offline diagnostic responses.")
@@ -99,11 +167,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--llm-api-key", type=str, default=None, help="API key. Prefer environment variables for normal use.")
     parser.add_argument("--llm-timeout-s", type=float, default=60.0, help="LLM request timeout in seconds.")
     parser.add_argument("--llm-max-tokens", type=int, default=1400, help="Maximum diagnostic response tokens.")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main() -> None:
     args = parse_args()
+    safety_bounds = parse_safety_bounds(args.safety_bound)
+    if args.experiment_result and _uses_builtin_experiment_inputs(args):
+        raise SystemExit(
+            "--experiment-result cannot be used with a built-in route or benchmark command"
+        )
+    experiment_results = load_experiment_results(args.experiment_result)
     adapter = None
     if args.use_llm or args.diagnostic_eval_llm:
         try:
@@ -164,10 +238,14 @@ def main() -> None:
                 text=args.description,
                 observed_outputs=args.observed_output,
                 actuators=args.actuator,
+                safety_bounds=safety_bounds,
+                time_scale_hint_s=args.time_scale_hint_s,
             )
         report = run_cfdc_route(
             args.run_route,
             description=description,
+            experiment_results=experiment_results,
+            safety_limits=safety_bounds,
             diagnostic_adapter=adapter,
             use_mechanism_cards=args.use_mechanism_cards,
             include_trajectory=args.include_trajectory,
@@ -185,11 +263,15 @@ def main() -> None:
         text=args.description,
         observed_outputs=args.observed_output,
         actuators=args.actuator,
+        safety_bounds=safety_bounds,
+        time_scale_hint_s=args.time_scale_hint_s,
     )
     print(
         json.dumps(
             run_cfdc_pipeline(
                 description,
+                experiment_results=experiment_results,
+                safety_limits=safety_bounds,
                 diagnostic_adapter=adapter,
                 use_mechanism_cards=args.use_mechanism_cards,
             ),

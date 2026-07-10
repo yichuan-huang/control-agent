@@ -9,6 +9,7 @@ from typing import Any, Iterable
 from cfdc.models import (
     ArchetypeClass,
     ArchetypeClassification,
+    DelayAssessment,
     StructuralDiagnosis,
     SystemDescription,
 )
@@ -126,8 +127,18 @@ def select_supplemental_mechanism_cards(
 
     description_text = description.text.lower() if description else ""
     diagnostic_text = " ".join(
-        field.value.lower() + " " + " ".join(field.evidence).lower()
-        for field in diagnosis.fields
+        getattr(diagnosis, field_name).value.lower()
+        + " "
+        + " ".join(getattr(diagnosis, field_name).evidence).lower()
+        for field_name in (
+            "open_loop_stability",
+            "minimum_phase",
+            "relative_degree",
+            "controllability_observability",
+            "nonlinearity_strength",
+            "coupling_severity",
+            "uncertainty_magnitude",
+        )
     )
     text = f"{description_text} {diagnostic_text}"
     selected: set[str] = set()
@@ -136,7 +147,6 @@ def select_supplemental_mechanism_cards(
     relative_degree = diagnosis.relative_degree.value.lower()
     coupling = diagnosis.coupling_severity.value.lower()
     phase = diagnosis.minimum_phase.value.lower()
-    delay = diagnosis.significant_delay.value.lower()
     primary_class = str(classification.primary_class)
 
     if "unstable" in stability or "safety-critical equilibrium" in stability:
@@ -188,7 +198,7 @@ def select_supplemental_mechanism_cards(
     ):
         selected.add("coupled_mimo")
 
-    if "significant delay" in delay and "no significant delay" not in delay:
+    if diagnosis.significant_delay.assessment == DelayAssessment.SIGNIFICANT.value:
         selected.add("delayed_or_transport_process")
     if "non-minimum" in phase or "inverse-response" in phase:
         selected.add("nonminimum_phase_or_inverse_response")

@@ -29,10 +29,30 @@ class DiagnosticField(CFDCModel):
     evidence: list[str] = Field(default_factory=list)
 
 
+class DelayAssessment(str, Enum):
+    SIGNIFICANT = "significant"
+    NOT_SIGNIFICANT = "not_significant"
+    UNKNOWN = "unknown"
+
+
+class SignificantDelayField(DiagnosticField):
+    assessment: DelayAssessment
+
+    @model_validator(mode="after")
+    def validate_status_assessment_consistency(self) -> "SignificantDelayField":
+        status_unknown = self.status == "unknown"
+        assessment_unknown = self.assessment == DelayAssessment.UNKNOWN.value
+        if status_unknown != assessment_unknown:
+            raise ValueError(
+                "significant_delay status and assessment must both be unknown or both be resolved"
+            )
+        return self
+
+
 class StructuralDiagnosis(CFDCModel):
     open_loop_stability: DiagnosticField
     minimum_phase: DiagnosticField
-    significant_delay: DiagnosticField
+    significant_delay: SignificantDelayField
     relative_degree: DiagnosticField
     controllability_observability: DiagnosticField
     nonlinearity_strength: DiagnosticField
@@ -185,6 +205,7 @@ class CoreFeatureArtifact(CFDCModel):
 class ControllerCandidate(CFDCModel):
     architecture: str
     gains: dict[str, float] = Field(default_factory=dict)
+    design_parameters: dict[str, float] = Field(default_factory=dict)
     tunable_gain_names: list[str] = Field(default_factory=list)
     feedforward: dict[str, float] = Field(default_factory=dict)
     saturation: dict[str, float] = Field(default_factory=dict)
