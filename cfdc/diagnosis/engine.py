@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from cfdc.diagnosis.llm import DiagnosticAdapter, DeterministicDiagnosticAdapter, validate_agent_payload
+from cfdc.diagnosis.safety import enforce_shared_diagnostic_safety_rules
 from cfdc.models import (
     ArchetypeClass,
     ArchetypeClassification,
@@ -106,7 +107,7 @@ def infer_structural_diagnosis(description: SystemDescription) -> StructuralDiag
     elif vtol:
         fields["nonlinearity_strength"] = _field("inferred", "moderate nonlinearity near hover", 0.7, ["tilt and thrust geometry are nonlinear but small hover motions can be localized"])
     elif first_order or oscillator or integrator:
-        fields["nonlinearity_strength"] = _field("inferred", "weak or local nonlinearity", 0.62, ["dominant behavior fits a low-order local model"])
+        fields["nonlinearity_strength"] = _field("inferred", "weak nonlinearity or local nonlinearity", 0.62, ["dominant behavior fits a low-order local model"])
     else:
         fields["nonlinearity_strength"] = _field("unknown", "not enough information", 0.2, [])
 
@@ -121,7 +122,7 @@ def infer_structural_diagnosis(description: SystemDescription) -> StructuralDiag
     else:
         fields["coupling_severity"] = _field("unknown", "not enough information", 0.2, [])
 
-    if _contains(text, ["unknown", "payload", "wear", "varies", "changes", "no parameters"]) or pendulum or vtol:
+    if _contains(text, ["unknown parameters", "payload", "wear", "varies", "load change", "operating conditions", "no parameters"]) or pendulum or vtol:
         fields["uncertainty_magnitude"] = _field("inferred", "large uncertainty", 0.8, ["parameters or payload changes are unknown"])
     elif first_order or oscillator or integrator:
         fields["uncertainty_magnitude"] = _field("inferred", "moderate uncertainty", 0.55, ["parameters still need feature extraction"])
@@ -157,22 +158,43 @@ def classify_archetype(diagnosis: StructuralDiagnosis) -> ArchetypeClassificatio
     pendulum_like = "rod angle" in rel_degree or "angle stabilization" in rel_degree
 
     if "significant multivariable" in coupling:
+        matrix_route = "local gain matrix" in coupling or "pairing" in coupling
         return ArchetypeClassification(
             primary_class=ArchetypeClass.CLASS_V_MULTIVARIABLE_SIGNIFICANT_COUPLING,
-            control_architecture="conservative loop pairing with optional half-strength static decoupling",
-            required_core_features=["coupling_gain"],
+            control_architecture=(
+                "local MIMO gain-matrix experiment and pairing review"
+                if matrix_route
+                else "conservative loop pairing with optional half-strength static decoupling"
+            ),
+            required_core_features=(
+                ["local_gain_matrix", "local_time_constant", "pairing_indicator"]
+                if matrix_route
+                else ["coupling_gain"]
+            ),
             safety_constraints=["bound each input separately", "freeze if one input moves multiple outputs unexpectedly"],
             rationale="The dominant limitation is cross-channel interaction, so Class V takes precedence.",
         )
     if "unstable" in stability or "non-minimum" in phase or "strong" in nonlinear or "higher" in rel_degree:
-        if "non-minimum" in phase and "stable" in stability and "unstable" not in stability:
+        if "operating-point-dependent" in nonlinear:
+            features = ["local_static_gain", "local_time_constant", "gain_variation_ratio"]
+            architecture = "local operating-region control with gain-scheduling review"
+        elif "energy-exchange" in coupling:
+            features = ["natural_frequency", "input_to_unactuated_coupling_gain"]
+            architecture = "underactuated energy-exchange and capture route"
+        elif "non-minimum" in phase and "stable" in stability and "unstable" not in stability:
             features = ["static_gain", "time_constant", "inverse_response_severity"]
+            architecture = "NMP-aware conservative outer-loop control with undershoot-limited gain search"
         elif pendulum_like:
             features = ["natural_frequency"]
+            architecture = "cascaded inner-outer control with safe online gain search"
         else:
             features = ["natural_frequency", "input_gain"]
-        architecture = "cascaded inner-outer control with safe online gain search"
-        if "non-minimum" in phase:
+            architecture = "cascaded inner-outer control with safe online gain search"
+        if (
+            "non-minimum" in phase
+            and "operating-point-dependent" not in nonlinear
+            and "energy-exchange" not in coupling
+        ):
             architecture = "NMP-aware conservative outer-loop control with undershoot-limited gain search"
         if "moderate cascaded" in coupling:
             features = ["hover_thrust", "angular_acceleration_gain", "lateral_coupling_gain"]
@@ -221,7 +243,8 @@ class DiagnosticEngine:
         self.use_mechanism_cards = use_mechanism_cards
 
     def diagnose(self, description: SystemDescription) -> StructuralDiagnosis:
-        return validate_agent_payload(self.adapter.diagnose(description))
+        diagnosis = validate_agent_payload(self.adapter.diagnose(description))
+        return enforce_shared_diagnostic_safety_rules(description, diagnosis)
 
     def classify(
         self,

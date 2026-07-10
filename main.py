@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 from cfdc.diagnosis import OpenAICompatibleDiagnosticAdapter
-from cfdc.diagnosis import run_diagnostic_evaluation
+from cfdc.diagnosis import (
+    run_diagnostic_evaluation,
+    run_live_llm_diagnostic_comparison,
+    run_saved_llm_diagnostic_comparison,
+)
 from cfdc.demo import run_demo_validation
 from cfdc.models import CFDCRunReport, SystemDescription
 from cfdc.pipeline import run_cfdc_pipeline
@@ -60,6 +65,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--feature-ablation", action="store_true", help="Run minimal/noisy/full-model feature ablations.")
     parser.add_argument("--diagnostic-eval", action="store_true", help="Score the saved 8+4 offline diagnostic responses.")
     parser.add_argument("--diagnostic-eval-current", action="store_true", help="Score fresh deterministic diagnostic responses.")
+    parser.add_argument("--diagnostic-eval-llm", action="store_true", help="Call the configured LLM for all frozen 8+4 cases, save structured responses, and compare with deterministic results.")
+    parser.add_argument("--diagnostic-eval-llm-saved", action="store_true", help="Compare a previously saved LLM response snapshot with the deterministic baseline.")
+    parser.add_argument("--diagnostic-llm-output", type=Path, default=None, help="Optional path for the structured LLM diagnostic response snapshot.")
     parser.add_argument("--validate-demo", action="store_true", help="Validate the stable Cartpole and VTOL software demo routes.")
     parser.add_argument("--cartpole-swingup", action="store_true", help="Run the deterministic cartpole energy swing-up simulation.")
     parser.add_argument("--vtol-sim", action="store_true", help="Run the deterministic planar VTOL simulation.")
@@ -97,14 +105,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     adapter = None
-    if args.use_llm:
-        adapter = OpenAICompatibleDiagnosticAdapter(
-            base_url=args.llm_base_url,
-            model=args.llm_model,
-            api_key=args.llm_api_key,
-            timeout_s=args.llm_timeout_s,
-            max_tokens=args.llm_max_tokens,
-        )
+    if args.use_llm or args.diagnostic_eval_llm:
+        try:
+            adapter = OpenAICompatibleDiagnosticAdapter(
+                base_url=args.llm_base_url,
+                model=args.llm_model,
+                api_key=args.llm_api_key,
+                timeout_s=args.llm_timeout_s,
+                max_tokens=args.llm_max_tokens,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
 
     if args.validate_demo:
         result = run_demo_validation()
@@ -122,6 +133,22 @@ def main() -> None:
         result = run_diagnostic_evaluation(
             use_saved_responses=not args.diagnostic_eval_current,
         )
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    if args.diagnostic_eval_llm:
+        if adapter is None:
+            raise RuntimeError("LLM diagnostic evaluation requires a configured adapter")
+        kwargs = {}
+        if args.diagnostic_llm_output is not None:
+            kwargs["output_path"] = args.diagnostic_llm_output
+        result = run_live_llm_diagnostic_comparison(adapter, **kwargs)
+        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
+        return
+    if args.diagnostic_eval_llm_saved:
+        kwargs = {}
+        if args.diagnostic_llm_output is not None:
+            kwargs["path"] = args.diagnostic_llm_output
+        result = run_saved_llm_diagnostic_comparison(**kwargs)
         print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
         return
     if args.cartpole_swingup:
@@ -151,7 +178,8 @@ def main() -> None:
     if not args.description:
         raise SystemExit(
             "Provide --description, use --run-route, --validate-demo, --benchmark, "
-            "--feature-ablation, --diagnostic-eval, --cartpole-swingup, or --vtol-sim."
+            "--feature-ablation, --diagnostic-eval, --diagnostic-eval-llm, "
+            "--cartpole-swingup, or --vtol-sim."
         )
     description = SystemDescription(
         text=args.description,

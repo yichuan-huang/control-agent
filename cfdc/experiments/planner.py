@@ -106,7 +106,27 @@ def plan_safe_experiments(
             )
         )
     elif archetype == ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP.value:
-        if {"static_gain", "time_constant", "inverse_response_severity"} & required_features:
+        if {"local_static_gain", "local_time_constant", "gain_variation_ratio"} & required_features:
+            instructions.append(
+                _instruction(
+                    ExperimentPrimitive.RAMP_STEP,
+                    "Two-region local response recording",
+                    [
+                        "Choose the first declared safe operating point and record one small input change.",
+                        "Return to steady operation before moving to the second declared safe operating point.",
+                        "Repeat the same small input change at the second point.",
+                        "Return immediately to the safer point after recording.",
+                    ],
+                    ["time", "input setting", "measured outputs", "operating-point label"],
+                    ["local_static_gain", "local_time_constant", "gain_variation_ratio"],
+                    [
+                        "stop if temperature or conversion leaves its declared local band",
+                        "stop if either local response fails to settle",
+                    ],
+                    "Do not extrapolate either local response beyond the two tested safe regions.",
+                )
+            )
+        elif {"static_gain", "time_constant", "inverse_response_severity"} & required_features:
             estimates = []
             for feature_id in ["static_gain", "time_constant", "dead_time", "inverse_response_severity"]:
                 if feature_id in required_features:
@@ -192,7 +212,28 @@ def plan_safe_experiments(
                         "Keep the push small enough that a person could safely stop the device.",
                     )
                 )
+            if "input_to_unactuated_coupling_gain" in required_features:
+                instructions.append(
+                    _instruction(
+                        ExperimentPrimitive.PULSE,
+                        "Small coupling-direction recording",
+                        [
+                            "Place the mechanism in its safest resting configuration and start recording both joint motions.",
+                            "Apply one short low-amplitude torque pulse to the actuated joint.",
+                            "Repeat once in the opposite direction after all motion settles.",
+                        ],
+                        ["time", "joint torque", "actuated-joint motion", "unactuated-joint motion"],
+                        ["input_to_unactuated_coupling_gain"],
+                        ["stop if either joint approaches its limit", "stop if the mechanism enters the upright capture region"],
+                        "This probe establishes only local coupling direction and scale; it does not authorize swing-up.",
+                    )
+                )
     else:
+        estimates = (
+            ["local_gain_matrix", "local_time_constant", "pairing_indicator"]
+            if "local_gain_matrix" in required_features
+            else ["coupling_gain"]
+        )
         instructions.append(
             _instruction(
                 ExperimentPrimitive.BOUNDED_SCAN,
@@ -204,7 +245,7 @@ def plan_safe_experiments(
                     "Do not move two inputs at the same time during this first check.",
                 ],
                 ["time", "each input setting", "all measured outputs"],
-                ["coupling_gain"],
+                estimates,
                 ["stop if any output crosses its safe band", "stop if one input causes an unexpectedly large motion"],
                 "This check is only for deciding safe input-output pairing.",
             )

@@ -28,7 +28,9 @@ Checked items have executable software evidence and automated test coverage. The
 - [x] Strict final-error, settling-time, saturation, state-boundary, and post-rollback validation gates for the main channels.
 - [x] Seven-case generic closed-loop benchmark from typed `BenchmarkRouteIR` through experiments, features, controller synthesis, simulation, and performance judgment.
 - [x] Feature-scaled Class II/III PD synthesis and delay-aware Class I PI de-tuning.
-- [x] Offline diagnosis evaluation with eight prompt cases, four complex cases, saved deterministic responses, and separate field/feature/clarification/controller-gate scores.
+- [x] Offline diagnosis evaluation with eight prompt cases, four complex cases, saved deterministic responses, and archive-style feature precision/minimality, constraint isolation, dangerous false-positive, evidence, executability, testability, and missing-information audits.
+- [x] Adapter-independent diagnostic safety normalization and release gating for explicit delay ambiguity, operating-point dependence, underactuated energy exchange, and strong MIMO/NMP evidence.
+- [x] Frozen 12-case diagnostic specification with a versioned SHA-256 fingerprint, deterministic/LLM response snapshots, and metric-by-metric comparison tooling.
 - [x] Parameterized minimal-core/noisy/full-model feature ablations for first-order and double-integrator plants.
 - [x] Deterministic `python main.py --validate-demo` validation for Cartpole, VTOL position, VTOL boundary, and VTOL variation.
 - [x] Unified simulation performance summaries with final error, overshoot, settling, saturation, capture, channel, boundary, and violation fields.
@@ -44,6 +46,7 @@ Checked items have executable software evidence and automated test coverage. The
 - [ ] Dedicated Class V MIMO plant and closed-loop controller validation.
 - [ ] Noise, disturbance, parameter-sweep, and repeated-trial experiments beyond the initial feature ablations.
 - [ ] Real experiment CSV/JSON import, hardware approval, actuator deployment, and physical validation.
+- [ ] A real LLM response snapshot; the live comparison command is implemented, but no API credentials are present in the repository or default environment.
 
 ### Needs Improvement
 
@@ -52,7 +55,7 @@ Checked items have executable software evidence and automated test coverage. The
 - [ ] Replace hand-selected boundary candidate schedules with a reusable constrained search policy.
 - [ ] Strengthen confidence intervals with repeated trials, filtering checks, and data-quality rejection rules.
 - [ ] Make experiment amplitude and duration depend on diagnosis, time-scale hints, forbidden actions, and safety bounds.
-- [ ] Add persistent multi-turn diagnostic state, fix the diagnosed premature-release cases, and add saved LLM-assisted responses to the offline evaluator.
+- [ ] Add persistent multi-turn diagnostic state and evaluate saved responses from one or more configured LLM APIs.
 - [ ] Add evidence-ledger artifacts with source hashes, configuration versions, and claim-boundary summaries.
 - [ ] Generate compact machine-readable and operator-facing reports for every stable and experimental route.
 
@@ -156,7 +159,9 @@ This layer implements Stage 0 and Stage 1.
 - `mechanism_cards.py` loads and validates the complete three-layer, 14-card catalog and deterministically selects optional supplemental labels. The catalog is disabled by default and its labels never replace or modify the canonical archetype route.
 - `control_mechanism_card_catalog.json` preserves the catalog metadata, evidence boundary, card roles, mechanism guidance, and layer membership.
 - `llm.py` provides `OpenAICompatibleDiagnosticAdapter`, which uses the OpenAI Python SDK to call OpenAI-compatible `/chat/completions` APIs and requires strict JSON output. It is used only for language diagnosis, not numeric controller synthesis.
-- `evaluation.py` scores the eight diagnostic fields, required-feature recall, clarification decisions, and controller-release gate over the 8+4 case catalog. `saved_evaluation_responses.json` supports repeatable offline scoring.
+- `evaluation.py` scores the eight diagnostic fields, required-feature recall/precision/minimality, constraint isolation, dangerous false-positive control, evidence discipline, missing-information quality, experiment executability, controller testability, archetype classification, and controller-release gate over the 8+4 case catalog. It reports extra features and constraints incorrectly selected as core features. `saved_evaluation_responses.json` supports repeatable offline scoring.
+- `safety.py` applies description-evidence rules and the controller-release gate after every adapter, so LLM and deterministic diagnosis share the same fail-closed boundary.
+- The 12-case catalog and archive-audit scoring policy are frozen as `cfdc-diagnostic-12-v2-archive-audit` with a SHA-256 fingerprint. Saved snapshots are rejected if their catalog, scoring policy, membership, or ordering differs.
 
 LLM environment variables:
 
@@ -294,9 +299,11 @@ Run the feature ablations and offline diagnostic evaluator:
 python main.py --feature-ablation
 python main.py --diagnostic-eval
 python main.py --diagnostic-eval-current
+python main.py --diagnostic-eval-llm
+python main.py --diagnostic-eval-llm-saved
 ```
 
-`--diagnostic-eval` replays the committed responses; `--diagnostic-eval-current` evaluates a fresh deterministic response snapshot.
+`--diagnostic-eval` replays the committed deterministic responses; `--diagnostic-eval-current` evaluates a fresh deterministic response snapshot. `--diagnostic-eval-llm` calls the configured API for the same frozen 12 cases, saves only structured diagnostic artifacts, and compares all diagnostic and archive-audit metrics against the deterministic baseline. Use `--diagnostic-llm-output PATH` to override the default LLM snapshot path. `--diagnostic-eval-llm-saved` repeats the comparison without another API call.
 
 Validate the stable software demo routes:
 
@@ -378,7 +385,7 @@ The latest local validation snapshot for the software prototype was:
 
 ```text
 python -m compileall cfdc tests main.py
-tests passed=89
+tests passed=95
 
 cartpole      completed go True NMP boundary / rollback verified
 vtol-position completed go True accepted
@@ -387,7 +394,7 @@ vtol-variation completed go True 6 / 6 expectations met
 demo          4 / 4 stable routes passed
 benchmark     7 / 7 generic closed-loop cases passed
 ablation      2 cases / 6 trials, expected comparisons passed
-diagnosis     6 / 12 strict cases passed, 3 premature releases detected
+diagnosis     12 / 12 strict archive-audit cases passed, 0 premature releases or dangerous false-positive controls detected
 ```
 
 This means the deterministic stable-demo routes are reproducible. It does not imply complete target-metric reproduction or real-hardware validation.
@@ -399,7 +406,8 @@ This means the deterministic stable-demo routes are reproducible. It does not im
 - Natural-frequency continuous tracking is not yet a full long-term small-dither FLL implementation.
 - VTOL `k_theta` RLS tracking is not yet integrated as a long-term route-level closed loop.
 - MIMO currently has pairing and decoupling synthesis, but no dedicated MIMO plant simulation.
-- The offline deterministic diagnosis snapshot currently flags premature controller release for first-order thermal delay ambiguity, CSTR operating-point nonlinearity, and quadruple-tank MIMO/NMP.
+- The shared gate now blocks the three previously detected premature releases. Complex CSTR, Acrobot, and matrix-valued MIMO routes remain experiment plans only because their deterministic controller synthesis is not implemented.
+- No real LLM comparison snapshot is committed yet; `--diagnostic-eval-llm` requires configured API credentials and records the model and prompt version in the saved structured artifact.
 - Real experiment log import, hardware approval, and actuator command deployment are not implemented.
 
 ## Suggested Next Steps
@@ -407,6 +415,6 @@ This means the deterministic stable-demo routes are reproducible. It does not im
 1. Reproduce the paper's Cartpole 19-20% undershoot value with a reusable constrained candidate policy.
 2. Reproduce the VTOL 14% undershoot / 3.1 s settling experiment.
 3. Extend the six-scenario payload study into long-horizon hover-thrust and `k_theta` tracking.
-4. Fix the three diagnosed premature-release cases and add LLM response snapshots for comparison.
+4. Run and preserve LLM response snapshots for comparison against the frozen deterministic baseline.
 5. Add noise, disturbance, parameter-sweep, and repeated-statistics experiments.
 6. Import real experiment CSV/JSON logs into `ExperimentResult`.

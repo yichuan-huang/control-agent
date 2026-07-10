@@ -8,6 +8,7 @@ import numpy as np
 from cfdc.controllers import synthesize_controller
 from cfdc.diagnosis import DiagnosticEngine
 from cfdc.diagnosis.llm import DiagnosticAdapter
+from cfdc.diagnosis.safety import validate_diagnostic_controller_release
 from cfdc.experiments import plan_safe_experiments
 from cfdc.features import extract_features_from_results
 from cfdc.models import (
@@ -346,12 +347,18 @@ def _base_report(
     diagnosis: StructuralDiagnosis,
     run_id: str | None,
 ) -> CFDCRunReport:
+    diagnostic_gate = validate_diagnostic_controller_release(
+        description,
+        diagnosis,
+        None,
+    )
     return CFDCRunReport(
         run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
         route_id=route_id,
         status="need_more_information",
         system_description=description,
         diagnosis=diagnosis,
+        go_no_go=diagnostic_gate,
         notes=["Stage 0 stopped because the description needs clarification."],
     )
 
@@ -415,7 +422,13 @@ def run_cfdc_route(
 
     classification = engine.classify(diagnosis, description)
     plan: ExperimentPlan = plan_safe_experiments(diagnosis, classification)
-    route_gate = validate_route_compatibility(route_id, classification)
+    diagnostic_gate = validate_diagnostic_controller_release(
+        description,
+        diagnosis,
+        classification,
+    )
+    compatibility_gate = validate_route_compatibility(route_id, classification)
+    route_gate = merge_go_no_go(diagnostic_gate, compatibility_gate)
     if route_gate.decision == "no_go":
         return _no_go_report(
             route_id,
@@ -425,7 +438,11 @@ def run_cfdc_route(
             plan,
             route_gate,
             run_id,
-            status="rejected",
+            status=(
+                "experiments_required"
+                if diagnostic_gate.decision == "no_go"
+                else "rejected"
+            ),
         )
     resolved_results = list(experiment_results or [])
     notes = ["Completed Stage 0-4 with deterministic CFDC computation after structured diagnosis."]

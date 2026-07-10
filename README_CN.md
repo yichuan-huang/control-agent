@@ -28,7 +28,9 @@ Control Agent 是一个面向非专家用户的控制系统自动化设计研究
 - [x] 主要通道的 final error、settling time、saturation、state boundary 和 rollback 后复验严格 gate。
 - [x] 7-case 通用闭环 benchmark：typed `BenchmarkRouteIR` -> 实验 -> 特征 -> 控制器 -> 仿真 -> 性能裁判。
 - [x] Class II/III 基于 `input_gain` 的 PD 定尺度，以及 Class I delay-aware PI de-tuning。
-- [x] 8 个 prompt case + 4 个复杂 case 的离线诊断评测，包含保存响应和字段/特征/补问/controller-gate 分项评分。
+- [x] 8 个 prompt case + 4 个复杂 case 的离线诊断评测，包含保存响应，以及 archive 风格的 feature precision/minimality、constraint isolation、dangerous false-positive、evidence、executability、testability 和 missing-information 审计。
+- [x] adapter 无关的诊断安全纠正和 release gate，覆盖显式 delay ambiguity、operating-point dependence、underactuated energy exchange 与强 MIMO/NMP 证据。
+- [x] 带版本和 SHA-256 指纹的冻结 12-case 诊断规范，以及 deterministic/LLM response snapshot 与逐指标对比工具。
 - [x] 一阶与双积分对象的 minimal-core/noisy/full-model 参数化 feature ablation。
 - [x] `python main.py --validate-demo` 对 Cartpole、VTOL position、VTOL boundary、VTOL variation 的确定性验证。
 - [x] 统一的软件仿真性能摘要，覆盖最终误差、超调、稳定时间、饱和、捕获、分通道状态、边界和违规原因。
@@ -44,6 +46,7 @@ Control Agent 是一个面向非专家用户的控制系统自动化设计研究
 - [ ] 独立 Class V MIMO plant 及其闭环 controller validation。
 - [ ] 在初始 feature ablation 之外增加噪声、扰动、参数扫描和重复试验。
 - [ ] 真实实验 CSV/JSON 导入、硬件审批、actuator deployment 和物理验证。
+- [ ] 真实 LLM response snapshot；live comparison 命令已经实现，但仓库和默认环境中没有 API 凭据。
 
 ### 需要改进
 
@@ -52,7 +55,7 @@ Control Agent 是一个面向非专家用户的控制系统自动化设计研究
 - [ ] 将手工给定的 boundary candidate 序列替换为可复用的约束搜索策略。
 - [ ] 通过重复试验、滤波校验和数据质量拒绝规则强化 confidence interval。
 - [ ] 让实验幅值和持续时间真正依赖 diagnosis、time-scale hint、forbidden actions 和 safety bounds。
-- [ ] 增加持久化多轮诊断状态，修复已发现的错误放行，并向离线评测器加入保存的 LLM-assisted responses。
+- [ ] 增加持久化多轮诊断状态，并评测一个或多个已配置 LLM API 的保存响应。
 - [ ] 增加 evidence ledger，包括原始数据哈希、配置版本和 claim-boundary summary。
 - [ ] 为所有稳定和实验性 route 生成紧凑的机器可读报告与 operator-facing 报告。
 
@@ -156,7 +159,9 @@ Control Agent 是一个面向非专家用户的控制系统自动化设计研究
 - `mechanism_cards.py` 加载并校验完整的三层 14-card catalog，并确定性选择可选 supplemental labels。catalog 默认关闭，labels 不替代或修改 canonical archetype route。
 - `control_mechanism_card_catalog.json` 保留 catalog metadata、evidence boundary、card roles、机制说明和 layer membership。
 - `llm.py` 提供 `OpenAICompatibleDiagnosticAdapter`，通过 OpenAI Python SDK 调用 OpenAI-compatible `/chat/completions` API，并要求模型返回严格 JSON。它只用于语言诊断，不负责数值 controller synthesis。
-- `evaluation.py` 在 8+4 case catalog 上分别评分八字段、required-feature recall、补问决策和 controller-release gate；`saved_evaluation_responses.json` 用于可重复的离线评分。
+- `evaluation.py` 在 8+4 case catalog 上分别评分八字段、required-feature recall/precision/minimality、constraint isolation、dangerous false-positive control、evidence discipline、missing-information quality、experiment executability、controller testability、archetype 分类和 controller-release gate；同时明确报告多余特征及被误选为核心特征的约束。`saved_evaluation_responses.json` 用于可重复的离线评分。
+- `safety.py` 在所有 adapter 之后统一应用 description-evidence rules 和 controller-release gate，因此 LLM 与 deterministic diagnosis 共用同一 fail-closed 边界。
+- 12-case catalog 与 archive-audit 评分规则冻结为 `cfdc-diagnostic-12-v2-archive-audit` 并绑定 SHA-256 指纹；catalog、评分策略、成员或顺序不一致的 snapshot 会被拒绝。
 
 LLM 环境变量：
 
@@ -294,9 +299,11 @@ python main.py --benchmark
 python main.py --feature-ablation
 python main.py --diagnostic-eval
 python main.py --diagnostic-eval-current
+python main.py --diagnostic-eval-llm
+python main.py --diagnostic-eval-llm-saved
 ```
 
-`--diagnostic-eval` 重放项目中保存的 responses；`--diagnostic-eval-current` 评测当前 deterministic engine 的新 snapshot。
+`--diagnostic-eval` 重放保存的 deterministic responses；`--diagnostic-eval-current` 评测当前 deterministic engine 的新 snapshot。`--diagnostic-eval-llm` 会用相同的冻结 12 cases 调用已配置 API，仅保存结构化诊断 artifact，并对比全部诊断及 archive-audit 指标。可用 `--diagnostic-llm-output PATH` 指定 snapshot 路径；`--diagnostic-eval-llm-saved` 不再次调用 API，直接重放保存结果。
 
 验证稳定软件演示 route：
 
@@ -378,7 +385,7 @@ python -m pytest
 
 ```text
 python -m compileall cfdc tests main.py
-tests passed=89
+tests passed=95
 
 cartpole      completed go True NMP boundary / rollback verified
 vtol-position completed go True accepted
@@ -387,7 +394,7 @@ vtol-variation completed go True 6 / 6 expectations met
 demo          4 / 4 stable routes passed
 benchmark     7 / 7 generic closed-loop cases passed
 ablation      2 cases / 6 trials, expected comparisons passed
-diagnosis     6 / 12 strict cases passed, 3 premature releases detected
+diagnosis     12 / 12 strict archive-audit cases passed, 0 premature releases or dangerous false-positive controls detected
 ```
 
 这说明稳定演示 route 可以确定性复现，但不代表已经完成全部目标指标复现或真实硬件验证。
@@ -399,7 +406,8 @@ diagnosis     6 / 12 strict cases passed, 3 premature releases detected
 - natural-frequency continuous tracking 还不是完整长期 small-dither FLL 实现。
 - VTOL `k_theta` RLS tracking 还没有集成为长期 route-level closed loop。
 - MIMO 当前有 pairing 和 decoupling synthesis，但还没有专门的 MIMO plant simulation。
-- 当前离线 deterministic diagnosis snapshot 检测到三类错误放行：first-order thermal delay ambiguity、CSTR operating-point nonlinearity、quadruple-tank MIMO/NMP。
+- 共享 gate 已阻止此前检测到的三类错误放行。复杂 CSTR、Acrobot 和 matrix-valued MIMO route 仍仅生成实验计划，因为相应 deterministic controller synthesis 尚未实现。
+- 当前尚未提交真实 LLM comparison snapshot；`--diagnostic-eval-llm` 需要 API 凭据，并会在结构化 artifact 中记录 model 与 prompt version。
 - 真实实验日志导入、硬件审批和 actuator command deployment 尚未实现。
 
 ## 建议下一步
@@ -407,6 +415,6 @@ diagnosis     6 / 12 strict cases passed, 3 premature releases detected
 1. 使用可复用的受约束候选策略复现论文中的 Cartpole 19-20% 欠冲数值。
 2. 复现 VTOL 14% undershoot / 3.1 s settling。
 3. 将六场景 payload study 扩展为长期 hover-thrust 与 `k_theta` tracking。
-4. 修复三类 diagnosis premature release，并加入 LLM response snapshot 做对比。
+4. 运行并保存 LLM response snapshot，与冻结 deterministic baseline 对比。
 5. 增加噪声、扰动、参数扫描和重复统计实验。
 6. 将真实实验 CSV/JSON 日志导入 `ExperimentResult`。

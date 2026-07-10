@@ -4,6 +4,10 @@ from typing import Any
 
 from cfdc.controllers import synthesize_controller
 from cfdc.diagnosis import DiagnosticEngine
+from cfdc.diagnosis.safety import (
+    diagnostic_required_feature_plan,
+    validate_diagnostic_controller_release,
+)
 from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.experiments import plan_safe_experiments
 from cfdc.features import extract_features_from_results
@@ -32,13 +36,37 @@ def run_cfdc_pipeline(
         "evidence_boundary": "software_pipeline_output_not_physical_validation",
     }
     if not diagnosis.complete:
+        diagnostic_gate = validate_diagnostic_controller_release(
+            description,
+            diagnosis,
+            None,
+        )
         result["status"] = "need_more_information"
+        result["go_no_go"] = diagnostic_gate.model_dump()
+        result["provisional_required_features"] = diagnostic_required_feature_plan(
+            description,
+            diagnosis,
+            None,
+        )
         return result
 
     classification = engine.classify(diagnosis, description)
     experiment_plan = plan_safe_experiments(diagnosis, classification)
     result["classification"] = classification.model_dump()
     result["experiment_plan"] = experiment_plan.model_dump()
+    diagnostic_gate = validate_diagnostic_controller_release(
+        description,
+        diagnosis,
+        classification,
+    )
+    result["diagnostic_release_gate"] = diagnostic_gate.model_dump()
+    if diagnostic_gate.decision == "no_go":
+        result["status"] = "experiments_required"
+        result["go_no_go"] = diagnostic_gate.model_dump()
+        result["notes"] = [
+            "The shared diagnostic safety gate blocked controller release before Stage 3/4.",
+        ]
+        return result
 
     resolved_features = features
     if resolved_features is None and experiment_results:

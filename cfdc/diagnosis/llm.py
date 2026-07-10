@@ -9,6 +9,9 @@ from openai import OpenAI
 from cfdc.models import StructuralDiagnosis, SystemDescription
 
 
+PROMPT_VERSION = "cfdc-stage0-v2-shared-safety"
+
+
 class DiagnosticAdapter(Protocol):
     """LLM-facing adapter: implementations must return structured data only."""
 
@@ -45,6 +48,10 @@ def build_diagnostic_prompt(description: SystemDescription) -> str:
         "- Fill all eight diagnostic fields.\n"
         "- If any field is unknown, set complete=false and ask 2-4 plain-language clarification questions.\n"
         "- If all fields are known or reasonably inferred, set complete=true and use an empty clarification_questions list.\n"
+        "- An explicitly unobserved or unknown delay must remain unknown; absence of a delay statement is not evidence of zero delay.\n"
+        "- If several inputs visibly affect several outputs, mark coupling as significant multivariable interaction.\n"
+        "- Initial opposite or unfavorable motion is non-minimum-phase or inverse-response evidence.\n"
+        "- If gain or time scale changes materially with operating point, mark strong operating-point-dependent nonlinearity and large uncertainty.\n"
         "- Ask about observable behavior and available sensors/actuators, not about control-theory jargon.\n"
         "- Do not synthesize controller gains. Numeric control computation happens later in deterministic code.\n\n"
         "System description artifact:\n"

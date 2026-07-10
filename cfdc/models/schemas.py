@@ -330,17 +330,44 @@ class FeatureAblationResult(CFDCModel):
 class SavedDiagnosticResponse(CFDCModel):
     case_id: str
     field_values: dict[str, str]
+    field_evidence: dict[str, list[str]] = Field(default_factory=dict)
     complete: bool
     clarification_questions: list[str] = Field(default_factory=list)
     primary_class: str | None = None
     required_core_features: list[str] = Field(default_factory=list)
+    control_architecture: str | None = None
+    classification_rationale: str | None = None
+    safety_constraints: list[str] = Field(default_factory=list)
+    experiment_plan_executable: bool = False
+    experiment_plan_issues: list[str] = Field(default_factory=list)
+    controller_testable: bool = False
+    controller_allowed: bool = False
+    controller_release_reasons: list[str] = Field(default_factory=list)
     generator: str
+
+
+class DiagnosticResponseSnapshot(CFDCModel):
+    snapshot_version: int = Field(ge=1)
+    evaluation_spec_version: str
+    case_catalog_sha256: str
+    scoring_policy: dict[str, Any]
+    response_source: Literal["saved_deterministic", "live_llm", "saved_llm"]
+    generator: str
+    model: str | None = None
+    prompt_version: str
+    responses: list[SavedDiagnosticResponse] = Field(min_length=1)
+    evidence_boundary: str = "structured_diagnostic_responses_not_controller_or_physical_validation"
 
 
 class DiagnosticEvaluationCaseResult(CFDCModel):
     case_id: str
     suite: Literal["prompt_8", "complex_4"]
-    response_source: Literal["current_engine", "saved_response"]
+    response_source: Literal[
+        "current_engine",
+        "saved_deterministic",
+        "live_llm",
+        "saved_llm",
+    ]
     expected_complete: bool
     actual_complete: bool
     clarification_correct: bool
@@ -352,6 +379,22 @@ class DiagnosticEvaluationCaseResult(CFDCModel):
     expected_required_features: list[str]
     actual_required_features: list[str]
     required_feature_recall: float = Field(ge=0.0, le=1.0)
+    required_feature_precision: float = Field(ge=0.0, le=1.0)
+    core_feature_minimality_correct: bool
+    extra_core_features: list[str] = Field(default_factory=list)
+    constraint_isolation_correct: bool
+    constraint_feature_leaks: list[str] = Field(default_factory=list)
+    dangerous_false_positive_control_correct: bool
+    dangerous_false_positive_features: list[str] = Field(default_factory=list)
+    evidence_discipline_correct: bool
+    missing_information_quality: float = Field(ge=0.0, le=1.0)
+    expected_experiment_executable: bool
+    actual_experiment_executable: bool
+    experiment_executability_correct: bool
+    experiment_plan_issues: list[str] = Field(default_factory=list)
+    expected_controller_testable: bool
+    actual_controller_testable: bool
+    controller_testability_correct: bool
     expected_controller_allowed: bool
     actual_controller_allowed: bool
     controller_gate_correct: bool
@@ -360,18 +403,44 @@ class DiagnosticEvaluationCaseResult(CFDCModel):
 
 
 class DiagnosticEvaluationResult(CFDCModel):
-    response_source: Literal["current_engine", "saved_response"]
+    response_source: Literal[
+        "current_engine",
+        "saved_deterministic",
+        "live_llm",
+        "saved_llm",
+    ]
+    evaluation_spec_version: str
+    case_catalog_sha256: str
     case_count: int = Field(ge=1)
     prompt_case_count: int = Field(ge=1)
     complex_case_count: int = Field(ge=1)
     mean_eight_field_accuracy: float = Field(ge=0.0, le=1.0)
     mean_required_feature_recall: float = Field(ge=0.0, le=1.0)
+    mean_required_feature_precision: float = Field(ge=0.0, le=1.0)
+    core_feature_minimality_accuracy: float = Field(ge=0.0, le=1.0)
+    constraint_isolation_accuracy: float = Field(ge=0.0, le=1.0)
+    dangerous_false_positive_control_accuracy: float = Field(ge=0.0, le=1.0)
+    evidence_discipline_accuracy: float = Field(ge=0.0, le=1.0)
+    mean_missing_information_quality: float = Field(ge=0.0, le=1.0)
+    experiment_executability_accuracy: float = Field(ge=0.0, le=1.0)
+    controller_testability_accuracy: float = Field(ge=0.0, le=1.0)
     clarification_accuracy: float = Field(ge=0.0, le=1.0)
+    archetype_accuracy: float = Field(ge=0.0, le=1.0)
     controller_gate_accuracy: float = Field(ge=0.0, le=1.0)
     premature_controller_release_count: int = Field(ge=0)
+    dangerous_false_positive_control_count: int = Field(ge=0)
     passed_count: int = Field(ge=0)
     cases: list[DiagnosticEvaluationCaseResult] = Field(min_length=1)
     evidence_boundary: str = "offline_diagnostic_evaluation_not_controller_validation"
+
+
+class DiagnosticEvaluationComparison(CFDCModel):
+    evaluation_spec_version: str
+    case_catalog_sha256: str
+    deterministic: DiagnosticEvaluationResult
+    llm: DiagnosticEvaluationResult
+    metric_deltas_llm_minus_deterministic: dict[str, float]
+    evidence_boundary: str = "diagnostic_response_comparison_not_controller_or_physical_validation"
 
 
 class OnlineTuningState(CFDCModel):

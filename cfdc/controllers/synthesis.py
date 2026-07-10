@@ -116,6 +116,20 @@ def synthesize_controller(
         )
 
     if archetype == ArchetypeClass.CLASS_V_MULTIVARIABLE_SIGNIFICANT_COUPLING.value:
+        if "local_gain_matrix" in fmap:
+            return ControllerCandidate(
+                architecture="mimo_pairing_evidence_required",
+                gains={},
+                tunable_gain_names=[],
+                saturation={"per_input_limit": _limit("per_input_limit", safety, 1.0)},
+                constraints=[
+                    "do not collapse a local gain matrix into one scalar coupling gain",
+                    "require typed matrix extraction and pairing validation before synthesis",
+                ],
+                source_features=["local_gain_matrix", "local_time_constant", "pairing_indicator"],
+                status="refuse",
+                notes=["The current scalar CoreFeatureArtifact path cannot safely synthesize this MIMO route."],
+            )
         return ControllerCandidate(
             architecture="conservative_mimo_pairing",
             gains={"loop_gain_scale": 0.1, "decoupler_scale": 0.5},
@@ -124,6 +138,36 @@ def synthesize_controller(
             constraints=["pair loops conservatively", "multiply static decoupling by 0.5"],
             source_features=["coupling_gain"],
             status="ready_for_conservative_trial",
+        )
+
+    if "local_static_gain" in fmap or "gain_variation_ratio" in fmap:
+        return ControllerCandidate(
+            architecture="local_operating_region_validation_required",
+            gains={},
+            tunable_gain_names=[],
+            saturation={},
+            constraints=[
+                "bind each feature packet to one declared operating region",
+                "do not release a global PI controller from one local response",
+            ],
+            source_features=["local_static_gain", "local_time_constant", "gain_variation_ratio"],
+            status="refuse",
+            notes=["Gain scheduling and operating-region transition validation are not implemented."],
+        )
+
+    if "input_to_unactuated_coupling_gain" in fmap:
+        return ControllerCandidate(
+            architecture="underactuated_capture_route_not_implemented",
+            gains={},
+            tunable_gain_names=[],
+            saturation={},
+            constraints=[
+                "validate energy exchange and capture separately for this mechanism",
+                "do not reuse the cartpole controller solely because both plants are underactuated",
+            ],
+            source_features=["natural_frequency", "input_to_unactuated_coupling_gain"],
+            status="refuse",
+            notes=["Only the Cartpole-specific underactuated route currently has closed-loop validation."],
         )
 
     if "inverse_response_severity" in fmap and "static_gain" in fmap and "time_constant" in fmap:

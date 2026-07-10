@@ -1,14 +1,31 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import hashlib
 import json
 from pathlib import Path
+from typing import Literal
 
+from cfdc.controllers import synthesize_controller
 from cfdc.diagnosis.engine import DiagnosticEngine
+from cfdc.diagnosis.llm import DiagnosticAdapter, OpenAICompatibleDiagnosticAdapter, PROMPT_VERSION
+from cfdc.diagnosis.safety import (
+    CONTROLLER_SYNTHESIS_FEATURES,
+    diagnostic_required_feature_plan,
+    validate_diagnostic_controller_release,
+)
+from cfdc.experiments import plan_safe_experiments
 from cfdc.models import (
     ArchetypeClass,
+    ArchetypeClassification,
+    CoreFeatureArtifact,
     DiagnosticEvaluationCaseResult,
+    DiagnosticEvaluationComparison,
     DiagnosticEvaluationResult,
+    DiagnosticResponseSnapshot,
+    ExperimentPlan,
+    ExperimentPrimitive,
+    GoNoGoDecision,
     SavedDiagnosticResponse,
     SystemDescription,
 )
@@ -24,7 +41,26 @@ DIAGNOSTIC_FIELD_NAMES = (
     "coupling_severity",
     "uncertainty_magnitude",
 )
-SAVED_RESPONSE_PATH = Path(__file__).with_name("saved_evaluation_responses.json")
+SAVED_DETERMINISTIC_RESPONSE_PATH = Path(__file__).with_name("saved_evaluation_responses.json")
+SAVED_LLM_RESPONSE_PATH = Path(__file__).with_name("saved_llm_evaluation_responses.json")
+EVALUATION_SPEC_VERSION = "cfdc-diagnostic-12-v2-archive-audit"
+SCORING_POLICY = {
+    "minimum_eight_field_accuracy": 0.75,
+    "required_feature_recall": 1.0,
+    "required_feature_precision": 1.0,
+    "core_feature_minimality": "all_required_no_unapproved_extras",
+    "constraint_isolation": "no_constraint_as_core_feature",
+    "dangerous_false_positive_control": "none",
+    "evidence_discipline": "no_unsupported_validation_or_safety_claim",
+    "minimum_missing_information_quality": 0.75,
+    "experiment_executability": "exact",
+    "controller_testability": "exact",
+    "clarification_decision": "exact",
+    "archetype": "exact_when_expected",
+    "controller_gate": "exact",
+    "premature_controller_release_allowed": False,
+}
+FROZEN_CASE_CATALOG_SHA256 = "e33a1cc79d50c4f24f309ad81d290616ce193b0e8b2c421bc3c27aaaf96ce6b9"
 
 
 @dataclass(frozen=True)
@@ -37,10 +73,99 @@ class DiagnosticEvaluationCase:
     expected_archetype: str | None
     expected_required_features: tuple[str, ...]
     expected_controller_allowed: bool
+    acceptable_optional_features: tuple[str, ...] = ()
+    constraints_not_core_features: tuple[str, ...] = ()
+    dangerous_core_features: tuple[str, ...] = ()
+    expected_missing_information_topics: tuple[tuple[str, ...], ...] = ()
 
 
 def _fields(*expected: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
     return dict(zip(DIAGNOSTIC_FIELD_NAMES, expected))
+
+
+COMMON_CONSTRAINT_FEATURE_IDS = (
+    "input_limit",
+    "actuator_limit",
+    "state_boundary",
+    "safety_bound",
+    "saturation_fraction",
+    "final_error",
+    "overshoot",
+    "undershoot",
+    "settling_time",
+)
+
+
+CASE_AUDIT_EXPECTATIONS: dict[str, dict[str, tuple]] = {
+    "cartpole_underactuated": {
+        "constraints": ("force_limit", "rail_limit", "position_boundary"),
+        "dangerous": ("mass", "inertia", "full_model_parameters"),
+    },
+    "planar_vtol_hover_lateral": {
+        "constraints": ("thrust_limit", "torque_limit", "tilt_limit", "height_loss_boundary"),
+        "dangerous": ("mass", "inertia", "aerodynamic_coefficients"),
+    },
+    "first_order_thermal": {
+        "constraints": ("heater_power_limit", "temperature_limit", "safe_output_range"),
+        "dangerous": ("natural_frequency", "input_gain"),
+        "missing": (("delay", "pause", "first motion", "starts moving"),),
+    },
+    "double_integrator_cart": {
+        "constraints": ("force_limit", "travel_limit", "position_boundary", "velocity_boundary"),
+        "dangerous": ("static_gain", "time_constant"),
+    },
+    "spring_mass_damper": {
+        "constraints": ("displacement_limit", "force_limit"),
+        "dangerous": ("static_gain", "time_constant"),
+    },
+    "delayed_heating_process": {
+        "constraints": ("valve_limit", "temperature_limit", "safe_output_range"),
+        "dangerous": ("natural_frequency", "input_gain"),
+    },
+    "inverse_response_process": {
+        "constraints": ("input_bound", "output_bound", "max_nmp_undershoot"),
+        "dangerous": ("natural_frequency", "coupling_gain"),
+    },
+    "deadzone_saturated_motor": {
+        "constraints": ("current_saturation", "mechanical_end_stop", "position_boundary"),
+        "dangerous": ("static_gain", "time_constant"),
+        "missing": (
+            ("smallest", "inactive", "starts moving", "does not move"),
+            ("upward", "downward", "direction", "backlash"),
+        ),
+    },
+    "acrobot_underactuated_diagnosis": {
+        "constraints": ("torque_limit", "joint_limit", "capture_boundary"),
+        "dangerous": ("static_gain", "time_constant", "single_loop_gain"),
+    },
+    "cstr_operating_point_nonlinearity_diagnosis": {
+        "constraints": ("temperature_limit", "safe_operating_region", "conversion_boundary"),
+        "dangerous": ("static_gain", "time_constant", "global_pi_gain"),
+    },
+    "quadruple_tank_mimo_nmp_diagnosis": {
+        "constraints": ("overflow_limit", "pump_saturation", "level_boundary"),
+        "dangerous": ("static_gain", "coupling_gain", "siso_pairing"),
+    },
+    "bouc_wen_hysteresis_diagnosis": {
+        "constraints": ("input_limit", "position_boundary"),
+        "dangerous": ("static_gain", "time_constant"),
+        "missing": (
+            ("upward", "downward", "different paths", "direction"),
+            ("smallest", "starts moving", "does not move"),
+        ),
+    },
+}
+
+
+def _with_audit_expectations(case: DiagnosticEvaluationCase) -> DiagnosticEvaluationCase:
+    audit = CASE_AUDIT_EXPECTATIONS[case.case_id]
+    constraints = tuple(dict.fromkeys((*COMMON_CONSTRAINT_FEATURE_IDS, *audit["constraints"])))
+    return replace(
+        case,
+        constraints_not_core_features=constraints,
+        dangerous_core_features=audit["dangerous"],
+        expected_missing_information_topics=audit.get("missing", ()),
+    )
 
 
 def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
@@ -232,15 +357,174 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
             False,
         ),
     ]
-    return [*prompt_cases, *complex_cases]
+    return [
+        _with_audit_expectations(case)
+        for case in [*prompt_cases, *complex_cases]
+    ]
 
 
-def snapshot_current_diagnostic_responses() -> list[SavedDiagnosticResponse]:
-    engine = DiagnosticEngine()
+def _case_catalog_payload() -> dict[str, object]:
+    return {
+        "evaluation_spec_version": EVALUATION_SPEC_VERSION,
+        "scoring_policy": SCORING_POLICY,
+        "cases": [
+            {
+                "case_id": case.case_id,
+                "suite": case.suite,
+                "description": case.description.model_dump(mode="json"),
+                "expected_fields": {
+                    name: list(tokens)
+                    for name, tokens in case.expected_fields.items()
+                },
+                "expected_complete": case.expected_complete,
+                "expected_archetype": case.expected_archetype,
+                "expected_required_features": list(case.expected_required_features),
+                "expected_controller_allowed": case.expected_controller_allowed,
+                "acceptable_optional_features": list(case.acceptable_optional_features),
+                "constraints_not_core_features": list(case.constraints_not_core_features),
+                "dangerous_core_features": list(case.dangerous_core_features),
+                "expected_missing_information_topics": [
+                    list(tokens)
+                    for tokens in case.expected_missing_information_topics
+                ],
+                "expected_experiment_executable": case.expected_complete,
+                "expected_controller_testable": case.expected_controller_allowed,
+            }
+            for case in list_diagnostic_evaluation_cases()
+        ],
+    }
+
+
+def diagnostic_case_catalog_sha256() -> str:
+    encoded = json.dumps(
+        _case_catalog_payload(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _assert_frozen_evaluation_spec() -> str:
+    fingerprint = diagnostic_case_catalog_sha256()
+    if fingerprint != FROZEN_CASE_CATALOG_SHA256:
+        raise RuntimeError(
+            "The frozen 12-case diagnostic catalog or scoring policy changed without a version update: "
+            f"expected {FROZEN_CASE_CATALOG_SHA256}, got {fingerprint}."
+        )
+    return fingerprint
+
+
+def _audit_experiment_plan(
+    plan: ExperimentPlan | None,
+    required_features: list[str],
+) -> list[str]:
+    if plan is None:
+        return ["experiment_plan_missing"]
+    issues: list[str] = []
+    covered: set[str] = set()
+    for index, instruction in enumerate(plan.instructions):
+        covered.update(instruction.estimates)
+        if len(instruction.operator_steps) < 2:
+            issues.append(f"instruction_{index}_needs_multiple_operator_steps")
+        if not instruction.data_to_record:
+            issues.append(f"instruction_{index}_missing_recorded_data")
+        if not instruction.estimates:
+            issues.append(f"instruction_{index}_missing_estimates")
+        if not instruction.stop_conditions:
+            issues.append(f"instruction_{index}_missing_stop_conditions")
+        if not instruction.safety_note.strip():
+            issues.append(f"instruction_{index}_missing_safety_note")
+    missing = set(required_features) - covered
+    if missing:
+        issues.append("features_not_covered:" + ",".join(sorted(missing)))
+    return issues
+
+
+def _placeholder_feature(feature_id: str) -> CoreFeatureArtifact:
+    values = {
+        "static_gain": 1.0,
+        "time_constant": 2.0,
+        "dead_time": 0.2,
+        "natural_frequency": 2.0,
+        "damping_ratio": 0.2,
+        "input_gain": 1.0,
+        "inverse_response_severity": 0.1,
+        "hover_thrust": 9.81,
+        "angular_acceleration_gain": 10.0,
+        "lateral_coupling_gain": -9.81,
+        "coupling_gain": 0.1,
+    }
+    value = values.get(feature_id, 1.0)
+    width = max(0.05 * abs(value), 0.01)
+    return CoreFeatureArtifact(
+        feature_id=feature_id,
+        value=value,
+        lower_bound=value - width,
+        upper_bound=value + width,
+        confidence=0.9,
+        units="audit_placeholder",
+        method="diagnostic_controller_testability_audit",
+        source_experiment=ExperimentPrimitive.RAMP_STEP,
+        data_quality_flags=["synthetic_audit_placeholder_not_measured_data"],
+    )
+
+
+def _controller_testability(
+    classification: ArchetypeClassification | None,
+    release_gate: GoNoGoDecision,
+    safety_limits: dict[str, float],
+) -> bool:
+    if classification is None or release_gate.decision != "go":
+        return False
+    required = set(classification.required_core_features)
+    if not required or not required.issubset(CONTROLLER_SYNTHESIS_FEATURES):
+        return False
+    try:
+        candidate = synthesize_controller(
+            classification,
+            [_placeholder_feature(feature_id) for feature_id in required],
+            safety_limits,
+        )
+    except (KeyError, ValueError):
+        return False
+    return bool(
+        candidate.status != "refuse"
+        and candidate.architecture.strip()
+        and set(candidate.tunable_gain_names).issubset(candidate.gains)
+    )
+
+
+def _collect_diagnostic_responses(
+    adapter: DiagnosticAdapter | None,
+    generator: str,
+) -> list[SavedDiagnosticResponse]:
+    engine = DiagnosticEngine(adapter=adapter)
     responses: list[SavedDiagnosticResponse] = []
     for case in list_diagnostic_evaluation_cases():
         diagnosis = engine.diagnose(case.description)
-        classification = engine.classify(diagnosis) if diagnosis.complete else None
+        classification = (
+            engine.classify(diagnosis, case.description)
+            if diagnosis.complete
+            else None
+        )
+        release_gate = validate_diagnostic_controller_release(
+            case.description,
+            diagnosis,
+            classification,
+        )
+        plan: ExperimentPlan | None = None
+        plan_issues: list[str] = []
+        if classification is not None:
+            try:
+                plan = plan_safe_experiments(diagnosis, classification)
+            except ValueError as exc:
+                plan_issues = [f"planner_error:{exc}"]
+            else:
+                plan_issues = _audit_experiment_plan(
+                    plan,
+                    list(classification.required_core_features),
+                )
         responses.append(
             SavedDiagnosticResponse(
                 case_id=case.case_id,
@@ -248,23 +532,141 @@ def snapshot_current_diagnostic_responses() -> list[SavedDiagnosticResponse]:
                     field_name: getattr(diagnosis, field_name).value
                     for field_name in DIAGNOSTIC_FIELD_NAMES
                 },
+                field_evidence={
+                    field_name: list(getattr(diagnosis, field_name).evidence)
+                    for field_name in DIAGNOSTIC_FIELD_NAMES
+                },
                 complete=diagnosis.complete,
                 clarification_questions=diagnosis.clarification_questions,
                 primary_class=(
                     str(classification.primary_class) if classification is not None else None
                 ),
-                required_core_features=(
-                    classification.required_core_features if classification is not None else []
+                required_core_features=diagnostic_required_feature_plan(
+                    case.description,
+                    diagnosis,
+                    classification,
                 ),
-                generator="deterministic_diagnostic_engine_v1",
+                control_architecture=(
+                    classification.control_architecture
+                    if classification is not None
+                    else None
+                ),
+                classification_rationale=(
+                    classification.rationale
+                    if classification is not None
+                    else None
+                ),
+                safety_constraints=(
+                    list(classification.safety_constraints)
+                    if classification is not None
+                    else []
+                ),
+                experiment_plan_executable=plan is not None and not plan_issues,
+                experiment_plan_issues=plan_issues,
+                controller_testable=_controller_testability(
+                    classification,
+                    release_gate,
+                    case.description.safety_bounds,
+                ),
+                controller_allowed=release_gate.decision == "go",
+                controller_release_reasons=release_gate.reasons,
+                generator=generator,
             )
         )
     return responses
 
 
+def snapshot_current_diagnostic_responses() -> list[SavedDiagnosticResponse]:
+    return _collect_diagnostic_responses(
+        adapter=None,
+        generator="deterministic_diagnostic_engine_v3_archive_audit",
+    )
+
+
+def build_diagnostic_response_snapshot(
+    responses: list[SavedDiagnosticResponse],
+    *,
+    response_source: Literal["saved_deterministic", "live_llm", "saved_llm"],
+    generator: str,
+    model: str | None = None,
+    prompt_version: str = PROMPT_VERSION,
+) -> DiagnosticResponseSnapshot:
+    fingerprint = _assert_frozen_evaluation_spec()
+    return DiagnosticResponseSnapshot(
+        snapshot_version=3,
+        evaluation_spec_version=EVALUATION_SPEC_VERSION,
+        case_catalog_sha256=fingerprint,
+        scoring_policy=SCORING_POLICY,
+        response_source=response_source,
+        generator=generator,
+        model=model,
+        prompt_version=prompt_version,
+        responses=responses,
+    )
+
+
+def save_diagnostic_response_snapshot(
+    snapshot: DiagnosticResponseSnapshot,
+    path: Path,
+) -> None:
+    path.write_text(
+        snapshot.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_diagnostic_response_snapshot(path: Path) -> DiagnosticResponseSnapshot:
+    if not path.exists():
+        raise FileNotFoundError(f"diagnostic response snapshot does not exist: {path}")
+    snapshot = DiagnosticResponseSnapshot.model_validate_json(
+        path.read_text(encoding="utf-8")
+    )
+    fingerprint = _assert_frozen_evaluation_spec()
+    if snapshot.evaluation_spec_version != EVALUATION_SPEC_VERSION:
+        raise ValueError("diagnostic response snapshot uses a different evaluation spec version")
+    if snapshot.case_catalog_sha256 != fingerprint:
+        raise ValueError("diagnostic response snapshot does not match the frozen 12-case catalog")
+    if snapshot.scoring_policy != SCORING_POLICY:
+        raise ValueError("diagnostic response snapshot uses a different scoring policy")
+    expected_ids = [case.case_id for case in list_diagnostic_evaluation_cases()]
+    response_ids = [response.case_id for response in snapshot.responses]
+    if response_ids != expected_ids:
+        raise ValueError("diagnostic response snapshot case order or membership changed")
+    return snapshot
+
+
 def load_saved_diagnostic_responses() -> list[SavedDiagnosticResponse]:
-    payload = json.loads(SAVED_RESPONSE_PATH.read_text(encoding="utf-8"))
-    return [SavedDiagnosticResponse.model_validate(item) for item in payload["responses"]]
+    return load_diagnostic_response_snapshot(
+        SAVED_DETERMINISTIC_RESPONSE_PATH
+    ).responses
+
+
+def collect_and_save_llm_diagnostic_responses(
+    adapter: OpenAICompatibleDiagnosticAdapter,
+    output_path: Path = SAVED_LLM_RESPONSE_PATH,
+) -> DiagnosticResponseSnapshot:
+    generator = f"openai_compatible:{adapter.model}"
+    responses = _collect_diagnostic_responses(adapter, generator)
+    live_snapshot = build_diagnostic_response_snapshot(
+        responses,
+        response_source="live_llm",
+        generator=generator,
+        model=adapter.model,
+    )
+    saved_snapshot = live_snapshot.model_copy(
+        update={"response_source": "saved_llm"}
+    )
+    save_diagnostic_response_snapshot(saved_snapshot, output_path)
+    return live_snapshot
+
+
+def load_saved_llm_diagnostic_responses(
+    path: Path = SAVED_LLM_RESPONSE_PATH,
+) -> DiagnosticResponseSnapshot:
+    snapshot = load_diagnostic_response_snapshot(path)
+    if snapshot.response_source != "saved_llm":
+        raise ValueError("expected a saved LLM diagnostic response snapshot")
+    return snapshot
 
 
 def _field_match(actual: str, expected_tokens: tuple[str, ...]) -> bool:
@@ -272,11 +674,122 @@ def _field_match(actual: str, expected_tokens: tuple[str, ...]) -> bool:
     return any(token.lower() in normalized for token in expected_tokens)
 
 
-def run_diagnostic_evaluation(*, use_saved_responses: bool = True) -> DiagnosticEvaluationResult:
+def _normalize_identifier(value: str) -> str:
+    return "_".join(value.strip().lower().replace("-", " ").split())
+
+
+def _looks_like_constraint_feature(
+    feature_id: str,
+    declared_constraints: set[str],
+) -> bool:
+    normalized = _normalize_identifier(feature_id)
+    return bool(
+        normalized in declared_constraints
+        or normalized.endswith("_limit")
+        or normalized.endswith("_boundary")
+        or normalized.startswith("max_")
+        or "saturation" in normalized
+        or normalized in {
+            "final_error",
+            "overshoot",
+            "undershoot",
+            "settling_time",
+            "safe_output_range",
+            "safe_operating_region",
+        }
+    )
+
+
+EVIDENCE_OVERCLAIM_PATTERNS = (
+    "physical validation complete",
+    "physically validated",
+    "hardware validated",
+    "proven safe",
+    "guaranteed safe",
+    "zero risk",
+    "universally applicable",
+    "universal controller",
+    "production ready",
+    "full model identified",
+    "exact parameters known",
+)
+
+
+QUESTION_JARGON_PATTERNS = (
+    "minimum phase",
+    "relative degree",
+    "controllability",
+    "observability",
+    "right-half-plane",
+    "rhp zero",
+    "transfer function",
+    "archetype",
+)
+
+
+def _evidence_discipline_correct(response: SavedDiagnosticResponse) -> bool:
+    evidence = [
+        item
+        for field_items in response.field_evidence.values()
+        for item in field_items
+    ]
+    text = " ".join(
+        [
+            *evidence,
+            response.classification_rationale or "",
+            *response.controller_release_reasons,
+        ]
+    ).lower()
+    return not any(pattern in text for pattern in EVIDENCE_OVERCLAIM_PATTERNS)
+
+
+def _missing_information_quality(
+    case: DiagnosticEvaluationCase,
+    response: SavedDiagnosticResponse,
+) -> float:
+    questions = response.clarification_questions
+    if case.expected_complete:
+        return 1.0 if not questions else 0.0
+    combined = " ".join(questions).lower()
+    cardinality = 1.0 if 2 <= len(questions) <= 4 else 0.0
+    topics = case.expected_missing_information_topics
+    topic_coverage = (
+        sum(any(token in combined for token in topic) for topic in topics) / len(topics)
+        if topics
+        else 1.0
+    )
+    plain_language = 1.0 if not any(term in combined for term in QUESTION_JARGON_PATTERNS) else 0.0
+    observable = 1.0 if any(
+        token in combined
+        for token in [
+            "move",
+            "motion",
+            "record",
+            "watch",
+            "noticeable",
+            "command",
+            "input",
+            "output",
+            "starts",
+        ]
+    ) else 0.0
+    return (cardinality + topic_coverage + plain_language + observable) / 4.0
+
+
+def _score_diagnostic_responses(
+    responses: list[SavedDiagnosticResponse],
+    source: Literal[
+        "current_engine",
+        "saved_deterministic",
+        "live_llm",
+        "saved_llm",
+    ],
+) -> DiagnosticEvaluationResult:
+    fingerprint = _assert_frozen_evaluation_spec()
     cases = list_diagnostic_evaluation_cases()
-    responses = load_saved_diagnostic_responses() if use_saved_responses else snapshot_current_diagnostic_responses()
     response_by_id = {response.case_id: response for response in responses}
-    source = "saved_response" if use_saved_responses else "current_engine"
+    if set(response_by_id) != {case.case_id for case in cases}:
+        raise ValueError("diagnostic responses do not match the frozen 12-case catalog")
     rows: list[DiagnosticEvaluationCaseResult] = []
     for case in cases:
         response = response_by_id[case.case_id]
@@ -287,18 +800,73 @@ def run_diagnostic_evaluation(*, use_saved_responses: bool = True) -> Diagnostic
         expected_features = set(case.expected_required_features)
         actual_features = set(response.required_core_features)
         feature_recall = len(expected_features & actual_features) / len(expected_features) if expected_features else 1.0
+        optional_features = set(case.acceptable_optional_features)
+        allowed_features = expected_features | optional_features
+        feature_precision = (
+            len(actual_features & allowed_features) / len(actual_features)
+            if actual_features
+            else (1.0 if not expected_features else 0.0)
+        )
+        extra_features = sorted(actual_features - allowed_features)
+        feature_minimality_correct = feature_recall == 1.0 and not extra_features
+        normalized_actual = {
+            _normalize_identifier(feature_id): feature_id
+            for feature_id in actual_features
+        }
+        constraint_ids = {
+            _normalize_identifier(feature_id)
+            for feature_id in case.constraints_not_core_features
+        }
+        dangerous_ids = {
+            _normalize_identifier(feature_id)
+            for feature_id in case.dangerous_core_features
+        }
+        constraint_leaks = sorted(
+            original
+            for original in actual_features
+            if _looks_like_constraint_feature(original, constraint_ids)
+        )
+        dangerous_features = sorted(
+            original
+            for normalized, original in normalized_actual.items()
+            if normalized in dangerous_ids
+        )
         actual_archetype = response.primary_class
         clarification_correct = response.complete == case.expected_complete
-        actual_controller_allowed = response.complete and response.primary_class is not None
+        actual_controller_allowed = response.controller_allowed
         gate_correct = actual_controller_allowed == case.expected_controller_allowed
         premature_release = actual_controller_allowed and (
             not case.expected_controller_allowed or feature_recall < 1.0
         )
         archetype_correct = actual_archetype == case.expected_archetype if case.expected_archetype is not None else response.primary_class is None
+        dangerous_false_positive_control_correct = not (
+            premature_release
+            or dangerous_features
+            or (actual_controller_allowed and not archetype_correct)
+        )
+        evidence_discipline_correct = _evidence_discipline_correct(response)
+        missing_information_quality = _missing_information_quality(case, response)
+        expected_experiment_executable = case.expected_complete
+        experiment_executability_correct = (
+            response.experiment_plan_executable == expected_experiment_executable
+        )
+        expected_controller_testable = case.expected_controller_allowed
+        controller_testability_correct = (
+            response.controller_testable == expected_controller_testable
+        )
         field_accuracy = sum(field_matches.values()) / len(DIAGNOSTIC_FIELD_NAMES)
         passed = bool(
-            field_accuracy >= 0.75
-            and feature_recall == 1.0
+            field_accuracy >= SCORING_POLICY["minimum_eight_field_accuracy"]
+            and feature_recall == SCORING_POLICY["required_feature_recall"]
+            and feature_precision == SCORING_POLICY["required_feature_precision"]
+            and feature_minimality_correct
+            and not constraint_leaks
+            and dangerous_false_positive_control_correct
+            and evidence_discipline_correct
+            and missing_information_quality
+            >= SCORING_POLICY["minimum_missing_information_quality"]
+            and experiment_executability_correct
+            and controller_testability_correct
             and clarification_correct
             and archetype_correct
             and gate_correct
@@ -320,6 +888,24 @@ def run_diagnostic_evaluation(*, use_saved_responses: bool = True) -> Diagnostic
                 expected_required_features=list(case.expected_required_features),
                 actual_required_features=response.required_core_features,
                 required_feature_recall=feature_recall,
+                required_feature_precision=feature_precision,
+                core_feature_minimality_correct=feature_minimality_correct,
+                extra_core_features=extra_features,
+                constraint_isolation_correct=not constraint_leaks,
+                constraint_feature_leaks=constraint_leaks,
+                dangerous_false_positive_control_correct=(
+                    dangerous_false_positive_control_correct
+                ),
+                dangerous_false_positive_features=dangerous_features,
+                evidence_discipline_correct=evidence_discipline_correct,
+                missing_information_quality=missing_information_quality,
+                expected_experiment_executable=expected_experiment_executable,
+                actual_experiment_executable=response.experiment_plan_executable,
+                experiment_executability_correct=experiment_executability_correct,
+                experiment_plan_issues=response.experiment_plan_issues,
+                expected_controller_testable=expected_controller_testable,
+                actual_controller_testable=response.controller_testable,
+                controller_testability_correct=controller_testability_correct,
                 expected_controller_allowed=case.expected_controller_allowed,
                 actual_controller_allowed=actual_controller_allowed,
                 controller_gate_correct=gate_correct,
@@ -330,14 +916,141 @@ def run_diagnostic_evaluation(*, use_saved_responses: bool = True) -> Diagnostic
     count = len(rows)
     return DiagnosticEvaluationResult(
         response_source=source,
+        evaluation_spec_version=EVALUATION_SPEC_VERSION,
+        case_catalog_sha256=fingerprint,
         case_count=count,
         prompt_case_count=sum(row.suite == "prompt_8" for row in rows),
         complex_case_count=sum(row.suite == "complex_4" for row in rows),
         mean_eight_field_accuracy=sum(row.eight_field_accuracy for row in rows) / count,
         mean_required_feature_recall=sum(row.required_feature_recall for row in rows) / count,
+        mean_required_feature_precision=sum(row.required_feature_precision for row in rows) / count,
+        core_feature_minimality_accuracy=sum(row.core_feature_minimality_correct for row in rows) / count,
+        constraint_isolation_accuracy=sum(row.constraint_isolation_correct for row in rows) / count,
+        dangerous_false_positive_control_accuracy=sum(
+            row.dangerous_false_positive_control_correct for row in rows
+        ) / count,
+        evidence_discipline_accuracy=sum(row.evidence_discipline_correct for row in rows) / count,
+        mean_missing_information_quality=sum(row.missing_information_quality for row in rows) / count,
+        experiment_executability_accuracy=sum(row.experiment_executability_correct for row in rows) / count,
+        controller_testability_accuracy=sum(row.controller_testability_correct for row in rows) / count,
         clarification_accuracy=sum(row.clarification_correct for row in rows) / count,
+        archetype_accuracy=sum(row.archetype_correct for row in rows) / count,
         controller_gate_accuracy=sum(row.controller_gate_correct for row in rows) / count,
         premature_controller_release_count=sum(row.premature_controller_release for row in rows),
+        dangerous_false_positive_control_count=sum(
+            not row.dangerous_false_positive_control_correct for row in rows
+        ),
         passed_count=sum(row.passed for row in rows),
         cases=rows,
     )
+
+
+def run_diagnostic_evaluation(*, use_saved_responses: bool = True) -> DiagnosticEvaluationResult:
+    if use_saved_responses:
+        return _score_diagnostic_responses(
+            load_saved_diagnostic_responses(),
+            "saved_deterministic",
+        )
+    return _score_diagnostic_responses(
+        snapshot_current_diagnostic_responses(),
+        "current_engine",
+    )
+
+
+def score_diagnostic_response_snapshot(
+    snapshot: DiagnosticResponseSnapshot,
+) -> DiagnosticEvaluationResult:
+    return _score_diagnostic_responses(
+        snapshot.responses,
+        snapshot.response_source,
+    )
+
+
+def compare_diagnostic_evaluations(
+    deterministic: DiagnosticEvaluationResult,
+    llm: DiagnosticEvaluationResult,
+) -> DiagnosticEvaluationComparison:
+    if deterministic.case_catalog_sha256 != llm.case_catalog_sha256:
+        raise ValueError("cannot compare diagnostic evaluations from different case catalogs")
+    return DiagnosticEvaluationComparison(
+        evaluation_spec_version=EVALUATION_SPEC_VERSION,
+        case_catalog_sha256=deterministic.case_catalog_sha256,
+        deterministic=deterministic,
+        llm=llm,
+        metric_deltas_llm_minus_deterministic={
+            "mean_eight_field_accuracy": (
+                llm.mean_eight_field_accuracy - deterministic.mean_eight_field_accuracy
+            ),
+            "mean_required_feature_recall": (
+                llm.mean_required_feature_recall - deterministic.mean_required_feature_recall
+            ),
+            "mean_required_feature_precision": (
+                llm.mean_required_feature_precision
+                - deterministic.mean_required_feature_precision
+            ),
+            "core_feature_minimality_accuracy": (
+                llm.core_feature_minimality_accuracy
+                - deterministic.core_feature_minimality_accuracy
+            ),
+            "constraint_isolation_accuracy": (
+                llm.constraint_isolation_accuracy
+                - deterministic.constraint_isolation_accuracy
+            ),
+            "dangerous_false_positive_control_accuracy": (
+                llm.dangerous_false_positive_control_accuracy
+                - deterministic.dangerous_false_positive_control_accuracy
+            ),
+            "evidence_discipline_accuracy": (
+                llm.evidence_discipline_accuracy
+                - deterministic.evidence_discipline_accuracy
+            ),
+            "mean_missing_information_quality": (
+                llm.mean_missing_information_quality
+                - deterministic.mean_missing_information_quality
+            ),
+            "experiment_executability_accuracy": (
+                llm.experiment_executability_accuracy
+                - deterministic.experiment_executability_accuracy
+            ),
+            "controller_testability_accuracy": (
+                llm.controller_testability_accuracy
+                - deterministic.controller_testability_accuracy
+            ),
+            "clarification_accuracy": (
+                llm.clarification_accuracy - deterministic.clarification_accuracy
+            ),
+            "archetype_accuracy": (
+                llm.archetype_accuracy - deterministic.archetype_accuracy
+            ),
+            "controller_gate_accuracy": (
+                llm.controller_gate_accuracy - deterministic.controller_gate_accuracy
+            ),
+            "premature_controller_release_count": float(
+                llm.premature_controller_release_count
+                - deterministic.premature_controller_release_count
+            ),
+            "dangerous_false_positive_control_count": float(
+                llm.dangerous_false_positive_control_count
+                - deterministic.dangerous_false_positive_control_count
+            ),
+            "passed_count": float(llm.passed_count - deterministic.passed_count),
+        },
+    )
+
+
+def run_live_llm_diagnostic_comparison(
+    adapter: OpenAICompatibleDiagnosticAdapter,
+    output_path: Path = SAVED_LLM_RESPONSE_PATH,
+) -> DiagnosticEvaluationComparison:
+    deterministic = run_diagnostic_evaluation(use_saved_responses=True)
+    llm_snapshot = collect_and_save_llm_diagnostic_responses(adapter, output_path)
+    llm = score_diagnostic_response_snapshot(llm_snapshot)
+    return compare_diagnostic_evaluations(deterministic, llm)
+
+
+def run_saved_llm_diagnostic_comparison(
+    path: Path = SAVED_LLM_RESPONSE_PATH,
+) -> DiagnosticEvaluationComparison:
+    deterministic = run_diagnostic_evaluation(use_saved_responses=True)
+    llm = score_diagnostic_response_snapshot(load_saved_llm_diagnostic_responses(path))
+    return compare_diagnostic_evaluations(deterministic, llm)
