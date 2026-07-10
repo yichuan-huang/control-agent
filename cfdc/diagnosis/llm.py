@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 from openai import OpenAI
 
@@ -130,6 +131,9 @@ class OpenAICompatibleDiagnosticAdapter:
         self.temperature = temperature
         self.max_tokens = max_tokens
         client_base_url = self.base_url.rstrip("/").removesuffix("/chat/completions")
+        self._disable_thinking = (
+            urlparse(client_base_url).hostname or ""
+        ).lower() == "api.deepseek.com"
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=client_base_url,
@@ -137,7 +141,7 @@ class OpenAICompatibleDiagnosticAdapter:
         )
 
     def diagnose(self, description: SystemDescription) -> dict[str, Any]:
-        response = self.client.chat.completions.create(
+        request_options: dict[str, Any] = dict(
             model=self.model,
             messages=[
                 {
@@ -153,7 +157,18 @@ class OpenAICompatibleDiagnosticAdapter:
             max_tokens=self.max_tokens,
             response_format={"type": "json_object"},
         )
-        content = response.choices[0].message.content
+        if self._disable_thinking:
+            request_options["extra_body"] = {"thinking": {"type": "disabled"}}
+        response = self.client.chat.completions.create(**request_options)
+        choice = response.choices[0]
+        content = choice.message.content
         if not isinstance(content, str):
             raise ValueError("OpenAI-compatible response content must be a string")
+        if not content.strip():
+            reasoning_content = getattr(choice.message, "reasoning_content", None)
+            raise ValueError(
+                "OpenAI-compatible response content was empty "
+                f"(finish_reason={getattr(choice, 'finish_reason', None)!r}, "
+                f"reasoning_content_present={bool(reasoning_content)})"
+            )
         return parse_json_content(content)

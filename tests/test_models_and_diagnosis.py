@@ -1,3 +1,5 @@
+import pytest
+
 from cfdc.diagnosis import DiagnosticEngine, validate_agent_payload
 from cfdc.diagnosis.llm import (
     OpenAICompatibleDiagnosticAdapter,
@@ -142,8 +144,70 @@ def test_openai_compatible_adapter_uses_sdk(monkeypatch):
     assert calls["completion"]["temperature"] == 0.0
     assert calls["completion"]["max_tokens"] == 321
     assert calls["completion"]["response_format"] == {"type": "json_object"}
+    assert "extra_body" not in calls["completion"]
     assert calls["completion"]["messages"][1]["role"] == "user"
     assert "open_loop_stability" in calls["completion"]["messages"][1]["content"]
+
+
+def test_deepseek_adapter_disables_thinking_for_strict_json(monkeypatch):
+    calls = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            calls["completion"] = kwargs
+            message = type("Message", (), {"content": "{\"complete\": true}"})()
+            choice = type("Choice", (), {"message": message, "finish_reason": "stop"})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            completions = FakeCompletions()
+            self.chat = type("Chat", (), {"completions": completions})()
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
+    adapter = OpenAICompatibleDiagnosticAdapter(
+        base_url="https://api.deepseek.com",
+        model="deepseek-v4-flash",
+        api_key="test-key",
+    )
+
+    result = adapter.diagnose(SystemDescription(text="A simple heater process settles."))
+
+    assert result == {"complete": True}
+    assert calls["completion"]["extra_body"] == {
+        "thinking": {"type": "disabled"}
+    }
+
+
+def test_openai_compatible_adapter_explains_empty_content(monkeypatch):
+    class FakeCompletions:
+        def create(self, **kwargs):
+            message = type(
+                "Message",
+                (),
+                {"content": "", "reasoning_content": "unfinished reasoning"},
+            )()
+            choice = type(
+                "Choice",
+                (),
+                {"message": message, "finish_reason": "length"},
+            )()
+            return type("Response", (), {"choices": [choice]})()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            completions = FakeCompletions()
+            self.chat = type("Chat", (), {"completions": completions})()
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
+    adapter = OpenAICompatibleDiagnosticAdapter(
+        base_url="https://example.test/v1",
+        model="test-model",
+        api_key="test-key",
+    )
+
+    with pytest.raises(ValueError, match="finish_reason='length'"):
+        adapter.diagnose(SystemDescription(text="A simple heater process settles."))
 
 
 def test_diagnostic_prompt_contains_required_fields():
