@@ -14,38 +14,45 @@ Checked items have executable software evidence and automated test coverage. The
 
 - [x] Structured Stage 0 diagnosis with eight diagnostic fields and clarification questions.
 - [x] Five-archetype classification with structured required features and safety constraints.
+- [x] Optional three-layer, 14-card mechanism catalog as supplemental audit labels; disabled by default and never a replacement for the five canonical archetypes.
 - [x] Operator-facing safe experiment plans for free-decay, ramp/step, pulse, hover-thrust, and bounded-scan experiments.
 - [x] Deterministic extraction of step, modal, pulse, hover-thrust, inverse-response, and coupling features.
 - [x] Conservative controller synthesis for Classes I-V with explicit tunable gain names.
 - [x] Structured go/no-go validation, bounded trial reports, rollback, and freeze behavior.
 - [x] Cartpole stable demo using natural-frequency-only normalized-energy swing-up and nonlinear online PD gain search.
+- [x] Cartpole outer-position NMP candidate search with measured undershoot, multi-step rollback, and long-horizon rollback verification.
 - [x] VTOL position stable demo with signed lateral coupling and validated vertical gain refinement.
 - [x] VTOL NMP boundary demo with measured undershoot, candidate history, and rollback to the last safe lateral gains.
-- [x] Seven-case feature-chain smoke benchmark with explicit `closed_loop_executed=false` labeling.
-- [x] Deterministic `python main.py --validate-demo` validation for Cartpole, VTOL position, and VTOL boundary.
+- [x] Six-scenario VTOL mass/inertia variation study with explicit stale-versus-updated feature comparisons.
+- [x] Full-model Cartpole and full-state VTOL LQR baselines with matched plant, initial condition, reference, horizon, and actuator limits.
+- [x] Strict final-error, settling-time, saturation, state-boundary, and post-rollback validation gates for the main channels.
+- [x] Seven-case generic closed-loop benchmark from typed `BenchmarkRouteIR` through experiments, features, controller synthesis, simulation, and performance judgment.
+- [x] Feature-scaled Class II/III PD synthesis and delay-aware Class I PI de-tuning.
+- [x] Offline diagnosis evaluation with eight prompt cases, four complex cases, saved deterministic responses, and separate field/feature/clarification/controller-gate scores.
+- [x] Parameterized minimal-core/noisy/full-model feature ablations for first-order and double-integrator plants.
+- [x] Deterministic `python main.py --validate-demo` validation for Cartpole, VTOL position, VTOL boundary, and VTOL variation.
 - [x] Unified simulation performance summaries with final error, overshoot, settling, saturation, capture, channel, boundary, and violation fields.
 - [x] Python 3.11/3.13 CI, editable `.[test]` installation, and automated regression tests.
 
 ### Not Completed
 
-- [ ] Complete Cartpole outer-position NMP search with a 19-20% target undershoot boundary.
-- [ ] Full-model LQR baselines and fair CFDC/LQR numerical comparisons for both case studies.
+- [ ] Reproduction of the paper's Cartpole 19-20% undershoot value; the current software search enforces a 20% rejection threshold but does not reproduce that exact value.
 - [ ] Reproduction of the VTOL target result: 14% undershoot and 3.1 s settling time.
 - [ ] Long-horizon natural-frequency FLL tracking and 30 s `k_theta` RLS updates.
-- [ ] Explicit payload-change simulation with online hover-thrust, vertical-gain, and lateral-loop re-tuning.
+- [ ] Continuous payload-change adaptation with long-horizon hover-thrust and `k_theta` tracking; the six-scenario stale/updated study is implemented.
 - [ ] Stable default validation for `vtol-altitude` and `vtol-hover`.
-- [ ] Closed-loop simulations for every synthetic benchmark case and a dedicated Class V MIMO plant.
-- [ ] Noise, disturbance, parameter-sweep, repeated-trial, and ablation experiments.
+- [ ] Dedicated Class V MIMO plant and closed-loop controller validation.
+- [ ] Noise, disturbance, parameter-sweep, and repeated-trial experiments beyond the initial feature ablations.
 - [ ] Real experiment CSV/JSON import, hardware approval, actuator deployment, and physical validation.
 
 ### Needs Improvement
 
 - [ ] Reduce Cartpole actuator saturation while preserving the upright handoff and travel limits.
-- [ ] Improve VTOL position settling time and add an explicit settling-time acceptance threshold.
+- [ ] Improve VTOL position settling time toward the paper's target; explicit settling-time acceptance thresholds are now enforced.
 - [ ] Replace hand-selected boundary candidate schedules with a reusable constrained search policy.
 - [ ] Strengthen confidence intervals with repeated trials, filtering checks, and data-quality rejection rules.
 - [ ] Make experiment amplitude and duration depend on diagnosis, time-scale hints, forbidden actions, and safety bounds.
-- [ ] Add persistent multi-turn diagnostic state and evaluate deterministic versus LLM-assisted diagnosis accuracy.
+- [ ] Add persistent multi-turn diagnostic state, fix the diagnosed premature-release cases, and add saved LLM-assisted responses to the offline evaluator.
 - [ ] Add evidence-ledger artifacts with source hashes, configuration versions, and claim-boundary summaries.
 - [ ] Generate compact machine-readable and operator-facing reports for every stable and experimental route.
 
@@ -69,6 +76,7 @@ The current runtime follows a six-part loop:
 2. **Stage 1: Structural Diagnosis and Archetype Classification**
    - Maps the system to one of five CFDC canonical classes.
    - Produces the recommended control architecture, required core features, and safety constraints.
+   - Optionally appends mechanism-card labels for audit and explanation. This opt-in layer does not change the canonical class, required features, safety constraints, experiment route, or controller.
 
 3. **Stage 2: Safe Experiment Design**
    - Generates operator-facing safe experiment instructions.
@@ -86,7 +94,8 @@ The current runtime follows a six-part loop:
 6. **Online Optimization and Adaptation**
    - Applies small 5-10% gain refinements.
    - Monitors overshoot, settling time, integral absolute error, high-frequency control RMS, actuator saturation, and inverse-response undershoot.
-   - Rolls back unsafe increments. Tracked-feature update utilities exist, but payload tracking is not injected into the default demo routes.
+   - Rolls back unsafe increments and re-validates the rollback over the configured long horizon.
+   - Runs a deterministic VTOL mass/inertia study that compares stale features with features re-extracted from each changed software plant.
 
 ## Repository Layout
 
@@ -120,7 +129,7 @@ The current runtime follows a six-part loop:
 
 - `SystemDescription`: user description, observed outputs, actuators, and safety boundaries.
 - `StructuralDiagnosis`: Stage 0 diagnosis fields and clarification questions.
-- `ArchetypeClassification`: canonical class, control architecture, required features, and constraints.
+- `ArchetypeClassification`: canonical class, control architecture, required features, constraints, and optional supplemental mechanism-card labels.
 - `ExperimentPlan`, `ExperimentInstruction`: safe experiment plans.
 - `ExperimentTrace`, `ExperimentResult`: structured experiment data.
 - `CoreFeatureArtifact`: scalar feature output with confidence and data-quality metadata.
@@ -129,6 +138,10 @@ The current runtime follows a six-part loop:
 - `TrialReport`: bounded safe-trial execution report.
 - `ChannelPerformanceMetrics`, `SimulationPerformanceSummary`: typed per-channel and route-level performance reports.
 - `CartpoleSimulationResult`, `VtolSimulationResult`: software simulation results with backward-compatible `metrics` and structured `performance` output.
+- `CartpoleBoundaryResult`, `VtolVariationResult`: structured NMP search/rollback and six-scenario variation artifacts.
+- `ControllerComparison`: matched-condition CFDC/LQR performance comparison.
+- `BenchmarkRouteIR`, `ClosedLoopBenchmarkCaseResult`: typed generic benchmark route and closed-loop result.
+- `DiagnosticEvaluationResult`, `FeatureAblationResult`: offline diagnosis scores and structured feature-ablation results.
 - `CFDCRunReport`: end-to-end route report from `run_cfdc_route()`.
 - `GoNoGoDecision`: deterministic validation result for routes, classes, and required features.
 
@@ -140,7 +153,10 @@ This layer implements Stage 0 and Stage 1.
 
 - `engine.py` provides the deterministic diagnostic adapter through `infer_structural_diagnosis()`.
 - `classify_archetype()` maps the eight diagnosis fields to CFDC canonical classes.
+- `mechanism_cards.py` loads and validates the complete three-layer, 14-card catalog and deterministically selects optional supplemental labels. The catalog is disabled by default and its labels never replace or modify the canonical archetype route.
+- `control_mechanism_card_catalog.json` preserves the catalog metadata, evidence boundary, card roles, mechanism guidance, and layer membership.
 - `llm.py` provides `OpenAICompatibleDiagnosticAdapter`, which uses the OpenAI Python SDK to call OpenAI-compatible `/chat/completions` APIs and requires strict JSON output. It is used only for language diagnosis, not numeric controller synthesis.
+- `evaluation.py` scores the eight diagnostic fields, required-feature recall, clarification decisions, and controller-release gate over the 8+4 case catalog. `saved_evaluation_responses.json` supports repeatable offline scoring.
 
 LLM environment variables:
 
@@ -186,6 +202,7 @@ Supported synthesis branches include:
 - Class V: `conservative_mimo_pairing`
 
 Required features are validated before synthesis so incomplete inputs return structured errors instead of runtime `KeyError` failures.
+Class II and III PD gains are scaled by measured `input_gain`; Class I controllers use `dead_time/time_constant` for additional delay-aware de-tuning when delay is present.
 Class V loop pairing uses SciPy's global maximum-weight linear assignment rather than row-by-row greedy selection, and reports unmatched channels for centralized review.
 
 ### `cfdc/online/`
@@ -205,10 +222,12 @@ Stable demo route IDs:
 - `cartpole`
 - `vtol-position`
 - `vtol-boundary`
+- `vtol-variation`
 
 Experimental route IDs:
 
 - `generic`
+- `cartpole-boundary` (explicit Cartpole boundary route; currently runs the same complete Cartpole protocol)
 - `vtol-altitude`
 - `vtol-hover`
 
@@ -226,15 +245,16 @@ These gates keep route/class mismatches and missing features as structured no-go
 
 This layer contains software plants and synthetic benchmarks.
 
-- `cartpole.py`: cartpole / inverted-pendulum software plant.
-- `vtol.py`: planar VTOL software plant. Its lateral output is measured at a fixed offset from the center of mass so the software plant exposes the RHP-zero inverse response used by the boundary demo.
-- `benchmarks.py`: seven synthetic benchmark cases.
+- `cartpole.py`: cartpole / inverted-pendulum plant, outer-position NMP search, long-horizon rollback validation, and full-model LQR baseline.
+- `vtol.py`: planar VTOL plant, full-state LQR baseline, and mass/inertia variation study. Its lateral output is measured at a fixed offset from the center of mass so the software plant exposes the RHP-zero inverse response used by the boundary demo.
+- `generic.py`: shared scalar closed-loop plants and performance gates for first-order, delayed, double-integrator, oscillator, and inverse-response routes.
+- `benchmarks.py`: seven typed benchmark routes plus structured feature ablations. Cartpole and VTOL reuse their existing simulation modules.
 - `integrators.py`: shared fixed-step RK4 integration with held control inputs.
 - `traces.py`: shared synthetic step, modal, pulse, hover, and coupling traces.
 
 The Cartpole reference LQR path solves the continuous algebraic Riccati equation with SciPy rather than reconstructing the stable Hamiltonian eigenspace manually.
 
-Every Cartpole and VTOL simulation exposes primary-channel fields such as `final_error`, `abs_final_error`, `overshoot`, `settling_time_s`, `final_output`, `saturation_fraction`, and `success`. The structured `performance` object also reports all output channels, actuator-specific saturation, state boundaries, configured limits, capture state, and violations. A response that never settles uses `settled=false` and `settling_time_s=null`.
+Every Cartpole and VTOL simulation exposes primary-channel fields such as `final_error`, `abs_final_error`, `overshoot`, `settling_time_s`, `final_output`, `saturation_fraction`, and `success`. The structured `performance` object also reports all output channels, actuator-specific saturation, state boundaries, configured limits, capture state, and violations. Major routes reject responses that miss their final-error or explicit settling-time limits, exceed saturation or state boundaries, or fail long-horizon rollback validation.
 
 ## Installation With Conda
 
@@ -266,7 +286,17 @@ Run the benchmark suite:
 python main.py --benchmark
 ```
 
-The benchmark is a seven-case feature-chain smoke test. It does not execute closed-loop validation.
+The benchmark executes all seven routes through diagnosis, experiment planning, feature extraction, controller synthesis, closed-loop simulation, and the shared performance judge. Each result reports `closed_loop_executed=true` and its execution backend.
+
+Run the feature ablations and offline diagnostic evaluator:
+
+```bash
+python main.py --feature-ablation
+python main.py --diagnostic-eval
+python main.py --diagnostic-eval-current
+```
+
+`--diagnostic-eval` replays the committed responses; `--diagnostic-eval-current` evaluates a fresh deterministic response snapshot.
 
 Validate the stable software demo routes:
 
@@ -278,8 +308,10 @@ Run route-level simulations:
 
 ```bash
 python main.py --run-route cartpole
+python main.py --run-route cartpole-boundary
 python main.py --run-route vtol-position
 python main.py --run-route vtol-boundary
+python main.py --run-route vtol-variation
 ```
 
 Run the generic pipeline:
@@ -290,6 +322,14 @@ python main.py \
   --observed-output temperature \
   --actuator heater
 ```
+
+Opt in to supplemental mechanism-card labels:
+
+```bash
+python main.py --run-route cartpole --use-mechanism-cards
+```
+
+Without `--use-mechanism-cards`, `classification.supplemental_mechanism_cards` is an empty list. Programmatic callers use the same explicit `use_mechanism_cards=True` option on `DiagnosticEngine`, `run_cfdc_pipeline()`, or `run_cfdc_route()`.
 
 Run LLM-assisted diagnosis:
 
@@ -319,11 +359,12 @@ python main.py --run-route cartpole --include-trajectory
 The test suite covers:
 
 - Pydantic model round trips, diagnosis, and classification.
+- Complete mechanism-card catalog validation, default-off behavior, deterministic opt-in labels, and proof that opt-in does not change controller synthesis.
 - Safe experiment planning, feature extraction, and incomplete-feature no-go behavior.
-- Controller de-tuning, safe gain search, rollback/freeze, feature tracking, and MIMO pairing.
+- Feature-scaled and delay-aware controller synthesis, safe gain search, rollback/freeze, feature tracking, and MIMO pairing.
 - Runtime safety checks and `SafeTrialRunner`.
-- Cartpole and VTOL route reports.
-- Seven-case benchmark integration.
+- Cartpole and VTOL route reports, NMP rollback histories, variation scenarios, and LQR comparisons.
+- Seven-case closed-loop benchmark integration, parameterized feature ablations, and 8+4 offline diagnosis scoring.
 
 Run tests with:
 
@@ -337,13 +378,16 @@ The latest local validation snapshot for the software prototype was:
 
 ```text
 python -m compileall cfdc tests main.py
-tests passed=60
+tests passed=89
 
-cartpole      completed go True upright_handoff_window_reached
+cartpole      completed go True NMP boundary / rollback verified
 vtol-position completed go True accepted
 vtol-boundary completed go True boundary_triggered / nmp_undershoot
-demo          3 / 3 stable routes passed
-benchmark     7 / 7 feature-chain smoke cases passed
+vtol-variation completed go True 6 / 6 expectations met
+demo          4 / 4 stable routes passed
+benchmark     7 / 7 generic closed-loop cases passed
+ablation      2 cases / 6 trials, expected comparisons passed
+diagnosis     6 / 12 strict cases passed, 3 premature releases detected
 ```
 
 This means the deterministic stable-demo routes are reproducible. It does not imply complete target-metric reproduction or real-hardware validation.
@@ -351,16 +395,18 @@ This means the deterministic stable-demo routes are reproducible. It does not im
 ## Known Boundaries
 
 - `vtol-altitude` and `vtol-hover` routes can run CFDC controllers, but default simulation metrics may still return `metric_limit`.
-- The default VTOL routes do not fabricate a payload change; long-term hover-thrust and `k_theta` tracking remain future scenarios.
+- `vtol-variation` re-extracts features separately for changed software plants; it is not continuous in-flight hover-thrust or `k_theta` tracking.
 - Natural-frequency continuous tracking is not yet a full long-term small-dither FLL implementation.
 - VTOL `k_theta` RLS tracking is not yet integrated as a long-term route-level closed loop.
 - MIMO currently has pairing and decoupling synthesis, but no dedicated MIMO plant simulation.
+- The offline deterministic diagnosis snapshot currently flags premature controller release for first-order thermal delay ambiguity, CSTR operating-point nonlinearity, and quadruple-tank MIMO/NMP.
 - Real experiment log import, hardware approval, and actuator command deployment are not implemented.
 
 ## Suggested Next Steps
 
-1. Add the Cartpole outer-loop 20% NMP boundary search and LQR comparison.
-2. Reproduce the VTOL 14% undershoot / 3.1 s settling experiment and LQR comparison.
-3. Add explicit payload-change scenarios with long-horizon hover-thrust and `k_theta` tracking.
-4. Add noise, disturbance, parameter-sweep, and repeated-statistics experiments.
-5. Import real experiment CSV/JSON logs into `ExperimentResult`.
+1. Reproduce the paper's Cartpole 19-20% undershoot value with a reusable constrained candidate policy.
+2. Reproduce the VTOL 14% undershoot / 3.1 s settling experiment.
+3. Extend the six-scenario payload study into long-horizon hover-thrust and `k_theta` tracking.
+4. Fix the three diagnosed premature-release cases and add LLM response snapshots for comparison.
+5. Add noise, disturbance, parameter-sweep, and repeated-statistics experiments.
+6. Import real experiment CSV/JSON logs into `ExperimentResult`.

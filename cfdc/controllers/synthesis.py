@@ -48,22 +48,37 @@ def synthesize_controller(
         if gain.value < 0:
             kc = -kc
         ti = 5.0 * max(tau.value, 1e-6)
+        source_features = ["static_gain", "time_constant"]
+        constraints = [
+            "stable-plant nominal gains reduced by a factor of 10",
+            "integral action slowed by 5x time constant",
+        ]
+        if "dead_time" in fmap:
+            dead_time = max(fmap["dead_time"].value, 0.0)
+            delay_ratio = dead_time / max(tau.value, 1e-6)
+            delay_detune = 1.0 + delay_ratio
+            kc /= delay_detune
+            ti *= delay_detune
+            source_features.append("dead_time")
+            constraints.append("gain and integral speed are detuned by 1 + dead_time/time_constant")
         return ControllerCandidate(
             architecture="detuned_PI",
             gains={"kp": kc, "ki": kc / ti, "integral_time": ti},
             tunable_gain_names=["kp", "ki"],
             saturation={"output_min": _limit("output_min", safety, -1e12), "output_max": _limit("output_max", safety, 1e12)},
-            constraints=["stable-plant nominal gains reduced by a factor of 10", "integral action slowed by 5x time constant"],
-            source_features=["static_gain", "time_constant"],
+            constraints=constraints,
+            source_features=source_features,
             status="ready_for_conservative_trial",
             notes=["No full parameter identification was used."],
         )
 
     if archetype == ArchetypeClass.CLASS_II_SECOND_ORDER_OSCILLATOR.value:
+        if "input_gain" not in fmap:
+            raise ValueError("missing required core features for Class II: input_gain")
         wn = fmap["natural_frequency"].value
         zeta = fmap["damping_ratio"].value if "damping_ratio" in fmap else 0.3
-        plant_gain = fmap.get("input_gain") or fmap.get("static_gain")
-        scale = max(abs(plant_gain.value), 1e-9) if plant_gain else 1.0
+        plant_gain = fmap["input_gain"].value
+        scale = math.copysign(max(abs(plant_gain), 1e-9), plant_gain)
         kp = 0.1 * wn * wn / scale
         kd = 0.1 * (2.0 * max(zeta, 0.1) * wn) / scale
         return ControllerCandidate(
@@ -72,19 +87,30 @@ def synthesize_controller(
             tunable_gain_names=["kp", "kd"],
             saturation={"output_min": _limit("output_min", safety, -1e12), "output_max": _limit("output_max", safety, 1e12)},
             constraints=["stable oscillatory gains reduced by a factor of 10"],
-            source_features=["natural_frequency", "damping_ratio"],
+            source_features=["natural_frequency", "damping_ratio", "input_gain"],
             status="ready_for_conservative_trial",
         )
 
     if archetype == ArchetypeClass.CLASS_III_DOUBLE_OR_PURE_INTEGRATOR.value:
         output_max = _limit("output_max", safety, 1.0)
         output_min = _limit("output_min", safety, -output_max)
+        input_gain = fmap["input_gain"].value
+        gain_scale = math.copysign(max(abs(input_gain), 1e-9), input_gain)
+        bandwidth = _limit("initial_bandwidth_rad_s", safety, 0.9)
+        damping = _limit("initial_damping_ratio", safety, 1.15)
         return ControllerCandidate(
             architecture="small_saturated_PD",
-            gains={"kp": 1e-3, "kd": 1e-2},
+            gains={
+                "kp": bandwidth**2 / gain_scale,
+                "kd": 2.0 * damping * bandwidth / gain_scale,
+            },
             tunable_gain_names=["kp", "kd"],
             saturation={"output_min": output_min, "output_max": output_max},
-            constraints=["marginal plant starts with tiny positive PD gains", "hard saturation is mandatory"],
+            constraints=[
+                "PD gains are scaled by the measured input-to-acceleration gain",
+                "initial closed-loop bandwidth is bounded conservatively",
+                "hard saturation is mandatory",
+            ],
             source_features=["input_gain"],
             status="ready_for_conservative_trial",
         )

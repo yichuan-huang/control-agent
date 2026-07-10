@@ -1,0 +1,467 @@
+{
+  "artifact_type": "cfdc_control_mechanism_card_catalog",
+  "version": "v0.4-mechanism-cards",
+  "updated": "2026-07-09",
+  "status": "active_design_reference_not_validation_evidence",
+  "purpose": "Guide LLM structural diagnosis without turning CFDC into a hand-written object taxonomy. Cards describe reusable control-relevant mechanisms, not mutually exclusive system classes.",
+  "evidence_boundary": "design_guidance_only_not_physical_validation_not_universal_coverage_proof",
+  "design_principles": [
+    "A mechanism card is not an object template. It names a control-relevant mechanism that can appear across many plant families.",
+    "Complex systems should be decomposed into mechanism combinations instead of forced into one high-order/nonlinear/MIMO class.",
+    "LLM reasoning remains primary. This catalog is a guide and audit vocabulary, not an if-then rule engine.",
+    "Cards may be selected with empty next_core_features when they only contribute a warning, constraint, measurement issue, or later boundary discovery.",
+    "Core features must remain few, physically meaningful, measurable, and blocking for the next control step.",
+    "Constraints, performance metrics, and online boundary discoveries must not be promoted to initial core features."
+  ],
+  "card_roles": [
+    "feature_source",
+    "controller_structure",
+    "route_warning",
+    "constraint_boundary",
+    "measurement_warning",
+    "operating_region_warning",
+    "interaction_structure"
+  ],
+  "layers": [
+    {
+      "layer_id": "dominant_dynamic_skeleton",
+      "purpose": "Capture the local low-order behavior that sets the first experiment and base control scale.",
+      "cards": [
+        "self_regulating_process",
+        "integrating_or_drifting",
+        "oscillatory_modal",
+        "unstable_equilibrium"
+      ]
+    },
+    {
+      "layer_id": "complex_control_mechanism",
+      "purpose": "Capture why a simple SISO low-order route may be insufficient.",
+      "cards": [
+        "underactuated_energy_exchange",
+        "hover_or_force_balance",
+        "coupled_mimo",
+        "delayed_or_transport_process",
+        "nonminimum_phase_or_inverse_response",
+        "operating_point_dependent_nonlinearity",
+        "actuator_nonlinearity_or_hysteresis",
+        "hybrid_or_mode_switching"
+      ]
+    },
+    {
+      "layer_id": "execution_condition",
+      "purpose": "Capture conditions that shape experiment safety, data quality, and route confidence without usually adding initial core features.",
+      "cards": [
+        "constraint_or_saturation_limited",
+        "measurement_limited_or_noisy"
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "card_id": "self_regulating_process",
+      "layer": "dominant_dynamic_skeleton",
+      "control_meaning": "Input changes drive the output toward a new steady value near the operating point.",
+      "when_to_consider": [
+        "Small input step produces monotone or weakly damped approach to a new steady output.",
+        "Output does not drift indefinitely after input is held constant."
+      ],
+      "typical_next_core_features": [
+        "static_gain",
+        "time_constant"
+      ],
+      "common_non_core_items": [
+        "input_limit",
+        "safe_output_range",
+        "final_error",
+        "overshoot",
+        "settling_time"
+      ],
+      "minimal_probe": "Small bounded step near the operating point.",
+      "controller_implication": "Conservative PI/PID or low-bandwidth loop using gain and time-scale estimates.",
+      "default_roles": [
+        "feature_source",
+        "controller_structure"
+      ]
+    },
+    {
+      "card_id": "integrating_or_drifting",
+      "layer": "dominant_dynamic_skeleton",
+      "control_meaning": "Input changes an accumulated state such as position, level, or velocity, and the state does not self-return to target.",
+      "when_to_consider": [
+        "Constant input causes ramp-like or accelerating output.",
+        "Removing input leaves position or level offset instead of returning to target."
+      ],
+      "typical_next_core_features": [
+        "input_gain",
+        "acceleration_gain"
+      ],
+      "common_non_core_items": [
+        "position_boundary",
+        "velocity_boundary",
+        "saturation_fraction",
+        "final_error"
+      ],
+      "minimal_probe": "Short pulse or short step kept far from state boundaries.",
+      "controller_implication": "Conservative PD/state feedback, reference management, and explicit bounds.",
+      "default_roles": [
+        "feature_source",
+        "controller_structure"
+      ]
+    },
+    {
+      "card_id": "oscillatory_modal",
+      "layer": "dominant_dynamic_skeleton",
+      "control_meaning": "A dominant mode stores and exchanges energy, causing oscillation or resonance that sets a time scale and damping need.",
+      "when_to_consider": [
+        "Small release, impulse, or disturbance produces repeated peaks or ringing.",
+        "High-gain control risks exciting a flexible or resonant mode."
+      ],
+      "typical_next_core_features": [
+        "natural_frequency",
+        "damping_ratio"
+      ],
+      "common_non_core_items": [
+        "overshoot",
+        "settling_time",
+        "saturation_fraction"
+      ],
+      "minimal_probe": "Small free release, small pulse, or low-amplitude modal response.",
+      "controller_implication": "Damping-oriented PD/PID, notch/low-bandwidth caution, or energy route scaling.",
+      "default_roles": [
+        "feature_source",
+        "route_warning"
+      ]
+    },
+    {
+      "card_id": "unstable_equilibrium",
+      "layer": "dominant_dynamic_skeleton",
+      "control_meaning": "The target operating point diverges without feedback, so stabilization must precede performance optimization.",
+      "when_to_consider": [
+        "The plant falls away, runs away, or diverges from the target equilibrium without control.",
+        "The desired equilibrium is different from a naturally stable configuration."
+      ],
+      "typical_next_core_features": [
+        "divergence_rate"
+      ],
+      "common_non_core_items": [
+        "capture_region",
+        "minimum_stabilizing_bandwidth",
+        "final_error"
+      ],
+      "minimal_probe": "Only use protected small perturbation or simulation unless physical safety is established.",
+      "controller_implication": "First form a conservative stabilizer or online small-step search before outer-loop performance tuning.",
+      "default_roles": [
+        "controller_structure",
+        "route_warning"
+      ],
+      "notes": [
+        "The card often contributes no initial core feature when direct divergence probing is unsafe."
+      ]
+    },
+    {
+      "card_id": "underactuated_energy_exchange",
+      "layer": "complex_control_mechanism",
+      "control_meaning": "There are fewer independent actuators than important degrees of freedom, so control must exploit natural dynamics or coupling.",
+      "when_to_consider": [
+        "An unactuated coordinate must be moved through motion of an actuated coordinate.",
+        "Energy shaping, swing-up, pumping, or capture is required before local stabilization."
+      ],
+      "typical_next_core_features": [
+        "natural_frequency",
+        "energy_scale",
+        "input_to_unactuated_coupling_gain"
+      ],
+      "common_non_core_items": [
+        "energy_difference",
+        "capture_region",
+        "position_boundary",
+        "full_mass_matrix"
+      ],
+      "minimal_probe": "Small natural-motion observation and, if safe, a low-energy bounded input to observe coupling direction.",
+      "controller_implication": "Staged route: energy/coupling exploitation, capture, then local stabilizer.",
+      "default_roles": [
+        "controller_structure",
+        "feature_source",
+        "route_warning"
+      ],
+      "anti_overfit_note": "Do not equate this card with cartpole. Acrobot, cranes, ships, spacecraft, and legged systems may share the mechanism while needing different features."
+    },
+    {
+      "card_id": "hover_or_force_balance",
+      "layer": "complex_control_mechanism",
+      "control_meaning": "A sustained input is needed to balance gravity, load, pressure, or another bias before feedback can regulate deviations.",
+      "when_to_consider": [
+        "Zero input cannot hold the desired operating point.",
+        "Control must first cancel weight, load, or bias force."
+      ],
+      "typical_next_core_features": [
+        "hover_input",
+        "vertical_input_gain",
+        "balance_input",
+        "load_gain"
+      ],
+      "common_non_core_items": [
+        "thrust_margin",
+        "input_limit",
+        "height_loss_boundary",
+        "saturation_fraction"
+      ],
+      "minimal_probe": "Bounded input scan around the expected balance point or safe simulation sweep.",
+      "controller_implication": "Feedforward balance plus conservative feedback around deviations.",
+      "default_roles": [
+        "feature_source",
+        "controller_structure"
+      ],
+      "anti_overfit_note": "Do not equate this card with VTOL only. Magnetic levitation, suspension, pressure balance, and load-bearing processes can share the mechanism."
+    },
+    {
+      "card_id": "coupled_mimo",
+      "layer": "complex_control_mechanism",
+      "control_meaning": "Multiple manipulated inputs and controlled outputs interact enough that the local input-output map, pairing, or coordinated control structure affects the route.",
+      "when_to_consider": [
+        "One actuator affects several controlled variables.",
+        "A SISO loop change visibly disturbs another output.",
+        "Pairing or input allocation is unclear.",
+        "The sign, strength, or time scale of cross-channel responses may change the feasible controller structure."
+      ],
+      "when_not_to_force": [
+        "There are several inputs and outputs, but available evidence supports nearly independent SISO loops.",
+        "Apparent correlation is caused only by a shared disturbance or measurement artifact.",
+        "No cross-channel response has been observed and one small bounded probe can resolve the question."
+      ],
+      "typical_next_core_features": [
+        "local_gain_matrix",
+        "local_time_constant",
+        "pairing_indicator"
+      ],
+      "optional_core_features_when_route_blocking": [
+        "inverse_response_severity"
+      ],
+      "common_non_core_items": [
+        "full_state_space_model",
+        "complete_transfer_matrix",
+        "final_error",
+        "saturation_fraction"
+      ],
+      "diagnostic_checks": [
+        "Does each candidate input affect one output or several outputs?",
+        "Is a scalar gain enough, or is a local input-output gain matrix needed?",
+        "Do cross-channel signs or time scales change the preferred input-output pairing?",
+        "Is inverse response present on any candidate pairing?",
+        "Can the plant be justified as weakly coupled independent loops, or is coordinated control required?"
+      ],
+      "minimal_probe": "Perturb one input at a time near one safe operating point while recording all relevant outputs; repeat only for the inputs needed to resolve pairing or coupling.",
+      "controller_implication": "Use independent or decentralized loops only when weak coupling is supported by evidence. Otherwise consider conservative pairing, detuning, decoupling, allocation, or a MIMO controller; avoid aggressive inversion when inverse response is present.",
+      "default_roles": [
+        "interaction_structure",
+        "feature_source",
+        "controller_structure"
+      ],
+      "anti_collapse_note": "Do not compress a coupled local input-output map into scalar static_gain, scalar time_constant, or one generic coupling_gain. Use local_gain_matrix when the probe produces one gain per input-output path; reserve a scalar coupling feature for a genuinely single aggregate coupling path.",
+      "anti_overfit_note": "This card describes an interaction mechanism across domains. It must not be selected merely because an object has multiple inputs or outputs, and it must not prescribe one named controller family."
+    },
+    {
+      "card_id": "delayed_or_transport_process",
+      "layer": "complex_control_mechanism",
+      "control_meaning": "Input changes reach the output after a significant delay, limiting achievable bandwidth and shaping safe tests.",
+      "when_to_consider": [
+        "Output remains unchanged for a visible time after input changes.",
+        "Delay is comparable to or larger than the dominant response time."
+      ],
+      "typical_next_core_features": [
+        "dead_time",
+        "static_gain",
+        "time_constant"
+      ],
+      "common_non_core_items": [
+        "settling_time",
+        "overshoot",
+        "test_duration_limit"
+      ],
+      "minimal_probe": "Timestamped small step with enough duration to see delayed departure and final trend.",
+      "controller_implication": "Low-bandwidth PI/PID, delay compensation candidate, or explicit bandwidth caution.",
+      "default_roles": [
+        "feature_source",
+        "route_warning"
+      ]
+    },
+    {
+      "card_id": "nonminimum_phase_or_inverse_response",
+      "layer": "complex_control_mechanism",
+      "control_meaning": "An input initially drives a relevant output in the wrong direction or imposes zero-dynamics bandwidth limits.",
+      "when_to_consider": [
+        "Small step produces initial opposite movement before the final trend.",
+        "Outer-loop acceleration causes undershoot or reverse response."
+      ],
+      "typical_next_core_features": [
+        "inverse_response_severity"
+      ],
+      "common_non_core_items": [
+        "reverse_response_fraction",
+        "outer_loop_gain_boundary",
+        "overshoot"
+      ],
+      "minimal_probe": "Small bounded step near the operating point, with early response recorded.",
+      "controller_implication": "Conservative outer-loop bandwidth, prefiltering, staged inner-loop design, and boundary discovery.",
+      "default_roles": [
+        "route_warning",
+        "feature_source"
+      ],
+      "notes": [
+        "Often this card should warn the route without adding initial core features unless inverse response blocks the next controller trial."
+      ]
+    },
+    {
+      "card_id": "operating_point_dependent_nonlinearity",
+      "layer": "complex_control_mechanism",
+      "control_meaning": "Local dynamics change materially with operating point, amplitude, or direction, so one global linear feature packet is unsafe.",
+      "when_to_consider": [
+        "Small-step gain or time constant changes with level, temperature, speed, angle, or amplitude.",
+        "The plant is locally controllable but performance or stability differs across regions.",
+        "A route must be explicitly local before claiming broader operation."
+      ],
+      "typical_next_core_features": [
+        "local_static_gain",
+        "local_time_constant",
+        "gain_variation_ratio",
+        "operating_region"
+      ],
+      "common_non_core_items": [
+        "global_model_parameters",
+        "safe_temperature_limit",
+        "production_rate_limit",
+        "full_nonlinear_model"
+      ],
+      "minimal_probe": "Repeat the smallest safe feature test at two nearby operating points or amplitudes.",
+      "controller_implication": "Local conservative controller, gain scheduling candidate, restricted operating envelope, or staged region expansion.",
+      "default_roles": [
+        "operating_region_warning",
+        "feature_source",
+        "route_warning"
+      ],
+      "anti_overfit_note": "This card covers CSTR-like processes, nonlinear tanks, aerodynamic operating points, and many mechanical systems; it is not tied to one benchmark object."
+    },
+    {
+      "card_id": "actuator_nonlinearity_or_hysteresis",
+      "layer": "complex_control_mechanism",
+      "control_meaning": "The actuator or plant input path has deadzone, backlash, hysteresis, stiction, or memory that can invalidate naive small-signal tests.",
+      "when_to_consider": [
+        "Small commands produce no response until a threshold is crossed.",
+        "Response depends on input direction or recent history.",
+        "Up-sweep and down-sweep gains differ."
+      ],
+      "typical_next_core_features": [
+        "deadzone_width",
+        "hysteresis_width",
+        "effective_gain_after_deadzone"
+      ],
+      "common_non_core_items": [
+        "input_limit",
+        "saturation_fraction",
+        "full_hysteresis_model",
+        "wear_state"
+      ],
+      "minimal_probe": "Small bidirectional ramp or pulse sweep with input and output history recorded.",
+      "controller_implication": "Avoid too-small probing, add bias/preload or compensation, use conservative effective gain after the inactive region.",
+      "default_roles": [
+        "feature_source",
+        "route_warning"
+      ],
+      "anti_overfit_note": "This card covers valve stiction, motor backlash, piezo hysteresis, and Bouc-Wen-like behavior without requiring a specific hysteresis model first."
+    },
+    {
+      "card_id": "hybrid_or_mode_switching",
+      "layer": "complex_control_mechanism",
+      "control_meaning": "The plant changes dynamics across modes, contact states, logic thresholds, or operating regimes.",
+      "when_to_consider": [
+        "There are mode switches, contact/no-contact phases, relays, guards, or discontinuous logic.",
+        "One controller law cannot be assumed valid across all states."
+      ],
+      "typical_next_core_features": [
+        "mode_switch_threshold",
+        "hysteresis_width"
+      ],
+      "common_non_core_items": [
+        "all_mode_models",
+        "rare_fault_modes",
+        "global_safety_case"
+      ],
+      "minimal_probe": "Stay within a known safe mode first; identify switch thresholds only if they block the next route.",
+      "controller_implication": "Mode-specific controller, guard condition, fail-closed behavior, or ask for more information.",
+      "default_roles": [
+        "route_warning",
+        "controller_structure"
+      ],
+      "notes": [
+        "Use sparingly in v0.4. It often means the first answer should request more information rather than force a controller."
+      ]
+    },
+    {
+      "card_id": "constraint_or_saturation_limited",
+      "layer": "execution_condition",
+      "control_meaning": "Input, rate, state, or safety bounds dominate what experiments and initial controllers are allowed.",
+      "when_to_consider": [
+        "Input limits, rate limits, rail limits, tilt limits, temperature limits, or hard safety boundaries are present.",
+        "A recommended experiment can only be safe if constrained."
+      ],
+      "typical_next_core_features": [],
+      "common_non_core_items": [
+        "input_limit",
+        "rate_limit",
+        "state_boundary",
+        "tilt_limit",
+        "height_loss_boundary",
+        "saturation_fraction"
+      ],
+      "minimal_probe": "Ask for the relevant limit or keep probes well inside known limits.",
+      "controller_implication": "Reference management, saturation handling, anti-windup, stop conditions, and conservative gain scaling.",
+      "default_roles": [
+        "constraint_boundary",
+        "route_warning"
+      ],
+      "notes": [
+        "This card should almost always have empty next_core_features."
+      ]
+    },
+    {
+      "card_id": "measurement_limited_or_noisy",
+      "layer": "execution_condition",
+      "control_meaning": "Available measurements, sample rate, noise, bias, or missing states may block reliable feature extraction or controller feedback.",
+      "when_to_consider": [
+        "Only output is measured but derivative or state estimates are needed.",
+        "Sampling is too slow for the suspected mode.",
+        "Noise or bias may dominate the proposed feature estimate."
+      ],
+      "typical_next_core_features": [],
+      "common_non_core_items": [
+        "sensor_noise_level",
+        "sample_time",
+        "bias",
+        "filter_cutoff",
+        "estimation_confidence"
+      ],
+      "minimal_probe": "Ask for measurable variables, sample rate, and a short quiet baseline; request a slower or larger safe test only if needed.",
+      "controller_implication": "Delay feature extraction, filter/estimate states, lower bandwidth, or ask for additional sensing.",
+      "default_roles": [
+        "measurement_warning",
+        "route_warning"
+      ],
+      "notes": [
+        "This card usually contributes no core feature; it changes data quality and go/no-go."
+      ]
+    }
+  ],
+  "audit_questions": [
+    "Does each selected card explain a control-relevant mechanism rather than an object name?",
+    "Does the card set include at least one dominant dynamic skeleton when enough information is available?",
+    "Are complex mechanisms selected only when they affect the next experiment, feature, controller structure, or route warning?",
+    "Are constraints and measurement limitations kept out of next_core_features?",
+    "Is the total next_core_feature packet still small enough to run the next experiment quickly?",
+    "If information is insufficient, does the response ask for the smallest human answer or simple experiment that removes the immediate blocker?"
+  ],
+  "known_limitations": [
+    "The catalog is not a complete taxonomy of all plants.",
+    "The catalog does not prove coverage of all high-order, nonlinear, underactuated, or MIMO systems.",
+    "New mechanisms should be added only after benchmark failures show a repeated missing control-relevant pattern."
+  ]
+}

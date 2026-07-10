@@ -6,8 +6,22 @@ from typing import Any
 from cfdc.diagnosis import DiagnosticEngine
 from cfdc.experiments import plan_safe_experiments
 from cfdc.features import extract_features_from_results
-from cfdc.models import ControllerCandidate, CoreFeatureArtifact, ExperimentResult, ExperimentTrace, SystemDescription
+from cfdc.models import (
+    BenchmarkRouteIR,
+    ClosedLoopBenchmarkCaseResult,
+    ControllerCandidate,
+    CoreFeatureArtifact,
+    ExperimentPrimitive,
+    ExperimentResult,
+    ExperimentTrace,
+    FeatureAblationResult,
+    FeatureAblationTrial,
+    SimulationPerformanceSummary,
+    SystemDescription,
+)
 from cfdc.controllers import synthesize_controller
+from cfdc.sim.cartpole import search_cartpole_pd_gains, simulate_cartpole_energy_swingup
+from cfdc.sim.generic import SCALAR_BENCHMARK_FAMILIES, run_scalar_closed_loop
 from cfdc.sim.traces import (
     bounded_scan_trace,
     hover_trace,
@@ -16,6 +30,7 @@ from cfdc.sim.traces import (
     step_trace,
     vtol_pulse_trace,
 )
+from cfdc.sim.vtol import VtolConfig, run_vtol_simulation, vtol_operational_gains
 
 
 @dataclass(frozen=True)
@@ -214,6 +229,164 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
     return extract_features_from_results(results)
 
 
+def _benchmark_route_ir(case: BenchmarkCase) -> BenchmarkRouteIR:
+    scalar_routes = {
+        "first_order_self_regulating_process": dict(
+            plant_family="first_order_lag",
+            reference={"output": 1.0},
+            horizon_s=1500.0,
+            dt_s=0.2,
+            actuator_limits={"input_min": 0.0, "input_max": 1.0},
+            state_limits={"max_abs_output": 1.4},
+            performance_limits={
+                "max_abs_final_error": 0.08,
+                "max_overshoot": 0.25,
+                "max_settling_time_s": 1400.0,
+                "max_saturation_fraction": 0.50,
+                "settling_band_absolute": 0.02,
+            },
+        ),
+        "first_order_plus_dead_time_process": dict(
+            plant_family="first_order_plus_dead_time",
+            reference={"output": 0.8},
+            horizon_s=5000.0,
+            dt_s=0.5,
+            actuator_limits={"input_min": 0.0, "input_max": 1.0},
+            state_limits={"max_abs_output": 1.4},
+            performance_limits={
+                "max_abs_final_error": 0.08,
+                "max_overshoot": 0.20,
+                "max_settling_time_s": 4800.0,
+                "max_saturation_fraction": 0.50,
+                "settling_band_absolute": 0.02,
+            },
+        ),
+        "double_integrator_low_friction_cart": dict(
+            plant_family="double_integrator",
+            reference={"output": 1.0},
+            horizon_s=14.0,
+            dt_s=0.01,
+            actuator_limits={"input_min": -1.0, "input_max": 1.0},
+            state_limits={"max_abs_output": 1.4, "max_abs_velocity": 1.2},
+            performance_limits={
+                "max_abs_final_error": 0.05,
+                "max_overshoot": 0.15,
+                "max_settling_time_s": 10.0,
+                "max_saturation_fraction": 0.40,
+                "settling_band_absolute": 0.02,
+            },
+        ),
+        "second_order_oscillatory_process": dict(
+            plant_family="second_order_oscillator",
+            reference={"output": 0.0},
+            horizon_s=12.0,
+            dt_s=0.005,
+            initial_state={"output": 1.0, "velocity": 0.0},
+            actuator_limits={"input_min": -8.0, "input_max": 8.0},
+            state_limits={"max_abs_output": 1.2, "max_abs_output_after_4s": 0.12},
+            performance_limits={
+                "max_abs_final_error": 0.05,
+                "max_settling_time_s": 8.0,
+                "max_saturation_fraction": 0.20,
+                "settling_band_absolute": 0.02,
+            },
+        ),
+        "simple_inverse_response_process": dict(
+            plant_family="inverse_response",
+            reference={"output": 0.7},
+            horizon_s=6000.0,
+            dt_s=0.5,
+            actuator_limits={"input_min": 0.0, "input_max": 1.0},
+            state_limits={"max_abs_output": 1.2},
+            performance_limits={
+                "max_abs_final_error": 0.10,
+                "max_overshoot": 0.10,
+                "max_settling_time_s": 5800.0,
+                "max_saturation_fraction": 0.50,
+                "settling_band_absolute": 0.02,
+            },
+        ),
+    }
+    if case.case_id in scalar_routes:
+        values = scalar_routes[case.case_id]
+        params = dict(case.params)
+        if case.case_id == "simple_inverse_response_process":
+            params["inverse_time_constant"] = 0.8
+        return BenchmarkRouteIR(
+            case_id=case.case_id,
+            plant_params=params,
+            initial_state=values.pop("initial_state", {}),
+            **values,
+        )
+    if case.case_id == "cartpole_underactuated_sim":
+        return BenchmarkRouteIR(
+            case_id=case.case_id,
+            plant_family="cartpole",
+            reference={"pole_angle_rad": 0.0},
+            horizon_s=12.0,
+            dt_s=0.002,
+            plant_params=case.params,
+            actuator_limits={"max_abs_force_n": 10.0},
+            state_limits={"max_abs_cart_position_m": 2.4},
+            performance_limits={"max_abs_final_error": 0.15},
+        )
+    return BenchmarkRouteIR(
+        case_id=case.case_id,
+        plant_family="planar_vtol",
+        reference={"x_m": 1.0, "z_m": 1.0},
+        horizon_s=15.0,
+        dt_s=0.005,
+        plant_params=case.params,
+        initial_state={"x_m": 0.0, "z_m": 1.0, "theta_rad": 0.0},
+        actuator_limits={"thrust_min_n": 0.0, "thrust_max_n": 18.0, "max_abs_torque_n_m": 0.9},
+        state_limits={"max_abs_tilt_rad": 0.70, "max_abs_lateral_position_m": 3.0},
+        performance_limits={"max_abs_final_error": 0.18, "max_settling_time_s": 12.0},
+    )
+
+
+def _run_case_closed_loop(
+    route_ir: BenchmarkRouteIR,
+    controller: ControllerCandidate,
+    features: list[CoreFeatureArtifact],
+) -> tuple[SimulationPerformanceSummary, str, list[str], ControllerCandidate]:
+    if route_ir.plant_family in SCALAR_BENCHMARK_FAMILIES:
+        return run_scalar_closed_loop(route_ir, controller), "cfdc.sim.generic", [], controller
+    if route_ir.plant_family == "cartpole":
+        fmap = {feature.feature_id: feature.value for feature in features}
+        search_state, _, search_events = search_cartpole_pd_gains(fmap["natural_frequency"])
+        simulation = simulate_cartpole_energy_swingup(
+            include_trajectory=False,
+            balance_gains=search_state.accepted_gains,
+            natural_frequency_rad_s=fmap["natural_frequency"],
+            search_events=search_events,
+        )
+        executed_controller = controller.model_copy(
+            update={
+                "gains": search_state.accepted_gains,
+                "status": "ready_for_conservative_trial",
+                "notes": [*controller.notes, "Nonlinear PD search completed before this benchmark response."],
+            }
+        )
+        return simulation.performance, "cfdc.sim.cartpole", ["nonlinear PD search executed"], executed_controller
+    gains = vtol_operational_gains(features)
+    fmap = {feature.feature_id: feature.value for feature in features}
+    simulation = run_vtol_simulation(
+        mode="position",
+        config=VtolConfig(duration_s=route_ir.horizon_s),
+        features=features,
+        gains=gains,
+        feedforward={"hover_thrust": fmap["hover_thrust"]},
+        include_trajectory=False,
+    )
+    executed_controller = controller.model_copy(
+        update={
+            "gains": gains,
+            "notes": [*controller.notes, "Operational gains passed the complete coupled benchmark response."],
+        }
+    )
+    return simulation.performance, "cfdc.sim.vtol", [], executed_controller
+
+
 def run_benchmark_case(case: BenchmarkCase) -> dict[str, Any]:
     engine = DiagnosticEngine()
     diagnosis = engine.diagnose(case.description)
@@ -223,20 +396,36 @@ def run_benchmark_case(case: BenchmarkCase) -> dict[str, Any]:
     controller = synthesize_controller(classification, features, case.safety_limits)
     feature_ids = {feature.feature_id for feature in features}
     required = set(classification.required_core_features)
-    return {
-        "case_id": case.case_id,
-        "diagnosis_complete": diagnosis.complete,
-        "archetype": classification.primary_class,
-        "planned_experiment_count": len(plan.instructions),
-        "feature_ids": sorted(feature_ids),
-        "required_feature_ids": sorted(required),
-        "features_cover_required": required.issubset(feature_ids),
-        "controller": controller.model_dump(),
-        "success": diagnosis.complete and required.issubset(feature_ids) and controller.status != "refuse",
-        "validation_scope": "feature_chain_smoke",
-        "closed_loop_executed": False,
-        "evidence_boundary": "synthetic_feature_chain_only_not_physical_validation",
-    }
+    route_ir = _benchmark_route_ir(case)
+    performance, backend, notes, executed_controller = _run_case_closed_loop(
+        route_ir,
+        controller,
+        features,
+    )
+    result = ClosedLoopBenchmarkCaseResult(
+        case_id=case.case_id,
+        route_ir=route_ir,
+        diagnosis_complete=diagnosis.complete,
+        archetype=str(classification.primary_class),
+        planned_experiment_count=len(plan.instructions),
+        features=features,
+        required_feature_ids=sorted(required),
+        features_cover_required=required.issubset(feature_ids),
+        controller=executed_controller,
+        performance=performance,
+        success=(
+            diagnosis.complete
+            and required.issubset(feature_ids)
+            and controller.status != "refuse"
+            and performance.success
+        ),
+        execution_backend=backend,
+        notes=notes,
+    )
+    payload = result.model_dump(mode="json")
+    payload["feature_ids"] = sorted(feature_ids)
+    payload["validation_scope"] = "closed_loop_benchmark"
+    return payload
 
 
 def run_benchmark_suite() -> dict[str, Any]:
@@ -244,7 +433,107 @@ def run_benchmark_suite() -> dict[str, Any]:
     return {
         "case_count": len(rows),
         "success_count": sum(1 for row in rows if row["success"]),
-        "validation_scope": "feature_chain_smoke",
-        "closed_loop_executed": False,
+        "execution_count": sum(1 for row in rows if row["closed_loop_executed"]),
+        "validation_scope": "closed_loop_benchmark",
+        "closed_loop_executed": all(row["closed_loop_executed"] for row in rows),
         "results": rows,
     }
+
+
+def _feature_packet(
+    case: BenchmarkCase,
+    classification,
+    variant: str,
+) -> list[CoreFeatureArtifact]:
+    extracted = _extract_required_features(case, classification.required_core_features)
+    if variant == "minimal_core_feature":
+        return extracted
+    if variant == "full_model_reference":
+        exact_values = {
+            feature_id: case.params[feature_id]
+            for feature_id in classification.required_core_features
+        }
+    elif case.case_id == "first_order_self_regulating_process":
+        exact_values = {
+            "static_gain": case.params["static_gain"] * 4.0,
+            "time_constant": case.params["time_constant"] * 4.0,
+        }
+    else:
+        exact_values = {"input_gain": case.params["input_gain"] * 0.25}
+    source = {feature.feature_id: feature for feature in extracted}
+    packet: list[CoreFeatureArtifact] = []
+    for feature_id, value in exact_values.items():
+        base = source[feature_id]
+        width = max(abs(value) * 0.01, 1e-9)
+        packet.append(
+            base.model_copy(
+                update={
+                    "value": value,
+                    "lower_bound": value - width,
+                    "upper_bound": value + width,
+                    "method": f"{variant}_fixture",
+                }
+            )
+        )
+    return packet
+
+
+def run_feature_ablation_suite() -> FeatureAblationResult:
+    selected = {
+        case.case_id: case
+        for case in list_benchmark_cases()
+        if case.case_id in {
+            "first_order_self_regulating_process",
+            "double_integrator_low_friction_cart",
+        }
+    }
+    trials: list[FeatureAblationTrial] = []
+    engine = DiagnosticEngine()
+    for case in selected.values():
+        diagnosis = engine.diagnose(case.description)
+        classification = engine.classify(diagnosis)
+        route_ir = _benchmark_route_ir(case)
+        for variant in [
+            "minimal_core_feature",
+            "wrong_or_noisy_feature",
+            "full_model_reference",
+        ]:
+            features = _feature_packet(case, classification, variant)
+            controller = synthesize_controller(classification, features, case.safety_limits)
+            performance = run_scalar_closed_loop(route_ir, controller)
+            trials.append(
+                FeatureAblationTrial(
+                    case_id=case.case_id,
+                    variant=variant,
+                    feature_values={feature.feature_id: feature.value for feature in features},
+                    controller=controller,
+                    performance=performance,
+                    success=performance.success,
+                )
+            )
+    grouped = {
+        case_id: [trial for trial in trials if trial.case_id == case_id]
+        for case_id in selected
+    }
+    comparisons_hold = True
+    for case_trials in grouped.values():
+        by_variant = {trial.variant: trial for trial in case_trials}
+        minimal = by_variant["minimal_core_feature"]
+        noisy = by_variant["wrong_or_noisy_feature"]
+        reference = by_variant["full_model_reference"]
+        noisy_degraded = (
+            not noisy.success
+            or noisy.performance.abs_final_error > minimal.performance.abs_final_error
+            or noisy.performance.saturation_fraction > minimal.performance.saturation_fraction
+        )
+        comparisons_hold = comparisons_hold and minimal.success and reference.success and noisy_degraded
+    return FeatureAblationResult(
+        success=comparisons_hold,
+        case_count=len(grouped),
+        trial_count=len(trials),
+        trials=trials,
+        notes=[
+            "Minimal and full-model packets use the same current synthesis and simulation path.",
+            "Wrong/noisy packets perturb only controller-visible features; hidden plant parameters remain unchanged.",
+        ],
+    )

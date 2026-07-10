@@ -17,10 +17,14 @@ def run_cfdc_pipeline(
     experiment_results: list[ExperimentResult] | None = None,
     safety_limits: dict[str, float] | None = None,
     diagnostic_adapter: DiagnosticAdapter | None = None,
+    use_mechanism_cards: bool = False,
 ) -> dict[str, Any]:
     """Run CFDC stages with optional raw experiment data or pre-extracted features."""
 
-    engine = DiagnosticEngine(adapter=diagnostic_adapter)
+    engine = DiagnosticEngine(
+        adapter=diagnostic_adapter,
+        use_mechanism_cards=use_mechanism_cards,
+    )
     diagnosis = engine.diagnose(description)
     result: dict[str, Any] = {
         "system_description": description.model_dump(),
@@ -31,7 +35,7 @@ def run_cfdc_pipeline(
         result["status"] = "need_more_information"
         return result
 
-    classification = engine.classify(diagnosis)
+    classification = engine.classify(diagnosis, description)
     experiment_plan = plan_safe_experiments(diagnosis, classification)
     result["classification"] = classification.model_dump()
     result["experiment_plan"] = experiment_plan.model_dump()

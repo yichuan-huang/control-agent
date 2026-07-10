@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 
 import numpy as np
+from scipy.linalg import solve_continuous_are
 
 from cfdc.models import (
     ChannelPerformanceMetrics,
@@ -12,6 +13,8 @@ from cfdc.models import (
     SimulationPerformanceSummary,
     VtolSimulationResult,
     VtolState,
+    VtolVariationResult,
+    VtolVariationScenario,
 )
 from cfdc.performance import build_performance_summary, calculate_channel_performance
 from cfdc.sim.integrators import rk4_step
@@ -47,6 +50,8 @@ class VtolConfig:
     max_saturation_fraction: float = 0.10
     max_nmp_undershoot: float = 0.15
     settling_band_fraction: float = 0.02
+    max_settling_time_s: float = 12.0
+    boundary_validation_duration_s: float = 15.0
     # A position sensor above the center of mass exposes the lateral RHP zero.
     lateral_output_angle_coupling_m: float = 0.35
 
@@ -183,6 +188,26 @@ def _conservative_gains(features: list[CoreFeatureArtifact]) -> dict[str, float]
         "attitude_kd_accel": 2.0 * 0.90 * 4.30,
         "vertical_gain": fmap["vertical_input_gain"],
         "angular_gain": fmap["angular_acceleration_gain"],
+    }
+
+
+def vtol_operational_gains(features: list[CoreFeatureArtifact], gravity_m_s2: float = 9.81) -> dict[str, float]:
+    """Feature-scaled gains used only after a full coupled software validation."""
+
+    fmap = _feature_map(features)
+    mass_estimate = fmap["hover_thrust"] / gravity_m_s2
+    inertia_estimate = 1.0 / max(abs(fmap["angular_acceleration_gain"]), 1e-12)
+    altitude_wn = 1.20
+    altitude_zeta = 0.90
+    attitude_wn = 4.30
+    attitude_zeta = 0.90
+    return {
+        "kp_z": mass_estimate * altitude_wn**2,
+        "kd_z": 2.0 * mass_estimate * altitude_zeta * altitude_wn,
+        "kp_theta": inertia_estimate * attitude_wn**2,
+        "kd_theta": 2.0 * inertia_estimate * attitude_zeta * attitude_wn,
+        "kp_y": 0.34,
+        "kd_y": 0.70,
     }
 
 
@@ -367,6 +392,7 @@ def _evaluate_records(
             [float(row["z_ref_m"]) for row in records],
             [float(row["z_m"]) for row in records],
             settling_band_fraction=config.settling_band_fraction,
+            settling_band_absolute=0.02,
         ),
         "attitude": calculate_channel_performance(
             time_s,
@@ -456,6 +482,7 @@ def _build_vtol_performance(
             "max_abs_attitude_error_rad": config.max_attitude_error_rad,
             "max_actuator_saturation_fraction": config.max_saturation_fraction,
             "max_nmp_undershoot": config.max_nmp_undershoot,
+            "max_settling_time_s": config.max_settling_time_s,
         },
         violations=violations,
         success=success,
@@ -539,7 +566,28 @@ def run_vtol_simulation(
         primary_channel,
     )
     final = records[-1]
-    success = bool(metrics["accepted"]) and abs(float(metrics["final_z_error_m"])) < 0.08
+    required_channels = ["altitude"]
+    if mode == "hover":
+        required_channels.append("attitude")
+    if mode == "position":
+        required_channels.extend(["lateral_position", "attitude"])
+    unsettled = [channel for channel in required_channels if not channels[channel].settled]
+    for channel in unsettled:
+        violations.append(f"{channel}_not_settled")
+    late_channels = [
+        channel
+        for channel in required_channels
+        if channels[channel].settling_time_s is not None
+        and channels[channel].settling_time_s > config.max_settling_time_s
+    ]
+    for channel in late_channels:
+        violations.append(f"{channel}_settling_time_limit")
+    success = (
+        bool(metrics["accepted"])
+        and not unsettled
+        and not late_channels
+        and abs(float(metrics["final_z_error_m"])) < 0.08
+    )
     if abs(float(metrics["final_z_error_m"])) >= 0.08:
         violations.append("final_altitude_error")
     if mode == "position":
@@ -576,6 +624,218 @@ def run_vtol_simulation(
         metrics=metrics,
         features=features,
         events=events,
+        trajectory=records if include_trajectory else [],
+    )
+
+
+def run_vtol_variation(
+    params: VtolParams | None = None,
+    config: VtolConfig | None = None,
+    include_trajectory: bool = False,
+) -> VtolVariationResult:
+    nominal_params = params or VtolParams()
+    base_config = config or VtolConfig(duration_s=25.0)
+    if base_config.duration_s < 25.0:
+        base_config = replace(base_config, duration_s=25.0)
+    nominal_features = extract_vtol_core_features(nominal_params)
+    mass_changed = replace(nominal_params, mass_kg=1.25 * nominal_params.mass_kg)
+    inertia_changed = replace(
+        nominal_params,
+        pitch_inertia_kg_m2=1.50 * nominal_params.pitch_inertia_kg_m2,
+    )
+    both_changed = replace(
+        mass_changed,
+        pitch_inertia_kg_m2=1.50 * nominal_params.pitch_inertia_kg_m2,
+    )
+    scenario_specs = [
+        ("nominal_updated_features", nominal_params, "updated", True),
+        ("mass_plus_25_percent_stale_features", mass_changed, "stale", False),
+        ("mass_plus_25_percent_updated_features", mass_changed, "updated", True),
+        ("inertia_plus_50_percent_stale_features", inertia_changed, "stale", True),
+        ("inertia_plus_50_percent_updated_features", inertia_changed, "updated", True),
+        ("mass_plus_25_inertia_plus_50_updated_features", both_changed, "updated", True),
+    ]
+    scenarios: list[VtolVariationScenario] = []
+    for scenario_id, scenario_params, feature_source, expected_success in scenario_specs:
+        scenario_features = (
+            nominal_features
+            if feature_source == "stale"
+            else extract_vtol_core_features(scenario_params)
+        )
+        simulation = run_vtol_simulation(
+            mode="position",
+            params=scenario_params,
+            config=base_config,
+            features=scenario_features,
+            gains=vtol_operational_gains(
+                scenario_features,
+                scenario_params.gravity_m_s2,
+            ),
+            feedforward={
+                "hover_thrust": _feature_map(scenario_features)["hover_thrust"],
+            },
+            include_trajectory=include_trajectory,
+        )
+        scenarios.append(
+            VtolVariationScenario(
+                scenario_id=scenario_id,
+                feature_source=feature_source,
+                mass_kg=scenario_params.mass_kg,
+                pitch_inertia_kg_m2=scenario_params.pitch_inertia_kg_m2,
+                expected_success=expected_success,
+                expectation_met=simulation.success == expected_success,
+                features=scenario_features,
+                simulation=simulation,
+            )
+        )
+    return VtolVariationResult(
+        success=all(scenario.expectation_met for scenario in scenarios),
+        scenarios=scenarios,
+        updated_scenario_count=sum(scenario.feature_source == "updated" for scenario in scenarios),
+        stale_scenario_count=sum(scenario.feature_source == "stale" for scenario in scenarios),
+        notes=[
+            "Updated scenarios re-extract hover thrust and angular acceleration gain from the changed software plant.",
+            "This is an explicit stale-versus-updated feature study, not continuous FLL or RLS tracking.",
+        ],
+    )
+
+
+def _linearize_hover(params: VtolParams) -> tuple[np.ndarray, np.ndarray]:
+    state0 = np.zeros(6, dtype=float)
+    thrust0 = params.hover_thrust_n
+    torque0 = 0.0
+    eps = 1e-6
+    a_mat = np.zeros((6, 6), dtype=float)
+    b_mat = np.zeros((6, 2), dtype=float)
+    for column in range(6):
+        delta = np.zeros(6, dtype=float)
+        delta[column] = eps
+        a_mat[:, column] = (
+            _dynamics(state0 + delta, thrust0, torque0, params)
+            - _dynamics(state0 - delta, thrust0, torque0, params)
+        ) / (2.0 * eps)
+    b_mat[:, 0] = (
+        _dynamics(state0, thrust0 + eps, torque0, params)
+        - _dynamics(state0, thrust0 - eps, torque0, params)
+    ) / (2.0 * eps)
+    b_mat[:, 1] = (
+        _dynamics(state0, thrust0, torque0 + eps, params)
+        - _dynamics(state0, thrust0, torque0 - eps, params)
+    ) / (2.0 * eps)
+    return a_mat, b_mat
+
+
+def run_vtol_lqr_baseline(
+    params: VtolParams | None = None,
+    config: VtolConfig | None = None,
+    include_trajectory: bool = False,
+) -> VtolSimulationResult:
+    params = params or VtolParams()
+    config = config or VtolConfig(duration_s=15.0)
+    a_mat, b_mat = _linearize_hover(params)
+    q_mat = np.diag([20.0, 25.0, 35.0, 5.0, 8.0, 5.0])
+    r_mat = np.diag([1.0, 0.25])
+    riccati = solve_continuous_are(a_mat, b_mat, q_mat, r_mat)
+    lqr_gain = np.linalg.solve(r_mat, b_mat.T @ riccati)
+    state = np.array([0.0, config.altitude_ref_m, 0.0, 0.0, 0.0, 0.0], dtype=float)
+    reference_state = np.array(
+        [config.position_ref_m, config.altitude_ref_m, 0.0, 0.0, 0.0, 0.0],
+        dtype=float,
+    )
+    records: list[dict[str, float | str]] = []
+    steps = int(config.duration_s / config.dt_s)
+    for step in range(steps + 1):
+        time_s = step * config.dt_s
+        delta_control = -lqr_gain @ (state - reference_state)
+        raw_thrust = params.hover_thrust_n + float(delta_control[0])
+        raw_torque = float(delta_control[1])
+        thrust = _clamp(raw_thrust, params.thrust_min_n, params.thrust_max_n)
+        torque = _clamp(raw_torque, -params.torque_limit_n_m, params.torque_limit_n_m)
+        measured_x, measured_x_dot = _lateral_measurement(state, config)
+        records.append(
+            {
+                "time_s": time_s,
+                "x_m": measured_x,
+                "physical_x_m": float(state[0]),
+                "z_m": float(state[1]),
+                "theta_rad": float(state[2]),
+                "x_dot_m_s": measured_x_dot,
+                "physical_x_dot_m_s": float(state[3]),
+                "z_dot_m_s": float(state[4]),
+                "theta_dot_rad_s": float(state[5]),
+                "x_ref_m": config.position_ref_m,
+                "z_ref_m": config.altitude_ref_m,
+                "theta_ref_rad": 0.0,
+                "thrust_n": thrust,
+                "torque_n_m": torque,
+                "thrust_saturated": "yes" if abs(thrust - raw_thrust) > 1e-9 else "no",
+                "torque_saturated": "yes" if abs(torque - raw_torque) > 1e-9 else "no",
+                "lateral_kp": 0.0,
+                "lateral_kd": 0.0,
+                "phase": "lqr_baseline",
+                "controller_source": "full_model_lqr",
+                "hover_feedforward_n": params.hover_thrust_n,
+            }
+        )
+        if step < steps:
+            state = rk4_step(_dynamics, state, config.dt_s, thrust, torque, params)
+
+    metrics, channels, violations = _evaluate_records(
+        records,
+        config,
+        config.altitude_ref_m,
+        "lateral_position",
+    )
+    for channel in ["lateral_position", "altitude", "attitude"]:
+        if not channels[channel].settled:
+            violations.append(f"{channel}_not_settled")
+        elif (
+            channels[channel].settling_time_s is not None
+            and channels[channel].settling_time_s > config.max_settling_time_s
+        ):
+            violations.append(f"{channel}_settling_time_limit")
+    if channels["lateral_position"].abs_final_error >= 0.18:
+        violations.append("final_lateral_error")
+    if channels["altitude"].abs_final_error >= 0.08:
+        violations.append("final_altitude_error")
+    success = not violations
+    metrics = {
+        **metrics,
+        "success": success,
+        "controller_source": "full_model_lqr",
+        "hover_feedforward_n": params.hover_thrust_n,
+    }
+    performance = _build_vtol_performance(
+        primary_channel="lateral_position",
+        channels=channels,
+        metrics=metrics,
+        config=config,
+        violations=violations,
+        success=success,
+    )
+    final = records[-1]
+    return VtolSimulationResult(
+        mode="lqr-baseline",
+        success=success,
+        stop_reason="accepted" if success else "metric_limit",
+        final_state=VtolState(
+            x_m=float(final["x_m"]),
+            z_m=float(final["z_m"]),
+            theta_rad=float(final["theta_rad"]),
+            x_dot_m_s=float(final["x_dot_m_s"]),
+            z_dot_m_s=float(final["z_dot_m_s"]),
+            theta_dot_rad_s=float(final["theta_dot_rad_s"]),
+        ),
+        performance=performance,
+        metrics=metrics,
+        features=[],
+        events=[
+            {
+                "time_s": 0.0,
+                "event": "full_model_lqr_loaded",
+                "controller_source": "full_model_lqr",
+            }
+        ],
         trajectory=records if include_trajectory else [],
     )
 
@@ -622,6 +882,7 @@ def run_vtol_boundary_scan(
     boundary_events: list[dict[str, int | float | str | bool | None]] = []
     last_records: list[dict[str, float | str]] = []
     last_accepted_gains: dict[str, float] = {}
+    accepted_gain_history: list[dict[str, float]] = []
     for trial_index, lateral_kp in enumerate(candidates, start=1):
         controller_state = VtolControllerState(lateral_kp=lateral_kp, lateral_kd=1.60 * math.sqrt(lateral_kp))
         records, _, _ = _simulate_closed_loop(
@@ -673,42 +934,76 @@ def run_vtol_boundary_scan(
                 "kp_y": lateral_kp,
                 "kd_y": controller_state.lateral_kd,
             }
+            accepted_gain_history.append(last_accepted_gains)
         if not accepted:
             break
     rejected = [event for event in boundary_events if event["accepted"] is False]
     first_rejected = rejected[0] if rejected else None
-    rollback_applied = bool(first_rejected and last_accepted_gains)
-    if rollback_applied:
-        rollback_state = VtolControllerState(
-            lateral_kp=last_accepted_gains["kp_y"],
-            lateral_kd=last_accepted_gains["kd_y"],
-        )
-        final_records, _, _ = _simulate_closed_loop(
-            params,
-            config,
-            features,
-            mode="boundary",
-            duration_s=6.0,
-            initial_state=[0.0, config.altitude_ref_m, 0.0, 0.0, 0.0, 0.0],
-            x_ref_m=0.15,
-            z_ref_m=config.altitude_ref_m,
-            gains=gains,
-            feedforward=feedforward,
-            controller_state=rollback_state,
-        )
-        all_records.extend(final_records)
-        boundary_events.append(
-            {
-                "event": "rollback_validation",
-                "trial_index": len(boundary_events) + 1,
-                "candidate_lateral_kp": last_accepted_gains["kp_y"],
-                "candidate_lateral_kd": last_accepted_gains["kd_y"],
-                "accepted": True,
-                "boundary_reason": "rollback_validated",
-            }
-        )
-    else:
-        final_records = last_records or all_records
+    rollback_applied = False
+    final_records = last_records or all_records
+    if first_rejected and accepted_gain_history:
+        for rollback_gains in reversed(accepted_gain_history):
+            rollback_state = VtolControllerState(
+                lateral_kp=rollback_gains["kp_y"],
+                lateral_kd=rollback_gains["kd_y"],
+            )
+            candidate_records, _, _ = _simulate_closed_loop(
+                params,
+                config,
+                features,
+                mode="boundary",
+                duration_s=config.boundary_validation_duration_s,
+                initial_state=[0.0, config.altitude_ref_m, 0.0, 0.0, 0.0, 0.0],
+                x_ref_m=0.15,
+                z_ref_m=config.altitude_ref_m,
+                gains=gains,
+                feedforward=feedforward,
+                controller_state=rollback_state,
+            )
+            candidate_metrics, candidate_channels, candidate_violations = _evaluate_records(
+                candidate_records,
+                config,
+                config.altitude_ref_m,
+                "lateral_position",
+            )
+            strict_reasons = list(candidate_violations)
+            if float(candidate_metrics["nmp_undershoot"]) >= config.max_nmp_undershoot:
+                strict_reasons.append("rollback_nmp_undershoot")
+            for channel_name in ["lateral_position", "altitude", "attitude"]:
+                if not candidate_channels[channel_name].settled:
+                    strict_reasons.append(f"rollback_{channel_name}_not_settled")
+                elif (
+                    candidate_channels[channel_name].settling_time_s is not None
+                    and candidate_channels[channel_name].settling_time_s
+                    > config.max_settling_time_s
+                ):
+                    strict_reasons.append(f"rollback_{channel_name}_settling_time_limit")
+            if candidate_channels["lateral_position"].abs_final_error >= 0.02:
+                strict_reasons.append("rollback_final_lateral_error")
+            if candidate_channels["altitude"].abs_final_error >= 0.08:
+                strict_reasons.append("rollback_final_altitude_error")
+            accepted_rollback = not strict_reasons
+            boundary_events.append(
+                {
+                    "event": "rollback_validation",
+                    "trial_index": len(boundary_events) + 1,
+                    "candidate_lateral_kp": rollback_gains["kp_y"],
+                    "candidate_lateral_kd": rollback_gains["kd_y"],
+                    "accepted": accepted_rollback,
+                    "boundary_reason": (
+                        "rollback_validated" if accepted_rollback else "+".join(strict_reasons)
+                    ),
+                    "nmp_undershoot": float(candidate_metrics["nmp_undershoot"]),
+                    "settled": bool(candidate_metrics["lateral_settled"]),
+                    "settling_time_s": candidate_metrics["lateral_settling_time_s"],
+                }
+            )
+            all_records.extend(candidate_records)
+            final_records = candidate_records
+            if accepted_rollback:
+                rollback_applied = True
+                last_accepted_gains = rollback_gains
+                break
     metrics, channels, final_violations = _evaluate_records(
         final_records,
         config,
@@ -725,6 +1020,18 @@ def run_vtol_boundary_scan(
         performance_violations.append("boundary_not_triggered")
     if first_rejected is not None and not rollback_applied:
         performance_violations.append("rollback_unavailable")
+    for channel_name in ["lateral_position", "altitude", "attitude"]:
+        if not channels[channel_name].settled:
+            performance_violations.append(f"rollback_{channel_name}_not_settled")
+        elif (
+            channels[channel_name].settling_time_s is not None
+            and channels[channel_name].settling_time_s > config.max_settling_time_s
+        ):
+            performance_violations.append(f"rollback_{channel_name}_settling_time_limit")
+    if channels["lateral_position"].abs_final_error >= 0.02:
+        performance_violations.append("rollback_final_lateral_error")
+    if channels["altitude"].abs_final_error >= 0.08:
+        performance_violations.append("rollback_final_altitude_error")
     success = bool(first_rejected) and rollback_applied and not performance_violations
     metrics = {
         **metrics,

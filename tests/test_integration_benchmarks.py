@@ -1,24 +1,41 @@
 from cfdc.diagnosis import DiagnosticEngine
 from cfdc.experiments import plan_safe_experiments
 from cfdc.sim import (
+    CartpoleParams,
     CartpoleSwingupConfig,
     VtolConfig,
     VtolParams,
     list_benchmark_cases,
     run_benchmark_suite,
+    run_cartpole_nmp_boundary_scan,
+    run_vtol_lqr_baseline,
     run_vtol_simulation,
+    run_vtol_variation,
+    run_feature_ablation_suite,
+    search_cartpole_pd_gains,
     simulate_cartpole_energy_swingup,
 )
 
 
-def test_seven_case_cfdc_feature_chain_benchmark_passes():
+def test_seven_case_cfdc_closed_loop_benchmark_passes():
     summary = run_benchmark_suite()
     assert summary["case_count"] == 7
     assert summary["success_count"] == 7
-    assert summary["validation_scope"] == "feature_chain_smoke"
-    assert summary["closed_loop_executed"] is False
+    assert summary["execution_count"] == 7
+    assert summary["validation_scope"] == "closed_loop_benchmark"
+    assert summary["closed_loop_executed"] is True
     assert all(row["features_cover_required"] for row in summary["results"])
-    assert all(row["closed_loop_executed"] is False for row in summary["results"])
+    assert all(row["closed_loop_executed"] is True for row in summary["results"])
+    assert all(row["performance"]["success"] for row in summary["results"])
+    assert {row["execution_backend"] for row in summary["results"]} == {
+        "cfdc.sim.generic",
+        "cfdc.sim.cartpole",
+        "cfdc.sim.vtol",
+    }
+    by_id = {row["case_id"]: row for row in summary["results"]}
+    assert by_id["cartpole_underactuated_sim"]["controller"]["status"] == "ready_for_conservative_trial"
+    assert by_id["cartpole_underactuated_sim"]["controller"]["gains"]["kp"] > 0.0
+    assert by_id["planar_vtol_hover_lateral_sim"]["controller"]["gains"]["kp_y"] == 0.34
 
 
 def test_benchmark_experiment_plans_cover_stage_one_required_features():
@@ -29,6 +46,30 @@ def test_benchmark_experiment_plans_cover_stage_one_required_features():
         plan = plan_safe_experiments(diagnosis, classification)
         estimates = {feature for instruction in plan.instructions for feature in instruction.estimates}
         assert set(classification.required_core_features).issubset(estimates), case.case_id
+
+
+def test_feature_ablation_suite_compares_minimal_noisy_and_full_model_packets():
+    result = run_feature_ablation_suite()
+
+    assert result.success
+    assert result.case_count == 2
+    assert result.trial_count == 6
+    assert {trial.variant for trial in result.trials} == {
+        "minimal_core_feature",
+        "wrong_or_noisy_feature",
+        "full_model_reference",
+    }
+    for case_id in {trial.case_id for trial in result.trials}:
+        rows = {trial.variant: trial for trial in result.trials if trial.case_id == case_id}
+        assert rows["minimal_core_feature"].success
+        assert rows["full_model_reference"].success
+        assert (
+            not rows["wrong_or_noisy_feature"].success
+            or rows["wrong_or_noisy_feature"].performance.abs_final_error
+            > rows["minimal_core_feature"].performance.abs_final_error
+            or rows["wrong_or_noisy_feature"].performance.saturation_fraction
+            > rows["minimal_core_feature"].performance.saturation_fraction
+        )
 
 
 def test_cartpole_energy_swingup_reaches_safe_handoff_window():
@@ -57,6 +98,29 @@ def test_cartpole_force_saturation_participates_in_acceptance():
     assert "force_saturation_fraction" in result.performance.violations
 
 
+def test_cartpole_nmp_boundary_triggers_and_verifies_rollback():
+    natural_frequency = CartpoleParams().free_cart_natural_frequency_down_rad_s
+    search, _, _ = search_cartpole_pd_gains(natural_frequency)
+    result = run_cartpole_nmp_boundary_scan(
+        natural_frequency,
+        search.accepted_gains,
+        include_trajectory=False,
+    )
+
+    assert result.success
+    assert result.performance.boundary_triggered is True
+    assert result.rejected_outer_gains["kp_y"] > result.accepted_outer_gains["kp_y"]
+    assert result.rollback_applied
+    assert result.rollback_verified
+    assert result.rollback_trial is not None
+    assert result.rollback_trial.accepted
+    assert any(not trial.accepted for trial in result.candidate_trials)
+    assert all(
+        result.performance.channels[channel].settled
+        for channel in ["cart_position", "pole_angle"]
+    )
+
+
 def test_vtol_position_and_boundary_simulations_run():
     position = run_vtol_simulation(mode="position", include_trajectory=False)
     assert position.success
@@ -81,13 +145,40 @@ def test_vtol_position_and_boundary_simulations_run():
     assert boundary.metrics["nmp_undershoot"] < 0.15
     assert boundary.performance.undershoot == boundary.metrics["nmp_undershoot"]
     assert boundary.events[-1]["event"] == "rollback_validation"
-    last_safe_trial = next(
-        event
-        for event in reversed(boundary.events[:-1])
-        if event["event"] == "candidate_trial" and event["accepted"] is True
+    assert boundary.events[-1]["accepted"] is True
+    assert boundary.metrics["nmp_undershoot"] == boundary.events[-1]["nmp_undershoot"]
+    assert any(
+        event["event"] == "rollback_validation" and event["accepted"] is False
+        for event in boundary.events[:-1]
     )
-    assert boundary.metrics["nmp_undershoot"] == last_safe_trial["nmp_undershoot"]
     assert boundary.metrics["tested_candidate_count"] >= 2
+
+
+def test_vtol_variation_and_full_state_lqr_are_strictly_validated():
+    variation = run_vtol_variation(include_trajectory=False)
+    baseline = run_vtol_lqr_baseline(include_trajectory=False)
+
+    assert variation.success
+    assert len(variation.scenarios) == 6
+    assert all(scenario.expectation_met for scenario in variation.scenarios)
+    assert baseline.success
+    assert all(
+        baseline.performance.channels[channel].settled
+        for channel in ["lateral_position", "altitude", "attitude"]
+    )
+    assert baseline.metrics["controller_source"] == "full_model_lqr"
+
+
+def test_strict_gate_rejects_unsettled_vtol_response():
+    result = run_vtol_simulation(
+        mode="position",
+        config=VtolConfig(duration_s=1.0),
+        include_trajectory=False,
+    )
+
+    assert not result.success
+    assert not result.performance.success
+    assert "lateral_position_not_settled" in result.performance.violations
 
 
 def test_vtol_core_feature_uses_signed_lateral_convention():

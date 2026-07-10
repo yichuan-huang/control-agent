@@ -23,6 +23,9 @@ test = [
 include = ["cfdc*"]
 exclude = ["archive*"]
 
+[tool.setuptools.package-data]
+cfdc = ["diagnosis/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

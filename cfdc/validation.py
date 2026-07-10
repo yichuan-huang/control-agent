@@ -44,7 +44,7 @@ def route_compatibility_reasons(route_id: str, classification: ArchetypeClassifi
     primary = str(classification.primary_class)
     required = set(classification.required_core_features)
 
-    if route_id == "cartpole":
+    if route_id.startswith("cartpole"):
         if primary != ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP.value:
             return [
                 "cartpole route requires Class IV unstable/nonlinear handling, "

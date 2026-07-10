@@ -13,6 +13,7 @@ from cfdc.features import extract_features_from_results
 from cfdc.models import (
     CFDCRunReport,
     ControllerCandidate,
+    ControllerComparison,
     CoreFeatureArtifact,
     ExperimentPlan,
     ExperimentPrimitive,
@@ -29,12 +30,17 @@ from cfdc.online import (
 )
 from cfdc.runtime.trial import SafeTrialConfig, SafeTrialRunner
 from cfdc.sim import (
+    CartpoleSwingupConfig,
     CartpoleParams,
     VtolConfig,
     VtolParams,
     run_vtol_simulation,
+    run_vtol_lqr_baseline,
+    run_vtol_variation,
+    run_cartpole_nmp_boundary_scan,
     search_cartpole_pd_gains,
     simulate_cartpole_energy_swingup,
+    vtol_operational_gains,
 )
 from cfdc.sim.traces import hover_trace, modal_trace, pulse_trace, vtol_pulse_trace
 from cfdc.validation import merge_go_no_go, validate_required_features, validate_route_compatibility
@@ -43,10 +49,12 @@ from cfdc.validation import merge_go_no_go, validate_required_features, validate
 RouteId = Literal[
     "generic",
     "cartpole",
+    "cartpole-boundary",
     "vtol-position",
     "vtol-boundary",
     "vtol-altitude",
     "vtol-hover",
+    "vtol-variation",
 ]
 
 
@@ -77,7 +85,7 @@ def _vtol_description() -> SystemDescription:
 
 
 def _default_description(route_id: RouteId) -> SystemDescription:
-    if route_id == "cartpole":
+    if route_id.startswith("cartpole"):
         return _cartpole_description()
     if route_id.startswith("vtol"):
         return _vtol_description()
@@ -197,6 +205,43 @@ def _status_from_simulation(success: bool, trial_reports: list[TrialReport]) -> 
     if any(not report.accepted for report in trial_reports):
         return "rejected"
     return "completed" if success else "rejected"
+
+
+def _comparison_report(
+    case_id: str,
+    cfdc_controller: str,
+    baseline_controller: str,
+    cfdc_performance,
+    baseline_performance,
+    matched_conditions: dict,
+) -> ControllerComparison:
+    cfdc_settling = cfdc_performance.settling_time_s
+    baseline_settling = baseline_performance.settling_time_s
+    settling_delta = (
+        cfdc_settling - baseline_settling
+        if cfdc_settling is not None and baseline_settling is not None
+        else None
+    )
+    return ControllerComparison(
+        case_id=case_id,
+        cfdc_controller=cfdc_controller,
+        baseline_controller=baseline_controller,
+        primary_channel=cfdc_performance.primary_channel,
+        cfdc_performance=cfdc_performance,
+        baseline_performance=baseline_performance,
+        matched_conditions=matched_conditions,
+        settling_time_delta_s=settling_delta,
+        abs_final_error_delta=(
+            cfdc_performance.abs_final_error - baseline_performance.abs_final_error
+        ),
+        saturation_fraction_delta=(
+            cfdc_performance.saturation_fraction - baseline_performance.saturation_fraction
+        ),
+        notes=[
+            "Both controllers use the same software plant, initial state, reference, horizon, and actuator limits.",
+            "The LQR baseline uses full model parameters; CFDC uses extracted core features and validated gain searches.",
+        ],
+    )
 
 
 def _run_vtol_altitude_trial(controller: ControllerCandidate) -> tuple[list[TrialReport], OnlineTuningState | None]:
@@ -351,6 +396,7 @@ def run_cfdc_route(
     diagnostic_adapter: DiagnosticAdapter | None = None,
     include_trajectory: bool = False,
     run_id: str | None = None,
+    use_mechanism_cards: bool = False,
 ) -> CFDCRunReport:
     """Run an auditable end-to-end CFDC route.
 
@@ -359,12 +405,15 @@ def run_cfdc_route(
     """
 
     description = description or _default_description(route_id)
-    engine = DiagnosticEngine(adapter=diagnostic_adapter)
+    engine = DiagnosticEngine(
+        adapter=diagnostic_adapter,
+        use_mechanism_cards=use_mechanism_cards,
+    )
     diagnosis = engine.diagnose(description)
     if not diagnosis.complete:
         return _base_report(route_id, description, diagnosis, run_id)
 
-    classification = engine.classify(diagnosis)
+    classification = engine.classify(diagnosis, description)
     plan: ExperimentPlan = plan_safe_experiments(diagnosis, classification)
     route_gate = validate_route_compatibility(route_id, classification)
     if route_gate.decision == "no_go":
@@ -382,7 +431,7 @@ def run_cfdc_route(
     notes = ["Completed Stage 0-4 with deterministic CFDC computation after structured diagnosis."]
 
     if not resolved_results and features is None:
-        if route_id == "cartpole":
+        if route_id.startswith("cartpole"):
             resolved_results = _cartpole_experiment_results(classification.required_core_features)
         elif route_id.startswith("vtol"):
             resolved_results = _vtol_experiment_results(classification.required_core_features)
@@ -427,47 +476,183 @@ def run_cfdc_route(
     tuning_state = None
     tracking_updates = []
     cartpole_simulation = None
+    cartpole_boundary = None
     vtol_simulation = None
+    vtol_variation = None
+    baseline_comparison = None
     final_gains = dict(controller.gains)
     final_feedforward = dict(controller.feedforward)
 
-    if route_id == "cartpole":
+    if route_id.startswith("cartpole"):
         fmap = {feature.feature_id: feature.value for feature in resolved_features}
         natural_frequency = fmap["natural_frequency"]
         safe_search_state, cartpole_trials, search_events = search_cartpole_pd_gains(
             natural_frequency,
         )
         trial_reports.extend(cartpole_trials)
-        final_gains = dict(safe_search_state.accepted_gains)
-        cartpole_simulation = simulate_cartpole_energy_swingup(
+        balance_gains = dict(safe_search_state.accepted_gains)
+        cartpole_boundary = run_cartpole_nmp_boundary_scan(
+            natural_frequency,
+            balance_gains,
             include_trajectory=include_trajectory,
-            balance_gains=final_gains,
+        )
+        final_gains = {
+            **balance_gains,
+            **cartpole_boundary.accepted_outer_gains,
+        }
+        cartpole_config = CartpoleSwingupConfig(
+            duration_s=20.0,
+            normalized_energy_gain=0.65,
+            swing_cart_position_gain=3.6,
+            swing_cart_velocity_gain=3.2,
+            outer_reference_m=0.2,
+            outer_kpy_initial=final_gains.get("kp_y", 0.0),
+            outer_kdy_initial=final_gains.get("kd_y", 0.0),
+            outer_theta_ref_limit_rad=0.25,
+            max_force_saturation_fraction=0.35,
+        )
+        cartpole_simulation = simulate_cartpole_energy_swingup(
+            config=cartpole_config,
+            include_trajectory=include_trajectory,
+            balance_gains=balance_gains,
             natural_frequency_rad_s=natural_frequency,
             search_events=search_events,
+            stop_after_handoff=False,
         )
-        status = _status_from_simulation(cartpole_simulation.success, trial_reports)
-        notes.append("Cartpole route uses accepted CFDC online-search gains in the final energy swing-up software simulation.")
+        cartpole_simulation = cartpole_simulation.model_copy(
+            update={"final_gains": final_gains}
+        )
+        cartpole_lqr = simulate_cartpole_energy_swingup(
+            config=cartpole_config,
+            include_trajectory=False,
+            stop_after_handoff=False,
+        )
+        baseline_comparison = _comparison_report(
+            "cartpole_outer_position",
+            "feature_energy_swingup_and_searched_pd",
+            "full_model_energy_swingup_and_lqr",
+            cartpole_simulation.performance,
+            cartpole_lqr.performance,
+            matched_conditions={
+                "plant": "CartpoleParams defaults",
+                "initial_state": {
+                    "cart_position_m": 0.0,
+                    "cart_velocity_m_s": 0.0,
+                    "pole_angle_rad": cartpole_config.initial_angle_from_upright_rad,
+                    "pole_angular_velocity_rad_s": 0.0,
+                },
+                "reference": {"cart_position_m": cartpole_config.outer_reference_m},
+                "horizon_s": cartpole_config.duration_s,
+                "actuator_limits": {"max_abs_force_n": CartpoleParams().force_limit_n},
+                "state_limits": {"max_abs_cart_position_m": CartpoleParams().cart_position_limit_m},
+            },
+        )
+        cartpole_success = (
+            cartpole_boundary.success
+            and cartpole_simulation.success
+            and cartpole_lqr.success
+        )
+        status = _status_from_simulation(cartpole_success, trial_reports)
+        notes.append("Cartpole route runs outer-position NMP discovery, validates rollback over a long horizon, then checks the accepted gains in a complete swing-up response.")
         notes.append("The safe_gain_search_state history records each 0.05 PD gain-search increment.")
+        notes.append("The CFDC/LQR comparison uses the same plant, initial state, position reference, 20 s horizon, and force/travel limits.")
     elif route_id.startswith("vtol"):
         vtol_trials, tuning_state = _run_vtol_altitude_trial(controller)
         trial_reports.extend(vtol_trials)
         if tuning_state is not None:
             final_gains = dict(tuning_state.gains)
-        mode = route_id.replace("vtol-", "")
-        route_config = VtolConfig(duration_s=15.0) if mode == "position" else VtolConfig()
-        vtol_simulation = run_vtol_simulation(
-            mode=mode,
-            config=route_config,
-            features=resolved_features,
-            gains=final_gains,
-            feedforward=final_feedforward,
-            include_trajectory=include_trajectory,
-        )
-        if mode == "boundary" and vtol_simulation.metrics.get("rollback_applied") is True:
-            final_gains["kp_y"] = float(vtol_simulation.metrics["accepted_lateral_kp"])
-            final_gains["kd_y"] = float(vtol_simulation.metrics["accepted_lateral_kd"])
-        status = _status_from_simulation(vtol_simulation.success, trial_reports)
-        notes.append("VTOL route uses only gains that passed their channel-specific bounded software trials.")
+        mode = route_id.removeprefix("vtol-")
+        if mode in {"position", "boundary", "variation"}:
+            previous_gains = dict(final_gains)
+            final_gains = vtol_operational_gains(resolved_features)
+            if tuning_state is not None:
+                tuning_state = tuning_state.model_copy(
+                    update={
+                        "previous_gains": previous_gains,
+                        "gains": final_gains,
+                        "history": tuning_state.history
+                        + [
+                            {
+                                "action": "coupled_operational_candidate",
+                                "tested_gains": final_gains,
+                                "validation": "route_specific_full_simulation",
+                            }
+                        ],
+                    }
+                )
+        if mode == "variation":
+            vtol_variation = run_vtol_variation(
+                include_trajectory=include_trajectory,
+            )
+            vtol_simulation = vtol_variation.scenarios[0].simulation
+            status = _status_from_simulation(vtol_variation.success, trial_reports)
+            notes.append("VTOL variation route evaluates six nominal, mass, and inertia cases with explicit stale-versus-updated core features.")
+        else:
+            route_config = VtolConfig(duration_s=15.0) if mode == "position" else VtolConfig()
+            vtol_simulation = run_vtol_simulation(
+                mode=mode,
+                config=route_config,
+                features=resolved_features,
+                gains=final_gains,
+                feedforward=final_feedforward,
+                include_trajectory=include_trajectory,
+            )
+            if mode == "boundary" and vtol_simulation.metrics.get("rollback_applied") is True:
+                final_gains["kp_y"] = float(vtol_simulation.metrics["accepted_lateral_kp"])
+                final_gains["kd_y"] = float(vtol_simulation.metrics["accepted_lateral_kd"])
+                if tuning_state is not None:
+                    tuning_state = tuning_state.model_copy(
+                        update={
+                            "gains": final_gains,
+                            "history": tuning_state.history
+                            + [
+                                {
+                                    "action": "boundary_rollback_validated",
+                                    "accepted_gains": final_gains,
+                                }
+                            ],
+                        }
+                    )
+            if mode == "position":
+                vtol_lqr = run_vtol_lqr_baseline(
+                    config=route_config,
+                    include_trajectory=False,
+                )
+                baseline_comparison = _comparison_report(
+                    "vtol_lateral_position",
+                    "core_feature_cascaded_controller",
+                    "full_state_full_model_lqr",
+                    vtol_simulation.performance,
+                    vtol_lqr.performance,
+                    matched_conditions={
+                        "plant": "VtolParams defaults",
+                        "initial_state": {
+                            "x_m": 0.0,
+                            "z_m": route_config.altitude_ref_m,
+                            "theta_rad": 0.0,
+                            "x_dot_m_s": 0.0,
+                            "z_dot_m_s": 0.0,
+                            "theta_dot_rad_s": 0.0,
+                        },
+                        "reference": {
+                            "x_m": route_config.position_ref_m,
+                            "z_m": route_config.altitude_ref_m,
+                        },
+                        "horizon_s": route_config.duration_s,
+                        "actuator_limits": {
+                            "thrust_min_n": VtolParams().thrust_min_n,
+                            "thrust_max_n": VtolParams().thrust_max_n,
+                            "max_abs_torque_n_m": VtolParams().torque_limit_n_m,
+                        },
+                    },
+                )
+                simulation_success = vtol_simulation.success and vtol_lqr.success
+            else:
+                simulation_success = vtol_simulation.success
+            status = _status_from_simulation(simulation_success, trial_reports)
+            notes.append("VTOL route uses only gains that passed their channel-specific bounded or complete coupled software checks.")
+            if mode == "position":
+                notes.append("The CFDC/LQR comparison uses the same plant, initial state, references, 15 s horizon, and thrust/torque limits.")
     else:
         status = "controller_candidate_ready"
         notes.append("Generic route stops at Stage 4 because no plant-specific safe trial is configured.")
@@ -493,7 +678,10 @@ def run_cfdc_route(
         safe_gain_search_state=safe_search_state,
         feature_tracking_updates=tracking_updates,
         cartpole_simulation=cartpole_simulation,
+        cartpole_boundary=cartpole_boundary,
         vtol_simulation=vtol_simulation,
+        vtol_variation=vtol_variation,
+        baseline_comparison=baseline_comparison,
         final_gains=final_gains,
         final_feedforward=final_feedforward,
         go_no_go=go_no_go,

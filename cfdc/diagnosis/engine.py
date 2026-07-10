@@ -163,7 +163,6 @@ def classify_archetype(diagnosis: StructuralDiagnosis) -> ArchetypeClassificatio
             required_core_features=["coupling_gain"],
             safety_constraints=["bound each input separately", "freeze if one input moves multiple outputs unexpectedly"],
             rationale="The dominant limitation is cross-channel interaction, so Class V takes precedence.",
-            supplemental_mechanism_cards=["coupled_mimo"],
         )
     if "unstable" in stability or "non-minimum" in phase or "strong" in nonlinear or "higher" in rel_degree:
         if "non-minimum" in phase and "stable" in stability and "unstable" not in stability:
@@ -172,21 +171,17 @@ def classify_archetype(diagnosis: StructuralDiagnosis) -> ArchetypeClassificatio
             features = ["natural_frequency"]
         else:
             features = ["natural_frequency", "input_gain"]
-        cards = ["unstable_equilibrium"]
         architecture = "cascaded inner-outer control with safe online gain search"
         if "non-minimum" in phase:
-            cards.append("nonminimum_phase_or_inverse_response")
             architecture = "NMP-aware conservative outer-loop control with undershoot-limited gain search"
         if "moderate cascaded" in coupling:
             features = ["hover_thrust", "angular_acceleration_gain", "lateral_coupling_gain"]
-            cards.extend(["hover_or_force_balance", "underactuated_or_cascaded_coupling"])
         return ArchetypeClassification(
             primary_class=ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP,
             control_architecture=architecture,
             required_core_features=features,
             safety_constraints=["start from the safest physical configuration", "use small reversible gain increments", "stop on overshoot, undershoot, saturation, or unsafe motion"],
             rationale="Unstable, nonlinear, or non-minimum-phase dominant behavior requires Class IV handling.",
-            supplemental_mechanism_cards=cards,
         )
     if "drifting" in stability or "integrator" in rel_degree or "double" in rel_degree:
         return ArchetypeClassification(
@@ -195,16 +190,14 @@ def classify_archetype(diagnosis: StructuralDiagnosis) -> ArchetypeClassificatio
             required_core_features=["input_gain"],
             safety_constraints=["hard output saturation", "short pulse only inside travel bounds"],
             rationale="The dominant behavior lacks a restoring force and behaves like an integrator chain.",
-            supplemental_mechanism_cards=["integrating_or_drifting"],
         )
     if "oscillatory" in rel_degree or "oscillation" in diagnosis.open_loop_stability.evidence[0:1]:
         return ArchetypeClassification(
             primary_class=ArchetypeClass.CLASS_II_SECOND_ORDER_OSCILLATOR,
             control_architecture="low-bandwidth damping-enhancing PD controller",
-            required_core_features=["natural_frequency", "damping_ratio"],
+            required_core_features=["natural_frequency", "damping_ratio", "input_gain"],
             safety_constraints=["free response must stay inside a small displacement range"],
             rationale="The dominant low-order behavior is a damped oscillatory mode.",
-            supplemental_mechanism_cards=["oscillatory_modal"],
         )
     features = ["static_gain", "time_constant"]
     if "significant delay likely" in delay:
@@ -215,22 +208,38 @@ def classify_archetype(diagnosis: StructuralDiagnosis) -> ArchetypeClassificatio
         required_core_features=features,
         safety_constraints=["small step only", "stop if output exceeds operator bounds"],
         rationale="The dominant behavior settles toward a new steady value after a small input change.",
-        supplemental_mechanism_cards=["self_regulating_process"],
     )
 
 
 class DiagnosticEngine:
-    def __init__(self, adapter: DiagnosticAdapter | None = None):
+    def __init__(
+        self,
+        adapter: DiagnosticAdapter | None = None,
+        use_mechanism_cards: bool = False,
+    ):
         self.adapter = adapter or DeterministicDiagnosticAdapter()
+        self.use_mechanism_cards = use_mechanism_cards
 
     def diagnose(self, description: SystemDescription) -> StructuralDiagnosis:
         return validate_agent_payload(self.adapter.diagnose(description))
 
-    def classify(self, diagnosis: StructuralDiagnosis) -> ArchetypeClassification:
-        return classify_archetype(diagnosis)
+    def classify(
+        self,
+        diagnosis: StructuralDiagnosis,
+        description: SystemDescription | None = None,
+        use_mechanism_cards: bool | None = None,
+    ) -> ArchetypeClassification:
+        classification = classify_archetype(diagnosis)
+        enabled = self.use_mechanism_cards if use_mechanism_cards is None else use_mechanism_cards
+        if not enabled:
+            return classification
+
+        from cfdc.diagnosis.mechanism_cards import supplement_with_mechanism_cards
+
+        return supplement_with_mechanism_cards(description, diagnosis, classification)
 
     def run(self, description: SystemDescription) -> tuple[StructuralDiagnosis, ArchetypeClassification | None]:
         diagnosis = self.diagnose(description)
         if not diagnosis.complete:
             return diagnosis, None
-        return diagnosis, self.classify(diagnosis)
+        return diagnosis, self.classify(diagnosis, description)

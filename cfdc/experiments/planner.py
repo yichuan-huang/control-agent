@@ -74,6 +74,21 @@ def plan_safe_experiments(
                 "Keep the starting displacement small enough that the motion stays in the normal operating region.",
             )
         )
+        instructions.append(
+            _instruction(
+                ExperimentPrimitive.PULSE,
+                "Small force pulse recording",
+                [
+                    "Start recording the force command and measured acceleration.",
+                    "Apply one short low-amplitude pulse near the resting position.",
+                    "Repeat once with the pulse direction reversed.",
+                ],
+                ["time", "input setting", "acceleration"],
+                ["input_gain"],
+                ["stop if displacement approaches its bound", "stop if the actuator saturates"],
+                "Keep the pulse short relative to the measured oscillation period.",
+            )
+        )
     elif archetype == ArchetypeClass.CLASS_III_DOUBLE_OR_PURE_INTEGRATOR.value:
         instructions.append(
             _instruction(

@@ -7,11 +7,12 @@ def test_stable_demo_validation_passes_and_is_deterministic():
 
     assert first == second
     assert first["passed"] is True
-    assert first["passed_count"] == 3
+    assert first["passed_count"] == 4
     assert [result["route_id"] for result in first["results"]] == [
         "cartpole",
         "vtol-position",
         "vtol-boundary",
+        "vtol-variation",
     ]
     assert all(result["performance"]["success"] for result in first["results"])
     assert all("final_error" in result["performance"] for result in first["results"])

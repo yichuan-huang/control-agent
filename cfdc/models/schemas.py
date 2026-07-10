@@ -256,6 +256,124 @@ class SimulationPerformanceSummary(CFDCModel):
     boundary_reason: str | None = None
 
 
+class ControllerComparison(CFDCModel):
+    case_id: str
+    cfdc_controller: str
+    baseline_controller: str
+    primary_channel: str
+    same_plant: bool = True
+    same_initial_state: bool = True
+    same_reference: bool = True
+    same_horizon: bool = True
+    same_limits: bool = True
+    matched_conditions: dict[str, Any] = Field(default_factory=dict)
+    cfdc_performance: SimulationPerformanceSummary
+    baseline_performance: SimulationPerformanceSummary
+    settling_time_delta_s: float | None = None
+    abs_final_error_delta: float
+    saturation_fraction_delta: float
+    notes: list[str] = Field(default_factory=list)
+    evidence_boundary: str = "software_controller_comparison_not_physical_validation"
+
+
+class BenchmarkRouteIR(CFDCModel):
+    case_id: str
+    plant_family: str
+    reference: dict[str, float]
+    horizon_s: float = Field(gt=0.0)
+    dt_s: float = Field(gt=0.0)
+    plant_params: dict[str, float]
+    initial_state: dict[str, float] = Field(default_factory=dict)
+    actuator_limits: dict[str, float]
+    state_limits: dict[str, float] = Field(default_factory=dict)
+    performance_limits: dict[str, float] = Field(default_factory=dict)
+    evidence_boundary: str = "synthetic_benchmark_route_ir_not_physical_validation"
+
+
+class ClosedLoopBenchmarkCaseResult(CFDCModel):
+    case_id: str
+    route_ir: BenchmarkRouteIR
+    diagnosis_complete: bool
+    archetype: str
+    planned_experiment_count: int = Field(ge=0)
+    features: list[CoreFeatureArtifact]
+    required_feature_ids: list[str]
+    features_cover_required: bool
+    controller: ControllerCandidate
+    performance: SimulationPerformanceSummary
+    success: bool
+    closed_loop_executed: bool = True
+    execution_backend: str
+    notes: list[str] = Field(default_factory=list)
+    evidence_boundary: str = "synthetic_closed_loop_benchmark_not_physical_validation"
+
+
+class FeatureAblationTrial(CFDCModel):
+    case_id: str
+    variant: Literal["minimal_core_feature", "wrong_or_noisy_feature", "full_model_reference"]
+    feature_values: dict[str, float]
+    controller: ControllerCandidate
+    performance: SimulationPerformanceSummary
+    success: bool
+    evidence_boundary: str = "synthetic_feature_ablation_not_physical_validation"
+
+
+class FeatureAblationResult(CFDCModel):
+    success: bool
+    case_count: int = Field(ge=1)
+    trial_count: int = Field(ge=1)
+    trials: list[FeatureAblationTrial] = Field(min_length=1)
+    notes: list[str] = Field(default_factory=list)
+    evidence_boundary: str = "synthetic_feature_ablation_suite_not_physical_validation"
+
+
+class SavedDiagnosticResponse(CFDCModel):
+    case_id: str
+    field_values: dict[str, str]
+    complete: bool
+    clarification_questions: list[str] = Field(default_factory=list)
+    primary_class: str | None = None
+    required_core_features: list[str] = Field(default_factory=list)
+    generator: str
+
+
+class DiagnosticEvaluationCaseResult(CFDCModel):
+    case_id: str
+    suite: Literal["prompt_8", "complex_4"]
+    response_source: Literal["current_engine", "saved_response"]
+    expected_complete: bool
+    actual_complete: bool
+    clarification_correct: bool
+    field_matches: dict[str, bool]
+    eight_field_accuracy: float = Field(ge=0.0, le=1.0)
+    expected_archetype: str | None = None
+    actual_archetype: str | None = None
+    archetype_correct: bool
+    expected_required_features: list[str]
+    actual_required_features: list[str]
+    required_feature_recall: float = Field(ge=0.0, le=1.0)
+    expected_controller_allowed: bool
+    actual_controller_allowed: bool
+    controller_gate_correct: bool
+    premature_controller_release: bool
+    passed: bool
+
+
+class DiagnosticEvaluationResult(CFDCModel):
+    response_source: Literal["current_engine", "saved_response"]
+    case_count: int = Field(ge=1)
+    prompt_case_count: int = Field(ge=1)
+    complex_case_count: int = Field(ge=1)
+    mean_eight_field_accuracy: float = Field(ge=0.0, le=1.0)
+    mean_required_feature_recall: float = Field(ge=0.0, le=1.0)
+    clarification_accuracy: float = Field(ge=0.0, le=1.0)
+    controller_gate_accuracy: float = Field(ge=0.0, le=1.0)
+    premature_controller_release_count: int = Field(ge=0)
+    passed_count: int = Field(ge=0)
+    cases: list[DiagnosticEvaluationCaseResult] = Field(min_length=1)
+    evidence_boundary: str = "offline_diagnostic_evaluation_not_controller_validation"
+
+
 class OnlineTuningState(CFDCModel):
     gains: dict[str, float]
     previous_gains: dict[str, float] = Field(default_factory=dict)
@@ -347,6 +465,23 @@ class TrialReport(CFDCModel):
     evidence_boundary: str = "bounded_software_trial_not_physical_validation"
 
 
+class CartpoleBoundaryResult(CFDCModel):
+    success: bool
+    stop_reason: str
+    start_state: CartpoleState
+    target_position_m: float
+    candidate_trials: list[TrialReport] = Field(default_factory=list)
+    accepted_outer_gains: dict[str, float] = Field(default_factory=dict)
+    rejected_outer_gains: dict[str, float] = Field(default_factory=dict)
+    rollback_applied: bool = False
+    rollback_verified: bool = False
+    rollback_trial: TrialReport | None = None
+    performance: SimulationPerformanceSummary
+    events: list[dict[str, Any]] = Field(default_factory=list)
+    trajectory: list[dict[str, float | str]] = Field(default_factory=list)
+    evidence_boundary: str = "deterministic_cartpole_nmp_boundary_not_hardware_validation"
+
+
 class VtolState(CFDCModel):
     x_m: float
     z_m: float
@@ -367,6 +502,26 @@ class VtolSimulationResult(CFDCModel):
     events: list[dict[str, int | float | str | bool | None]] = Field(default_factory=list)
     trajectory: list[dict[str, float | str]] = Field(default_factory=list)
     evidence_boundary: str = "deterministic_vtol_simulation_not_hardware_validation"
+
+
+class VtolVariationScenario(CFDCModel):
+    scenario_id: str
+    feature_source: Literal["stale", "updated"]
+    mass_kg: float = Field(gt=0.0)
+    pitch_inertia_kg_m2: float = Field(gt=0.0)
+    expected_success: bool
+    expectation_met: bool
+    features: list[CoreFeatureArtifact]
+    simulation: VtolSimulationResult
+
+
+class VtolVariationResult(CFDCModel):
+    success: bool
+    scenarios: list[VtolVariationScenario] = Field(min_length=1)
+    updated_scenario_count: int = Field(ge=0)
+    stale_scenario_count: int = Field(ge=0)
+    notes: list[str] = Field(default_factory=list)
+    evidence_boundary: str = "deterministic_vtol_variation_study_not_online_or_hardware_validation"
 
 
 class CFDCRunReport(CFDCModel):
@@ -393,7 +548,10 @@ class CFDCRunReport(CFDCModel):
     safe_gain_search_state: SafeGainSearchState | None = None
     feature_tracking_updates: list[FeatureTrackingUpdate] = Field(default_factory=list)
     cartpole_simulation: CartpoleSimulationResult | None = None
+    cartpole_boundary: CartpoleBoundaryResult | None = None
     vtol_simulation: VtolSimulationResult | None = None
+    vtol_variation: VtolVariationResult | None = None
+    baseline_comparison: ControllerComparison | None = None
     final_gains: dict[str, float] = Field(default_factory=dict)
     final_feedforward: dict[str, float] = Field(default_factory=dict)
     go_no_go: GoNoGoDecision | None = None

@@ -63,7 +63,7 @@ def test_synthesis_rejects_incomplete_required_features_with_clear_error():
     raise AssertionError("synthesis accepted an incomplete feature set")
 
 
-def test_marginal_plant_controller_has_tiny_pd_and_saturation():
+def test_marginal_plant_controller_scales_pd_from_input_gain_and_saturates():
     classification = ArchetypeClassification(
         primary_class=ArchetypeClass.CLASS_III_DOUBLE_OR_PURE_INTEGRATOR,
         control_architecture="small saturated PD",
@@ -72,8 +72,79 @@ def test_marginal_plant_controller_has_tiny_pd_and_saturation():
         rationale="test",
     )
     controller = synthesize_controller(classification, [feature("input_gain", 1.0)], {"output_max": 0.4})
-    assert controller.gains == {"kp": 1e-3, "kd": 1e-2}
+    assert controller.gains == {"kp": 0.9**2, "kd": 2.0 * 1.15 * 0.9}
     assert controller.saturation["output_max"] == 0.4
+
+    half_gain = synthesize_controller(
+        classification,
+        [feature("input_gain", 0.5)],
+        {"output_max": 0.4},
+    )
+    assert half_gain.gains["kp"] == 2.0 * controller.gains["kp"]
+    assert half_gain.gains["kd"] == 2.0 * controller.gains["kd"]
+
+
+def test_second_order_controller_scales_from_input_gain():
+    classification = ArchetypeClassification(
+        primary_class=ArchetypeClass.CLASS_II_SECOND_ORDER_OSCILLATOR,
+        control_architecture="detuned PD",
+        required_core_features=["natural_frequency", "damping_ratio", "input_gain"],
+        safety_constraints=[],
+        rationale="test",
+    )
+    unit_gain = synthesize_controller(
+        classification,
+        [feature("natural_frequency", 3.0), feature("damping_ratio", 0.2), feature("input_gain", 1.0)],
+    )
+    double_gain = synthesize_controller(
+        classification,
+        [feature("natural_frequency", 3.0), feature("damping_ratio", 0.2), feature("input_gain", 2.0)],
+    )
+
+    assert double_gain.gains["kp"] == 0.5 * unit_gain.gains["kp"]
+    assert double_gain.gains["kd"] == 0.5 * unit_gain.gains["kd"]
+    assert unit_gain.source_features == ["natural_frequency", "damping_ratio", "input_gain"]
+
+
+def test_second_order_controller_rejects_missing_input_gain_clearly():
+    classification = ArchetypeClassification(
+        primary_class=ArchetypeClass.CLASS_II_SECOND_ORDER_OSCILLATOR,
+        control_architecture="detuned PD",
+        required_core_features=["natural_frequency", "damping_ratio"],
+        safety_constraints=[],
+        rationale="legacy incomplete contract",
+    )
+
+    try:
+        synthesize_controller(
+            classification,
+            [feature("natural_frequency", 3.0), feature("damping_ratio", 0.2)],
+        )
+    except ValueError as exc:
+        assert "input_gain" in str(exc)
+        return
+    raise AssertionError("Class II synthesis accepted a missing input_gain")
+
+
+def test_first_order_dead_time_detunes_gain_and_integral_speed():
+    without_delay = ArchetypeClassification(
+        primary_class=ArchetypeClass.CLASS_I_FIRST_ORDER_LAG,
+        control_architecture="detuned PI",
+        required_core_features=["static_gain", "time_constant"],
+        safety_constraints=[],
+        rationale="test",
+    )
+    with_delay = without_delay.model_copy(
+        update={"required_core_features": ["static_gain", "time_constant", "dead_time"]}
+    )
+    common = [feature("static_gain", 2.0), feature("time_constant", 8.0)]
+    nominal = synthesize_controller(without_delay, common)
+    delayed = synthesize_controller(with_delay, [*common, feature("dead_time", 2.0)])
+
+    assert delayed.gains["kp"] < nominal.gains["kp"]
+    assert delayed.gains["ki"] < nominal.gains["ki"]
+    assert delayed.gains["integral_time"] > nominal.gains["integral_time"]
+    assert delayed.source_features == ["static_gain", "time_constant", "dead_time"]
 
 
 def test_unstable_safe_gain_search_accepts_then_freezes_on_violation():

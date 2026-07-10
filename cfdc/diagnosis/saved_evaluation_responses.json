@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "responses": [
+    {
+      "case_id": "cartpole_underactuated",
+      "field_values": {
+        "open_loop_stability": "unstable or safety-critical equilibrium",
+        "minimum_phase": "non-minimum phase or inverse-response risk",
+        "significant_delay": "no significant delay reported",
+        "relative_degree": "2 for angle stabilization and higher for cart position",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "strong nonlinearity",
+        "coupling_severity": "underactuated coupling between cart and rod",
+        "uncertainty_magnitude": "large uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_iv_higher_order_unstable_nonlinear_or_nmp",
+      "required_core_features": ["natural_frequency"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "planar_vtol_hover_lateral",
+      "field_values": {
+        "open_loop_stability": "unstable or safety-critical equilibrium",
+        "minimum_phase": "non-minimum phase or inverse-response risk",
+        "significant_delay": "no significant delay reported",
+        "relative_degree": "2 for vertical/attitude channels and high relative degree for lateral motion",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "moderate nonlinearity near hover",
+        "coupling_severity": "moderate cascaded coupling",
+        "uncertainty_magnitude": "large uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_iv_higher_order_unstable_nonlinear_or_nmp",
+      "required_core_features": ["hover_thrust", "angular_acceleration_gain", "lateral_coupling_gain"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "first_order_thermal",
+      "field_values": {
+        "open_loop_stability": "open-loop stable near the operating point",
+        "minimum_phase": "minimum phase expected for the first safe test",
+        "significant_delay": "no significant delay reported",
+        "relative_degree": "1 for first-order lag",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "weak or local nonlinearity",
+        "coupling_severity": "single-loop or weak coupling",
+        "uncertainty_magnitude": "large uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_i_first_order_lag",
+      "required_core_features": ["static_gain", "time_constant"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "double_integrator_cart",
+      "field_values": {
+        "open_loop_stability": "marginally stable drifting motion",
+        "minimum_phase": "minimum phase expected for the first safe test",
+        "significant_delay": "no significant delay reported",
+        "relative_degree": "2 for double-integrator-like motion",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "weak or local nonlinearity",
+        "coupling_severity": "single-loop or weak coupling",
+        "uncertainty_magnitude": "moderate uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_iii_double_or_pure_integrator",
+      "required_core_features": ["input_gain"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "spring_mass_damper",
+      "field_values": {
+        "open_loop_stability": "open-loop stable near the operating point",
+        "minimum_phase": "minimum phase expected for the first safe test",
+        "significant_delay": "no significant delay reported",
+        "relative_degree": "2 for the dominant oscillatory mode",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "weak or local nonlinearity",
+        "coupling_severity": "single-loop or weak coupling",
+        "uncertainty_magnitude": "moderate uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_ii_second_order_oscillator",
+      "required_core_features": ["natural_frequency", "damping_ratio", "input_gain"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "delayed_heating_process",
+      "field_values": {
+        "open_loop_stability": "open-loop stable near the operating point",
+        "minimum_phase": "minimum phase expected for the first safe test",
+        "significant_delay": "significant delay likely",
+        "relative_degree": "1 for first-order lag",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "weak or local nonlinearity",
+        "coupling_severity": "single-loop or weak coupling",
+        "uncertainty_magnitude": "moderate uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_i_first_order_lag",
+      "required_core_features": ["static_gain", "time_constant", "dead_time"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "inverse_response_process",
+      "field_values": {
+        "open_loop_stability": "open-loop stable near the operating point",
+        "minimum_phase": "non-minimum phase or inverse-response risk",
+        "significant_delay": "no significant delay reported",
+        "relative_degree": "1 for first-order lag",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "weak or local nonlinearity",
+        "coupling_severity": "single-loop or weak coupling",
+        "uncertainty_magnitude": "moderate uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_iv_higher_order_unstable_nonlinear_or_nmp",
+      "required_core_features": ["static_gain", "time_constant", "inverse_response_severity"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "deadzone_saturated_motor",
+      "field_values": {
+        "open_loop_stability": "not enough information",
+        "minimum_phase": "not enough information",
+        "significant_delay": "not enough information",
+        "relative_degree": "not enough information",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "strong nonlinearity",
+        "coupling_severity": "not enough information",
+        "uncertainty_magnitude": "large uncertainty"
+      },
+      "complete": false,
+      "clarification_questions": [
+        "When you make a small change, does the measured output first move the expected way or briefly the opposite way?",
+        "After a small change, is there a noticeable pause before anything moves?",
+        "If there are several inputs and outputs, does one input strongly move more than one output?"
+      ],
+      "primary_class": null,
+      "required_core_features": [],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "acrobot_underactuated_diagnosis",
+      "field_values": {
+        "open_loop_stability": "unstable or safety-critical equilibrium",
+        "minimum_phase": "not enough information",
+        "significant_delay": "not enough information",
+        "relative_degree": "not enough information",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "not enough information",
+        "coupling_severity": "not enough information",
+        "uncertainty_magnitude": "large uncertainty"
+      },
+      "complete": false,
+      "clarification_questions": [
+        "When you make a small change, does the measured output first move the expected way or briefly the opposite way?",
+        "After a small change, is there a noticeable pause before anything moves?",
+        "If there are several inputs and outputs, does one input strongly move more than one output?"
+      ],
+      "primary_class": null,
+      "required_core_features": [],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "cstr_operating_point_nonlinearity_diagnosis",
+      "field_values": {
+        "open_loop_stability": "open-loop stable near the operating point",
+        "minimum_phase": "minimum phase expected for the first safe test",
+        "significant_delay": "no significant delay reported",
+        "relative_degree": "1 for first-order lag",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "weak or local nonlinearity",
+        "coupling_severity": "single-loop or weak coupling",
+        "uncertainty_magnitude": "moderate uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_i_first_order_lag",
+      "required_core_features": ["static_gain", "time_constant"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "quadruple_tank_mimo_nmp_diagnosis",
+      "field_values": {
+        "open_loop_stability": "open-loop stable near the operating point",
+        "minimum_phase": "minimum phase expected for the first safe test",
+        "significant_delay": "no significant delay reported",
+        "relative_degree": "1 for first-order lag",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "weak or local nonlinearity",
+        "coupling_severity": "single-loop or weak coupling",
+        "uncertainty_magnitude": "moderate uncertainty"
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_i_first_order_lag",
+      "required_core_features": ["static_gain", "time_constant"],
+      "generator": "deterministic_diagnostic_engine_v1"
+    },
+    {
+      "case_id": "bouc_wen_hysteresis_diagnosis",
+      "field_values": {
+        "open_loop_stability": "not enough information",
+        "minimum_phase": "not enough information",
+        "significant_delay": "not enough information",
+        "relative_degree": "not enough information",
+        "controllability_observability": "available input and measured output are declared",
+        "nonlinearity_strength": "strong nonlinearity",
+        "coupling_severity": "not enough information",
+        "uncertainty_magnitude": "not enough information"
+      },
+      "complete": false,
+      "clarification_questions": [
+        "When you make a small change, does the measured output first move the expected way or briefly the opposite way?",
+        "After a small change, is there a noticeable pause before anything moves?",
+        "If there are several inputs and outputs, does one input strongly move more than one output?",
+        "Do load, wear, or operating conditions change the behavior noticeably?"
+      ],
+      "primary_class": null,
+      "required_core_features": [],
+      "generator": "deterministic_diagnostic_engine_v1"
+    }
+  ]
+}

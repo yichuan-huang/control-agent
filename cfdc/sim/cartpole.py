@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 import math
 
@@ -8,12 +8,16 @@ import numpy as np
 from scipy.linalg import solve_continuous_are
 
 from cfdc.models import (
+    CartpoleBoundaryResult,
     CartpoleSimulationResult,
     CartpoleState,
     OnlinePerformanceMetrics,
     SafeGainSearchState,
+    SafetyViolation,
     TrialReport,
+    TrialSample,
 )
+from cfdc.online import compute_performance_metrics
 from cfdc.performance import build_performance_summary, calculate_channel_performance
 from cfdc.sim.integrators import rk4_step
 
@@ -72,6 +76,26 @@ class CartpoleSwingupConfig:
     outer_kpy_initial: float = 0.01
     outer_kdy_initial: float = 0.02
     max_force_saturation_fraction: float = 0.30
+    max_response_settling_time_s: float = 15.0
+
+
+@dataclass(frozen=True)
+class CartpoleNmpConfig:
+    prepare_duration_s: float = 15.0
+    position_step_m: float = 0.2
+    candidate_trial_duration_s: float = 5.0
+    rollback_validation_duration_s: float = 20.0
+    candidate_kpy_initial: float = 0.1
+    candidate_kpy_step: float = 0.1
+    candidate_kpy_max: float = 0.6
+    candidate_kdy_ratio: float = 2.0
+    theta_reference_limit_rad: float = 0.25
+    max_nmp_undershoot: float = 0.20
+    max_abs_angle_rad: float = 0.25
+    max_force_saturation_fraction: float = 0.20
+    final_position_tolerance_m: float = 0.02
+    final_angle_tolerance_rad: float = 0.03
+    max_rollback_settling_time_s: float = 12.0
 
 
 def _wrap_angle(angle_rad: float) -> float:
@@ -155,7 +179,7 @@ class _HybridEnergyLQRController:
         x, x_dot, theta, theta_dot = [float(value) for value in state]
         theta = _wrap_angle(theta)
         if abs(theta) < self.config.capture_angle_rad and abs(theta_dot) < self.config.capture_rate_rad_s:
-            local_state = np.array([x, x_dot, theta, theta_dot], dtype=float)
+            local_state = np.array([x - self.config.outer_reference_m, x_dot, theta, theta_dot], dtype=float)
             force = -float((self.lqr_gain @ local_state).item())
             mode = "balance_lqr"
         else:
@@ -571,6 +595,7 @@ def simulate_cartpole_energy_swingup(
     balance_gains: dict[str, float] | None = None,
     natural_frequency_rad_s: float | None = None,
     search_events: list[dict[str, int | float | str | bool | None]] | None = None,
+    stop_after_handoff: bool = True,
 ) -> CartpoleSimulationResult:
     params = params or CartpoleParams()
     config = config or CartpoleSwingupConfig()
@@ -636,12 +661,15 @@ def simulate_cartpole_energy_swingup(
         if handoff_time is None and balance_hold_samples >= required_balance_samples:
             handoff_time = time_s - (required_balance_samples - 1) * config.dt_s
             stop_reason = "upright_handoff_window_reached"
-            break
+            if stop_after_handoff:
+                break
         if step < steps:
             state = _rk4_step(state, force, config.dt_s, params)
             max_abs_x = max(max_abs_x, abs(float(state[0])))
     if handoff_time is None and balance_gains is not None:
         stop_reason = "cfdc_final_gains_failed_handoff"
+    elif handoff_time is not None and not stop_after_handoff and stop_reason == "upright_handoff_window_reached":
+        stop_reason = "duration_elapsed_after_upright_handoff"
 
     final_state = CartpoleState(
         cart_position_m=float(state[0]),
@@ -660,7 +688,6 @@ def simulate_cartpole_energy_swingup(
         violations.append("force_limit")
     if force_saturation_fraction > config.max_force_saturation_fraction:
         violations.append("force_saturation_fraction")
-    success = not violations
     time_s = [float(row["time_s"]) for row in records]
     channels = {
         "pole_angle": calculate_channel_performance(
@@ -678,8 +705,24 @@ def simulate_cartpole_energy_swingup(
             settling_band_absolute=0.02,
         ),
     }
+    if not stop_after_handoff:
+        for channel_name in ["pole_angle", "cart_position"]:
+            channel = channels[channel_name]
+            if not channel.settled:
+                violations.append(f"{channel_name}_not_settled")
+            elif (
+                channel.settling_time_s is not None
+                and channel.settling_time_s > config.max_response_settling_time_s
+            ):
+                violations.append(f"{channel_name}_settling_time_limit")
+        if channels["pole_angle"].abs_final_error > config.pd_target_angle_rad:
+            violations.append("final_pole_angle_error")
+        if channels["cart_position"].abs_final_error > 0.02:
+            violations.append("final_cart_position_error")
+    success = not violations
+    primary_channel = "pole_angle" if stop_after_handoff else "cart_position"
     performance = build_performance_summary(
-        primary_channel="pole_angle",
+        primary_channel=primary_channel,
         channels=channels,
         actuator_saturation_fractions={"force": force_saturation_fraction},
         state_boundaries={
@@ -692,6 +735,7 @@ def simulate_cartpole_energy_swingup(
             "max_abs_cart_position_m": params.cart_position_limit_m,
             "max_abs_force_n": params.force_limit_n,
             "max_force_saturation_fraction": config.max_force_saturation_fraction,
+            "max_response_settling_time_s": config.max_response_settling_time_s,
             "capture_angle_rad": config.pd_target_angle_rad,
             "capture_rate_rad_s": 1.0,
         },
@@ -726,8 +770,421 @@ def simulate_cartpole_energy_swingup(
             "balance_max_abs_rate_rad_s": balance_max_rate,
             "force_saturation_fraction": force_saturation_fraction,
             "max_abs_cart_position_m": max_abs_x,
+            "cart_position_settled": channels["cart_position"].settled,
+            "cart_position_settling_time_s": channels["cart_position"].settling_time_s,
+            "cart_position_final_error_m": channels["cart_position"].final_error,
         },
         events=list(search_events or []),
         final_gains=dict(balance_gains or {}),
         trajectory=records if include_trajectory else [],
+    )
+
+
+def _cartpole_outer_trial(
+    *,
+    trial_id: str,
+    start_state: CartpoleState,
+    target_position_m: float,
+    balance_gains: dict[str, float],
+    outer_gains: dict[str, float],
+    params: CartpoleParams,
+    swingup_config: CartpoleSwingupConfig,
+    nmp_config: CartpoleNmpConfig,
+    duration_s: float,
+    require_settled: bool,
+) -> tuple[TrialReport, CartpoleState, dict[str, object], list[dict[str, float | str]]]:
+    state = np.array(
+        [
+            start_state.cart_position_m,
+            start_state.cart_velocity_m_s,
+            start_state.pole_angle_rad,
+            start_state.pole_angular_velocity_rad_s,
+        ],
+        dtype=float,
+    )
+    samples: list[TrialSample] = []
+    trajectory: list[dict[str, float | str]] = []
+    violations: list[SafetyViolation] = []
+    steps = max(1, int(round(duration_s / swingup_config.dt_s)))
+
+    for step in range(steps + 1):
+        time_s = step * swingup_config.dt_s
+        x, x_dot = float(state[0]), float(state[1])
+        theta = _wrap_angle(float(state[2]))
+        theta_dot = float(state[3])
+        theta_ref = outer_gains["kp_y"] * (target_position_m - x) - outer_gains["kd_y"] * x_dot
+        theta_ref = float(
+            np.clip(
+                theta_ref,
+                -swingup_config.outer_theta_ref_limit_rad,
+                swingup_config.outer_theta_ref_limit_rad,
+            )
+        )
+        raw_force = balance_gains["kp"] * (theta - theta_ref) + balance_gains["kd"] * theta_dot
+        force = float(np.clip(raw_force, -params.force_limit_n, params.force_limit_n))
+        sample = TrialSample(
+            time_s=time_s,
+            state={
+                "output": x,
+                "position": x,
+                "velocity": x_dot,
+                "angle": theta,
+                "angular_velocity": theta_dot,
+            },
+            control={"input": force},
+            reference={"output": target_position_m},
+            metadata={"saturated": abs(raw_force) >= 0.98 * params.force_limit_n},
+        )
+        samples.append(sample)
+        trajectory.append(
+            {
+                "time_s": time_s,
+                "cart_position_m": x,
+                "cart_velocity_m_s": x_dot,
+                "pole_angle_rad": theta,
+                "pole_angular_velocity_rad_s": theta_dot,
+                "force_n": force,
+                "theta_reference_rad": theta_ref,
+                "phase": "cartpole_nmp_outer_trial",
+            }
+        )
+
+        if abs(x) > params.cart_position_limit_m:
+            violations.append(
+                SafetyViolation(
+                    constraint="max_abs_position",
+                    observed_value=abs(x),
+                    limit=params.cart_position_limit_m,
+                    time_s=time_s,
+                    message="cart position exceeded the configured track boundary",
+                )
+            )
+            break
+        if abs(theta) > nmp_config.max_abs_angle_rad:
+            violations.append(
+                SafetyViolation(
+                    constraint="max_abs_angle",
+                    observed_value=abs(theta),
+                    limit=nmp_config.max_abs_angle_rad,
+                    time_s=time_s,
+                    message="pole angle exceeded the NMP trial safety envelope",
+                )
+            )
+            break
+        if step < steps:
+            state = _rk4_step(state, force, swingup_config.dt_s, params)
+
+    time_values = [sample.time_s for sample in samples]
+    position_values = [sample.state["output"] for sample in samples]
+    angle_values = [sample.state["angle"] for sample in samples]
+    force_values = [sample.control["input"] for sample in samples]
+    reference_values = [target_position_m] * len(samples)
+    metrics = compute_performance_metrics(
+        time_values,
+        reference_values,
+        position_values,
+        force_values,
+        saturation_limit=params.force_limit_n,
+        settling_band=nmp_config.final_position_tolerance_m / max(nmp_config.position_step_m, 1e-9),
+    )
+    cart_channel = calculate_channel_performance(
+        time_values,
+        target_position_m,
+        position_values,
+        settling_band_absolute=nmp_config.final_position_tolerance_m,
+    )
+    pole_channel = calculate_channel_performance(
+        time_values,
+        0.0,
+        angle_values,
+        settling_band_absolute=nmp_config.final_angle_tolerance_rad,
+    )
+    final_time = time_values[-1]
+    if metrics.nmp_undershoot >= nmp_config.max_nmp_undershoot:
+        violations.append(
+            SafetyViolation(
+                constraint="max_nmp_undershoot",
+                observed_value=metrics.nmp_undershoot,
+                limit=nmp_config.max_nmp_undershoot,
+                time_s=final_time,
+                message="cart reverse motion reached the configured NMP boundary",
+            )
+        )
+    if metrics.actuator_saturation_fraction > nmp_config.max_force_saturation_fraction:
+        violations.append(
+            SafetyViolation(
+                constraint="max_actuator_saturation_fraction",
+                observed_value=metrics.actuator_saturation_fraction,
+                limit=nmp_config.max_force_saturation_fraction,
+                time_s=final_time,
+                message="force saturation fraction exceeded the NMP trial limit",
+            )
+        )
+    if require_settled and not cart_channel.settled:
+        violations.append(
+            SafetyViolation(
+                constraint="cart_position_settled",
+                observed_value=cart_channel.abs_final_error,
+                limit=nmp_config.final_position_tolerance_m,
+                time_s=final_time,
+                message="rollback cart response did not settle inside the final position band",
+            )
+        )
+    if require_settled and cart_channel.settling_time_s is not None and cart_channel.settling_time_s > final_time - 1.0:
+        violations.append(
+            SafetyViolation(
+                constraint="cart_position_settling_dwell",
+                observed_value=cart_channel.settling_time_s,
+                limit=max(0.0, final_time - 1.0),
+                time_s=final_time,
+                message="rollback cart response did not remain settled for the required dwell",
+            )
+        )
+    if require_settled and not pole_channel.settled:
+        violations.append(
+            SafetyViolation(
+                constraint="pole_angle_settled",
+                observed_value=pole_channel.abs_final_error,
+                limit=nmp_config.final_angle_tolerance_rad,
+                time_s=final_time,
+                message="rollback pole response did not settle inside the angle band",
+            )
+        )
+    if require_settled:
+        for channel_name, channel in [
+            ("cart_position", cart_channel),
+            ("pole_angle", pole_channel),
+        ]:
+            if (
+                channel.settling_time_s is not None
+                and channel.settling_time_s > nmp_config.max_rollback_settling_time_s
+            ):
+                violations.append(
+                    SafetyViolation(
+                        constraint=f"{channel_name}_settling_time_limit",
+                        observed_value=channel.settling_time_s,
+                        limit=nmp_config.max_rollback_settling_time_s,
+                        time_s=final_time,
+                        message="rollback response exceeded the configured settling-time limit",
+                    )
+                )
+
+    accepted = not violations
+    tested_gains = {**balance_gains, **outer_gains}
+    report = TrialReport(
+        trial_id=trial_id,
+        accepted=accepted,
+        stop_reason="accepted" if accepted else violations[0].constraint,
+        duration_s=final_time,
+        samples=samples,
+        metrics=metrics,
+        safety_violations=violations,
+        tested_gains=tested_gains,
+        accepted_gains=tested_gains if accepted else {},
+    )
+    final_state = CartpoleState(
+        cart_position_m=float(state[0]),
+        cart_velocity_m_s=float(state[1]),
+        pole_angle_rad=_wrap_angle(float(state[2])),
+        pole_angular_velocity_rad_s=float(state[3]),
+    )
+    return report, final_state, {"cart_position": cart_channel, "pole_angle": pole_channel}, trajectory
+
+
+def run_cartpole_nmp_boundary_scan(
+    natural_frequency_rad_s: float,
+    balance_gains: dict[str, float],
+    params: CartpoleParams | None = None,
+    swingup_config: CartpoleSwingupConfig | None = None,
+    nmp_config: CartpoleNmpConfig | None = None,
+    include_trajectory: bool = False,
+) -> CartpoleBoundaryResult:
+    params = params or CartpoleParams()
+    swingup_config = swingup_config or CartpoleSwingupConfig()
+    nmp_config = nmp_config or CartpoleNmpConfig()
+    prepare_config = replace(
+        swingup_config,
+        duration_s=nmp_config.prepare_duration_s,
+        normalized_energy_gain=0.65,
+        swing_cart_position_gain=3.6,
+        swing_cart_velocity_gain=3.2,
+        outer_reference_m=0.2,
+        outer_kpy_initial=nmp_config.candidate_kpy_initial,
+        outer_kdy_initial=nmp_config.candidate_kdy_ratio * nmp_config.candidate_kpy_initial,
+        outer_theta_ref_limit_rad=nmp_config.theta_reference_limit_rad,
+        max_force_saturation_fraction=max(
+            swingup_config.max_force_saturation_fraction,
+            0.35,
+        ),
+    )
+    preparation = simulate_cartpole_energy_swingup(
+        params=params,
+        config=prepare_config,
+        include_trajectory=True,
+        balance_gains=balance_gains,
+        natural_frequency_rad_s=natural_frequency_rad_s,
+        stop_after_handoff=False,
+    )
+    start_state = preparation.final_state
+    target_position_m = start_state.cart_position_m + nmp_config.position_step_m
+    candidate_trials: list[TrialReport] = []
+    events: list[dict[str, object]] = [
+        {
+            "event": "nmp_preparation_complete",
+            "accepted": preparation.success,
+            "start_position_m": start_state.cart_position_m,
+            "max_abs_cart_position_m": preparation.max_abs_cart_position_m,
+            "force_saturation_fraction": preparation.performance.saturation_fraction,
+        }
+    ]
+    last_accepted: dict[str, float] = {}
+    accepted_history: list[dict[str, float]] = []
+    first_rejected: dict[str, float] = {}
+    candidate_kpy = nmp_config.candidate_kpy_initial
+    trial_index = 0
+    while candidate_kpy <= nmp_config.candidate_kpy_max + 1e-12:
+        trial_index += 1
+        outer_gains = {
+            "kp_y": candidate_kpy,
+            "kd_y": nmp_config.candidate_kdy_ratio * candidate_kpy,
+        }
+        report, _, _, _ = _cartpole_outer_trial(
+            trial_id=f"cartpole_nmp_candidate_{trial_index:03d}",
+            start_state=start_state,
+            target_position_m=target_position_m,
+            balance_gains=balance_gains,
+            outer_gains=outer_gains,
+            params=params,
+            swingup_config=prepare_config,
+            nmp_config=nmp_config,
+            duration_s=nmp_config.candidate_trial_duration_s,
+            require_settled=False,
+        )
+        candidate_trials.append(report)
+        events.append(
+            {
+                "event": "candidate_trial",
+                "trial_index": trial_index,
+                "candidate_outer_gains": outer_gains,
+                "accepted": report.accepted,
+                "nmp_undershoot": report.metrics.nmp_undershoot if report.metrics else None,
+                "stop_reason": report.stop_reason,
+            }
+        )
+        if report.accepted:
+            last_accepted = outer_gains
+            accepted_history.append(outer_gains)
+        else:
+            first_rejected = outer_gains
+            break
+        candidate_kpy += nmp_config.candidate_kpy_step
+
+    rollback_applied = bool(last_accepted and first_rejected)
+    rollback_report: TrialReport | None = None
+    rollback_channels: dict[str, object] = {}
+    rollback_trajectory: list[dict[str, float | str]] = []
+    if rollback_applied:
+        for rollback_index, rollback_gains in enumerate(reversed(accepted_history), start=1):
+            candidate_rollback_report, _, candidate_channels, candidate_trajectory = _cartpole_outer_trial(
+                trial_id=f"cartpole_nmp_rollback_validation_{rollback_index:03d}",
+                start_state=start_state,
+                target_position_m=target_position_m,
+                balance_gains=balance_gains,
+                outer_gains=rollback_gains,
+                params=params,
+                swingup_config=prepare_config,
+                nmp_config=nmp_config,
+                duration_s=nmp_config.rollback_validation_duration_s,
+                require_settled=True,
+            )
+            events.append(
+                {
+                    "event": "rollback_validation",
+                    "accepted_outer_gains": rollback_gains,
+                    "accepted": candidate_rollback_report.accepted,
+                    "nmp_undershoot": (
+                        candidate_rollback_report.metrics.nmp_undershoot
+                        if candidate_rollback_report.metrics
+                        else None
+                    ),
+                    "stop_reason": candidate_rollback_report.stop_reason,
+                }
+            )
+            rollback_report = candidate_rollback_report
+            rollback_channels = candidate_channels
+            rollback_trajectory = candidate_trajectory
+            if candidate_rollback_report.accepted:
+                last_accepted = rollback_gains
+                break
+
+    rollback_verified = bool(rollback_report and rollback_report.accepted)
+    performance_violations: list[str] = []
+    if not preparation.success:
+        performance_violations.append("nmp_preparation_failed")
+    if not first_rejected:
+        performance_violations.append("nmp_boundary_not_triggered")
+    if not rollback_applied:
+        performance_violations.append("nmp_rollback_unavailable")
+    if not rollback_verified:
+        performance_violations.append("nmp_rollback_not_verified")
+
+    if rollback_report is not None and rollback_report.metrics is not None and rollback_channels:
+        cart_channel = rollback_channels["cart_position"]
+        pole_channel = rollback_channels["pole_angle"]
+        max_abs_position = max(abs(sample.state["position"]) for sample in rollback_report.samples)
+        max_abs_angle = max(abs(sample.state["angle"]) for sample in rollback_report.samples)
+        max_abs_force = max(abs(sample.control["input"]) for sample in rollback_report.samples)
+        saturation_fraction = rollback_report.metrics.actuator_saturation_fraction
+    else:
+        cart_channel = calculate_channel_performance([0.0, 1.0], target_position_m, [start_state.cart_position_m] * 2)
+        pole_channel = calculate_channel_performance([0.0, 1.0], 0.0, [start_state.pole_angle_rad] * 2)
+        max_abs_position = abs(start_state.cart_position_m)
+        max_abs_angle = abs(start_state.pole_angle_rad)
+        max_abs_force = 0.0
+        saturation_fraction = 0.0
+
+    success = not performance_violations
+    performance = build_performance_summary(
+        primary_channel="cart_position",
+        channels={"cart_position": cart_channel, "pole_angle": pole_channel},
+        actuator_saturation_fractions={"force": saturation_fraction},
+        state_boundaries={
+            "max_abs_cart_position_m": max_abs_position,
+            "max_abs_pole_angle_rad": max_abs_angle,
+            "max_abs_force_n": max_abs_force,
+            "preparation_max_abs_cart_position_m": preparation.max_abs_cart_position_m,
+        },
+        limits={
+            "max_abs_cart_position_m": params.cart_position_limit_m,
+            "max_abs_pole_angle_rad": nmp_config.max_abs_angle_rad,
+            "max_abs_force_n": params.force_limit_n,
+            "max_force_saturation_fraction": nmp_config.max_force_saturation_fraction,
+            "max_nmp_undershoot": nmp_config.max_nmp_undershoot,
+            "final_position_tolerance_m": nmp_config.final_position_tolerance_m,
+            "max_rollback_settling_time_s": nmp_config.max_rollback_settling_time_s,
+        },
+        violations=performance_violations,
+        success=success,
+        capture_success=preparation.performance.capture_success,
+        capture_time_s=preparation.performance.capture_time_s,
+        boundary_triggered=bool(first_rejected),
+        boundary_reason=(candidate_trials[-1].stop_reason if first_rejected else "not_triggered"),
+    )
+    trajectory = []
+    if include_trajectory:
+        trajectory = [*preparation.trajectory, *rollback_trajectory]
+    return CartpoleBoundaryResult(
+        success=success,
+        stop_reason="boundary_triggered_and_rollback_verified" if success else performance_violations[0],
+        start_state=start_state,
+        target_position_m=target_position_m,
+        candidate_trials=candidate_trials,
+        accepted_outer_gains=last_accepted,
+        rejected_outer_gains=first_rejected,
+        rollback_applied=rollback_applied,
+        rollback_verified=rollback_verified,
+        rollback_trial=rollback_report,
+        performance=performance,
+        events=events,
+        trajectory=trajectory,
     )
