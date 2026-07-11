@@ -324,6 +324,83 @@ class BenchmarkRouteIR(CFDCModel):
     evidence_boundary: str = "synthetic_benchmark_route_ir_not_physical_validation"
 
 
+class CandidateExperimentRequest(CFDCModel):
+    request_id: str = Field(min_length=1)
+    primitive: str = Field(min_length=1)
+    input_signal_ids: list[str] = Field(default_factory=list)
+    output_signal_ids: list[str] = Field(default_factory=list)
+    feature_ids: list[str] = Field(min_length=1)
+    input_amplitude: float | None = None
+    duration_s: float | None = Field(default=None, gt=0.0)
+    sample_rate_hz: float | None = Field(default=None, gt=0.0)
+    operating_region: str = "declared_safe_operating_region"
+    stop_conditions: list[str] = Field(min_length=1)
+    provenance_requirement: DataProvenance
+
+
+class CandidateRouteIR(CFDCModel):
+    schema_version: str = "1.0"
+    route_id: str = Field(min_length=1)
+    workflow_mode: WorkflowMode
+    canonical_class: ArchetypeClass
+    supplemental_mechanism_cards: list[str] = Field(default_factory=list)
+    control_architecture_id: str = Field(min_length=1)
+    experiment_requests: list[CandidateExperimentRequest] = Field(default_factory=list)
+    required_core_feature_ids: list[str] = Field(min_length=1)
+    optional_core_feature_ids: list[str] = Field(default_factory=list)
+    controller_template_id: str = Field(min_length=1)
+    tunable_gain_names: list[str] = Field(default_factory=list)
+    online_refinement_policy_id: str = Field(min_length=1)
+    feature_tracking_requests: list[str] = Field(default_factory=list)
+    validation_metrics: list[str] = Field(min_length=1)
+    safety_constraints: list[str] = Field(min_length=1)
+    evidence_boundary: str = "candidate_route_from_declared_evidence_not_plant_ground_truth"
+
+
+class CapabilityGap(CFDCModel):
+    code: str = Field(min_length=1)
+    stage: str = Field(min_length=1)
+    capability_id: str = Field(min_length=1)
+    explanation: str = Field(min_length=1)
+    resolvable_by_measurement: bool = False
+    required_next_action: str = Field(min_length=1)
+    blocking: bool = True
+
+
+class PrimitiveSignalRequirement(CFDCModel):
+    input_required: bool = True
+    output_required: bool = True
+
+
+class ControllerTemplateCapability(CFDCModel):
+    compatible_classes: list[ArchetypeClass] = Field(min_length=1)
+    required_feature_ids: list[str] = Field(default_factory=list)
+    implemented: bool = True
+
+
+class CapabilityCatalog(CFDCModel):
+    schema_version: str = "1.0"
+    experiment_primitive_classes: dict[str, list[ArchetypeClass]]
+    primitive_signal_requirements: dict[str, PrimitiveSignalRequirement]
+    feature_extractors: dict[str, list[str]]
+    controller_templates: dict[str, ControllerTemplateCapability]
+    online_refinement_policies: list[str]
+    tracking_implementations: list[str]
+    simulation_fixture_routes: list[str]
+
+
+class CompiledRoute(CFDCModel):
+    candidate_route: CandidateRouteIR
+    capability_catalog_version: str
+    gaps: list[CapabilityGap] = Field(default_factory=list)
+    executable: bool
+    compiled_experiment_ids: list[str] = Field(default_factory=list)
+    compiled_feature_extractor_ids: list[str] = Field(default_factory=list)
+    compiled_controller_template_id: str | None = None
+    compiled_tracking_ids: list[str] = Field(default_factory=list)
+    evidence_boundary: str = "capability_compilation_not_controller_release"
+
+
 class ClosedLoopBenchmarkCaseResult(CFDCModel):
     case_id: str
     route_ir: BenchmarkRouteIR
@@ -644,6 +721,8 @@ class CFDCRunReport(CFDCModel):
     diagnosis: StructuralDiagnosis | None = None
     classification: ArchetypeClassification | None = None
     experiment_plan: ExperimentPlan | None = None
+    candidate_route: CandidateRouteIR | None = None
+    compiled_route: CompiledRoute | None = None
     experiment_results: list[ExperimentResult] = Field(default_factory=list)
     features: list[CoreFeatureArtifact] = Field(default_factory=list)
     controller: ControllerCandidate | None = None

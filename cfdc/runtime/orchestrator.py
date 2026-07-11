@@ -12,7 +12,9 @@ from cfdc.diagnosis.safety import validate_diagnostic_controller_release
 from cfdc.experiments import plan_safe_experiments
 from cfdc.features import extract_features_from_results
 from cfdc.models import (
+    CandidateRouteIR,
     CFDCRunReport,
+    CompiledRoute,
     ControllerCandidate,
     ControllerComparison,
     CoreFeatureArtifact,
@@ -47,7 +49,12 @@ from cfdc.sim import (
 )
 from cfdc.sim.traces import hover_trace, modal_trace, pulse_trace, vtol_pulse_trace
 from cfdc.validation import merge_go_no_go, validate_required_features, validate_route_compatibility
-from cfdc.workflow import resolve_workflow_mode
+from cfdc.workflow import (
+    build_candidate_route,
+    compile_candidate_route,
+    default_capability_catalog,
+    resolve_workflow_mode,
+)
 
 
 RouteId = Literal[
@@ -381,6 +388,8 @@ def _no_go_report(
     go_no_go: GoNoGoDecision,
     run_id: str | None,
     workflow_mode: WorkflowMode,
+    candidate_route: CandidateRouteIR | None = None,
+    compiled_route: CompiledRoute | None = None,
     features: list[CoreFeatureArtifact] | None = None,
     experiment_results: list[ExperimentResult] | None = None,
     controller: ControllerCandidate | None = None,
@@ -395,6 +404,8 @@ def _no_go_report(
         diagnosis=diagnosis,
         classification=classification,
         experiment_plan=plan,
+        candidate_route=candidate_route,
+        compiled_route=compiled_route,
         experiment_results=list(experiment_results or []),
         features=list(features or []),
         controller=controller,
@@ -447,13 +458,34 @@ def run_cfdc_route(
 
     classification = engine.classify(diagnosis, description)
     plan: ExperimentPlan = plan_safe_experiments(diagnosis, classification)
+    candidate_route = build_candidate_route(
+        route_id,
+        diagnosis,
+        classification,
+        description,
+        plan,
+        resolved_mode,
+    )
+    compiled_route = compile_candidate_route(
+        candidate_route,
+        default_capability_catalog(),
+    )
     diagnostic_gate = validate_diagnostic_controller_release(
         description,
         diagnosis,
         classification,
     )
     compatibility_gate = validate_route_compatibility(route_id, classification)
-    route_gate = merge_go_no_go(diagnostic_gate, compatibility_gate)
+    compiler_gate = GoNoGoDecision(
+        decision="go" if compiled_route.executable else "no_go",
+        reasons=[gap.explanation for gap in compiled_route.gaps if gap.blocking],
+        route_compatible=compiled_route.executable,
+    )
+    route_gate = merge_go_no_go(
+        diagnostic_gate,
+        compatibility_gate,
+        compiler_gate,
+    )
     if route_gate.decision == "no_go":
         return _no_go_report(
             route_id,
@@ -464,9 +496,15 @@ def run_cfdc_route(
             route_gate,
             run_id,
             resolved_mode,
+            candidate_route,
+            compiled_route,
             status=(
                 "experiments_required"
                 if diagnostic_gate.decision == "no_go"
+                or (
+                    compiled_route.gaps
+                    and all(gap.resolvable_by_measurement for gap in compiled_route.gaps)
+                )
                 else "rejected"
             ),
         )
@@ -498,6 +536,8 @@ def run_cfdc_route(
             diagnosis=diagnosis,
             classification=classification,
             experiment_plan=plan,
+            candidate_route=candidate_route,
+            compiled_route=compiled_route,
             go_no_go=merge_go_no_go(route_gate, feature_gate),
             notes=["Stage 2 plan is ready; Stage 3 requires experiment traces before controller synthesis."],
         )
@@ -514,6 +554,8 @@ def run_cfdc_route(
             go_no_go,
             run_id,
             resolved_mode,
+            candidate_route,
+            compiled_route,
             features=resolved_features,
             experiment_results=resolved_results,
             status="experiments_required",
@@ -537,6 +579,8 @@ def run_cfdc_route(
             merge_go_no_go(go_no_go, controller_gate),
             run_id,
             resolved_mode,
+            candidate_route,
+            compiled_route,
             features=resolved_features,
             experiment_results=resolved_results,
             controller=controller,
@@ -742,6 +786,8 @@ def run_cfdc_route(
         diagnosis=diagnosis,
         classification=classification,
         experiment_plan=plan,
+        candidate_route=candidate_route,
+        compiled_route=compiled_route,
         experiment_results=resolved_results,
         features=resolved_features,
         controller=controller,
