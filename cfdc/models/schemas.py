@@ -12,6 +12,17 @@ class CFDCModel(BaseModel):
     model_config = ConfigDict(extra="forbid", use_enum_values=True, allow_inf_nan=False)
 
 
+class WorkflowMode(str, Enum):
+    SIMULATION = "simulation"
+    REAL = "real"
+
+
+class DataProvenance(str, Enum):
+    SYNTHETIC_FIXTURE = "synthetic_fixture"
+    REAL_EXPERIMENT = "real_experiment"
+    EXTERNALLY_REVIEWED = "externally_reviewed"
+
+
 class SystemDescription(CFDCModel):
     text: str = Field(min_length=1)
     observed_outputs: list[str] = Field(default_factory=list)
@@ -168,6 +179,7 @@ class ExperimentResult(CFDCModel):
     estimates: list[str] = Field(min_length=1)
     trace: ExperimentTrace
     instruction_title: str | None = None
+    provenance: DataProvenance = DataProvenance.SYNTHETIC_FIXTURE
     evidence_boundary: str = "raw_experiment_trace_not_physical_validation_by_itself"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -193,6 +205,7 @@ class CoreFeatureArtifact(CFDCModel):
     units: str
     method: str
     source_experiment: ExperimentPrimitive
+    provenance: DataProvenance = DataProvenance.SYNTHETIC_FIXTURE
     data_quality_flags: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -617,6 +630,7 @@ class VtolVariationResult(CFDCModel):
 class CFDCRunReport(CFDCModel):
     run_id: str
     route_id: str = "generic"
+    workflow_mode: WorkflowMode = WorkflowMode.SIMULATION
     status: Literal[
         "need_more_information",
         "experiments_required",

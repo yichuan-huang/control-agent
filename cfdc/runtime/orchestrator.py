@@ -16,6 +16,7 @@ from cfdc.models import (
     ControllerCandidate,
     ControllerComparison,
     CoreFeatureArtifact,
+    DataProvenance,
     ExperimentPlan,
     ExperimentPrimitive,
     ExperimentResult,
@@ -25,6 +26,7 @@ from cfdc.models import (
     StructuralDiagnosis,
     SystemDescription,
     TrialReport,
+    WorkflowMode,
 )
 from cfdc.online import (
     refine_gains_once,
@@ -45,6 +47,7 @@ from cfdc.sim import (
 )
 from cfdc.sim.traces import hover_trace, modal_trace, pulse_trace, vtol_pulse_trace
 from cfdc.validation import merge_go_no_go, validate_required_features, validate_route_compatibility
+from cfdc.workflow import resolve_workflow_mode
 
 
 RouteId = Literal[
@@ -113,6 +116,7 @@ def _free_decay_result(
     return ExperimentResult(
         primitive=ExperimentPrimitive.FREE_DECAY,
         estimates=feature_ids,
+        provenance=DataProvenance.SYNTHETIC_FIXTURE,
         trace=ExperimentTrace(
             time_s=time_s.tolist(),
             signals={"measured position or angle": signal.tolist()},
@@ -131,6 +135,7 @@ def _pulse_result(
     return ExperimentResult(
         primitive=ExperimentPrimitive.PULSE,
         estimates=[feature_id],
+        provenance=DataProvenance.SYNTHETIC_FIXTURE,
         trace=ExperimentTrace(
             time_s=time_s.tolist(),
             signals={"input setting": input_signal.tolist(), "acceleration": acceleration.tolist()},
@@ -166,6 +171,7 @@ def _vtol_experiment_results(required_features: list[str]) -> list[ExperimentRes
             ExperimentResult(
                 primitive=ExperimentPrimitive.HOVER_THRUST,
                 estimates=["hover_thrust"],
+                provenance=DataProvenance.SYNTHETIC_FIXTURE,
                 trace=ExperimentTrace(
                     time_s=time_s.tolist(),
                     signals={"lift setting": thrust.tolist(), "vertical motion": lift.tolist()},
@@ -187,6 +193,7 @@ def _vtol_experiment_results(required_features: list[str]) -> list[ExperimentRes
             ExperimentResult(
                 primitive=ExperimentPrimitive.PULSE,
                 estimates=pulse_features,
+                provenance=DataProvenance.SYNTHETIC_FIXTURE,
                 trace=ExperimentTrace(
                     time_s=time_s.tolist(),
                     signals={
@@ -346,6 +353,7 @@ def _base_report(
     description: SystemDescription,
     diagnosis: StructuralDiagnosis,
     run_id: str | None,
+    workflow_mode: WorkflowMode,
 ) -> CFDCRunReport:
     diagnostic_gate = validate_diagnostic_controller_release(
         description,
@@ -355,6 +363,7 @@ def _base_report(
     return CFDCRunReport(
         run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
         route_id=route_id,
+        workflow_mode=workflow_mode,
         status="need_more_information",
         system_description=description,
         diagnosis=diagnosis,
@@ -371,6 +380,7 @@ def _no_go_report(
     plan: ExperimentPlan,
     go_no_go: GoNoGoDecision,
     run_id: str | None,
+    workflow_mode: WorkflowMode,
     features: list[CoreFeatureArtifact] | None = None,
     experiment_results: list[ExperimentResult] | None = None,
     controller: ControllerCandidate | None = None,
@@ -379,6 +389,7 @@ def _no_go_report(
     return CFDCRunReport(
         run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
         route_id=route_id,
+        workflow_mode=workflow_mode,
         status=status,
         system_description=description,
         diagnosis=diagnosis,
@@ -410,6 +421,7 @@ def run_cfdc_route(
     include_trajectory: bool = False,
     run_id: str | None = None,
     use_mechanism_cards: bool = False,
+    workflow_mode: WorkflowMode | str | None = None,
 ) -> CFDCRunReport:
     """Run an auditable end-to-end CFDC route.
 
@@ -417,6 +429,7 @@ def run_cfdc_route(
     do not replace physical validation or operator approval.
     """
 
+    resolved_mode = resolve_workflow_mode(workflow_mode, diagnostic_adapter)
     description = description or _default_description(route_id)
     engine = DiagnosticEngine(
         adapter=diagnostic_adapter,
@@ -424,7 +437,13 @@ def run_cfdc_route(
     )
     diagnosis = engine.diagnose(description)
     if not diagnosis.complete:
-        return _base_report(route_id, description, diagnosis, run_id)
+        return _base_report(
+            route_id,
+            description,
+            diagnosis,
+            run_id,
+            resolved_mode,
+        )
 
     classification = engine.classify(diagnosis, description)
     plan: ExperimentPlan = plan_safe_experiments(diagnosis, classification)
@@ -444,6 +463,7 @@ def run_cfdc_route(
             plan,
             route_gate,
             run_id,
+            resolved_mode,
             status=(
                 "experiments_required"
                 if diagnostic_gate.decision == "no_go"
@@ -453,7 +473,11 @@ def run_cfdc_route(
     resolved_results = list(experiment_results or [])
     notes = ["Completed Stage 0-4 with deterministic CFDC computation after structured diagnosis."]
 
-    if not resolved_results and features is None:
+    if (
+        resolved_mode == WorkflowMode.SIMULATION
+        and not resolved_results
+        and features is None
+    ):
         if route_id.startswith("cartpole"):
             resolved_results = _cartpole_experiment_results(classification.required_core_features)
         elif route_id.startswith("vtol"):
@@ -468,6 +492,7 @@ def run_cfdc_route(
         return CFDCRunReport(
             run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
             route_id=route_id,
+            workflow_mode=resolved_mode,
             status="experiments_required",
             system_description=description,
             diagnosis=diagnosis,
@@ -488,6 +513,7 @@ def run_cfdc_route(
             plan,
             go_no_go,
             run_id,
+            resolved_mode,
             features=resolved_features,
             experiment_results=resolved_results,
             status="experiments_required",
@@ -510,6 +536,7 @@ def run_cfdc_route(
             plan,
             merge_go_no_go(go_no_go, controller_gate),
             run_id,
+            resolved_mode,
             features=resolved_features,
             experiment_results=resolved_results,
             controller=controller,
@@ -709,6 +736,7 @@ def run_cfdc_route(
     return CFDCRunReport(
         run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
         route_id=route_id,
+        workflow_mode=resolved_mode,
         status=status,
         system_description=description,
         diagnosis=diagnosis,

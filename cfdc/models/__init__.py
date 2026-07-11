@@ -11,6 +11,7 @@ from cfdc.models.schemas import (
     ControllerCandidate,
     ControllerComparison,
     CoreFeatureArtifact,
+    DataProvenance,
     DelayAssessment,
     DiagnosticField,
     DiagnosticEvaluationCaseResult,
@@ -41,6 +42,7 @@ from cfdc.models.schemas import (
     VtolState,
     VtolVariationResult,
     VtolVariationScenario,
+    WorkflowMode,
 )
 
 __all__ = [
@@ -56,6 +58,7 @@ __all__ = [
     "ControllerCandidate",
     "ControllerComparison",
     "CoreFeatureArtifact",
+    "DataProvenance",
     "DelayAssessment",
     "DiagnosticField",
     "DiagnosticEvaluationCaseResult",
@@ -86,4 +89,5 @@ __all__ = [
     "VtolState",
     "VtolVariationResult",
     "VtolVariationScenario",
+    "WorkflowMode",
 ]

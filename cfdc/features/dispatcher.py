@@ -257,7 +257,10 @@ def extract_features_from_result(result: ExperimentResult) -> list[CoreFeatureAr
     if missing:
         missing_list = ", ".join(sorted(missing))
         raise ValueError(f"no extractor available for requested feature(s): {missing_list}")
-    return features
+    return [
+        feature.model_copy(update={"provenance": result.provenance})
+        for feature in features
+    ]
 
 
 def extract_features_from_results(results: list[ExperimentResult]) -> list[CoreFeatureArtifact]:
