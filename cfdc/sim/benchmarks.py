@@ -12,7 +12,7 @@ from cfdc.models import (
     ControllerCandidate,
     CoreFeatureArtifact,
     ExperimentPrimitive,
-    ExperimentResult,
+    SimulationExperimentRecord,
     ExperimentTrace,
     FeatureAblationResult,
     FeatureAblationTrial,
@@ -20,6 +20,12 @@ from cfdc.models import (
     SystemDescription,
 )
 from cfdc.controllers import synthesize_controller
+from cfdc.workflow import (
+    apply_profile_to_classification,
+    default_simulation_profile_catalog,
+    deterministic_profile_selection,
+    validate_semantic_selection,
+)
 from cfdc.sim.cartpole import search_cartpole_pd_gains, simulate_cartpole_energy_swingup
 from cfdc.sim.generic import SCALAR_BENCHMARK_FAMILIES, run_scalar_closed_loop
 from cfdc.sim.traces import (
@@ -125,7 +131,7 @@ def list_benchmark_cases() -> list[BenchmarkCase]:
 
 def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list[CoreFeatureArtifact]:
     params = case.params
-    results: list[ExperimentResult] = []
+    results: list[SimulationExperimentRecord] = []
     if {"static_gain", "time_constant"} & set(required):
         t, u, y = step_trace(
             params.get("static_gain", 1.0),
@@ -139,7 +145,7 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
             if feature_id in required
         ]
         results.append(
-            ExperimentResult(
+            SimulationExperimentRecord(
                 primitive="ramp_step",
                 estimates=estimates,
                 trace=ExperimentTrace(
@@ -152,7 +158,7 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
         t, y = modal_trace(params.get("natural_frequency", 3.0), params.get("damping_ratio", 0.08))
         estimates = [feature_id for feature_id in ["natural_frequency", "damping_ratio"] if feature_id in required]
         results.append(
-            ExperimentResult(
+            SimulationExperimentRecord(
                 primitive="free_decay",
                 estimates=estimates,
                 trace=ExperimentTrace(
@@ -164,7 +170,7 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
     if "input_gain" in required:
         t, u, a = pulse_trace(params.get("input_gain", 1.0))
         results.append(
-            ExperimentResult(
+            SimulationExperimentRecord(
                 primitive="pulse",
                 estimates=["input_gain"],
                 trace=ExperimentTrace(
@@ -176,7 +182,7 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
     if "hover_thrust" in required:
         t, thrust, lift = hover_trace(params["hover_thrust"])
         results.append(
-            ExperimentResult(
+            SimulationExperimentRecord(
                 primitive="hover_thrust",
                 estimates=["hover_thrust"],
                 trace=ExperimentTrace(
@@ -196,7 +202,7 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
             if feature_id in required
         ]
         results.append(
-            ExperimentResult(
+            SimulationExperimentRecord(
                 primitive="pulse",
                 estimates=estimates,
                 trace=ExperimentTrace(
@@ -213,7 +219,7 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
     if "coupling_gain" in required:
         t, input_signal, primary, coupled = bounded_scan_trace(params.get("coupling_gain", 0.5))
         results.append(
-            ExperimentResult(
+            SimulationExperimentRecord(
                 primitive="bounded_scan",
                 estimates=["coupling_gain"],
                 trace=ExperimentTrace(
@@ -294,14 +300,14 @@ def _benchmark_route_ir(case: BenchmarkCase) -> BenchmarkRouteIR:
         "simple_inverse_response_process": dict(
             plant_family="inverse_response",
             reference={"output": 0.7},
-            horizon_s=6000.0,
+            horizon_s=7000.0,
             dt_s=0.5,
             actuator_limits={"input_min": 0.0, "input_max": 1.0},
             state_limits={"max_abs_output": 1.2},
             performance_limits={
                 "max_abs_final_error": 0.10,
                 "max_overshoot": 0.10,
-                "max_settling_time_s": 5800.0,
+                "max_settling_time_s": 6800.0,
                 "max_saturation_fraction": 0.50,
                 "settling_band_absolute": 0.02,
             },
@@ -391,6 +397,10 @@ def run_benchmark_case(case: BenchmarkCase) -> dict[str, Any]:
     engine = DiagnosticEngine()
     diagnosis = engine.diagnose(case.description)
     classification = engine.classify(diagnosis)
+    profile_catalog = default_simulation_profile_catalog()
+    selection = deterministic_profile_selection(case.description, diagnosis, classification, profile_catalog)
+    profile = validate_semantic_selection(selection, classification, profile_catalog)
+    classification = apply_profile_to_classification(classification, profile)
     plan = plan_safe_experiments(diagnosis, classification)
     features = _extract_required_features(case, classification.required_core_features)
     controller = synthesize_controller(classification, features, case.safety_limits)

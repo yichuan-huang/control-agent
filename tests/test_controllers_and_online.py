@@ -85,7 +85,11 @@ def test_marginal_plant_controller_scales_pd_from_input_gain_and_saturates():
         rationale="test",
     )
     controller = synthesize_controller(classification, [feature("input_gain", 1.0)], {"output_max": 0.4})
-    assert controller.gains == {"kp": 0.9**2, "kd": 2.0 * 1.15 * 0.9}
+    conservative_gain = 1.05
+    assert controller.gains == {
+        "kp": 0.9**2 / conservative_gain,
+        "kd": 2.0 * 1.15 * 0.9 / conservative_gain,
+    }
     assert controller.saturation["output_max"] == 0.4
 
     half_gain = synthesize_controller(
@@ -240,7 +244,7 @@ def test_unstable_safe_gain_search_accepts_then_freezes_on_violation():
     state = initialize_safe_gain_search(controller, search_direction={"kp": 1.0, "kd": 1.0})
     pending = propose_unstable_gain_candidate(state)
     assert pending.status == "trial_pending"
-    assert pending.candidate_gains["kp"] == 0.05
+    assert pending.candidate_gains["kp"] == state.accepted_gains["kp"] * 1.05
     assert pending.candidate_gains["kd"] > state.accepted_gains["kd"]
 
     safe_metrics = OnlinePerformanceMetrics(

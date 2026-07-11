@@ -15,6 +15,8 @@ from cfdc.sim.cartpole import (
     simulate_cartpole_energy_swingup,
 )
 from cfdc.sim.generic import SCALAR_BENCHMARK_FAMILIES, run_scalar_closed_loop
+from cfdc.sim.profile_experiments import profile_nominal_parameters, run_profile_experiments
+from cfdc.sim.profile_runtime import run_mimo_profile_adaptation, run_scalar_profile_adaptation
 from cfdc.sim.vtol import (
     VtolConfig,
     VtolParams,
@@ -49,4 +51,8 @@ __all__ = [
     "run_vtol_variation",
     "simulate_cartpole_energy_swingup",
     "vtol_operational_gains",
+    "profile_nominal_parameters",
+    "run_profile_experiments",
+    "run_scalar_profile_adaptation",
+    "run_mimo_profile_adaptation",
 ]

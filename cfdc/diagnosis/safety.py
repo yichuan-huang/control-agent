@@ -36,6 +36,9 @@ CONTROLLER_SYNTHESIS_FEATURES = {
     "angular_acceleration_gain",
     "lateral_coupling_gain",
     "coupling_gain",
+    "local_gain_matrix",
+    "local_time_constant",
+    "pairing_indicator",
 }
 
 
@@ -343,23 +346,9 @@ def diagnostic_required_feature_plan(
 ) -> list[str]:
     """Return classified or provisional next features for diagnostic auditing."""
 
-    del diagnosis
+    del description, diagnosis
     if classification is not None:
         return list(classification.required_core_features)
-    text = description.text.lower()
-    if has_explicit_delay_ambiguity(description) and _contains_any(
-        text,
-        ["heater", "temperature", "first order", "first-order", "settles"],
-    ):
-        return ["static_gain", "time_constant", "dead_time"]
-    if has_actuator_nonlinearity(description):
-        features: list[str] = []
-        if _contains_any(text, ["deadzone", "dead zone", "backlash"]):
-            features.append("deadzone_width")
-        if _contains_any(text, ["hysteresis", "backlash", "memory"]):
-            features.append("hysteresis_width")
-        features.append("effective_gain_after_deadzone")
-        return features
     return []
 
 
@@ -373,12 +362,10 @@ def validate_diagnostic_controller_release(
     reasons: list[str] = []
     if not diagnosis.complete or classification is None:
         reasons.append("Stage 0 diagnosis is incomplete; clarification is required before controller release.")
-    if has_explicit_delay_ambiguity(description):
+    if diagnosis.significant_delay.assessment == DelayAssessment.UNKNOWN.value:
         reasons.append("First-motion delay is explicitly unresolved; measure or clarify dead time before PI release.")
-    if has_operating_point_dependence(description):
-        reasons.append("Operating-point-dependent dynamics require local feature validation and an operating-region boundary.")
-    if has_strong_mimo_interaction(description):
-        reasons.append("Strong MIMO interaction requires a local gain matrix and pairing evidence before controller release.")
+    if diagnosis.controllability_observability.assessment == "inadequate":
+        reasons.append("The normalized diagnosis reports inadequate controllability or observability.")
     unsupported: list[str] = []
     missing_features: list[str] = []
     if classification is not None:

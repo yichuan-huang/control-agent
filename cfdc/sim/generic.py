@@ -12,6 +12,7 @@ SCALAR_BENCHMARK_FAMILIES = {
     "double_integrator",
     "second_order_oscillator",
     "inverse_response",
+    "unstable_second_order",
 }
 
 
@@ -58,7 +59,7 @@ def run_scalar_closed_loop(
 
         error = reference - y
         integral_candidate = integral + error * dt_s
-        if route.plant_family in {"double_integrator", "second_order_oscillator"}:
+        if route.plant_family in {"double_integrator", "second_order_oscillator", "unstable_second_order"}:
             raw_input = gains.get("kp", 0.0) * error - gains.get("kd", 0.0) * velocity
         else:
             raw_input = gains.get("kp", 0.0) * error + gains.get("ki", 0.0) * integral_candidate
@@ -91,6 +92,11 @@ def run_scalar_closed_loop(
                 - 2.0 * damping * omega * velocity
                 - omega**2 * y
             )
+            velocity += dt_s * acceleration
+            y += dt_s * velocity
+        elif route.plant_family == "unstable_second_order":
+            omega = params["natural_frequency"]
+            acceleration = params["input_gain"] * control + omega**2 * y
             velocity += dt_s * acceleration
             y += dt_s * velocity
         else:

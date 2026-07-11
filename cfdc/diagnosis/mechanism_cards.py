@@ -143,15 +143,15 @@ def select_supplemental_mechanism_cards(
     text = f"{description_text} {diagnostic_text}"
     selected: set[str] = set()
 
-    stability = diagnosis.open_loop_stability.value.lower()
-    relative_degree = diagnosis.relative_degree.value.lower()
-    coupling = diagnosis.coupling_severity.value.lower()
-    phase = diagnosis.minimum_phase.value.lower()
+    stability = diagnosis.open_loop_stability.assessment
+    relative_degree = diagnosis.relative_degree.assessment
+    coupling = diagnosis.coupling_severity.assessment
+    phase = diagnosis.minimum_phase.assessment
     primary_class = str(classification.primary_class)
 
-    if "unstable" in stability or "safety-critical equilibrium" in stability:
+    if stability == "unstable":
         selected.add("unstable_equilibrium")
-    elif _contains_any(stability + " " + relative_degree, ["drifting", "integrator", "double"]):
+    elif stability == "marginal":
         selected.add("integrating_or_drifting")
     elif _contains_any(text, ["oscillat", "vibrat", "resonan", "natural frequency"]):
         selected.add("oscillatory_modal")
@@ -162,8 +162,8 @@ def select_supplemental_mechanism_cards(
     elif primary_class == ArchetypeClass.CLASS_III_DOUBLE_OR_PURE_INTEGRATOR.value:
         selected.add("integrating_or_drifting")
 
-    if _contains_any(
-        text,
+    if diagnosis.coupling_severity.assessment == "underactuated" or _contains_any(
+        description_text,
         [
             "underactuated",
             "cartpole",
@@ -192,7 +192,7 @@ def select_supplemental_mechanism_cards(
     ):
         selected.add("hover_or_force_balance")
 
-    if "significant multivariable" in coupling or _contains_any(
+    if coupling == "severe_mimo" or _contains_any(
         description_text,
         ["coupled mimo", "coupled multi-input", "both outputs respond to both inputs"],
     ):
@@ -200,7 +200,7 @@ def select_supplemental_mechanism_cards(
 
     if diagnosis.significant_delay.assessment == DelayAssessment.SIGNIFICANT.value:
         selected.add("delayed_or_transport_process")
-    if "non-minimum" in phase or "inverse-response" in phase:
+    if phase == "nonminimum_phase":
         selected.add("nonminimum_phase_or_inverse_response")
 
     if _contains_any(

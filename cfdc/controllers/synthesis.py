@@ -46,10 +46,11 @@ def synthesize_controller(
         if tau.value <= 0.0 or tau.upper_bound <= 0.0:
             raise ValueError("time_constant must be positive for Class I synthesis")
         rel = _relative_uncertainty(gain)
-        kc = 0.1 / max(abs(gain.value), 1e-9) / (1.0 + 3.0 * rel)
+        conservative_gain = max(abs(gain.lower_bound), abs(gain.upper_bound), 1e-9)
+        kc = 0.1 / conservative_gain / (1.0 + 3.0 * rel)
         if gain.value < 0:
             kc = -kc
-        ti = 5.0 * max(tau.value, 1e-6)
+        ti = 5.0 * max(tau.upper_bound, 1e-6)
         source_features = ["static_gain", "time_constant"]
         constraints = [
             "stable-plant nominal gains reduced by a factor of 10",
@@ -118,10 +119,16 @@ def synthesize_controller(
     if archetype == ArchetypeClass.CLASS_II_SECOND_ORDER_OSCILLATOR.value:
         if "input_gain" not in fmap:
             raise ValueError("missing required core features for Class II: input_gain")
-        wn = fmap["natural_frequency"].value
-        zeta = fmap["damping_ratio"].value if "damping_ratio" in fmap else 0.3
-        plant_gain = fmap["input_gain"].value
-        scale = math.copysign(max(abs(plant_gain), 1e-9), plant_gain)
+        wn_feature = fmap["natural_frequency"]
+        wn = max(wn_feature.lower_bound, 1e-9)
+        zeta = fmap["damping_ratio"].lower_bound if "damping_ratio" in fmap else 0.3
+        plant_gain = fmap["input_gain"]
+        conservative_gain = max(
+            abs(plant_gain.lower_bound),
+            abs(plant_gain.upper_bound),
+            1e-9,
+        )
+        scale = math.copysign(conservative_gain, plant_gain.value)
         kp = 0.1 * wn * wn / scale
         kd = 0.1 * (2.0 * max(zeta, 0.1) * wn) / scale
         return ControllerCandidate(
@@ -137,8 +144,13 @@ def synthesize_controller(
     if archetype == ArchetypeClass.CLASS_III_DOUBLE_OR_PURE_INTEGRATOR.value:
         output_max = _limit("output_max", safety, 1.0)
         output_min = _limit("output_min", safety, -output_max)
-        input_gain = fmap["input_gain"].value
-        gain_scale = math.copysign(max(abs(input_gain), 1e-9), input_gain)
+        input_gain = fmap["input_gain"]
+        conservative_gain = max(
+            abs(input_gain.lower_bound),
+            abs(input_gain.upper_bound),
+            1e-9,
+        )
+        gain_scale = math.copysign(conservative_gain, input_gain.value)
         bandwidth = _limit("initial_bandwidth_rad_s", safety, 0.9)
         damping = _limit("initial_damping_ratio", safety, 1.15)
         return ControllerCandidate(
@@ -160,18 +172,28 @@ def synthesize_controller(
 
     if archetype == ArchetypeClass.CLASS_V_MULTIVARIABLE_SIGNIFICANT_COUPLING.value:
         if "local_gain_matrix" in fmap:
+            matrix = fmap["local_gain_matrix"].value
+            if not isinstance(matrix, list):
+                raise ValueError("local_gain_matrix requires a matrix value")
+            pairing = pair_mimo_loops(matrix)
+            gains = {
+                "loop_1_gain": 0.1 / max(abs(matrix[0][0]), 1e-9),
+                "loop_2_gain": 0.1 / max(abs(matrix[1][1]), 1e-9),
+            }
             return ControllerCandidate(
-                architecture="mimo_pairing_evidence_required",
-                gains={},
-                tunable_gain_names=[],
+                architecture="conservative_mimo_pairing_with_half_strength_decoupling",
+                gains=gains,
+                design_parameters={"pairing_indicator": float(fmap["pairing_indicator"].value)},
+                tunable_gain_names=list(gains),
+                feedforward={f"decoupler_{r}_{c}": value for r, row in enumerate(pairing["half_strength_decoupler"]) for c, value in enumerate(row)},
                 saturation={"per_input_limit": _limit("per_input_limit", safety, 1.0)},
                 constraints=[
-                    "do not collapse a local gain matrix into one scalar coupling gain",
-                    "require typed matrix extraction and pairing validation before synthesis",
+                    "use matrix-valued evidence without scalar collapse",
+                    "apply half-strength static decoupling",
                 ],
                 source_features=["local_gain_matrix", "local_time_constant", "pairing_indicator"],
-                status="refuse",
-                notes=["The current scalar CoreFeatureArtifact path cannot safely synthesize this MIMO route."],
+                status="ready_for_conservative_trial",
+                notes=["The 2x2 normalized prototype uses global pairing and a half-strength pseudoinverse decoupler."],
             )
         return ControllerCandidate(
             architecture="conservative_mimo_pairing",
@@ -219,10 +241,11 @@ def synthesize_controller(
         severity = fmap["inverse_response_severity"].value
         rel = _relative_uncertainty(gain)
         detune = 0.05 / (1.0 + severity + 3.0 * rel)
-        kp = detune / max(abs(gain.value), 1e-9)
+        conservative_gain = max(abs(gain.lower_bound), abs(gain.upper_bound), 1e-9)
+        kp = detune / conservative_gain
         if gain.value < 0:
             kp = -kp
-        ti = 8.0 * max(tau.value, 1e-6)
+        ti = 8.0 * max(tau.upper_bound, 1e-6)
         return ControllerCandidate(
             architecture="detuned_PI_with_NMP_undershoot_guard",
             gains={"kp": kp, "ki": kp / ti, "integral_time": ti},
@@ -242,7 +265,12 @@ def synthesize_controller(
         beta_v = 0.1
         beta_r = 0.1
         beta_l = 0.05
-        angular_gain = max(abs(fmap["angular_acceleration_gain"].value), 1e-9)
+        angular_feature = fmap["angular_acceleration_gain"]
+        angular_gain = max(
+            abs(angular_feature.lower_bound),
+            abs(angular_feature.upper_bound),
+            1e-9,
+        )
         inertia_est = 1.0 / angular_gain
         wtheta = 3.0 * wz
         wy = 0.1 * wtheta
@@ -278,6 +306,25 @@ def synthesize_controller(
         )
 
     wn = fmap["natural_frequency"].value if "natural_frequency" in fmap else 1.0
+    if "natural_frequency" in fmap and "input_gain" in fmap:
+        input_gain = fmap["input_gain"].value
+        if isinstance(wn, list) or isinstance(input_gain, list):
+            raise ValueError("unstable scalar synthesis requires scalar features")
+        lower = fmap["input_gain"].lower_bound
+        upper = fmap["input_gain"].upper_bound
+        assert lower is not None and upper is not None
+        gain_scale = math.copysign(max(abs(lower), abs(upper), 1e-9), input_gain)
+        return ControllerCandidate(
+            architecture="unstable_mode_conservative_PD",
+            gains={"kp": 1.25 * wn**2 / gain_scale, "kd": 2.2 * wn / gain_scale},
+            tunable_gain_names=["kp", "kd"],
+            saturation={"output_min": _limit("output_min", safety, -8.0), "output_max": _limit("output_max", safety, 8.0)},
+            constraints=["stabilizing proportional gain starts above the extracted unstable pole threshold", "bounded Algorithm 1 trial is mandatory"],
+            source_features=["natural_frequency", "input_gain"],
+            status="requires_online_search",
+        )
+    if isinstance(wn, list):
+        raise ValueError("natural_frequency must be scalar")
     return ControllerCandidate(
         architecture="safe_online_gain_search",
         gains={"kp": 0.0, "kd": 0.01 * wn},

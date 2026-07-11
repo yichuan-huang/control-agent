@@ -4,7 +4,7 @@
   "updated": "2026-07-09",
   "status": "active_design_reference_not_validation_evidence",
   "purpose": "Guide LLM structural diagnosis without turning CFDC into a hand-written object taxonomy. Cards describe reusable control-relevant mechanisms, not mutually exclusive system classes.",
-  "evidence_boundary": "design_guidance_only_not_physical_validation_not_universal_coverage_proof",
+  "evidence_boundary": "software_simulation_design_guidance_only",
   "design_principles": [
     "A mechanism card is not an object template. It names a control-relevant mechanism that can appear across many plant families.",
     "Complex systems should be decomposed into mechanism combinations instead of forced into one high-order/nonlinear/MIMO class.",

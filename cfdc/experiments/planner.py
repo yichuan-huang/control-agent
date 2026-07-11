@@ -3,11 +3,251 @@ from __future__ import annotations
 from cfdc.models import (
     ArchetypeClass,
     ArchetypeClassification,
+    CapabilityGap,
     ExperimentInstruction,
     ExperimentPlan,
     ExperimentPrimitive,
     StructuralDiagnosis,
+    SystemDescription,
 )
+
+
+_PRIMITIVE_FORBIDDEN_ALIASES: dict[str, tuple[str, ...]] = {
+    ExperimentPrimitive.FREE_DECAY.value: (
+        "free decay",
+        "free release",
+        "release",
+        "let go",
+    ),
+    ExperimentPrimitive.RAMP_STEP.value: ("ramp", "step", "input change"),
+    ExperimentPrimitive.PULSE.value: ("pulse", "nudge", "push", "twist"),
+    ExperimentPrimitive.HOVER_THRUST.value: ("hover", "lift", "thrust ramp"),
+    ExperimentPrimitive.BOUNDED_SCAN.value: ("bounded scan", "scan"),
+}
+
+
+def _normalized(value: str) -> str:
+    return " ".join(value.lower().replace("_", " ").replace("-", " ").split())
+
+
+def _first_positive(
+    bounds: dict[str, float],
+    aliases: tuple[str, ...],
+) -> tuple[str, float] | None:
+    normalized = {_normalized(name): value for name, value in bounds.items()}
+    for alias in aliases:
+        value = normalized.get(_normalized(alias))
+        if value is not None and value > 0.0:
+            return alias, float(value)
+    return None
+
+
+def _forbidden(
+    primitive: str,
+    forbidden_actions: list[str],
+) -> str | None:
+    aliases = _PRIMITIVE_FORBIDDEN_ALIASES[primitive]
+    for action in forbidden_actions:
+        normalized_action = _normalized(action)
+        if any(_normalized(alias) in normalized_action for alias in aliases):
+            return action
+    return None
+
+
+def _duration_for(primitive: str, time_scale_s: float) -> float:
+    if primitive == ExperimentPrimitive.PULSE.value:
+        return min(0.5, max(0.02, 0.1 * time_scale_s))
+    if primitive == ExperimentPrimitive.FREE_DECAY.value:
+        return 6.0 * time_scale_s
+    if primitive == ExperimentPrimitive.HOVER_THRUST.value:
+        return 5.0 * time_scale_s
+    return 8.0 * time_scale_s
+
+
+def _bound_for_instruction(
+    primitive: str,
+    description: SystemDescription,
+) -> tuple[float | None, str, str, float]:
+    bounds = description.safety_bounds
+    actuator = _first_positive(
+        bounds,
+        (
+            "max_abs_control",
+            "max_abs_force",
+            "force_limit",
+            "max_force",
+            "max_torque",
+            "max_abs_torque",
+            "torque_limit",
+        ),
+    )
+    thrust = _first_positive(
+        bounds,
+        ("max_thrust", "thrust_max", "max_abs_thrust", "thrust_limit"),
+    )
+    input_range = _first_positive(
+        bounds,
+        ("input_range", "actuator_range", "control_range", "command_range"),
+    )
+    state_range = _first_positive(
+        bounds,
+        ("state_range", "travel_range", "position_range", "angle_range"),
+    )
+    state_abs = _first_positive(
+        bounds,
+        (
+            "max_abs_position",
+            "position_limit",
+            "max_abs_angle",
+            "max_tilt_rad",
+            "state_limit",
+        ),
+    )
+
+    if primitive == ExperimentPrimitive.FREE_DECAY.value:
+        if state_range is not None:
+            name, value = state_range
+            return 0.10 * value, "state_units", name, value
+        if state_abs is not None:
+            name, value = state_abs
+            return 0.10 * (2.0 * value), "state_units", name, value
+        return None, "state_units", "state_range", 0.0
+
+    if primitive == ExperimentPrimitive.HOVER_THRUST.value:
+        selected = thrust
+        scale = 0.05
+    elif primitive in {
+        ExperimentPrimitive.RAMP_STEP.value,
+        ExperimentPrimitive.BOUNDED_SCAN.value,
+    }:
+        if input_range is not None:
+            name, value = input_range
+            return 0.05 * value, "actuator_units", name, value
+        if actuator is not None:
+            name, value = actuator
+            return 0.05 * (2.0 * value), "actuator_units", name, value
+        return None, "actuator_units", "input_range", 0.0
+    else:
+        selected = actuator
+        scale = 0.05
+
+    if selected is None:
+        return None, "actuator_units", "actuator_limit", 0.0
+    name, value = selected
+    return scale * value, "actuator_units", name, value
+
+
+def _parameterize_plan(
+    plan: ExperimentPlan,
+    description: SystemDescription,
+) -> ExperimentPlan:
+    time_scale_s = description.time_scale_hint_s or 1.0
+    sample_rate_hz = max(50.0 / time_scale_s, 20.0)
+    instructions: list[ExperimentInstruction] = []
+    gaps: list[CapabilityGap] = []
+
+    for instruction in plan.instructions:
+        primitive = str(instruction.primitive)
+        forbidden_action = _forbidden(primitive, description.forbidden_actions)
+        if forbidden_action is not None:
+            gaps.append(
+                CapabilityGap(
+                    code="forbidden_experiment_action",
+                    stage="experiment_design",
+                    capability_id=primitive,
+                    explanation=(
+                        f"Experiment primitive '{primitive}' conflicts with forbidden "
+                        f"action '{forbidden_action}'."
+                    ),
+                    required_next_action=(
+                        "select a non-forbidden measurement protocol or revise the "
+                        "operator-declared restriction"
+                    ),
+                )
+            )
+            continue
+
+        amplitude, units, bound_name, bound_value = _bound_for_instruction(
+            primitive,
+            description,
+        )
+        using_normalized_fixture = amplitude is None
+        if using_normalized_fixture:
+            normalized_description = description.model_copy(
+                update={
+                    "safety_bounds": {
+                        "max_abs_control": 1.0,
+                        "max_abs_position": 1.0,
+                        "max_thrust": 1.0,
+                        "input_range": 2.0,
+                        "state_range": 2.0,
+                    }
+                }
+            )
+            amplitude, units, _, _ = _bound_for_instruction(
+                primitive,
+                normalized_description,
+            )
+            bound_label = "normalized_fixture:max_abs_control_or_state=1.0"
+            operating_region = "normalized_simulation_fixture_region"
+        elif amplitude is None:
+            bound_label = f"missing:{bound_name}"
+            operating_region = "declared_safe_operating_region_pending_bound"
+            gaps.append(
+                CapabilityGap(
+                    code="missing_numeric_safety_bound",
+                    stage="experiment_design",
+                    capability_id=primitive,
+                    explanation=(
+                        f"Simulation experiment '{primitive}' requires a positive numeric "
+                        f"{bound_name}."
+                    ),
+                    resolvable_by_measurement=True,
+                    required_next_action=(
+                        f"declare and review {bound_name} before executing the experiment"
+                    ),
+                )
+            )
+        else:
+            bound_label = f"declared:{bound_name}={bound_value:g}"
+            operating_region = "declared_safe_operating_region"
+
+        duration_s = _duration_for(primitive, time_scale_s)
+        if amplitude is None:
+            numeric_step = (
+                f"Do not execute until {bound_name} is declared; then use duration "
+                f"{duration_s:g} s and sample at {sample_rate_hz:g} Hz."
+            )
+        else:
+            numeric_step = (
+                f"Use input amplitude {amplitude:g} {units} for {duration_s:g} s "
+                f"and sample at {sample_rate_hz:g} Hz."
+            )
+        instructions.append(
+            instruction.model_copy(
+                update={
+                    "operator_steps": [*instruction.operator_steps, numeric_step],
+                    "stop_conditions": [
+                        *instruction.stop_conditions,
+                        f"stop before crossing {bound_label}",
+                    ],
+                    "input_amplitude": amplitude,
+                    "input_amplitude_units": units,
+                    "duration_s": duration_s,
+                    "sample_rate_hz": sample_rate_hz,
+                    "operating_region": operating_region,
+                    "required_safety_bounds": [bound_label],
+                }
+            )
+        )
+
+    return plan.model_copy(
+        update={
+            "instructions": instructions,
+            "planning_gaps": gaps,
+            "parameterization_status": "blocked" if gaps else "parameterized",
+        }
+    )
 
 
 def _instruction(
@@ -33,6 +273,7 @@ def _instruction(
 def plan_safe_experiments(
     diagnosis: StructuralDiagnosis,
     classification: ArchetypeClassification,
+    description: SystemDescription | None = None,
 ) -> ExperimentPlan:
     archetype = str(classification.primary_class)
     required_features = set(classification.required_core_features)
@@ -257,4 +498,10 @@ def plan_safe_experiments(
         missing = ", ".join(sorted(missing_features))
         raise ValueError(f"Experiment plan does not cover required core features: {missing}")
 
-    return ExperimentPlan(archetype=classification.primary_class, instructions=instructions)
+    plan = ExperimentPlan(
+        archetype=classification.primary_class,
+        instructions=instructions,
+    )
+    if description is None:
+        return plan
+    return _parameterize_plan(plan, description)

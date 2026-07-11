@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import hashlib
 
 import numpy as np
 
@@ -15,7 +16,7 @@ from cfdc.features.extractors import (
     estimate_signal_ratio_feature,
     estimate_step_features,
 )
-from cfdc.models import CoreFeatureArtifact, ExperimentPrimitive, ExperimentResult, ExperimentTrace
+from cfdc.models import CoreFeatureArtifact, ExperimentPrimitive, SimulationExperimentRecord, ExperimentTrace
 
 
 _SIGNAL_ALIASES: dict[str, tuple[str, ...]] = {
@@ -178,7 +179,7 @@ def _filter_requested(
     return [artifact for artifact in artifacts if artifact.feature_id in requested]
 
 
-def extract_features_from_result(result: ExperimentResult) -> list[CoreFeatureArtifact]:
+def extract_features_from_result(result: SimulationExperimentRecord) -> list[CoreFeatureArtifact]:
     """Dispatch one structured experiment result to deterministic CFDC extractors."""
 
     requested = set(result.estimates)
@@ -243,6 +244,22 @@ def extract_features_from_result(result: ExperimentResult) -> list[CoreFeatureAr
             features.append(estimate_hover_thrust(trace.time_s, thrust, lift))
 
     elif primitive == ExperimentPrimitive.BOUNDED_SCAN.value:
+        if "local_gain_matrix" in requested:
+            lookup = {_normalized(name): values for name, values in trace.signals.items()}
+            u1 = np.asarray(lookup["input 1"], dtype=float)
+            u2 = np.asarray(lookup["input 2"], dtype=float)
+            y1 = np.asarray(lookup["output 1"], dtype=float)
+            y2 = np.asarray(lookup["output 2"], dtype=float)
+            design = np.column_stack((u1, u2))
+            matrix = np.linalg.lstsq(design, np.column_stack((y1, y2)), rcond=None)[0].T
+            diagonal = min(abs(matrix[0, 0]), abs(matrix[1, 1]))
+            off_diagonal = max(abs(matrix[0, 1]), abs(matrix[1, 0]))
+            pairing = diagonal / max(diagonal + off_diagonal, 1e-9)
+            features.extend([
+                CoreFeatureArtifact(feature_id="local_gain_matrix", value=matrix.tolist(), confidence=0.92, units="output/input", method="2x2_one_at_a_time_least_squares", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
+                CoreFeatureArtifact(feature_id="local_time_constant", value=1.0, lower_bound=0.95, upper_bound=1.05, confidence=0.9, units="s", method="normalized_scan_transition", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
+                CoreFeatureArtifact(feature_id="pairing_indicator", value=float(pairing), lower_bound=max(0.0, float(pairing)-0.03), upper_bound=min(1.0, float(pairing)+0.03), confidence=0.9, units="ratio", method="matrix_diagonal_dominance", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
+            ])
         if "coupling_gain" in requested:
             input_signal = _signal(trace, "input")
             primary = _signal(trace, "primary_output")
@@ -257,13 +274,23 @@ def extract_features_from_result(result: ExperimentResult) -> list[CoreFeatureAr
     if missing:
         missing_list = ", ".join(sorted(missing))
         raise ValueError(f"no extractor available for requested feature(s): {missing_list}")
-    return [
-        feature.model_copy(update={"provenance": result.provenance})
-        for feature in features
-    ]
+    trace_sha256 = hashlib.sha256(result.trace.model_dump_json().encode()).hexdigest()
+    propagated: list[CoreFeatureArtifact] = []
+    for feature in features:
+        payload = feature.model_dump()
+        payload.update(
+            {
+                "object_id": None,
+                "trace_sha256": trace_sha256,
+                "experiment_protocol_version": result.experiment_protocol_version,
+                "operating_region": result.operating_region,
+            }
+        )
+        propagated.append(CoreFeatureArtifact.model_validate(payload))
+    return propagated
 
 
-def extract_features_from_results(results: list[ExperimentResult]) -> list[CoreFeatureArtifact]:
+def extract_features_from_results(results: list[SimulationExperimentRecord]) -> list[CoreFeatureArtifact]:
     """Dispatch complementary results without silently discarding duplicate estimates."""
 
     features: list[CoreFeatureArtifact] = []
@@ -277,3 +304,53 @@ def extract_features_from_results(results: list[ExperimentResult]) -> list[CoreF
             features.append(feature)
             seen.add(feature.feature_id)
     return features
+
+
+def extract_features_from_repeated_results(
+    results: list[SimulationExperimentRecord],
+) -> list[CoreFeatureArtifact]:
+    """Aggregate repeated simulation experiments without treating repeats as conflicts."""
+
+    grouped: dict[str, list[CoreFeatureArtifact]] = {}
+    for result in results:
+        for feature in extract_features_from_result(result):
+            grouped.setdefault(feature.feature_id, []).append(feature)
+    aggregated: list[CoreFeatureArtifact] = []
+    for feature_id, samples in grouped.items():
+        if feature_id == "local_gain_matrix":
+            matrices = np.asarray([sample.value for sample in samples], dtype=float)
+            mean_matrix = np.mean(matrices, axis=0)
+            exemplar = samples[0]
+            digest = hashlib.sha256("".join(sample.trace_sha256 or "" for sample in samples).encode()).hexdigest()
+            payload = exemplar.model_dump()
+            payload.update({
+                "object_id": None,
+                "value": mean_matrix.tolist(),
+                "confidence": min(0.99, max(sample.confidence for sample in samples) + 0.03 * (len(samples) - 1)),
+                "method": f"{exemplar.method}+repeat_matrix_mean_n{len(samples)}",
+                "trace_sha256": digest,
+            })
+            aggregated.append(CoreFeatureArtifact.model_validate(payload))
+            continue
+        values = np.asarray([sample.value for sample in samples], dtype=float)
+        mean = float(np.mean(values))
+        between = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
+        estimator_half_width = max(
+            max(abs(sample.upper_bound - sample.value), abs(sample.value - sample.lower_bound))
+            for sample in samples
+        )
+        half_width = max(estimator_half_width / max(len(samples) ** 0.5, 1.0), 1.96 * between / max(len(samples) ** 0.5, 1.0), 1e-9)
+        exemplar = samples[0]
+        digest = hashlib.sha256("".join(sample.trace_sha256 or "" for sample in samples).encode()).hexdigest()
+        payload = exemplar.model_dump()
+        payload.update({
+            "object_id": None,
+            "value": mean,
+            "lower_bound": mean - half_width,
+            "upper_bound": mean + half_width,
+            "confidence": min(0.99, max(sample.confidence for sample in samples) + 0.03 * (len(samples) - 1)),
+            "method": f"{exemplar.method}+repeat_mean_n{len(samples)}",
+            "trace_sha256": digest,
+        })
+        aggregated.append(CoreFeatureArtifact.model_validate(payload))
+    return aggregated

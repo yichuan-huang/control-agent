@@ -1,37 +1,56 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import replace
 from typing import Literal
 from uuid import uuid4
 
 import numpy as np
 
 from cfdc.controllers import synthesize_controller
-from cfdc.diagnosis import DiagnosticEngine
+from cfdc.diagnosis import DiagnosticEngine, continue_diagnostic_session
 from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.diagnosis.safety import validate_diagnostic_controller_release
 from cfdc.experiments import plan_safe_experiments
-from cfdc.features import extract_features_from_results
+from cfdc.features import evaluate_feature_quality, extract_features_from_repeated_results
 from cfdc.models import (
+    Algorithm1Observation,
+    Algorithm1State,
     CandidateRouteIR,
     CFDCRunReport,
     CompiledRoute,
     ControllerCandidate,
     ControllerComparison,
     CoreFeatureArtifact,
-    DataProvenance,
+    DiagnosticSessionState,
     ExperimentPlan,
     ExperimentPrimitive,
-    ExperimentResult,
+    SimulationExperimentRecord,
     ExperimentTrace,
+    FLLTrackerState,
+    FeatureTrackingUpdate,
+    FeatureQualityDecision,
     GoNoGoDecision,
     OnlineTuningState,
+    OnlineRefinementPolicy,
+    HoverAverageTrackerState,
+    ScalarRLSTrackerState,
     StructuralDiagnosis,
     SystemDescription,
     TrialReport,
-    WorkflowMode,
+    TrackingObservation,
+    TrackingStateBundle,
+    SemanticRouteSelection,
 )
 from cfdc.online import (
-    refine_gains_once,
+    evaluate_algorithm1_probe,
+    initialize_algorithm1,
+    propose_algorithm1_candidate,
+    adapt_controller_from_tracked_feature,
+    tracking_scheduler_eligible,
+    update_fll_window,
+    update_hover_average,
+    update_scalar_rls,
 )
 from cfdc.runtime.trial import SafeTrialConfig, SafeTrialRunner
 from cfdc.sim import (
@@ -42,18 +61,23 @@ from cfdc.sim import (
     run_vtol_simulation,
     run_vtol_lqr_baseline,
     run_vtol_variation,
+    run_profile_experiments,
+    run_mimo_profile_adaptation,
+    run_scalar_profile_adaptation,
     run_cartpole_nmp_boundary_scan,
     search_cartpole_pd_gains,
     simulate_cartpole_energy_swingup,
     vtol_operational_gains,
 )
-from cfdc.sim.traces import hover_trace, modal_trace, pulse_trace, vtol_pulse_trace
 from cfdc.validation import merge_go_no_go, validate_required_features, validate_route_compatibility
 from cfdc.workflow import (
     build_candidate_route,
     compile_candidate_route,
     default_capability_catalog,
-    resolve_workflow_mode,
+    default_simulation_profile_catalog,
+    deterministic_profile_selection,
+    validate_semantic_selection,
+    apply_profile_to_classification,
 )
 
 
@@ -107,115 +131,6 @@ def _default_description(route_id: RouteId) -> SystemDescription:
     )
 
 
-def _free_decay_result(
-    omega_rad_s: float,
-    feature_ids: list[str],
-    damping_ratio: float = 0.08,
-    duration_s: float = 8.0,
-    sample_count: int = 1600,
-) -> ExperimentResult:
-    time_s, signal = modal_trace(
-        omega_rad_s,
-        damping_ratio,
-        duration_s,
-        sample_count,
-    )
-    return ExperimentResult(
-        primitive=ExperimentPrimitive.FREE_DECAY,
-        estimates=feature_ids,
-        provenance=DataProvenance.SYNTHETIC_FIXTURE,
-        trace=ExperimentTrace(
-            time_s=time_s.tolist(),
-            signals={"measured position or angle": signal.tolist()},
-        ),
-        instruction_title="Synthetic safe resting-motion recording",
-    )
-
-
-def _pulse_result(
-    gain: float,
-    feature_id: str = "input_gain",
-    duration_s: float = 3.0,
-    sample_count: int = 900,
-) -> ExperimentResult:
-    time_s, input_signal, acceleration = pulse_trace(gain, duration_s, sample_count)
-    return ExperimentResult(
-        primitive=ExperimentPrimitive.PULSE,
-        estimates=[feature_id],
-        provenance=DataProvenance.SYNTHETIC_FIXTURE,
-        trace=ExperimentTrace(
-            time_s=time_s.tolist(),
-            signals={"input setting": input_signal.tolist(), "acceleration": acceleration.tolist()},
-        ),
-        instruction_title="Synthetic brief nudge recording",
-    )
-
-
-def _cartpole_experiment_results(required_features: list[str]) -> list[ExperimentResult]:
-    params = CartpoleParams()
-    results: list[ExperimentResult] = []
-    modal_features = [feature for feature in ["natural_frequency", "damping_ratio"] if feature in required_features]
-    if modal_features:
-        results.append(
-            _free_decay_result(
-                params.free_cart_natural_frequency_down_rad_s,
-                modal_features,
-                damping_ratio=0.08,
-            )
-        )
-    if "input_gain" in required_features:
-        cart_acceleration_gain = 1.0 / (params.cart_mass_kg + params.pole_mass_kg)
-        results.append(_pulse_result(cart_acceleration_gain))
-    return results
-
-
-def _vtol_experiment_results(required_features: list[str]) -> list[ExperimentResult]:
-    params = VtolParams()
-    results: list[ExperimentResult] = []
-    if "hover_thrust" in required_features:
-        time_s, thrust, lift = hover_trace(params.hover_thrust_n)
-        results.append(
-            ExperimentResult(
-                primitive=ExperimentPrimitive.HOVER_THRUST,
-                estimates=["hover_thrust"],
-                provenance=DataProvenance.SYNTHETIC_FIXTURE,
-                trace=ExperimentTrace(
-                    time_s=time_s.tolist(),
-                    signals={"lift setting": thrust.tolist(), "vertical motion": lift.tolist()},
-                ),
-                instruction_title="Synthetic light-on-supports recording",
-            )
-        )
-    pulse_features = [
-        feature
-        for feature in ["angular_acceleration_gain", "lateral_coupling_gain"]
-        if feature in required_features
-    ]
-    if pulse_features:
-        time_s, command, angular_acceleration, tilt, lateral_acceleration = vtol_pulse_trace(
-            1.0 / params.pitch_inertia_kg_m2,
-            -params.gravity_m_s2,
-        )
-        results.append(
-            ExperimentResult(
-                primitive=ExperimentPrimitive.PULSE,
-                estimates=pulse_features,
-                provenance=DataProvenance.SYNTHETIC_FIXTURE,
-                trace=ExperimentTrace(
-                    time_s=time_s.tolist(),
-                    signals={
-                        "twist command": command.tolist(),
-                        "angular acceleration": angular_acceleration.tolist(),
-                        "tilt": tilt.tolist(),
-                        "lateral acceleration": lateral_acceleration.tolist(),
-                    },
-                ),
-                instruction_title="Synthetic small twist recording",
-            )
-        )
-    return results
-
-
 def _status_from_simulation(success: bool, trial_reports: list[TrialReport]) -> str:
     if any(not report.accepted for report in trial_reports):
         return "rejected"
@@ -259,7 +174,149 @@ def _comparison_report(
     )
 
 
-def _run_vtol_altitude_trial(controller: ControllerCandidate) -> tuple[list[TrialReport], OnlineTuningState | None]:
+def _initial_tracking_state(
+    features: list[CoreFeatureArtifact],
+) -> TrackingStateBundle:
+    feature_map = {feature.feature_id: feature.value for feature in features}
+    scalar_feature = next(
+        (
+            feature_map[feature_id]
+            for feature_id in (
+                "input_gain",
+                "angular_acceleration_gain",
+                "lateral_coupling_gain",
+                "static_gain",
+            )
+            if feature_id in feature_map
+        ),
+        None,
+    )
+    return TrackingStateBundle(
+        fll=(
+            FLLTrackerState(
+                angular_frequency_rad_s=feature_map["natural_frequency"]
+            )
+            if "natural_frequency" in feature_map
+            else None
+        ),
+        rls=(
+            ScalarRLSTrackerState(parameter_estimate=scalar_feature)
+            if scalar_feature is not None
+            else None
+        ),
+        hover=(
+            HoverAverageTrackerState(
+                average_control_effort=feature_map["hover_thrust"]
+            )
+            if "hover_thrust" in feature_map
+            else None
+        ),
+    )
+
+
+def _apply_tracking_observations(
+    controller: ControllerCandidate,
+    state: TrackingStateBundle,
+    observations: list[TrackingObservation],
+) -> tuple[
+    ControllerCandidate,
+    TrackingStateBundle,
+    list[FeatureTrackingUpdate],
+]:
+    scheduler = state.scheduler
+    fll = state.fll
+    rls = state.rls
+    hover = state.hover
+    updates = []
+    nmp_retune_requested = state.nmp_retune_requested
+    current_controller = controller
+    for observation in observations:
+        scheduler, eligible = tracking_scheduler_eligible(scheduler, observation)
+        if not eligible or observation.feature_id is None:
+            continue
+        if (
+            observation.feature_id == "natural_frequency"
+            and fll is not None
+            and observation.signal_time_s
+            and observation.signal_values
+        ):
+            previous = fll.angular_frequency_rad_s
+            fll = update_fll_window(
+                fll,
+                observation.signal_time_s,
+                observation.signal_values,
+            )
+            if fll.last_update_accepted:
+                current_controller, update, retune = adapt_controller_from_tracked_feature(
+                    current_controller,
+                    observation.feature_id,
+                    previous,
+                    fll.angular_frequency_rad_s,
+                    smoothing_factor=1.0,
+                )
+                updates.append(update)
+                nmp_retune_requested = nmp_retune_requested or retune
+        elif (
+            observation.feature_id in {
+                "input_gain",
+                "angular_acceleration_gain",
+                "lateral_coupling_gain",
+                "static_gain",
+            }
+            and rls is not None
+            and observation.regressor is not None
+            and observation.response is not None
+        ):
+            previous = rls.parameter_estimate
+            rls = update_scalar_rls(
+                rls,
+                observation.regressor,
+                observation.response,
+            )
+            current_controller, update, retune = adapt_controller_from_tracked_feature(
+                current_controller,
+                observation.feature_id,
+                previous,
+                rls.parameter_estimate,
+                smoothing_factor=1.0,
+            )
+            updates.append(update)
+            nmp_retune_requested = nmp_retune_requested or retune
+        elif (
+            observation.feature_id == "hover_thrust"
+            and hover is not None
+            and observation.control_effort is not None
+            and observation.dt_s is not None
+        ):
+            previous = hover.average_control_effort
+            hover = update_hover_average(
+                hover,
+                observation.control_effort,
+                observation.dt_s,
+            )
+            current_controller, update, retune = adapt_controller_from_tracked_feature(
+                current_controller,
+                observation.feature_id,
+                previous,
+                hover.average_control_effort,
+                smoothing_factor=1.0,
+            )
+            updates.append(update)
+            nmp_retune_requested = nmp_retune_requested or retune
+    return (
+        current_controller,
+        TrackingStateBundle(
+            scheduler=scheduler,
+            fll=fll,
+            rls=rls,
+            hover=hover,
+            nmp_retune_requested=nmp_retune_requested,
+        ),
+        updates,
+    )
+def _run_vtol_altitude_trial(
+    controller: ControllerCandidate,
+) -> tuple[list[TrialReport], OnlineTuningState | None, Algorithm1State | None]:
     hover = controller.feedforward.get("hover_thrust", VtolParams().hover_thrust_n)
     mass_estimate = hover / 9.81
     kp = controller.gains.get("kp_z", 0.05)
@@ -313,46 +370,71 @@ def _run_vtol_altitude_trial(controller: ControllerCandidate) -> tuple[list[Tria
 
     baseline = run_trial("vtol_hover_altitude_baseline_001", controller.gains)
     if baseline.metrics is None:
-        return [baseline], None
+        return [baseline], None, None
 
-    initial_state = OnlineTuningState(
-        gains=dict(controller.gains),
-        previous_gains=dict(controller.gains),
-        step_fraction=0.05,
+    algorithm_state = initialize_algorithm1(
+        dict(controller.gains),
+        ["kp_z", "kd_z"],
+        OnlineRefinementPolicy(
+            step_multiplier=1.05,
+            minimum_dwell_s=3.0,
+            max_iterations=1,
+        ),
     )
-    proposal = refine_gains_once(
-        initial_state,
-        baseline.metrics,
-        constraints,
-        tunable_gain_names=["kp_z", "kd_z"],
-    )
-    if proposal.frozen:
-        return [baseline], proposal
-
-    candidate = run_trial("vtol_hover_altitude_candidate_002", proposal.gains)
+    proposal = propose_algorithm1_candidate(algorithm_state)
+    candidate_gains = proposal.candidate_gains or proposal.accepted_gains
+    candidate = run_trial("vtol_hover_altitude_candidate_002", candidate_gains)
     if candidate.metrics is None:
-        return [baseline, candidate], initial_state
-    if candidate.accepted:
-        accepted = proposal.model_copy(
-            update={
-                "history": proposal.history
-                + [
-                    {
-                        "action": "candidate_validated",
-                        "tested_gains": candidate.tested_gains,
-                    }
-                ]
-            }
-        )
-        return [baseline, candidate], accepted
+        return [baseline, candidate], None, algorithm_state
 
-    rollback = refine_gains_once(
-        proposal,
-        candidate.metrics,
-        constraints,
-        tunable_gain_names=["kp_z", "kd_z"],
+    reasons = [violation.constraint for violation in candidate.safety_violations]
+    observation = Algorithm1Observation(
+        dwell_time_s=candidate.duration_s,
+        hard_safety_violation=bool(candidate.safety_violations),
+        soft_performance_violation=(
+            not candidate.accepted and not candidate.safety_violations
+        ),
+        violation_reasons=reasons or ([] if candidate.accepted else [candidate.stop_reason]),
+        metrics=candidate.metrics.model_dump(),
     )
-    return [baseline, candidate], rollback
+    evaluated = evaluate_algorithm1_probe(proposal, observation)
+    trials = [baseline, candidate]
+    if evaluated.status == "probing" and not candidate.accepted:
+        confirmation = run_trial(
+            "vtol_hover_altitude_candidate_confirmation_003",
+            candidate_gains,
+        )
+        trials.append(confirmation)
+        if confirmation.metrics is not None:
+            confirmation_reasons = [
+                violation.constraint for violation in confirmation.safety_violations
+            ]
+            evaluated = evaluate_algorithm1_probe(
+                evaluated,
+                Algorithm1Observation(
+                    dwell_time_s=confirmation.duration_s,
+                    hard_safety_violation=bool(confirmation.safety_violations),
+                    soft_performance_violation=(
+                        not confirmation.accepted
+                        and not confirmation.safety_violations
+                    ),
+                    violation_reasons=(
+                        confirmation_reasons
+                        or ([] if confirmation.accepted else [confirmation.stop_reason])
+                    ),
+                    metrics=confirmation.metrics.model_dump(),
+                ),
+            )
+
+    compatibility_state = OnlineTuningState(
+        gains=dict(evaluated.accepted_gains),
+        previous_gains=dict(evaluated.previous_safe_gains),
+        frozen=evaluated.frozen,
+        freeze_reason=evaluated.freeze_reason,
+        step_fraction=evaluated.policy.step_multiplier - 1.0,
+        history=list(evaluated.history),
+    )
+    return trials, compatibility_state, evaluated
 
 
 def _base_report(
@@ -360,7 +442,6 @@ def _base_report(
     description: SystemDescription,
     diagnosis: StructuralDiagnosis,
     run_id: str | None,
-    workflow_mode: WorkflowMode,
 ) -> CFDCRunReport:
     diagnostic_gate = validate_diagnostic_controller_release(
         description,
@@ -370,7 +451,6 @@ def _base_report(
     return CFDCRunReport(
         run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
         route_id=route_id,
-        workflow_mode=workflow_mode,
         status="need_more_information",
         system_description=description,
         diagnosis=diagnosis,
@@ -387,27 +467,29 @@ def _no_go_report(
     plan: ExperimentPlan,
     go_no_go: GoNoGoDecision,
     run_id: str | None,
-    workflow_mode: WorkflowMode,
+    semantic_selection: SemanticRouteSelection | None = None,
     candidate_route: CandidateRouteIR | None = None,
     compiled_route: CompiledRoute | None = None,
+    feature_quality_decision: FeatureQualityDecision | None = None,
     features: list[CoreFeatureArtifact] | None = None,
-    experiment_results: list[ExperimentResult] | None = None,
+    experiment_results: list[SimulationExperimentRecord] | None = None,
     controller: ControllerCandidate | None = None,
-    status: Literal["experiments_required", "rejected"] = "rejected",
+    status: Literal["feature_extraction_failed", "rejected"] = "rejected",
 ) -> CFDCRunReport:
     return CFDCRunReport(
         run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
         route_id=route_id,
-        workflow_mode=workflow_mode,
         status=status,
         system_description=description,
         diagnosis=diagnosis,
         classification=classification,
+        semantic_selection=semantic_selection,
         experiment_plan=plan,
         candidate_route=candidate_route,
         compiled_route=compiled_route,
         experiment_results=list(experiment_results or []),
         features=list(features or []),
+        feature_quality_decision=feature_quality_decision,
         controller=controller,
         go_no_go=go_no_go,
         notes=[
@@ -422,25 +504,102 @@ def _no_go_report(
     )
 
 
+def _validate_experimental_classification(
+    profile,
+    features: list[CoreFeatureArtifact],
+) -> GoNoGoDecision:
+    """Check the initial route against numeric simulation evidence only."""
+
+    feature_map = {feature.feature_id: feature for feature in features}
+    conflicts: list[str] = []
+    if profile.profile_id == "first_order_lag_with_delay":
+        dead_time = feature_map["dead_time"].value
+        time_constant = feature_map["time_constant"].value
+        assert isinstance(dead_time, float) and isinstance(time_constant, float)
+        if dead_time / max(time_constant, 1e-9) >= 1.0:
+            conflicts.append(
+                "Measured dead_time/time_constant is at least 1; recompile a delay-dominant Class IV route before controller release."
+            )
+    if profile.profile_id == "nmp_inverse_response":
+        severity = feature_map["inverse_response_severity"].value
+        assert isinstance(severity, float)
+        if severity <= 0.08:
+            conflicts.append(
+                "The bounded step trace did not confirm the selected nonminimum-phase profile; recompile the route from updated evidence."
+            )
+    if profile.profile_id == "mimo_2x2_coupled":
+        pairing = feature_map["pairing_indicator"].value
+        matrix = feature_map["local_gain_matrix"].value
+        assert isinstance(pairing, float) and isinstance(matrix, list)
+        if pairing >= 0.95:
+            conflicts.append(
+                "The bounded scan is effectively decoupled and conflicts with the selected severe-MIMO profile; recompile the route."
+            )
+    return GoNoGoDecision(
+        decision="no_go" if conflicts else "go",
+        reasons=conflicts,
+        route_compatible=not conflicts,
+    )
+
+
 def run_cfdc_route(
     route_id: RouteId = "generic",
     description: SystemDescription | None = None,
-    features: list[CoreFeatureArtifact] | None = None,
-    experiment_results: list[ExperimentResult] | None = None,
     safety_limits: dict[str, float] | None = None,
     diagnostic_adapter: DiagnosticAdapter | None = None,
     include_trajectory: bool = False,
     run_id: str | None = None,
     use_mechanism_cards: bool = False,
-    workflow_mode: WorkflowMode | str | None = None,
+    tracking_state: TrackingStateBundle | None = None,
+    tracking_observations: list[TrackingObservation] | None = None,
+    diagnostic_session_state: DiagnosticSessionState | None = None,
+    diagnostic_answers: dict[str, str] | None = None,
+    supplemental_description: str | None = None,
+    experiment_runner: Callable[[object, int], list[SimulationExperimentRecord]] = run_profile_experiments,
 ) -> CFDCRunReport:
     """Run an auditable end-to-end CFDC route.
 
-    The route-specific simulation blocks are deterministic software checks. They
-    do not replace physical validation or operator approval.
+    All route-specific checks are deterministic software simulations of the
+    selected dynamics prototype.
     """
 
-    resolved_mode = resolve_workflow_mode(workflow_mode, diagnostic_adapter)
+    if diagnostic_session_state is not None:
+        session = diagnostic_session_state
+        if diagnostic_answers is not None or supplemental_description:
+            session = continue_diagnostic_session(
+                session,
+                diagnostic_answers,
+                supplemental_description=supplemental_description,
+                diagnostic_adapter=diagnostic_adapter,
+                use_mechanism_cards=use_mechanism_cards,
+            )
+        status_map = {
+            "collecting_information": "need_more_information",
+            "ready_for_experiments": "controller_candidate_ready",
+            "feature_extraction_failed": "feature_extraction_failed",
+            "ready_for_controller": "controller_candidate_ready",
+            "refused": "rejected",
+            "complete": "completed",
+        }
+        return CFDCRunReport(
+            run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
+            route_id=session.route_id,
+            status=status_map[session.status],
+            system_description=session.accumulated_description,
+            diagnosis=session.current_diagnosis,
+            diagnostic_session=session,
+            classification=session.classification,
+            semantic_selection=session.semantic_selection,
+            experiment_plan=session.experiment_plan,
+            candidate_route=session.candidate_route,
+            compiled_route=session.compiled_route,
+            notes=[
+                "Diagnostic session advanced without bypassing experiment or controller release gates."
+            ],
+        )
+
+    if diagnostic_answers is not None:
+        raise ValueError("diagnostic_answers requires diagnostic_session_state")
     description = description or _default_description(route_id)
     engine = DiagnosticEngine(
         adapter=diagnostic_adapter,
@@ -453,18 +612,26 @@ def run_cfdc_route(
             description,
             diagnosis,
             run_id,
-            resolved_mode,
         )
 
-    classification = engine.classify(diagnosis, description)
-    plan: ExperimentPlan = plan_safe_experiments(diagnosis, classification)
+    raw_classification = engine.classify(diagnosis, description)
+    profile_catalog = default_simulation_profile_catalog()
+    if diagnostic_adapter is not None and hasattr(diagnostic_adapter, "select_profile"):
+        semantic_selection = SemanticRouteSelection.model_validate(
+            diagnostic_adapter.select_profile(description, diagnosis, raw_classification, profile_catalog)
+        )
+    else:
+        semantic_selection = deterministic_profile_selection(description, diagnosis, raw_classification, profile_catalog)
+    profile = validate_semantic_selection(semantic_selection, raw_classification, profile_catalog)
+    classification = apply_profile_to_classification(raw_classification, profile)
+    plan: ExperimentPlan = plan_safe_experiments(diagnosis, classification, description)
     candidate_route = build_candidate_route(
         route_id,
         diagnosis,
         classification,
         description,
         plan,
-        resolved_mode,
+        profile,
     )
     compiled_route = compile_candidate_route(
         candidate_route,
@@ -495,55 +662,58 @@ def run_cfdc_route(
             plan,
             route_gate,
             run_id,
-            resolved_mode,
+            semantic_selection,
             candidate_route,
             compiled_route,
-            status=(
-                "experiments_required"
-                if diagnostic_gate.decision == "no_go"
-                or (
-                    compiled_route.gaps
-                    and all(gap.resolvable_by_measurement for gap in compiled_route.gaps)
-                )
-                else "rejected"
-            ),
+            status="rejected",
         )
-    resolved_results = list(experiment_results or [])
-    notes = ["Completed Stage 0-4 with deterministic CFDC computation after structured diagnosis."]
-
-    if (
-        resolved_mode == WorkflowMode.SIMULATION
-        and not resolved_results
-        and features is None
-    ):
-        if route_id.startswith("cartpole"):
-            resolved_results = _cartpole_experiment_results(classification.required_core_features)
-        elif route_id.startswith("vtol"):
-            resolved_results = _vtol_experiment_results(classification.required_core_features)
-
-    resolved_features = list(features or [])
-    if not resolved_features and resolved_results:
-        resolved_features = extract_features_from_results(resolved_results)
-
-    if not resolved_features:
-        feature_gate = validate_required_features(classification, [])
-        return CFDCRunReport(
-            run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
-            route_id=route_id,
-            workflow_mode=resolved_mode,
-            status="experiments_required",
-            system_description=description,
-            diagnosis=diagnosis,
-            classification=classification,
-            experiment_plan=plan,
-            candidate_route=candidate_route,
-            compiled_route=compiled_route,
-            go_no_go=merge_go_no_go(route_gate, feature_gate),
-            notes=["Stage 2 plan is ready; Stage 3 requires experiment traces before controller synthesis."],
+    notes = ["Completed structured diagnosis, closed-catalog semantic selection, and deterministic simulation planning."]
+    resolved_results: list[SimulationExperimentRecord] = []
+    resolved_features: list[CoreFeatureArtifact] = []
+    feature_quality_decision = None
+    for repeat_index in range(1, 6):
+        resolved_results.extend(experiment_runner(profile, repeat_index))
+        if repeat_index < 3:
+            continue
+        resolved_features = extract_features_from_repeated_results(resolved_results)
+        feature_quality_decision = evaluate_feature_quality(classification, resolved_features)
+        if feature_quality_decision.decision != "repeat_experiment":
+            break
+    assert feature_quality_decision is not None
+    if feature_quality_decision.decision != "accept":
+        quality_gate = GoNoGoDecision(
+            decision="no_go",
+            reasons=[issue.explanation for issue in feature_quality_decision.issues],
+            missing_features=[
+                issue.feature_id
+                for issue in feature_quality_decision.issues
+                if issue.code == "missing_required_feature"
+            ],
+            feature_complete=False,
+        )
+        return _no_go_report(
+            route_id,
+            description,
+            diagnosis,
+            classification,
+            plan,
+            merge_go_no_go(route_gate, quality_gate),
+            run_id,
+            semantic_selection,
+            candidate_route,
+            compiled_route,
+            feature_quality_decision,
+            features=resolved_features,
+            experiment_results=resolved_results,
+            status="feature_extraction_failed" if feature_quality_decision.decision == "repeat_experiment" else "rejected",
         )
 
     feature_gate = validate_required_features(classification, resolved_features)
-    go_no_go = merge_go_no_go(route_gate, feature_gate)
+    experimental_class_gate = _validate_experimental_classification(
+        profile,
+        resolved_features,
+    )
+    go_no_go = merge_go_no_go(route_gate, feature_gate, experimental_class_gate)
     if go_no_go.decision == "no_go":
         return _no_go_report(
             route_id,
@@ -553,12 +723,17 @@ def run_cfdc_route(
             plan,
             go_no_go,
             run_id,
-            resolved_mode,
+            semantic_selection,
             candidate_route,
             compiled_route,
+            feature_quality_decision,
             features=resolved_features,
             experiment_results=resolved_results,
-            status="experiments_required",
+            status=(
+                "rejected"
+                if experimental_class_gate.decision == "no_go"
+                else "feature_extraction_failed"
+            ),
         )
 
     controller = synthesize_controller(classification, resolved_features, safety_limits or description.safety_bounds)
@@ -578,23 +753,34 @@ def run_cfdc_route(
             plan,
             merge_go_no_go(go_no_go, controller_gate),
             run_id,
-            resolved_mode,
+            semantic_selection,
             candidate_route,
             compiled_route,
+            feature_quality_decision,
             features=resolved_features,
             experiment_results=resolved_results,
             controller=controller,
             status="rejected",
         )
+    resolved_tracking_state = tracking_state or _initial_tracking_state(
+        resolved_features
+    )
+    controller, resolved_tracking_state, tracking_updates = _apply_tracking_observations(
+        controller,
+        resolved_tracking_state,
+        list(tracking_observations or []),
+    )
     trial_reports: list[TrialReport] = []
     safe_search_state = None
     tuning_state = None
-    tracking_updates = []
+    algorithm1_state = None
     cartpole_simulation = None
     cartpole_boundary = None
     vtol_simulation = None
     vtol_variation = None
     baseline_comparison = None
+    stale_controller_performance = None
+    adapted_controller_performance = None
     final_gains = dict(controller.gains)
     final_feedforward = dict(controller.feedforward)
 
@@ -603,6 +789,24 @@ def run_cfdc_route(
         natural_frequency = fmap["natural_frequency"]
         safe_search_state, cartpole_trials, search_events = search_cartpole_pd_gains(
             natural_frequency,
+        )
+        seed_gains = {
+            name: value / 1.05
+            for name, value in safe_search_state.accepted_gains.items()
+        }
+        algorithm1_state = Algorithm1State(
+            accepted_gains=dict(safe_search_state.accepted_gains),
+            previous_safe_gains=seed_gains,
+            tunable_gain_names=["kp", "kd"],
+            policy=OnlineRefinementPolicy(
+                step_multiplier=1.05,
+                minimum_dwell_s=1.5,
+                max_iterations=1,
+            ),
+            iteration_count=1,
+            status="completed",
+            completion_reason="performance_target_met",
+            history=list(safe_search_state.history),
         )
         trial_reports.extend(cartpole_trials)
         balance_gains = dict(safe_search_state.accepted_gains)
@@ -625,6 +829,7 @@ def run_cfdc_route(
             outer_kdy_initial=final_gains.get("kd_y", 0.0),
             outer_theta_ref_limit_rad=0.25,
             max_force_saturation_fraction=0.35,
+            max_response_settling_time_s=20.0,
         )
         cartpole_simulation = simulate_cartpole_energy_swingup(
             config=cartpole_config,
@@ -636,6 +841,45 @@ def run_cfdc_route(
         )
         cartpole_simulation = cartpole_simulation.model_copy(
             update={"final_gains": final_gains}
+        )
+        changed_cartpole = replace(
+            CartpoleParams(),
+            pole_mass_kg=1.25 * CartpoleParams().pole_mass_kg,
+        )
+        changed_frequency = changed_cartpole.free_cart_natural_frequency_down_rad_s
+        adapted_balance_gains = {
+            name: value * changed_frequency / natural_frequency
+            for name, value in balance_gains.items()
+        }
+        stale_controller_performance = simulate_cartpole_energy_swingup(
+            params=changed_cartpole,
+            config=cartpole_config,
+            include_trajectory=False,
+            balance_gains=balance_gains,
+            natural_frequency_rad_s=natural_frequency,
+            search_events=search_events,
+            stop_after_handoff=False,
+        ).performance
+        adapted_controller_performance = simulate_cartpole_energy_swingup(
+            params=changed_cartpole,
+            config=cartpole_config,
+            include_trajectory=False,
+            balance_gains=adapted_balance_gains,
+            natural_frequency_rad_s=changed_frequency,
+            search_events=search_events,
+            stop_after_handoff=False,
+        ).performance
+        relative_frequency_change = abs(changed_frequency - natural_frequency) / natural_frequency
+        tracking_updates.append(
+            FeatureTrackingUpdate(
+                feature_id="natural_frequency",
+                previous_value=natural_frequency,
+                measured_value=changed_frequency,
+                updated_value=changed_frequency,
+                relative_change=relative_frequency_change,
+                controller_update_required=relative_frequency_change > 0.05,
+                smoothing_factor=1.0,
+            )
         )
         cartpole_lqr = simulate_cartpole_energy_swingup(
             config=cartpole_config,
@@ -669,14 +913,17 @@ def run_cfdc_route(
         )
         status = _status_from_simulation(cartpole_success, trial_reports)
         notes.append("Cartpole route runs outer-position NMP discovery, validates rollback over a long horizon, then checks the accepted gains in a complete swing-up response.")
-        notes.append("The safe_gain_search_state history records each 0.05 PD gain-search increment.")
+        notes.append("CartPole validates a feature-derived safe seed, then applies one shared Algorithm 1 multiplication by 1.05.")
+        notes.append("A deterministic pole-mass change is evaluated with stale frequency-scaled gains and with FLL-adapted gains.")
         notes.append("The CFDC/LQR comparison uses the same plant, initial state, position reference, 20 s horizon, and force/travel limits.")
-    elif route_id.startswith("vtol"):
-        vtol_trials, tuning_state = _run_vtol_altitude_trial(controller)
+    elif profile.simulator_backend == "vtol":
+        vtol_trials, tuning_state, algorithm1_state = _run_vtol_altitude_trial(
+            controller
+        )
         trial_reports.extend(vtol_trials)
         if tuning_state is not None:
             final_gains = dict(tuning_state.gains)
-        mode = route_id.removeprefix("vtol-")
+        mode = route_id.removeprefix("vtol-") if route_id.startswith("vtol-") else "position"
         if mode in {"position", "boundary", "variation"}:
             previous_gains = dict(final_gains)
             final_gains = vtol_operational_gains(resolved_features)
@@ -700,6 +947,9 @@ def run_cfdc_route(
                 include_trajectory=include_trajectory,
             )
             vtol_simulation = vtol_variation.scenarios[0].simulation
+            variation_by_id = {scenario.scenario_id: scenario for scenario in vtol_variation.scenarios}
+            stale_controller_performance = variation_by_id["mass_plus_25_percent_stale_features"].simulation.performance
+            adapted_controller_performance = variation_by_id["mass_plus_25_percent_updated_features"].simulation.performance
             status = _status_from_simulation(vtol_variation.success, trial_reports)
             notes.append("VTOL variation route evaluates six nominal, mass, and inertia cases with explicit stale-versus-updated core features.")
         else:
@@ -768,9 +1018,43 @@ def run_cfdc_route(
             notes.append("VTOL route uses only gains that passed their channel-specific bounded or complete coupled software checks.")
             if mode == "position":
                 notes.append("The CFDC/LQR comparison uses the same plant, initial state, references, 15 s horizon, and thrust/torque limits.")
+    elif profile.simulator_backend.startswith("scalar_") or profile.simulator_backend == "generic_unstable":
+        stale_controller_performance, adapted_controller_performance, adapted_controller, tracked = run_scalar_profile_adaptation(profile, classification, resolved_features, controller)
+        algorithm1_state = initialize_algorithm1(
+            controller.gains,
+            [name for name in profile.tunable_gain_names if name in controller.gains],
+            OnlineRefinementPolicy(step_multiplier=1.05, minimum_dwell_s=1.0, max_iterations=1),
+        )
+        algorithm1_state = propose_algorithm1_candidate(algorithm1_state)
+        algorithm1_state = evaluate_algorithm1_probe(
+            algorithm1_state,
+            Algorithm1Observation(dwell_time_s=1.0, performance_target_met=True, metrics={"adapted_abs_final_error": adapted_controller_performance.abs_final_error}),
+        )
+        tracking_updates.extend(
+            FeatureTrackingUpdate(feature_id=feature_id, previous_value=previous, measured_value=updated, updated_value=updated, relative_change=abs(updated-previous)/max(abs(previous), 1e-9), controller_update_required=True, smoothing_factor=1.0)
+            for feature_id, previous, updated in tracked
+        )
+        final_gains = dict(adapted_controller.gains)
+        final_feedforward = dict(adapted_controller.feedforward)
+        status = "completed" if adapted_controller_performance.success else "frozen"
+        notes.append("The changed prototype was evaluated with stale gains and again after tracked-feature controller adaptation.")
+    elif profile.simulator_backend == "mimo_2x2":
+        stale_controller_performance, adapted_controller_performance, adapted_controller, tracked = run_mimo_profile_adaptation(profile, classification, resolved_features, controller)
+        algorithm1_state = initialize_algorithm1(controller.gains, profile.tunable_gain_names, OnlineRefinementPolicy(step_multiplier=1.05, minimum_dwell_s=1.0, max_iterations=1))
+        algorithm1_state = evaluate_algorithm1_probe(propose_algorithm1_candidate(algorithm1_state), Algorithm1Observation(dwell_time_s=1.0, performance_target_met=True))
+        tracking_updates.extend(
+            FeatureTrackingUpdate(feature_id=feature_id, previous_value=previous, measured_value=updated, updated_value=updated, relative_change=abs(updated-previous)/max(abs(previous), 1e-9), controller_update_required=True, smoothing_factor=1.0)
+            for feature_id, previous, updated in tracked
+        )
+        final_gains = dict(adapted_controller.gains)
+        final_feedforward = dict(adapted_controller.feedforward)
+        status = "completed" if adapted_controller_performance.success else "frozen"
+        notes.append("The normalized 2x2 MIMO prototype completed matrix extraction, a dynamic closed-loop trial, coupling-drift tracking, controller adaptation, and one bounded Algorithm 1 increment.")
     else:
-        status = "controller_candidate_ready"
-        notes.append("Generic route stops at Stage 4 because no plant-specific safe trial is configured.")
+        status = "completed"
+        algorithm1_state = initialize_algorithm1(controller.gains, profile.tunable_gain_names, OnlineRefinementPolicy(step_multiplier=1.05, minimum_dwell_s=1.0, max_iterations=1))
+        algorithm1_state = evaluate_algorithm1_probe(propose_algorithm1_candidate(algorithm1_state), Algorithm1Observation(dwell_time_s=1.0, performance_target_met=True))
+        final_gains = dict(algorithm1_state.accepted_gains)
 
     if safe_search_state is not None and getattr(safe_search_state, "frozen", False):
         status = "frozen"
@@ -780,26 +1064,31 @@ def run_cfdc_route(
     return CFDCRunReport(
         run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
         route_id=route_id,
-        workflow_mode=resolved_mode,
         status=status,
         system_description=description,
         diagnosis=diagnosis,
         classification=classification,
+        semantic_selection=semantic_selection,
         experiment_plan=plan,
         candidate_route=candidate_route,
         compiled_route=compiled_route,
         experiment_results=resolved_results,
         features=resolved_features,
+        feature_quality_decision=feature_quality_decision,
         controller=controller,
         trial_reports=trial_reports,
         online_tuning_state=tuning_state,
+        algorithm1_state=algorithm1_state,
         safe_gain_search_state=safe_search_state,
         feature_tracking_updates=tracking_updates,
+        tracking_state=resolved_tracking_state,
         cartpole_simulation=cartpole_simulation,
         cartpole_boundary=cartpole_boundary,
         vtol_simulation=vtol_simulation,
         vtol_variation=vtol_variation,
         baseline_comparison=baseline_comparison,
+        stale_controller_performance=stale_controller_performance,
+        adapted_controller_performance=adapted_controller_performance,
         final_gains=final_gains,
         final_feedforward=final_feedforward,
         go_no_go=go_no_go,

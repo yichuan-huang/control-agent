@@ -29,6 +29,12 @@ from cfdc.models import (
     SavedDiagnosticResponse,
     SystemDescription,
 )
+from cfdc.workflow import (
+    apply_profile_to_classification,
+    default_simulation_profile_catalog,
+    deterministic_profile_selection,
+    validate_semantic_selection,
+)
 
 
 DIAGNOSTIC_FIELD_NAMES = (
@@ -43,7 +49,7 @@ DIAGNOSTIC_FIELD_NAMES = (
 )
 SAVED_DETERMINISTIC_RESPONSE_PATH = Path(__file__).with_name("saved_evaluation_responses.json")
 SAVED_LLM_RESPONSE_PATH = Path(__file__).with_name("saved_llm_evaluation_responses.json")
-EVALUATION_SPEC_VERSION = "cfdc-diagnostic-12-v2-archive-audit"
+EVALUATION_SPEC_VERSION = "cfdc-diagnostic-12-v3-assessment-catalog"
 SCORING_POLICY = {
     "minimum_eight_field_accuracy": 0.75,
     "required_feature_recall": 1.0,
@@ -60,7 +66,7 @@ SCORING_POLICY = {
     "controller_gate": "exact",
     "premature_controller_release_allowed": False,
 }
-FROZEN_CASE_CATALOG_SHA256 = "e33a1cc79d50c4f24f309ad81d290616ce193b0e8b2c421bc3c27aaaf96ce6b9"
+FROZEN_CASE_CATALOG_SHA256 = "c353e12d63877bce2127e0a84b4db056631734686c7e0efb70702ecc4deb6893"
 
 
 @dataclass(frozen=True)
@@ -357,10 +363,36 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
             False,
         ),
     ]
-    return [
-        _with_audit_expectations(case)
-        for case in [*prompt_cases, *complex_cases]
-    ]
+    cases = [_with_audit_expectations(case) for case in [*prompt_cases, *complex_cases]]
+    assessments = {
+        "cartpole_underactuated": ("unstable", "nonminimum_phase", "not_significant", "high", "adequate", "strong_dynamic", "underactuated", "large"),
+        "planar_vtol_hover_lateral": ("unstable", "nonminimum_phase", "not_significant", "high", "adequate", "weak", "cascaded", "large"),
+        "first_order_thermal": ("stable", "minimum_phase", "unknown", "low", "adequate", "weak", "siso", "moderate"),
+        "double_integrator_cart": ("marginal", "minimum_phase", "not_significant", "low", "adequate", "weak", "siso", "moderate"),
+        "spring_mass_damper": ("stable", "minimum_phase", "not_significant", "low", "adequate", "weak", "siso", "moderate"),
+        "delayed_heating_process": ("stable", "minimum_phase", "significant", "low", "adequate", "weak", "siso", "moderate"),
+        "inverse_response_process": ("stable", "nonminimum_phase", "not_significant", "low", "adequate", "weak", "siso", "moderate"),
+        "deadzone_saturated_motor": ("unknown", "unknown", "unknown", "unknown", "adequate", "static_compensable", "unknown", "unknown"),
+        "acrobot_underactuated_diagnosis": ("unstable", "nonminimum_phase", "not_significant", "high", "adequate", "strong_dynamic", "underactuated", "large"),
+        "cstr_operating_point_nonlinearity_diagnosis": ("stable", "minimum_phase", "not_significant", "high", "adequate", "strong_dynamic", "weak_mimo", "large"),
+        "quadruple_tank_mimo_nmp_diagnosis": ("stable", "nonminimum_phase", "not_significant", "low", "adequate", "weak", "severe_mimo", "large"),
+        "bouc_wen_hysteresis_diagnosis": ("unknown", "unknown", "unknown", "unknown", "adequate", "static_compensable", "unknown", "unknown"),
+    }
+    features = {
+        "cartpole_underactuated": ("natural_frequency",),
+        "planar_vtol_hover_lateral": ("hover_thrust", "angular_acceleration_gain", "lateral_coupling_gain"),
+        "first_order_thermal": (),
+        "double_integrator_cart": ("input_gain",),
+        "spring_mass_damper": ("natural_frequency", "damping_ratio", "input_gain"),
+        "delayed_heating_process": ("static_gain", "time_constant", "dead_time"),
+        "inverse_response_process": ("static_gain", "time_constant", "inverse_response_severity"),
+        "deadzone_saturated_motor": (),
+        "acrobot_underactuated_diagnosis": ("natural_frequency",),
+        "cstr_operating_point_nonlinearity_diagnosis": ("natural_frequency", "input_gain"),
+        "quadruple_tank_mimo_nmp_diagnosis": ("local_gain_matrix", "local_time_constant", "pairing_indicator"),
+        "bouc_wen_hysteresis_diagnosis": (),
+    }
+    return [replace(case, expected_fields=_fields(*[(value,) for value in assessments[case.case_id]]), expected_required_features=features[case.case_id], expected_controller_allowed=case.expected_complete) for case in cases]
 
 
 def _case_catalog_payload() -> dict[str, object]:
@@ -457,11 +489,16 @@ def _placeholder_feature(feature_id: str) -> CoreFeatureArtifact:
     }
     value = values.get(feature_id, 1.0)
     width = max(0.05 * abs(value), 0.01)
+    released_value = (
+        [[2.0, 0.5], [0.4, 1.6]]
+        if feature_id == "local_gain_matrix"
+        else value
+    )
     return CoreFeatureArtifact(
         feature_id=feature_id,
-        value=value,
-        lower_bound=value - width,
-        upper_bound=value + width,
+        value=released_value,
+        lower_bound=None if feature_id == "local_gain_matrix" else value - width,
+        upper_bound=None if feature_id == "local_gain_matrix" else value + width,
         confidence=0.9,
         units="audit_placeholder",
         method="diagnostic_controller_testability_audit",
@@ -508,6 +545,11 @@ def _collect_diagnostic_responses(
             if diagnosis.complete
             else None
         )
+        if classification is not None:
+            catalog = default_simulation_profile_catalog()
+            selection = deterministic_profile_selection(case.description, diagnosis, classification, catalog)
+            profile = validate_semantic_selection(selection, classification, catalog)
+            classification = apply_profile_to_classification(classification, profile)
         release_gate = validate_diagnostic_controller_release(
             case.description,
             diagnosis,
@@ -529,7 +571,7 @@ def _collect_diagnostic_responses(
             SavedDiagnosticResponse(
                 case_id=case.case_id,
                 field_values={
-                    field_name: getattr(diagnosis, field_name).value
+                    field_name: getattr(diagnosis, field_name).assessment
                     for field_name in DIAGNOSTIC_FIELD_NAMES
                 },
                 field_evidence={
@@ -701,9 +743,8 @@ def _looks_like_constraint_feature(
 
 
 EVIDENCE_OVERCLAIM_PATTERNS = (
-    "physical validation complete",
-    "physically validated",
-    "hardware validated",
+    "external validation complete",
+    "externally validated",
     "proven safe",
     "guaranteed safe",
     "zero risk",

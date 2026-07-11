@@ -4,16 +4,23 @@ import argparse
 import json
 import math
 from pathlib import Path
+from uuid import uuid4
 
-from cfdc.diagnosis import OpenAICompatibleDiagnosticAdapter
+from cfdc.diagnosis import (
+    OpenAICompatibleDiagnosticAdapter,
+    start_diagnostic_session,
+)
 from cfdc.diagnosis import (
     run_diagnostic_evaluation,
     run_live_llm_diagnostic_comparison,
     run_saved_llm_diagnostic_comparison,
 )
 from cfdc.demo import run_demo_validation
-from cfdc.models import CFDCRunReport, ExperimentResult, SystemDescription
-from cfdc.pipeline import run_cfdc_pipeline
+from cfdc.models import (
+    CFDCRunReport,
+    DiagnosticSessionState,
+    SystemDescription,
+)
 from cfdc.runtime import run_cfdc_route
 from cfdc.sim import (
     run_benchmark_suite,
@@ -89,21 +96,41 @@ def parse_safety_bounds(values: list[str]) -> dict[str, float]:
     return bounds
 
 
-def load_experiment_results(paths: list[Path]) -> list[ExperimentResult]:
-    results: list[ExperimentResult] = []
-    seen_estimates: set[str] = set()
-    for path in paths:
-        try:
-            result = ExperimentResult.model_validate_json(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise SystemExit(f"invalid --experiment-result {path}: {exc}") from None
-        duplicates = seen_estimates.intersection(result.estimates)
-        if duplicates:
-            duplicate = sorted(duplicates)[0]
-            raise SystemExit(f"duplicate experiment estimate '{duplicate}'")
-        seen_estimates.update(result.estimates)
-        results.append(result)
-    return results
+def load_diagnostic_session(path: Path) -> DiagnosticSessionState:
+    try:
+        return DiagnosticSessionState.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"invalid --diagnostic-session-input {path}: {exc}") from None
+
+
+def write_diagnostic_session_atomic(
+    path: Path,
+    session: DiagnosticSessionState,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        temporary.write_text(session.model_dump_json(indent=2), encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def parse_diagnostic_answers(values: list[str]) -> dict[str, str]:
+    answers: dict[str, str] = {}
+    for item in values:
+        question, separator, answer = item.partition("=")
+        if not separator or not question.strip() or not answer.strip():
+            raise SystemExit(
+                f"invalid --diagnostic-answer {item!r}; expected QUESTION_ID=ANSWER"
+            )
+        if question in answers:
+            raise SystemExit(f"duplicate --diagnostic-answer question {question!r}")
+        answers[question] = answer
+    return answers
 
 
 def _uses_builtin_experiment_inputs(args: argparse.Namespace) -> bool:
@@ -117,7 +144,6 @@ def _uses_builtin_experiment_inputs(args: argparse.Namespace) -> bool:
         or args.validate_demo
         or args.cartpole_swingup
         or args.vtol_sim
-        or args.run_route not in (None, "generic")
     )
 
 
@@ -128,7 +154,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--actuator", action="append", default=[], help="Actuator or input name. Can be repeated.")
     parser.add_argument("--safety-bound", action="append", default=[], metavar="KEY=FLOAT", help="Safety bound. Can be repeated.")
     parser.add_argument("--time-scale-hint-s", type=_positive_float, default=None, help="Positive process time-scale hint in seconds.")
-    parser.add_argument("--experiment-result", action="append", type=Path, default=[], help="Path to an ExperimentResult JSON object. Can be repeated.")
+    parser.add_argument("--diagnostic-session-input", type=Path, default=None, help="Resume a DiagnosticSessionState JSON file.")
+    parser.add_argument("--diagnostic-session-output", type=Path, default=None, help="Atomically write the resulting DiagnosticSessionState JSON file.")
+    parser.add_argument("--diagnostic-answer", action="append", default=[], metavar="QUESTION_ID=ANSWER", help="Answer a pending question by stable question ID.")
+    parser.add_argument("--diagnostic-description", type=str, default=None, help="Add a free-form supplemental description when resuming a diagnostic session.")
     parser.add_argument("--benchmark", action="store_true", help="Run the built-in CFDC synthetic benchmark chain.")
     parser.add_argument("--feature-ablation", action="store_true", help="Run minimal/noisy/full-model feature ablations.")
     parser.add_argument("--diagnostic-eval", action="store_true", help="Score the saved 8+4 offline diagnostic responses.")
@@ -156,15 +185,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--include-trajectory", action="store_true", help="Include route simulation trajectories in JSON output.")
     parser.add_argument("--full-report", action="store_true", help="Include raw experiment traces and trial samples in route JSON output.")
-    parser.add_argument("--use-llm", action="store_true", help="Use an OpenAI-compatible LLM for Stage 0 diagnosis.")
+    parser.add_argument("--use-llm", action="store_true", help="Use the configured OpenAI-compatible provider for diagnosis and closed-catalog profile selection.")
     parser.add_argument(
         "--use-mechanism-cards",
         action="store_true",
         help="Add optional mechanism-card labels without changing the canonical archetype route.",
     )
-    parser.add_argument("--llm-base-url", type=str, default=None, help="OpenAI-compatible base URL, e.g. https://api.openai.com/v1.")
-    parser.add_argument("--llm-model", type=str, default=None, help="OpenAI-compatible model name.")
-    parser.add_argument("--llm-api-key", type=str, default=None, help="API key. Prefer environment variables for normal use.")
+    parser.add_argument("--llm-base-url", type=str, default=None, help="Provider API root, e.g. https://api.deepseek.com/v1 or http://localhost:11434/v1 (env: CFDC_LLM_BASE_URL).")
+    parser.add_argument("--llm-model", type=str, default=None, help="Provider model identifier (env: CFDC_LLM_MODEL).")
+    parser.add_argument("--llm-api-key", type=str, default=None, help="Provider API key (env: CFDC_LLM_API_KEY). Prefer environment variables for normal use.")
     parser.add_argument("--llm-timeout-s", type=float, default=60.0, help="LLM request timeout in seconds.")
     parser.add_argument("--llm-max-tokens", type=int, default=1400, help="Maximum diagnostic response tokens.")
     return parser.parse_args(argv)
@@ -173,11 +202,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     safety_bounds = parse_safety_bounds(args.safety_bound)
-    if args.experiment_result and _uses_builtin_experiment_inputs(args):
-        raise SystemExit(
-            "--experiment-result cannot be used with a built-in route or benchmark command"
-        )
-    experiment_results = load_experiment_results(args.experiment_result)
+    session_state = (
+        load_diagnostic_session(args.diagnostic_session_input)
+        if args.diagnostic_session_input is not None
+        else None
+    )
+    diagnostic_answers = parse_diagnostic_answers(args.diagnostic_answer)
+    if diagnostic_answers and session_state is None:
+        raise SystemExit("--diagnostic-answer requires --diagnostic-session-input")
     adapter = None
     if args.use_llm or args.diagnostic_eval_llm:
         try:
@@ -231,7 +263,7 @@ def main() -> None:
     if args.vtol_sim:
         print(json.dumps(run_vtol_simulation(mode=args.vtol_mode, include_trajectory=args.include_trajectory).model_dump(), indent=2, sort_keys=True))
         return
-    if args.run_route:
+    if args.run_route or session_state is not None or args.description:
         description = None
         if args.description:
             description = SystemDescription(
@@ -241,15 +273,41 @@ def main() -> None:
                 safety_bounds=safety_bounds,
                 time_scale_hint_s=args.time_scale_hint_s,
             )
+        route_id = args.run_route or (session_state.route_id if session_state is not None else "generic")
+        if session_state is not None and route_id != session_state.route_id:
+            raise SystemExit("--run-route must match the diagnostic session route_id")
+        if session_state is None and args.diagnostic_session_output is not None:
+            if description is None:
+                description = SystemDescription(
+                    text=(
+                        "A route description was not supplied; ask for the missing "
+                        "system behavior, sensors, actuators, and safety bounds."
+                    )
+                )
+            session_state = start_diagnostic_session(
+                description,
+                route_id=route_id,
+                diagnostic_adapter=adapter,
+                use_mechanism_cards=args.use_mechanism_cards,
+            )
         report = run_cfdc_route(
-            args.run_route,
+            route_id,
             description=description,
-            experiment_results=experiment_results,
             safety_limits=safety_bounds,
             diagnostic_adapter=adapter,
             use_mechanism_cards=args.use_mechanism_cards,
             include_trajectory=args.include_trajectory,
+            diagnostic_session_state=session_state,
+            diagnostic_answers=(diagnostic_answers or None),
+            supplemental_description=args.diagnostic_description,
         )
+        if args.diagnostic_session_output is not None:
+            if report.diagnostic_session is None:
+                raise SystemExit("route did not produce a diagnostic session state")
+            write_diagnostic_session_atomic(
+                args.diagnostic_session_output,
+                report.diagnostic_session,
+            )
         payload = report.model_dump() if args.full_report else compact_route_report(report)
         print(json.dumps(payload, indent=2, sort_keys=True))
         return
@@ -259,26 +317,6 @@ def main() -> None:
             "--feature-ablation, --diagnostic-eval, --diagnostic-eval-llm, "
             "--cartpole-swingup, or --vtol-sim."
         )
-    description = SystemDescription(
-        text=args.description,
-        observed_outputs=args.observed_output,
-        actuators=args.actuator,
-        safety_bounds=safety_bounds,
-        time_scale_hint_s=args.time_scale_hint_s,
-    )
-    print(
-        json.dumps(
-            run_cfdc_pipeline(
-                description,
-                experiment_results=experiment_results,
-                safety_limits=safety_bounds,
-                diagnostic_adapter=adapter,
-                use_mechanism_cards=args.use_mechanism_cards,
-            ),
-            indent=2,
-            sort_keys=True,
-        )
-    )
 
 
 if __name__ == "__main__":

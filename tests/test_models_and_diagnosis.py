@@ -12,7 +12,7 @@ from cfdc.models import (
     CoreFeatureArtifact,
     DelayAssessment,
     ExperimentPrimitive,
-    ExperimentResult,
+    SimulationExperimentRecord,
     ExperimentTrace,
     SignificantDelayField,
     SystemDescription,
@@ -36,7 +36,7 @@ def test_public_model_json_roundtrip():
 
 
 def test_experiment_result_json_roundtrip():
-    result = ExperimentResult(
+    result = SimulationExperimentRecord(
         primitive=ExperimentPrimitive.RAMP_STEP,
         estimates=["static_gain", "time_constant"],
         trace=ExperimentTrace(
@@ -45,7 +45,7 @@ def test_experiment_result_json_roundtrip():
         ),
     )
     payload = result.model_dump_json()
-    restored = ExperimentResult.model_validate_json(payload)
+    restored = SimulationExperimentRecord.model_validate_json(payload)
     assert restored == result
 
 
@@ -68,23 +68,7 @@ def test_significant_delay_field_roundtrip_and_consistency():
         )
 
 
-@pytest.mark.parametrize(
-    ("phrase", "status", "expected"),
-    [
-        ("significant delay likely", "known", "significant"),
-        ("significant delay present", "inferred", "significant"),
-        ("noticeable dead time", "known", "significant"),
-        ("no significant delay reported", "known", "not_significant"),
-        ("negligible delay", "inferred", "not_significant"),
-        ("delay unknown", "unknown", "unknown"),
-        ("not enough information about first-motion delay", "unknown", "unknown"),
-    ],
-)
-def test_legacy_delay_synonyms_are_normalized_at_adapter_boundary(
-    phrase,
-    status,
-    expected,
-):
+def test_missing_assessment_is_rejected_at_adapter_boundary():
     description = SystemDescription(
         text="A first order process settles after a small pump change with dead time.",
         observed_outputs=["level"],
@@ -92,32 +76,20 @@ def test_legacy_delay_synonyms_are_normalized_at_adapter_boundary(
     )
     payload = infer_structural_diagnosis(description).model_dump()
     payload["significant_delay"].pop("assessment")
-    payload["significant_delay"].update(status=status, value=phrase)
-    payload["complete"] = status != "unknown"
-    payload["clarification_questions"] = (
-        []
-        if payload["complete"]
-        else ["Is there a pause before motion?", "What is a safe test input?"]
-    )
-
-    diagnosis = validate_agent_payload(payload)
-
-    assert diagnosis.significant_delay.assessment == expected
+    with pytest.raises(ValueError, match="assessment"):
+        validate_agent_payload(payload)
 
 
-def test_contradictory_legacy_delay_phrase_is_rejected():
+def test_invalid_assessment_enum_is_rejected():
     description = SystemDescription(
         text="A first order process settles after a small pump change with dead time.",
         observed_outputs=["level"],
         actuators=["pump"],
     )
     payload = infer_structural_diagnosis(description).model_dump()
-    payload["significant_delay"].pop("assessment")
-    payload["significant_delay"]["value"] = (
-        "no significant delay reported but significant delay present"
-    )
+    payload["significant_delay"]["assessment"] = "maybe_delay"
 
-    with pytest.raises(ValueError, match="contradictory"):
+    with pytest.raises(ValueError, match="assessment"):
         validate_agent_payload(payload)
 
 
@@ -222,6 +194,47 @@ def test_openai_compatible_adapter_uses_sdk(monkeypatch):
     assert "extra_body" not in calls["completion"]
     assert calls["completion"]["messages"][1]["role"] == "user"
     assert "open_loop_stability" in calls["completion"]["messages"][1]["content"]
+
+
+def test_openai_compatible_adapter_requires_explicit_provider_configuration(monkeypatch):
+    for name in [
+        "CFDC_LLM_BASE_URL",
+        "CONTROL_PROJECT_LLM_BASE_URL",
+        "OPENAI_BASE_URL",
+        "CFDC_LLM_MODEL",
+        "CONTROL_PROJECT_LLM_MODEL",
+        "OPENAI_MODEL",
+        "CFDC_LLM_API_KEY",
+        "CONTROL_PROJECT_LLM_API_KEY",
+        "OPENAI_API_KEY",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(ValueError, match="base URL, model, API key"):
+        OpenAICompatibleDiagnosticAdapter()
+
+
+def test_openai_compatible_adapter_reads_non_openai_provider_environment(monkeypatch):
+    calls = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            calls.update(kwargs)
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
+    monkeypatch.setenv("CFDC_LLM_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("CFDC_LLM_MODEL", "qwen2.5:14b")
+    monkeypatch.setenv("CFDC_LLM_API_KEY", "ollama")
+
+    adapter = OpenAICompatibleDiagnosticAdapter()
+
+    assert adapter.base_url == "http://localhost:11434/v1"
+    assert adapter.model == "qwen2.5:14b"
+    assert calls == {
+        "api_key": "ollama",
+        "base_url": "http://localhost:11434/v1",
+        "timeout": 60.0,
+    }
 
 
 def test_deepseek_adapter_disables_thinking_for_strict_json(monkeypatch):

@@ -76,7 +76,7 @@ def vtol_pulse_trace(
     command[(time_s >= 1.5) & (time_s <= 1.7)] = -0.4
     angular_acceleration = angular_acceleration_gain * command
     tilt = 0.04 * command
-    lateral_acceleration = lateral_coupling_gain * tilt
+    lateral_acceleration = -abs(lateral_coupling_gain) * tilt
     return time_s, command, angular_acceleration, tilt, lateral_acceleration
 
 

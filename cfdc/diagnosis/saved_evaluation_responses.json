@@ -1,7 +1,7 @@
 {
   "snapshot_version": 3,
-  "evaluation_spec_version": "cfdc-diagnostic-12-v2-archive-audit",
-  "case_catalog_sha256": "e33a1cc79d50c4f24f309ad81d290616ce193b0e8b2c421bc3c27aaaf96ce6b9",
+  "evaluation_spec_version": "cfdc-diagnostic-12-v3-assessment-catalog",
+  "case_catalog_sha256": "c353e12d63877bce2127e0a84b4db056631734686c7e0efb70702ecc4deb6893",
   "scoring_policy": {
     "minimum_eight_field_accuracy": 0.75,
     "required_feature_recall": 1.0,
@@ -19,46 +19,46 @@
     "premature_controller_release_allowed": false
   },
   "response_source": "saved_deterministic",
-  "generator": "deterministic_diagnostic_engine_v3_archive_audit",
+  "generator": "deterministic_diagnostic_engine_v4_assessment_catalog",
   "model": null,
-  "prompt_version": "cfdc-stage0-v2-shared-safety",
+  "prompt_version": "cfdc-stage0-v4-eight-assessments",
   "responses": [
     {
       "case_id": "cartpole_underactuated",
       "field_values": {
-        "open_loop_stability": "unstable or safety-critical equilibrium",
-        "minimum_phase": "non-minimum phase or inverse-response risk",
-        "significant_delay": "no significant delay reported",
-        "relative_degree": "2 for angle stabilization and higher for cart position",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "strong nonlinearity",
-        "coupling_severity": "underactuated coupling between cart and rod",
-        "uncertainty_magnitude": "large uncertainty"
+        "open_loop_stability": "unstable",
+        "minimum_phase": "nonminimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "high",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "strong_dynamic",
+        "coupling_severity": "underactuated",
+        "uncertainty_magnitude": "large"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "description implies an equilibrium that does not hold itself"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "description implies initial reverse motion or underactuated outer-loop behavior"
+          "reported initial motion direction and actuation geometry"
         ],
         "significant_delay": [
-          "fast response is stated or typical for the described benchmark"
+          "reported response timing"
         ],
         "relative_degree": [
-          "cart force affects rod angle before cart outer-loop objective"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "description includes large-angle, dead-zone, or hysteresis behavior"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "one actuator affects two motions"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "parameters or payload changes are unknown"
+          "reported parameter or load variability"
         ]
       },
       "complete": true,
@@ -67,12 +67,12 @@
       "required_core_features": [
         "natural_frequency"
       ],
-      "control_architecture": "NMP-aware conservative outer-loop control with undershoot-limited gain search",
-      "classification_rationale": "Unstable, nonlinear, or non-minimum-phase dominant behavior requires Class IV handling.",
+      "control_architecture": "cartpole_cascaded",
+      "classification_rationale": "At least one normalized Class IV condition is present. Simulation profile: underactuated_cartpole.",
       "safety_constraints": [
-        "start from the safest physical configuration",
-        "use small reversible gain increments",
-        "stop on overshoot, undershoot, saturation, or unsafe motion"
+        "start from the safest simulated configuration",
+        "use reversible five-percent gain increments",
+        "rollback on structural or safety limits"
       ],
       "experiment_plan_executable": true,
       "experiment_plan_issues": [],
@@ -84,39 +84,39 @@
     {
       "case_id": "planar_vtol_hover_lateral",
       "field_values": {
-        "open_loop_stability": "unstable or safety-critical equilibrium",
-        "minimum_phase": "non-minimum phase or inverse-response risk",
-        "significant_delay": "no significant delay reported",
-        "relative_degree": "2 for vertical/attitude channels and high relative degree for lateral motion",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "moderate nonlinearity near hover",
-        "coupling_severity": "moderate cascaded coupling",
-        "uncertainty_magnitude": "large uncertainty"
+        "open_loop_stability": "unstable",
+        "minimum_phase": "nonminimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "high",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "weak",
+        "coupling_severity": "cascaded",
+        "uncertainty_magnitude": "large"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "description implies an equilibrium that does not hold itself"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "description implies initial reverse motion or underactuated outer-loop behavior"
+          "reported initial motion direction and actuation geometry"
         ],
         "significant_delay": [
-          "fast response is stated or typical for the described benchmark"
+          "reported response timing"
         ],
         "relative_degree": [
-          "hovering vehicle uses cascaded attitude-to-position motion"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "tilt and thrust geometry are nonlinear but small hover motions can be localized"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "lateral motion is mediated by tilt"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "parameters or payload changes are unknown"
+          "reported parameter or load variability"
         ]
       },
       "complete": true,
@@ -127,12 +127,12 @@
         "angular_acceleration_gain",
         "lateral_coupling_gain"
       ],
-      "control_architecture": "NMP-aware conservative outer-loop control with undershoot-limited gain search",
-      "classification_rationale": "Unstable, nonlinear, or non-minimum-phase dominant behavior requires Class IV handling.",
+      "control_architecture": "vtol_cascaded",
+      "classification_rationale": "At least one normalized Class IV condition is present. Simulation profile: vtol_cascaded.",
       "safety_constraints": [
-        "start from the safest physical configuration",
-        "use small reversible gain increments",
-        "stop on overshoot, undershoot, saturation, or unsafe motion"
+        "start from the safest simulated configuration",
+        "use reversible five-percent gain increments",
+        "rollback on structural or safety limits"
       ],
       "experiment_plan_executable": true,
       "experiment_plan_issues": [],
@@ -144,53 +144,46 @@
     {
       "case_id": "first_order_thermal",
       "field_values": {
-        "open_loop_stability": "open-loop stable near the operating point",
-        "minimum_phase": "minimum phase expected for the first safe test",
-        "significant_delay": "not enough information about first-motion delay",
-        "relative_degree": "1 for first-order lag",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "weak nonlinearity or local nonlinearity",
-        "coupling_severity": "single-loop or weak coupling",
-        "uncertainty_magnitude": "moderate uncertainty"
+        "open_loop_stability": "stable",
+        "minimum_phase": "minimum_phase",
+        "significant_delay": "unknown",
+        "relative_degree": "low",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "weak",
+        "coupling_severity": "siso",
+        "uncertainty_magnitude": "moderate"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "description suggests settling or free decay"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "no reverse response was described"
+          "reported initial motion direction and actuation geometry"
         ],
-        "significant_delay": [
-          "the description explicitly says first-motion timing has not been observed"
-        ],
+        "significant_delay": [],
         "relative_degree": [
-          "self-regulating lag described"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "dominant behavior fits a low-order local model"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "no strong multivariable interaction was described"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "delay remains unknown but no large parameter variation is described"
+          "reported parameter or load variability"
         ]
       },
       "complete": false,
       "clarification_questions": [
-        "After a small safe input change, is there a noticeable pause before the output starts moving?",
-        "What output or motion range must not be crossed during the first test?",
-        "What is the smallest reversible input change that is safe to try?"
+        "After a small change, is there a noticeable pause before anything moves?",
+        "What safe motion can be observed after the smallest input change?"
       ],
       "primary_class": null,
-      "required_core_features": [
-        "static_gain",
-        "time_constant",
-        "dead_time"
-      ],
+      "required_core_features": [],
       "control_architecture": null,
       "classification_rationale": null,
       "safety_constraints": [],
@@ -207,39 +200,39 @@
     {
       "case_id": "double_integrator_cart",
       "field_values": {
-        "open_loop_stability": "marginally stable drifting motion",
-        "minimum_phase": "minimum phase expected for the first safe test",
-        "significant_delay": "no significant delay reported",
-        "relative_degree": "2 for double-integrator-like motion",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "weak nonlinearity or local nonlinearity",
-        "coupling_severity": "single-loop or weak coupling",
-        "uncertainty_magnitude": "moderate uncertainty"
+        "open_loop_stability": "marginal",
+        "minimum_phase": "minimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "low",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "weak",
+        "coupling_severity": "siso",
+        "uncertainty_magnitude": "moderate"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "description indicates accumulated motion or drift"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "no reverse response was described"
+          "reported initial motion direction and actuation geometry"
         ],
         "significant_delay": [
-          "description does not mention a visible pause before motion"
+          "reported response timing"
         ],
         "relative_degree": [
-          "position changes through velocity"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "dominant behavior fits a low-order local model"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "no strong multivariable interaction was described"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "parameters still need feature extraction"
+          "reported parameter or load variability"
         ]
       },
       "complete": true,
@@ -248,11 +241,11 @@
       "required_core_features": [
         "input_gain"
       ],
-      "control_architecture": "small saturated PD controller for marginally stable motion",
-      "classification_rationale": "The dominant behavior lacks a restoring force and behaves like an integrator chain.",
+      "control_architecture": "saturated_pd",
+      "classification_rationale": "The normalized diagnosis reports marginal non-restoring dynamics. Simulation profile: double_integrator.",
       "safety_constraints": [
         "hard output saturation",
-        "short pulse only inside travel bounds"
+        "short bounded pulse"
       ],
       "experiment_plan_executable": true,
       "experiment_plan_issues": [],
@@ -264,39 +257,39 @@
     {
       "case_id": "spring_mass_damper",
       "field_values": {
-        "open_loop_stability": "open-loop stable near the operating point",
-        "minimum_phase": "minimum phase expected for the first safe test",
-        "significant_delay": "no significant delay reported",
-        "relative_degree": "2 for the dominant oscillatory mode",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "weak nonlinearity or local nonlinearity",
-        "coupling_severity": "single-loop or weak coupling",
-        "uncertainty_magnitude": "moderate uncertainty"
+        "open_loop_stability": "stable",
+        "minimum_phase": "minimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "low",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "weak",
+        "coupling_severity": "siso",
+        "uncertainty_magnitude": "moderate"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "description suggests settling or free decay"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "no reverse response was described"
+          "reported initial motion direction and actuation geometry"
         ],
         "significant_delay": [
-          "description does not mention a visible pause before motion"
+          "reported response timing"
         ],
         "relative_degree": [
-          "second-order oscillation described"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "dominant behavior fits a low-order local model"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "no strong multivariable interaction was described"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "parameters still need feature extraction"
+          "reported parameter or load variability"
         ]
       },
       "complete": true,
@@ -307,10 +300,10 @@
         "damping_ratio",
         "input_gain"
       ],
-      "control_architecture": "low-bandwidth damping-enhancing PD controller",
-      "classification_rationale": "The dominant low-order behavior is a damped oscillatory mode.",
+      "control_architecture": "damping_pd",
+      "classification_rationale": "A stable second-order dominant mode is diagnosed. Simulation profile: second_order_oscillator.",
       "safety_constraints": [
-        "free response must stay inside a small displacement range"
+        "free response stays in the normalized safe range"
       ],
       "experiment_plan_executable": true,
       "experiment_plan_issues": [],
@@ -322,39 +315,39 @@
     {
       "case_id": "delayed_heating_process",
       "field_values": {
-        "open_loop_stability": "open-loop stable near the operating point",
-        "minimum_phase": "minimum phase expected for the first safe test",
-        "significant_delay": "significant delay likely",
-        "relative_degree": "1 for first-order lag",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "weak nonlinearity or local nonlinearity",
-        "coupling_severity": "single-loop or weak coupling",
-        "uncertainty_magnitude": "moderate uncertainty"
+        "open_loop_stability": "stable",
+        "minimum_phase": "minimum_phase",
+        "significant_delay": "significant",
+        "relative_degree": "low",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "weak",
+        "coupling_severity": "siso",
+        "uncertainty_magnitude": "moderate"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "description suggests settling or free decay"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "no reverse response was described"
+          "reported initial motion direction and actuation geometry"
         ],
         "significant_delay": [
-          "delay is explicitly mentioned"
+          "reported response timing"
         ],
         "relative_degree": [
-          "self-regulating lag described"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "dominant behavior fits a low-order local model"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "no strong multivariable interaction was described"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "parameters still need feature extraction"
+          "reported parameter or load variability"
         ]
       },
       "complete": true,
@@ -365,11 +358,11 @@
         "time_constant",
         "dead_time"
       ],
-      "control_architecture": "detuned PI controller for a self-regulating response",
-      "classification_rationale": "The dominant behavior settles toward a new steady value after a small input change.",
+      "control_architecture": "detuned_pi",
+      "classification_rationale": "The remaining normalized signature is a stable first-order dominant response. Simulation profile: first_order_lag_with_delay.",
       "safety_constraints": [
-        "small step only",
-        "stop if output exceeds operator bounds"
+        "small normalized step",
+        "stop at the configured output bound"
       ],
       "experiment_plan_executable": true,
       "experiment_plan_issues": [],
@@ -381,39 +374,39 @@
     {
       "case_id": "inverse_response_process",
       "field_values": {
-        "open_loop_stability": "open-loop stable near the operating point",
-        "minimum_phase": "non-minimum phase or inverse-response risk",
-        "significant_delay": "no significant delay reported",
-        "relative_degree": "1 for first-order lag",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "weak nonlinearity or local nonlinearity",
-        "coupling_severity": "single-loop or weak coupling",
-        "uncertainty_magnitude": "moderate uncertainty"
+        "open_loop_stability": "stable",
+        "minimum_phase": "nonminimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "low",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "weak",
+        "coupling_severity": "siso",
+        "uncertainty_magnitude": "moderate"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "description suggests settling or free decay"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "description implies initial reverse motion or underactuated outer-loop behavior"
+          "reported initial motion direction and actuation geometry"
         ],
         "significant_delay": [
-          "description does not mention a visible pause before motion"
+          "reported response timing"
         ],
         "relative_degree": [
-          "self-regulating lag described"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "dominant behavior fits a low-order local model"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "no strong multivariable interaction was described"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "parameters still need feature extraction"
+          "reported parameter or load variability"
         ]
       },
       "complete": true,
@@ -424,12 +417,12 @@
         "time_constant",
         "inverse_response_severity"
       ],
-      "control_architecture": "NMP-aware conservative outer-loop control with undershoot-limited gain search",
-      "classification_rationale": "Unstable, nonlinear, or non-minimum-phase dominant behavior requires Class IV handling.",
+      "control_architecture": "nmp_outer_loop",
+      "classification_rationale": "At least one normalized Class IV condition is present. Simulation profile: nmp_inverse_response.",
       "safety_constraints": [
-        "start from the safest physical configuration",
-        "use small reversible gain increments",
-        "stop on overshoot, undershoot, saturation, or unsafe motion"
+        "start from the safest simulated configuration",
+        "use reversible five-percent gain increments",
+        "rollback on structural or safety limits"
       ],
       "experiment_plan_executable": true,
       "experiment_plan_issues": [],
@@ -441,14 +434,14 @@
     {
       "case_id": "deadzone_saturated_motor",
       "field_values": {
-        "open_loop_stability": "not enough information",
-        "minimum_phase": "not enough information",
-        "significant_delay": "not enough information",
-        "relative_degree": "not enough information",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "strong nonlinearity",
-        "coupling_severity": "not enough information",
-        "uncertainty_magnitude": "not enough information"
+        "open_loop_stability": "unknown",
+        "minimum_phase": "unknown",
+        "significant_delay": "unknown",
+        "relative_degree": "unknown",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "static_compensable",
+        "coupling_severity": "unknown",
+        "uncertainty_magnitude": "unknown"
       },
       "field_evidence": {
         "open_loop_stability": [],
@@ -456,27 +449,23 @@
         "significant_delay": [],
         "relative_degree": [],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "description includes large-angle, dead-zone, or hysteresis behavior"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [],
         "uncertainty_magnitude": []
       },
       "complete": false,
       "clarification_questions": [
-        "What is the smallest command that reliably starts visible motion in each direction?",
-        "When the command is moved upward and then downward, how different are the recorded motion paths?",
-        "When you make a small change, does the measured output first move the expected way or briefly the opposite way?",
-        "After a small change, is there a noticeable pause before anything moves?"
+        "After a small change, does the output first move the expected way or briefly the opposite way?",
+        "After a small change, is there a noticeable pause before anything moves?",
+        "Does one input strongly move more than one measured output?",
+        "Do load, wear, or operating conditions change the behavior noticeably?"
       ],
       "primary_class": null,
-      "required_core_features": [
-        "deadzone_width",
-        "hysteresis_width",
-        "effective_gain_after_deadzone"
-      ],
+      "required_core_features": [],
       "control_architecture": null,
       "classification_rationale": null,
       "safety_constraints": [],
@@ -485,46 +474,105 @@
       "controller_testable": false,
       "controller_allowed": false,
       "controller_release_reasons": [
-        "Stage 0 diagnosis is incomplete; clarification is required before controller release."
+        "Stage 0 diagnosis is incomplete; clarification is required before controller release.",
+        "First-motion delay is explicitly unresolved; measure or clarify dead time before PI release."
       ],
       "generator": "deterministic_diagnostic_engine_v3_archive_audit"
     },
     {
       "case_id": "acrobot_underactuated_diagnosis",
       "field_values": {
-        "open_loop_stability": "unstable or safety-critical equilibrium",
-        "minimum_phase": "non-minimum phase or underactuated inverse-response risk",
-        "significant_delay": "no significant delay reported",
-        "relative_degree": "higher relative degree with an underactuated coordinate",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "strong nonlinearity from large-angle energy exchange",
-        "coupling_severity": "moderate underactuated energy-exchange coupling",
-        "uncertainty_magnitude": "large uncertainty in masses, inertias, and coupling strength"
+        "open_loop_stability": "unstable",
+        "minimum_phase": "nonminimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "high",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "strong_dynamic",
+        "coupling_severity": "underactuated",
+        "uncertainty_magnitude": "large"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "the unactuated link must swing near an upright target before stabilization"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "the controlled coordinate moves through an actuated coordinate and energy exchange"
+          "reported initial motion direction and actuation geometry"
         ],
         "significant_delay": [
-          "the description presents a direct mechanical torque path and no transport delay"
+          "reported response timing"
         ],
         "relative_degree": [
-          "one actuator must move two linked coordinates through natural dynamics"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "swing-up and upright capture require large-angle motion"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "the actuated joint moves an unactuated link through coupling"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "the description states that physical masses and inertias are unknown"
+          "reported parameter or load variability"
+        ]
+      },
+      "complete": true,
+      "clarification_questions": [],
+      "primary_class": "class_iv_higher_order_unstable_nonlinear_or_nmp",
+      "required_core_features": [
+        "natural_frequency"
+      ],
+      "control_architecture": "cartpole_cascaded",
+      "classification_rationale": "At least one normalized Class IV condition is present. Simulation profile: underactuated_cartpole.",
+      "safety_constraints": [
+        "start from the safest simulated configuration",
+        "use reversible five-percent gain increments",
+        "rollback on structural or safety limits"
+      ],
+      "experiment_plan_executable": true,
+      "experiment_plan_issues": [],
+      "controller_testable": true,
+      "controller_allowed": true,
+      "controller_release_reasons": [],
+      "generator": "deterministic_diagnostic_engine_v3_archive_audit"
+    },
+    {
+      "case_id": "cstr_operating_point_nonlinearity_diagnosis",
+      "field_values": {
+        "open_loop_stability": "stable",
+        "minimum_phase": "minimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "high",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "strong_dynamic",
+        "coupling_severity": "weak_mimo",
+        "uncertainty_magnitude": "large"
+      },
+      "field_evidence": {
+        "open_loop_stability": [
+          "observable settling, drift, or divergence pattern"
+        ],
+        "minimum_phase": [
+          "reported initial motion direction and actuation geometry"
+        ],
+        "significant_delay": [
+          "reported response timing"
+        ],
+        "relative_degree": [
+          "input-to-output motion chain"
+        ],
+        "controllability_observability": [
+          "declared measured outputs and actuators"
+        ],
+        "nonlinearity_strength": [
+          "reported operating geometry and nonlinear effects"
+        ],
+        "coupling_severity": [
+          "declared input-output interaction pattern"
+        ],
+        "uncertainty_magnitude": [
+          "reported parameter or load variability"
         ]
       },
       "complete": true,
@@ -532,123 +580,58 @@
       "primary_class": "class_iv_higher_order_unstable_nonlinear_or_nmp",
       "required_core_features": [
         "natural_frequency",
-        "input_to_unactuated_coupling_gain"
+        "input_gain"
       ],
-      "control_architecture": "underactuated energy-exchange and capture route",
-      "classification_rationale": "Unstable, nonlinear, or non-minimum-phase dominant behavior requires Class IV handling.",
+      "control_architecture": "class_iv_conservative",
+      "classification_rationale": "At least one normalized Class IV condition is present. Simulation profile: generic_unstable_higher_order.",
       "safety_constraints": [
-        "start from the safest physical configuration",
-        "use small reversible gain increments",
-        "stop on overshoot, undershoot, saturation, or unsafe motion"
+        "start from the safest simulated configuration",
+        "use reversible five-percent gain increments",
+        "rollback on structural or safety limits"
       ],
       "experiment_plan_executable": true,
       "experiment_plan_issues": [],
-      "controller_testable": false,
-      "controller_allowed": false,
-      "controller_release_reasons": [
-        "Current deterministic synthesis does not support the required diagnostic features: input_to_unactuated_coupling_gain."
-      ],
-      "generator": "deterministic_diagnostic_engine_v3_archive_audit"
-    },
-    {
-      "case_id": "cstr_operating_point_nonlinearity_diagnosis",
-      "field_values": {
-        "open_loop_stability": "open-loop stable near the operating point",
-        "minimum_phase": "minimum phase expected for the first safe test",
-        "significant_delay": "no significant delay reported",
-        "relative_degree": "1 for first-order lag",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "strong nonlinearity with operating-point-dependent dynamics",
-        "coupling_severity": "moderate multivariable coupling across local operating regions",
-        "uncertainty_magnitude": "large uncertainty across operating points"
-      },
-      "field_evidence": {
-        "open_loop_stability": [
-          "description suggests settling or free decay"
-        ],
-        "minimum_phase": [
-          "no reverse response was described"
-        ],
-        "significant_delay": [
-          "description does not mention a visible pause before motion"
-        ],
-        "relative_degree": [
-          "self-regulating lag described"
-        ],
-        "controllability_observability": [
-          "actuators and measured outputs are provided"
-        ],
-        "nonlinearity_strength": [
-          "the description states that gain or time scale changes across operating points"
-        ],
-        "coupling_severity": [
-          "multiple manipulated and measured variables are declared but strong cross-response is not established"
-        ],
-        "uncertainty_magnitude": [
-          "local dynamics vary strongly with the operating condition"
-        ]
-      },
-      "complete": true,
-      "clarification_questions": [],
-      "primary_class": "class_iv_higher_order_unstable_nonlinear_or_nmp",
-      "required_core_features": [
-        "local_static_gain",
-        "local_time_constant",
-        "gain_variation_ratio"
-      ],
-      "control_architecture": "local operating-region control with gain-scheduling review",
-      "classification_rationale": "Unstable, nonlinear, or non-minimum-phase dominant behavior requires Class IV handling.",
-      "safety_constraints": [
-        "start from the safest physical configuration",
-        "use small reversible gain increments",
-        "stop on overshoot, undershoot, saturation, or unsafe motion"
-      ],
-      "experiment_plan_executable": true,
-      "experiment_plan_issues": [],
-      "controller_testable": false,
-      "controller_allowed": false,
-      "controller_release_reasons": [
-        "Operating-point-dependent dynamics require local feature validation and an operating-region boundary.",
-        "Current deterministic synthesis does not support the required diagnostic features: local_static_gain, local_time_constant, gain_variation_ratio."
-      ],
+      "controller_testable": true,
+      "controller_allowed": true,
+      "controller_release_reasons": [],
       "generator": "deterministic_diagnostic_engine_v3_archive_audit"
     },
     {
       "case_id": "quadruple_tank_mimo_nmp_diagnosis",
       "field_values": {
-        "open_loop_stability": "open-loop stable near the operating point",
-        "minimum_phase": "non-minimum phase or inverse-response risk",
-        "significant_delay": "no significant delay reported",
-        "relative_degree": "1 for first-order lag",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "weak nonlinearity or local nonlinearity",
-        "coupling_severity": "significant multivariable coupling requiring a local gain matrix and pairing",
-        "uncertainty_magnitude": "large uncertainty in multivariable interaction and pairing"
+        "open_loop_stability": "stable",
+        "minimum_phase": "nonminimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "low",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "weak",
+        "coupling_severity": "severe_mimo",
+        "uncertainty_magnitude": "large"
       },
       "field_evidence": {
         "open_loop_stability": [
-          "description suggests settling or free decay"
+          "observable settling, drift, or divergence pattern"
         ],
         "minimum_phase": [
-          "the description reports unfavorable initial motion in a coupled process"
+          "reported initial motion direction and actuation geometry"
         ],
         "significant_delay": [
-          "description does not mention a visible pause before motion"
+          "reported response timing"
         ],
         "relative_degree": [
-          "self-regulating lag described"
+          "input-to-output motion chain"
         ],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "dominant behavior fits a low-order local model"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [
-          "each candidate input visibly affects multiple controlled outputs"
+          "declared input-output interaction pattern"
         ],
         "uncertainty_magnitude": [
-          "the local input-output pairing and cross-channel strengths are unresolved"
+          "reported parameter or load variability"
         ]
       },
       "complete": true,
@@ -659,33 +642,30 @@
         "local_time_constant",
         "pairing_indicator"
       ],
-      "control_architecture": "local MIMO gain-matrix experiment and pairing review",
-      "classification_rationale": "The dominant limitation is cross-channel interaction, so Class V takes precedence.",
+      "control_architecture": "mimo_decoupling_matrix",
+      "classification_rationale": "The normalized diagnosis reports severe multivariable coupling. Simulation profile: mimo_2x2_coupled.",
       "safety_constraints": [
         "bound each input separately",
-        "freeze if one input moves multiple outputs unexpectedly"
+        "freeze on unexpected cross-channel motion"
       ],
       "experiment_plan_executable": true,
       "experiment_plan_issues": [],
-      "controller_testable": false,
-      "controller_allowed": false,
-      "controller_release_reasons": [
-        "Strong MIMO interaction requires a local gain matrix and pairing evidence before controller release.",
-        "Current deterministic synthesis does not support the required diagnostic features: local_gain_matrix, local_time_constant, pairing_indicator."
-      ],
+      "controller_testable": true,
+      "controller_allowed": true,
+      "controller_release_reasons": [],
       "generator": "deterministic_diagnostic_engine_v3_archive_audit"
     },
     {
       "case_id": "bouc_wen_hysteresis_diagnosis",
       "field_values": {
-        "open_loop_stability": "not enough information",
-        "minimum_phase": "not enough information",
-        "significant_delay": "not enough information",
-        "relative_degree": "not enough information",
-        "controllability_observability": "available input and measured output are declared",
-        "nonlinearity_strength": "strong nonlinearity",
-        "coupling_severity": "not enough information",
-        "uncertainty_magnitude": "not enough information"
+        "open_loop_stability": "unknown",
+        "minimum_phase": "unknown",
+        "significant_delay": "unknown",
+        "relative_degree": "unknown",
+        "controllability_observability": "adequate",
+        "nonlinearity_strength": "static_compensable",
+        "coupling_severity": "unknown",
+        "uncertainty_magnitude": "unknown"
       },
       "field_evidence": {
         "open_loop_stability": [],
@@ -693,26 +673,23 @@
         "significant_delay": [],
         "relative_degree": [],
         "controllability_observability": [
-          "actuators and measured outputs are provided"
+          "declared measured outputs and actuators"
         ],
         "nonlinearity_strength": [
-          "description includes large-angle, dead-zone, or hysteresis behavior"
+          "reported operating geometry and nonlinear effects"
         ],
         "coupling_severity": [],
         "uncertainty_magnitude": []
       },
       "complete": false,
       "clarification_questions": [
-        "What is the smallest command that reliably starts visible motion in each direction?",
-        "When the command is moved upward and then downward, how different are the recorded motion paths?",
-        "When you make a small change, does the measured output first move the expected way or briefly the opposite way?",
-        "After a small change, is there a noticeable pause before anything moves?"
+        "After a small change, does the output first move the expected way or briefly the opposite way?",
+        "After a small change, is there a noticeable pause before anything moves?",
+        "Does one input strongly move more than one measured output?",
+        "Do load, wear, or operating conditions change the behavior noticeably?"
       ],
       "primary_class": null,
-      "required_core_features": [
-        "hysteresis_width",
-        "effective_gain_after_deadzone"
-      ],
+      "required_core_features": [],
       "control_architecture": null,
       "classification_rationale": null,
       "safety_constraints": [],
@@ -721,10 +698,11 @@
       "controller_testable": false,
       "controller_allowed": false,
       "controller_release_reasons": [
-        "Stage 0 diagnosis is incomplete; clarification is required before controller release."
+        "Stage 0 diagnosis is incomplete; clarification is required before controller release.",
+        "First-motion delay is explicitly unresolved; measure or clarify dead time before PI release."
       ],
       "generator": "deterministic_diagnostic_engine_v3_archive_audit"
     }
   ],
-  "evidence_boundary": "structured_diagnostic_responses_not_controller_or_physical_validation"
+  "evidence_boundary": "software_simulation_structural_diagnosis"
 }

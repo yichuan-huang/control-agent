@@ -2,12 +2,23 @@ from cfdc.workflow.capabilities import (
     compile_candidate_route,
     default_capability_catalog,
 )
-from cfdc.workflow.mode import resolve_workflow_mode
 from cfdc.workflow.routes import build_candidate_route
 
 __all__ = [
     "build_candidate_route",
     "compile_candidate_route",
     "default_capability_catalog",
-    "resolve_workflow_mode",
+    "apply_profile_to_classification",
+    "default_simulation_profile_catalog",
+    "deterministic_profile_selection",
+    "profile_by_id",
+    "validate_semantic_selection",
 ]
+
+from cfdc.workflow.profiles import (
+    apply_profile_to_classification,
+    default_simulation_profile_catalog,
+    deterministic_profile_selection,
+    profile_by_id,
+    validate_semantic_selection,
+)

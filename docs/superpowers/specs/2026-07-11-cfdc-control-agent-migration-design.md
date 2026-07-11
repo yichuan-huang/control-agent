@@ -2,7 +2,11 @@
 
 Date: 2026-07-11
 
-Status: approved design
+Status: superseded by the simulation-first workflow implemented on 2026-07-11
+
+> Historical note: this document describes an abandoned real/simulation split. The
+> project now implements software simulation only. It must not be used as the
+> current runtime specification.
 
 ## Objective
 

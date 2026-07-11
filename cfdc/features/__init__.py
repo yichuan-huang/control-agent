@@ -1,4 +1,4 @@
-from cfdc.features.dispatcher import extract_features_from_result, extract_features_from_results
+from cfdc.features.dispatcher import extract_features_from_result, extract_features_from_results, extract_features_from_repeated_results
 from cfdc.features.extractors import (
     estimate_coupling_gain,
     estimate_damping_ratio,
@@ -12,6 +12,7 @@ from cfdc.features.extractors import (
     low_pass_filter,
     steady_state_detected,
 )
+from cfdc.features.quality import evaluate_feature_quality
 
 __all__ = [
     "estimate_coupling_gain",
@@ -25,6 +26,8 @@ __all__ = [
     "estimate_step_features",
     "extract_features_from_result",
     "extract_features_from_results",
+    "extract_features_from_repeated_results",
+    "evaluate_feature_quality",
     "low_pass_filter",
     "steady_state_detected",
 ]

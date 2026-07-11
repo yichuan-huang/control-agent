@@ -8,16 +8,23 @@ import numpy as np
 from scipy.linalg import solve_continuous_are
 
 from cfdc.models import (
+    Algorithm1Observation,
     CartpoleBoundaryResult,
     CartpoleSimulationResult,
     CartpoleState,
     OnlinePerformanceMetrics,
+    OnlineRefinementPolicy,
     SafeGainSearchState,
     SafetyViolation,
     TrialReport,
     TrialSample,
 )
-from cfdc.online import compute_performance_metrics
+from cfdc.online import (
+    compute_performance_metrics,
+    evaluate_algorithm1_probe,
+    initialize_algorithm1,
+    propose_algorithm1_candidate,
+)
 from cfdc.performance import build_performance_summary, calculate_channel_performance
 from cfdc.sim.integrators import rk4_step
 
@@ -86,7 +93,6 @@ class CartpoleNmpConfig:
     candidate_trial_duration_s: float = 5.0
     rollback_validation_duration_s: float = 20.0
     candidate_kpy_initial: float = 0.1
-    candidate_kpy_step: float = 0.1
     candidate_kpy_max: float = 0.6
     candidate_kdy_ratio: float = 2.0
     theta_reference_limit_rad: float = 0.25
@@ -325,13 +331,77 @@ def search_cartpole_pd_gains(
     params: CartpoleParams | None = None,
     config: CartpoleSwingupConfig | None = None,
 ) -> tuple[SafeGainSearchState, list[TrialReport], list[dict[str, float | str | bool]]]:
-    """Search PD gains from observed nonlinear trials without using the input gain."""
+    """Validate a feature-derived safe seed, then execute one Algorithm 1 step."""
 
     params = params or CartpoleParams()
     config = config or CartpoleSwingupConfig()
-    capture_state, capture_time_s = _capture_state_for_search(natural_frequency_rad_s, params, config)
-    kd = config.pd_initial_kd_multiplier * natural_frequency_rad_s
-    kp = 0.0
+    capture_state, capture_time_s = _capture_state_for_search(
+        natural_frequency_rad_s,
+        params,
+        config,
+    )
+    seed_gains = {
+        "kp": 2.6 * natural_frequency_rad_s,
+        "kd": 1.05 * natural_frequency_rad_s,
+    }
+    seed_outcome = _run_balance_candidate(
+        capture_state,
+        seed_gains,
+        params,
+        config,
+        duration_s=1.5,
+    )
+    seed_accepted = bool(seed_outcome["safe"]) and bool(
+        seed_outcome["dwell_passed"]
+    )
+    if not seed_accepted:
+        raise RuntimeError("feature-derived CartPole seed failed bounded validation")
+
+    algorithm_state = initialize_algorithm1(
+        seed_gains,
+        ["kp", "kd"],
+        OnlineRefinementPolicy(
+            step_multiplier=1.05,
+            minimum_dwell_s=1.5,
+            max_iterations=1,
+        ),
+    )
+    proposal = propose_algorithm1_candidate(algorithm_state)
+    candidate_gains = proposal.candidate_gains or seed_gains
+    candidate_outcome = _run_balance_candidate(
+        capture_state,
+        candidate_gains,
+        params,
+        config,
+        duration_s=1.5,
+    )
+    candidate_accepted = bool(candidate_outcome["safe"]) and bool(
+        candidate_outcome["dwell_passed"]
+    )
+    algorithm_state = evaluate_algorithm1_probe(
+        proposal,
+        Algorithm1Observation(
+            dwell_time_s=1.5,
+            hard_safety_violation=not bool(candidate_outcome["safe"]),
+            soft_performance_violation=(
+                bool(candidate_outcome["safe"])
+                and not bool(candidate_outcome["dwell_passed"])
+            ),
+            performance_target_met=candidate_accepted,
+            violation_reasons=(
+                [] if candidate_accepted else ["cartpole_balance_validation"]
+            ),
+            metrics={
+                "dwell_passed": 1.0 if candidate_outcome["dwell_passed"] else 0.0,
+                "max_abs_angle_rad": float(candidate_outcome["max_abs_angle_rad"]),
+                "max_abs_position_m": float(candidate_outcome["max_abs_position_m"]),
+            },
+        ),
+    )
+    if algorithm_state.status != "completed":
+        raise RuntimeError("CartPole Algorithm 1 candidate did not meet the dwell target")
+
+    accepted_gains = dict(algorithm_state.accepted_gains)
     events: list[dict[str, float | str | bool]] = [
         {
             "event": "capture_state_recorded",
@@ -339,112 +409,70 @@ def search_cartpole_pd_gains(
             "cart_position_m": float(capture_state[0]),
             "pole_angle_rad": _wrap_angle(float(capture_state[2])),
             "pole_angular_velocity_rad_s": float(capture_state[3]),
-        }
+        },
+        {
+            "event": "algorithm1_seed_validation",
+            "trial_index": 1,
+            "kp": seed_gains["kp"],
+            "kd": seed_gains["kd"],
+            "accepted": True,
+            "dwell_passed": bool(seed_outcome["dwell_passed"]),
+        },
+        {
+            "event": "algorithm1_candidate_trial",
+            "trial_index": 2,
+            "kp": accepted_gains["kp"],
+            "kd": accepted_gains["kd"],
+            "step_multiplier": 1.05,
+            "accepted": candidate_accepted,
+            "dwell_passed": bool(candidate_outcome["dwell_passed"]),
+        },
     ]
-    trial_index = 0
-
-    kp_outcome: dict[str, float | bool] = {}
-    while kp + config.pd_kp_step <= config.pd_kp_max:
-        trial_index += 1
-        kp += config.pd_kp_step
-        outcome = _run_balance_candidate(
-            capture_state,
-            {"kp": kp, "kd": kd},
-            params,
-            config,
-            duration_s=0.35,
-        )
-        critical_reached = bool(outcome["safe"]) and float(outcome["final_rate_rad_s"]) <= 0.0
-        events.append(
-            {
-                "event": "kp_trial",
-                "trial_index": trial_index,
-                "time_s": capture_time_s + trial_index * config.pd_kp_update_period_s,
-                "kp": kp,
-                "kd": kd,
-                "accepted": critical_reached,
-                **outcome,
-            }
-        )
-        if critical_reached:
-            kp_outcome = outcome
-            break
-    else:
-        raise RuntimeError("cartpole Kp search exhausted its configured limit")
-
-    kd_outcome: dict[str, float | bool] = {}
-    while kd + config.pd_kd_step <= config.pd_kd_max:
-        trial_index += 1
-        kd += config.pd_kd_step
-        outcome = _run_balance_candidate(
-            capture_state,
-            {"kp": kp, "kd": kd},
-            params,
-            config,
-            duration_s=1.5,
-        )
-        accepted = bool(outcome["safe"]) and bool(outcome["dwell_passed"])
-        events.append(
-            {
-                "event": "kd_trial",
-                "trial_index": trial_index,
-                "time_s": (
-                    capture_time_s
-                    + (trial_index - 1) * config.pd_kp_update_period_s
-                    + config.pd_kd_update_period_s
-                ),
-                "kp": kp,
-                "kd": kd,
-                "accepted": accepted,
-                **outcome,
-            }
-        )
-        if accepted:
-            kd_outcome = outcome
-            break
-    else:
-        raise RuntimeError("cartpole Kd search exhausted its configured limit")
-
-    accepted_gains = {"kp": kp, "kd": kd}
     state = SafeGainSearchState(
         accepted_gains=accepted_gains,
         search_direction={"kp": 1.0, "kd": 1.0},
         step_fraction=0.05,
-        trial_index=trial_index,
+        trial_index=2,
         status="accepted",
-        history=events,
+        history=list(algorithm_state.history),
     )
     reports = [
         TrialReport(
-            trial_id="cartpole_kp_search",
+            trial_id="cartpole_algorithm1_seed_validation",
             accepted=True,
-            stop_reason="critical_stiffness_reached",
-            duration_s=0.35,
-            metrics=OnlinePerformanceMetrics(
-                overshoot=0.0,
-                settling_time_s=None,
-                integral_absolute_error=0.0,
-                high_frequency_control_rms=0.0,
-                actuator_saturation_fraction=float(kp_outcome.get("saturation_fraction", 0.0)),
-                nmp_undershoot=0.0,
-            ),
-            tested_gains={"kp": kp, "kd": config.pd_initial_kd_multiplier * natural_frequency_rad_s},
-            accepted_gains={"kp": kp, "kd": config.pd_initial_kd_multiplier * natural_frequency_rad_s},
-        ),
-        TrialReport(
-            trial_id="cartpole_kd_search",
-            accepted=True,
-            stop_reason="upright_dwell_reached",
+            stop_reason="safe_seed_dwell_reached",
             duration_s=1.5,
             metrics=OnlinePerformanceMetrics(
                 overshoot=0.0,
                 settling_time_s=1.5,
                 integral_absolute_error=0.0,
                 high_frequency_control_rms=0.0,
-                actuator_saturation_fraction=float(kd_outcome.get("saturation_fraction", 0.0)),
+                actuator_saturation_fraction=float(seed_outcome["saturation_fraction"]),
                 nmp_undershoot=0.0,
             ),
-            tested_gains=accepted_gains,
+            tested_gains=seed_gains,
+            accepted_gains=seed_gains,
+        ),
+        TrialReport(
+            trial_id="cartpole_algorithm1_candidate_001",
+            accepted=candidate_accepted,
+            stop_reason=(
+                "algorithm1_performance_target_met"
+                if candidate_accepted
+                else "algorithm1_candidate_rejected"
+            ),
+            duration_s=1.5,
+            metrics=OnlinePerformanceMetrics(
+                overshoot=0.0,
+                settling_time_s=1.5 if candidate_accepted else None,
+                integral_absolute_error=0.0,
+                high_frequency_control_rms=0.0,
+                actuator_saturation_fraction=float(
+                    candidate_outcome["saturation_fraction"]
+                ),
+                nmp_undershoot=0.0,
+            ),
+            tested_gains=candidate_gains,
             accepted_gains=accepted_gains,
         ),
     ]
@@ -1040,9 +1068,27 @@ def run_cartpole_nmp_boundary_scan(
     last_accepted: dict[str, float] = {}
     accepted_history: list[dict[str, float]] = []
     first_rejected: dict[str, float] = {}
+    boundary_state = initialize_algorithm1(
+        {"kp_y": nmp_config.candidate_kpy_initial},
+        ["kp_y"],
+        OnlineRefinementPolicy(
+            step_multiplier=1.10,
+            minimum_dwell_s=nmp_config.candidate_trial_duration_s,
+            max_iterations=30,
+        ),
+    )
     candidate_kpy = nmp_config.candidate_kpy_initial
     trial_index = 0
+    seed_trial = True
     while candidate_kpy <= nmp_config.candidate_kpy_max + 1e-12:
+        proposal = None
+        if not seed_trial:
+            proposal = propose_algorithm1_candidate(boundary_state)
+            if proposal.status == "completed" or proposal.candidate_gains is None:
+                break
+            candidate_kpy = proposal.candidate_gains["kp_y"]
+            if candidate_kpy > nmp_config.candidate_kpy_max + 1e-12:
+                break
         trial_index += 1
         outer_gains = {
             "kp_y": candidate_kpy,
@@ -1074,10 +1120,97 @@ def run_cartpole_nmp_boundary_scan(
         if report.accepted:
             last_accepted = outer_gains
             accepted_history.append(outer_gains)
+            if proposal is not None:
+                boundary_state = evaluate_algorithm1_probe(
+                    proposal,
+                    Algorithm1Observation(
+                        dwell_time_s=nmp_config.candidate_trial_duration_s,
+                        metrics={
+                            "nmp_undershoot": (
+                                report.metrics.nmp_undershoot
+                                if report.metrics is not None
+                                else None
+                            )
+                        },
+                    ),
+                )
         else:
             first_rejected = outer_gains
+            if proposal is not None:
+                hard_reasons = [
+                    violation.constraint for violation in report.safety_violations
+                ]
+                nmp_violation = bool(
+                    report.metrics
+                    and report.metrics.nmp_undershoot
+                    >= nmp_config.max_nmp_undershoot
+                )
+                boundary_state = evaluate_algorithm1_probe(
+                    proposal,
+                    Algorithm1Observation(
+                        dwell_time_s=nmp_config.candidate_trial_duration_s,
+                        hard_safety_violation=bool(hard_reasons),
+                        nmp_violation=nmp_violation,
+                        soft_performance_violation=(
+                            not hard_reasons and not nmp_violation
+                        ),
+                        violation_reasons=hard_reasons or [report.stop_reason],
+                    ),
+                )
+                if boundary_state.status == "probing":
+                    trial_index += 1
+                    confirmation, _, _, _ = _cartpole_outer_trial(
+                        trial_id=f"cartpole_nmp_candidate_confirmation_{trial_index:03d}",
+                        start_state=start_state,
+                        target_position_m=target_position_m,
+                        balance_gains=balance_gains,
+                        outer_gains=outer_gains,
+                        params=params,
+                        swingup_config=prepare_config,
+                        nmp_config=nmp_config,
+                        duration_s=nmp_config.candidate_trial_duration_s,
+                        require_settled=False,
+                    )
+                    candidate_trials.append(confirmation)
+                    events.append(
+                        {
+                            "event": "candidate_confirmation_trial",
+                            "trial_index": trial_index,
+                            "candidate_outer_gains": outer_gains,
+                            "accepted": confirmation.accepted,
+                            "nmp_undershoot": (
+                                confirmation.metrics.nmp_undershoot
+                                if confirmation.metrics
+                                else None
+                            ),
+                            "stop_reason": confirmation.stop_reason,
+                        }
+                    )
+                    confirmation_hard = [
+                        violation.constraint
+                        for violation in confirmation.safety_violations
+                    ]
+                    confirmation_nmp = bool(
+                        confirmation.metrics
+                        and confirmation.metrics.nmp_undershoot
+                        >= nmp_config.max_nmp_undershoot
+                    )
+                    boundary_state = evaluate_algorithm1_probe(
+                        boundary_state,
+                        Algorithm1Observation(
+                            dwell_time_s=nmp_config.candidate_trial_duration_s,
+                            hard_safety_violation=bool(confirmation_hard),
+                            nmp_violation=confirmation_nmp,
+                            soft_performance_violation=(
+                                not confirmation_hard and not confirmation_nmp
+                            ),
+                            violation_reasons=(
+                                confirmation_hard or [confirmation.stop_reason]
+                            ),
+                        ),
+                    )
             break
-        candidate_kpy += nmp_config.candidate_kpy_step
+        seed_trial = False
 
     rollback_applied = bool(last_accepted and first_rejected)
     rollback_report: TrialReport | None = None

@@ -1,4 +1,8 @@
-# CFDC Control-Agent Migration Implementation Plan
+# CFDC Control-Agent Migration Implementation Plan (Superseded)
+
+> This historical plan contains an abandoned real/simulation split. The current
+> project is simulation-only and does not expose workflow modes or user-supplied
+> experiment-result inputs.
 
 > **For agentic workers:** Execute this plan task-by-task with red-green-refactor TDD and a review checkpoint after each task.
 

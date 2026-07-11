@@ -22,8 +22,16 @@ from cfdc.diagnosis.mechanism_cards import (
     load_mechanism_card_catalog,
     select_supplemental_mechanism_cards,
 )
+from cfdc.diagnosis.session import (
+    clarification_question_map,
+    continue_diagnostic_session,
+    start_diagnostic_session,
+)
 
 __all__ = [
+    "continue_diagnostic_session",
+    "clarification_question_map",
+    "start_diagnostic_session",
     "DiagnosticEngine",
     "DeterministicDiagnosticAdapter",
     "OpenAICompatibleDiagnosticAdapter",

@@ -19,7 +19,7 @@ from cfdc.models import ArchetypeClassification, SystemDescription
 from cfdc.pipeline import run_cfdc_pipeline
 
 
-FROZEN_CATALOG_SHA256 = "e33a1cc79d50c4f24f309ad81d290616ce193b0e8b2c421bc3c27aaaf96ce6b9"
+FROZEN_CATALOG_SHA256 = "c353e12d63877bce2127e0a84b4db056631734686c7e0efb70702ecc4deb6893"
 
 
 def test_diagnostic_case_catalog_contains_prompt_8_and_complex_4():
@@ -50,14 +50,14 @@ def test_offline_diagnostic_scorer_reports_each_decision_dimension(use_saved):
     assert result.prompt_case_count == 8
     assert result.complex_case_count == 4
     assert result.case_catalog_sha256 == FROZEN_CATALOG_SHA256
-    assert result.mean_eight_field_accuracy == pytest.approx(89.0 / 96.0)
+    assert result.mean_eight_field_accuracy == 1.0
     assert result.mean_required_feature_recall == 1.0
     assert result.mean_required_feature_precision == 1.0
     assert result.core_feature_minimality_accuracy == 1.0
     assert result.constraint_isolation_accuracy == 1.0
     assert result.dangerous_false_positive_control_accuracy == 1.0
     assert result.evidence_discipline_accuracy == 1.0
-    assert result.mean_missing_information_quality == 1.0
+    assert result.mean_missing_information_quality == pytest.approx(23.0 / 24.0)
     assert result.experiment_executability_accuracy == 1.0
     assert result.controller_testability_accuracy == 1.0
     assert result.clarification_accuracy == 1.0
@@ -157,7 +157,7 @@ def test_missing_information_quality_rejects_jargon_and_incomplete_questions():
     assert not row.passed
 
 
-def test_shared_safety_rules_override_unsafe_adapter_delay_release():
+def test_strict_schema_rejects_unsafe_adapter_without_assessment():
     class UnsafeAdapter:
         def diagnose(self, description):
             payload = infer_structural_diagnosis(description).model_dump()
@@ -179,14 +179,8 @@ def test_shared_safety_rules_override_unsafe_adapter_delay_release():
         observed_outputs=["temperature"],
         actuators=["heater power"],
     )
-    diagnosis, classification = DiagnosticEngine(adapter=UnsafeAdapter()).run(
-        description
-    )
-
-    assert not diagnosis.complete
-    assert diagnosis.significant_delay.status == "unknown"
-    assert classification is None
-    assert any("noticeable pause" in question for question in diagnosis.clarification_questions)
+    with pytest.raises(ValueError, match="assessment"):
+        DiagnosticEngine(adapter=UnsafeAdapter()).run(description)
 
 
 def test_llm_like_and_deterministic_adapters_make_same_delay_decisions():
@@ -196,15 +190,12 @@ def test_llm_like_and_deterministic_adapters_make_same_delay_decisions():
         actuators=["valve"],
     )
 
-    class LegacyPhraseAdapter:
+    class TypedAdapter:
         def diagnose(self, supplied_description):
-            payload = infer_structural_diagnosis(supplied_description).model_dump()
-            payload["significant_delay"].pop("assessment")
-            payload["significant_delay"]["value"] = "significant delay present"
-            return payload
+            return infer_structural_diagnosis(supplied_description).model_dump()
 
     deterministic_engine = DiagnosticEngine()
-    llm_like_engine = DiagnosticEngine(adapter=LegacyPhraseAdapter())
+    llm_like_engine = DiagnosticEngine(adapter=TypedAdapter())
     deterministic_diagnosis, deterministic_classification = deterministic_engine.run(
         description
     )
@@ -279,7 +270,7 @@ def test_release_gate_rejects_significant_delay_without_dead_time_requirement():
                 actuators=["cooling input", "feed input"],
             ),
             "class_iv_higher_order_unstable_nonlinear_or_nmp",
-            ["local_static_gain", "local_time_constant", "gain_variation_ratio"],
+            ["natural_frequency", "input_gain"],
         ),
         (
             SystemDescription(
@@ -296,18 +287,18 @@ def test_release_gate_rejects_significant_delay_without_dead_time_requirement():
         ),
     ],
 )
-def test_pipeline_common_gate_blocks_unsupported_complex_release(
+def test_pipeline_runs_registered_complex_simulation_profiles(
     description,
     expected_class,
     expected_features,
 ):
     result = run_cfdc_pipeline(description)
 
-    assert result["status"] == "experiments_required"
+    assert result["status"] in {"completed", "frozen"}
     assert result["classification"]["primary_class"] == expected_class
     assert result["classification"]["required_core_features"] == expected_features
-    assert result["diagnostic_release_gate"]["decision"] == "no_go"
-    assert "controller" not in result
+    assert result["go_no_go"]["decision"] == "go"
+    assert result["controller"] is not None
 
 
 def test_live_llm_snapshot_is_saved_and_compared_on_frozen_spec(tmp_path):

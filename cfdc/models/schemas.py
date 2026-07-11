@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from enum import Enum
 from typing import Any, Literal
 
@@ -10,17 +11,6 @@ class CFDCModel(BaseModel):
     """Base model that rejects undeclared fields for auditable JSON output."""
 
     model_config = ConfigDict(extra="forbid", use_enum_values=True, allow_inf_nan=False)
-
-
-class WorkflowMode(str, Enum):
-    SIMULATION = "simulation"
-    REAL = "real"
-
-
-class DataProvenance(str, Enum):
-    SYNTHETIC_FIXTURE = "synthetic_fixture"
-    REAL_EXPERIMENT = "real_experiment"
-    EXTERNALLY_REVIEWED = "externally_reviewed"
 
 
 class SystemDescription(CFDCModel):
@@ -40,35 +30,114 @@ class DiagnosticField(CFDCModel):
     evidence: list[str] = Field(default_factory=list)
 
 
+class StabilityAssessment(str, Enum):
+    STABLE = "stable"
+    MARGINAL = "marginal"
+    UNSTABLE = "unstable"
+    UNKNOWN = "unknown"
+
+
+class PhaseAssessment(str, Enum):
+    MINIMUM_PHASE = "minimum_phase"
+    NONMINIMUM_PHASE = "nonminimum_phase"
+    UNKNOWN = "unknown"
+
+
 class DelayAssessment(str, Enum):
     SIGNIFICANT = "significant"
     NOT_SIGNIFICANT = "not_significant"
     UNKNOWN = "unknown"
 
 
-class SignificantDelayField(DiagnosticField):
-    assessment: DelayAssessment
+class RelativeDegreeAssessment(str, Enum):
+    LOW = "low"
+    HIGH = "high"
+    UNKNOWN = "unknown"
 
+
+class ControllabilityObservabilityAssessment(str, Enum):
+    ADEQUATE = "adequate"
+    INADEQUATE = "inadequate"
+    UNKNOWN = "unknown"
+
+
+class NonlinearityAssessment(str, Enum):
+    WEAK = "weak"
+    STATIC_COMPENSABLE = "static_compensable"
+    STRONG_DYNAMIC = "strong_dynamic"
+    UNKNOWN = "unknown"
+
+
+class CouplingAssessment(str, Enum):
+    SISO = "siso"
+    WEAK_MIMO = "weak_mimo"
+    SEVERE_MIMO = "severe_mimo"
+    UNDERACTUATED = "underactuated"
+    CASCADED = "cascaded"
+    UNKNOWN = "unknown"
+
+
+class UncertaintyAssessment(str, Enum):
+    SMALL = "small"
+    MODERATE = "moderate"
+    LARGE = "large"
+    UNKNOWN = "unknown"
+
+
+class AssessedDiagnosticField(DiagnosticField):
     @model_validator(mode="after")
-    def validate_status_assessment_consistency(self) -> "SignificantDelayField":
-        status_unknown = self.status == "unknown"
-        assessment_unknown = self.assessment == DelayAssessment.UNKNOWN.value
-        if status_unknown != assessment_unknown:
-            raise ValueError(
-                "significant_delay status and assessment must both be unknown or both be resolved"
-            )
+    def validate_unknown_consistency(self) -> "AssessedDiagnosticField":
+        assessment = getattr(self, "assessment", None)
+        is_unknown = str(assessment) == "unknown"
+        if (self.status == "unknown") != is_unknown:
+            raise ValueError("diagnostic status and assessment must resolve together")
+        if self.status != "unknown" and (not self.evidence or self.confidence < 0.5):
+            raise ValueError("resolved diagnostic fields require evidence and confidence >= 0.5")
         return self
 
 
+class StabilityField(AssessedDiagnosticField):
+    assessment: StabilityAssessment
+
+
+class PhaseField(AssessedDiagnosticField):
+    assessment: PhaseAssessment
+
+
+class SignificantDelayField(AssessedDiagnosticField):
+    assessment: DelayAssessment
+
+
+class RelativeDegreeField(AssessedDiagnosticField):
+    assessment: RelativeDegreeAssessment
+    estimated_order: int | None = Field(default=None, ge=1)
+
+
+class ControllabilityObservabilityField(AssessedDiagnosticField):
+    assessment: ControllabilityObservabilityAssessment
+
+
+class NonlinearityField(AssessedDiagnosticField):
+    assessment: NonlinearityAssessment
+
+
+class CouplingField(AssessedDiagnosticField):
+    assessment: CouplingAssessment
+
+
+class UncertaintyField(AssessedDiagnosticField):
+    assessment: UncertaintyAssessment
+
+
 class StructuralDiagnosis(CFDCModel):
-    open_loop_stability: DiagnosticField
-    minimum_phase: DiagnosticField
+    open_loop_stability: StabilityField
+    minimum_phase: PhaseField
     significant_delay: SignificantDelayField
-    relative_degree: DiagnosticField
-    controllability_observability: DiagnosticField
-    nonlinearity_strength: DiagnosticField
-    coupling_severity: DiagnosticField
-    uncertainty_magnitude: DiagnosticField
+    relative_degree: RelativeDegreeField
+    controllability_observability: ControllabilityObservabilityField
+    nonlinearity_strength: NonlinearityField
+    coupling_severity: CouplingField
+    uncertainty_magnitude: UncertaintyField
     clarification_questions: list[str] = Field(default_factory=list, max_length=4)
     complete: bool
 
@@ -81,7 +150,7 @@ class StructuralDiagnosis(CFDCModel):
         return self
 
     @property
-    def fields(self) -> list[DiagnosticField]:
+    def fields(self) -> list[AssessedDiagnosticField]:
         return [
             self.open_loop_stability,
             self.minimum_phase,
@@ -115,6 +184,34 @@ class ArchetypeClassification(CFDCModel):
     supplemental_mechanism_cards: list[str] = Field(default_factory=list)
 
 
+class SimulationProfile(CFDCModel):
+    profile_id: str = Field(min_length=1)
+    compatible_class: ArchetypeClass
+    semantic_description: str = Field(min_length=1)
+    feature_bundle_id: str = Field(min_length=1)
+    required_feature_ids: list[str] = Field(min_length=1)
+    controller_template_id: str = Field(min_length=1)
+    simulator_backend: str = Field(min_length=1)
+    experiment_primitives: list[str] = Field(min_length=1)
+    tunable_gain_names: list[str] = Field(default_factory=list)
+    tracking_ids: list[str] = Field(default_factory=list)
+    change_scenario_id: str = Field(min_length=1)
+
+
+class SimulationProfileCatalog(CFDCModel):
+    schema_version: str = "1.0"
+    profiles: list[SimulationProfile] = Field(min_length=1)
+
+
+class SemanticRouteSelection(CFDCModel):
+    simulation_profile_id: str = Field(min_length=1)
+    feature_bundle_id: str = Field(min_length=1)
+    selected_feature_ids: list[str] = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence: list[str] = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+
+
 class ExperimentPrimitive(str, Enum):
     FREE_DECAY = "free_decay"
     RAMP_STEP = "ramp_step"
@@ -131,12 +228,24 @@ class ExperimentInstruction(CFDCModel):
     estimates: list[str] = Field(min_length=1)
     stop_conditions: list[str] = Field(min_length=1)
     safety_note: str
+    input_amplitude: float | None = None
+    input_amplitude_units: str | None = None
+    duration_s: float | None = Field(default=None, gt=0.0)
+    sample_rate_hz: float | None = Field(default=None, gt=0.0)
+    operating_region: str | None = None
+    required_safety_bounds: list[str] = Field(default_factory=list)
 
 
 class ExperimentPlan(CFDCModel):
     archetype: ArchetypeClass
-    instructions: list[ExperimentInstruction] = Field(min_length=1, max_length=5)
-    evidence_boundary: str = "experiment_plan_only_not_physical_validation"
+    instructions: list[ExperimentInstruction] = Field(max_length=5)
+    planning_gaps: list[CapabilityGap] = Field(default_factory=list)
+    parameterization_status: Literal[
+        "unparameterized_simulation_template",
+        "parameterized",
+        "blocked",
+    ] = "unparameterized_simulation_template"
+    evidence_boundary: str = "software_simulation_experiment_plan"
 
 
 class ExperimentTrace(CFDCModel):
@@ -174,13 +283,15 @@ class ExperimentTrace(CFDCModel):
         return self
 
 
-class ExperimentResult(CFDCModel):
+class SimulationExperimentRecord(CFDCModel):
     primitive: ExperimentPrimitive
     estimates: list[str] = Field(min_length=1)
     trace: ExperimentTrace
     instruction_title: str | None = None
-    provenance: DataProvenance = DataProvenance.SYNTHETIC_FIXTURE
-    evidence_boundary: str = "raw_experiment_trace_not_physical_validation_by_itself"
+    repeat_index: int = Field(default=1, ge=1, le=5)
+    experiment_protocol_version: str = "simulation-v1"
+    operating_region: str = "unspecified"
+    evidence_boundary: str = "software_simulation_only"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("estimates")
@@ -197,22 +308,73 @@ class ExperimentResult(CFDCModel):
 
 
 class CoreFeatureArtifact(CFDCModel):
+    object_id: str | None = None
     feature_id: str
-    value: float
-    lower_bound: float
-    upper_bound: float
+    value: float | list[list[float]]
+    lower_bound: float | None = None
+    upper_bound: float | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     units: str
     method: str
     source_experiment: ExperimentPrimitive
-    provenance: DataProvenance = DataProvenance.SYNTHETIC_FIXTURE
+    trace_sha256: str | None = None
+    experiment_protocol_version: str = "legacy-v1"
+    estimator_version: str = "cfdc-estimator-v1"
+    operating_region: str = "unspecified"
+    applicable_plant_families: list[str] = Field(default_factory=list)
+    invalidating_conditions: list[str] = Field(default_factory=list)
     data_quality_flags: list[str] = Field(default_factory=list)
-
     @model_validator(mode="after")
     def validate_bounds(self) -> "CoreFeatureArtifact":
-        if self.lower_bound > self.value or self.upper_bound < self.value:
-            raise ValueError("Feature value must lie inside confidence bounds")
+        if isinstance(self.value, list):
+            if self.feature_id != "local_gain_matrix":
+                raise ValueError("Only local_gain_matrix may carry a matrix value")
+            if self.lower_bound is not None or self.upper_bound is not None:
+                raise ValueError("Matrix features use element values instead of scalar bounds")
+            width = len(self.value[0]) if self.value else 0
+            if len(self.value) < 2 or width < 2 or any(len(row) != width for row in self.value):
+                raise ValueError("local_gain_matrix must be a rectangular matrix of at least 2x2")
+        else:
+            if self.lower_bound is None or self.upper_bound is None:
+                raise ValueError("Scalar features require lower_bound and upper_bound")
+            if self.lower_bound > self.value or self.upper_bound < self.value:
+                raise ValueError("Feature value must lie inside confidence bounds")
+        if self.object_id is None:
+            serialized_value = (
+                repr(self.value)
+                if isinstance(self.value, list)
+                else f"{self.value:.17g}"
+            )
+            identity = "|".join(
+                (
+                    self.feature_id,
+                    str(self.source_experiment),
+                    self.method,
+                    serialized_value,
+                    self.trace_sha256 or "no-trace",
+                )
+            )
+            self.object_id = f"feature-{hashlib.sha256(identity.encode()).hexdigest()[:20]}"
         return self
+
+class FeatureQualityPolicy(CFDCModel):
+    minimum_confidence: float = Field(default=0.70, ge=0.0, le=1.0)
+    maximum_relative_half_width: float = Field(default=0.50, gt=0.0)
+
+
+class FeatureQualityIssue(CFDCModel):
+    code: str = Field(min_length=1)
+    feature_id: str
+    severity: Literal["repeat_experiment", "refuse"]
+    explanation: str = Field(min_length=1)
+
+
+class FeatureQualityDecision(CFDCModel):
+    decision: Literal["accept", "repeat_experiment", "refuse"]
+    issues: list[FeatureQualityIssue] = Field(default_factory=list)
+    accepted_feature_ids: list[str] = Field(default_factory=list)
+    policy: FeatureQualityPolicy = Field(default_factory=FeatureQualityPolicy)
+    evidence_boundary: str = "software_simulation_feature_release_decision"
 
 
 class ControllerCandidate(CFDCModel):
@@ -307,7 +469,7 @@ class ControllerComparison(CFDCModel):
     abs_final_error_delta: float
     saturation_fraction_delta: float
     notes: list[str] = Field(default_factory=list)
-    evidence_boundary: str = "software_controller_comparison_not_physical_validation"
+    evidence_boundary: str = "software_simulation_controller_comparison"
 
 
 class BenchmarkRouteIR(CFDCModel):
@@ -321,7 +483,7 @@ class BenchmarkRouteIR(CFDCModel):
     actuator_limits: dict[str, float]
     state_limits: dict[str, float] = Field(default_factory=dict)
     performance_limits: dict[str, float] = Field(default_factory=dict)
-    evidence_boundary: str = "synthetic_benchmark_route_ir_not_physical_validation"
+    evidence_boundary: str = "software_simulation_benchmark_route_ir"
 
 
 class CandidateExperimentRequest(CFDCModel):
@@ -335,14 +497,13 @@ class CandidateExperimentRequest(CFDCModel):
     sample_rate_hz: float | None = Field(default=None, gt=0.0)
     operating_region: str = "declared_safe_operating_region"
     stop_conditions: list[str] = Field(min_length=1)
-    provenance_requirement: DataProvenance
 
 
 class CandidateRouteIR(CFDCModel):
     schema_version: str = "1.0"
     route_id: str = Field(min_length=1)
-    workflow_mode: WorkflowMode
     canonical_class: ArchetypeClass
+    simulation_profile_id: str = Field(min_length=1)
     supplemental_mechanism_cards: list[str] = Field(default_factory=list)
     control_architecture_id: str = Field(min_length=1)
     experiment_requests: list[CandidateExperimentRequest] = Field(default_factory=list)
@@ -354,7 +515,7 @@ class CandidateRouteIR(CFDCModel):
     feature_tracking_requests: list[str] = Field(default_factory=list)
     validation_metrics: list[str] = Field(min_length=1)
     safety_constraints: list[str] = Field(min_length=1)
-    evidence_boundary: str = "candidate_route_from_declared_evidence_not_plant_ground_truth"
+    evidence_boundary: str = "software_simulation_candidate_route"
 
 
 class CapabilityGap(CFDCModel):
@@ -398,7 +559,42 @@ class CompiledRoute(CFDCModel):
     compiled_feature_extractor_ids: list[str] = Field(default_factory=list)
     compiled_controller_template_id: str | None = None
     compiled_tracking_ids: list[str] = Field(default_factory=list)
-    evidence_boundary: str = "capability_compilation_not_controller_release"
+    evidence_boundary: str = "software_simulation_capability_compilation"
+
+
+class DiagnosticTurn(CFDCModel):
+    turn_index: int = Field(ge=1)
+    questions: list[str] = Field(min_length=1)
+    answers: dict[str, str]
+    evidence: list[str] = Field(min_length=1)
+    diagnosis: StructuralDiagnosis
+
+
+class DiagnosticSessionState(CFDCModel):
+    session_id: str = Field(min_length=1)
+    schema_version: str = "1.0"
+    route_id: str = "generic"
+    initial_description: SystemDescription
+    accumulated_description: SystemDescription
+    turns: list[DiagnosticTurn] = Field(default_factory=list)
+    current_diagnosis: StructuralDiagnosis
+    classification: ArchetypeClassification | None = None
+    semantic_selection: SemanticRouteSelection | None = None
+    experiment_plan: ExperimentPlan | None = None
+    pending_clarification_questions: list[str] = Field(default_factory=list)
+    candidate_route: CandidateRouteIR | None = None
+    compiled_route: CompiledRoute | None = None
+    status: Literal[
+        "collecting_information",
+        "ready_for_experiments",
+        "feature_extraction_failed",
+        "ready_for_controller",
+        "refused",
+        "complete",
+    ]
+    maximum_turns: int = Field(default=8, ge=1, le=8)
+    refusal_reason: str | None = None
+    evidence_boundary: str = "software_simulation_diagnostic_session"
 
 
 class ClosedLoopBenchmarkCaseResult(CFDCModel):
@@ -416,7 +612,7 @@ class ClosedLoopBenchmarkCaseResult(CFDCModel):
     closed_loop_executed: bool = True
     execution_backend: str
     notes: list[str] = Field(default_factory=list)
-    evidence_boundary: str = "synthetic_closed_loop_benchmark_not_physical_validation"
+    evidence_boundary: str = "software_simulation_closed_loop_benchmark"
 
 
 class FeatureAblationTrial(CFDCModel):
@@ -426,7 +622,7 @@ class FeatureAblationTrial(CFDCModel):
     controller: ControllerCandidate
     performance: SimulationPerformanceSummary
     success: bool
-    evidence_boundary: str = "synthetic_feature_ablation_not_physical_validation"
+    evidence_boundary: str = "software_simulation_feature_ablation"
 
 
 class FeatureAblationResult(CFDCModel):
@@ -435,7 +631,7 @@ class FeatureAblationResult(CFDCModel):
     trial_count: int = Field(ge=1)
     trials: list[FeatureAblationTrial] = Field(min_length=1)
     notes: list[str] = Field(default_factory=list)
-    evidence_boundary: str = "synthetic_feature_ablation_suite_not_physical_validation"
+    evidence_boundary: str = "software_simulation_feature_ablation_suite"
 
 
 class SavedDiagnosticResponse(CFDCModel):
@@ -467,7 +663,7 @@ class DiagnosticResponseSnapshot(CFDCModel):
     model: str | None = None
     prompt_version: str
     responses: list[SavedDiagnosticResponse] = Field(min_length=1)
-    evidence_boundary: str = "structured_diagnostic_responses_not_controller_or_physical_validation"
+    evidence_boundary: str = "software_simulation_structural_diagnosis"
 
 
 class DiagnosticEvaluationCaseResult(CFDCModel):
@@ -542,7 +738,7 @@ class DiagnosticEvaluationResult(CFDCModel):
     dangerous_false_positive_control_count: int = Field(ge=0)
     passed_count: int = Field(ge=0)
     cases: list[DiagnosticEvaluationCaseResult] = Field(min_length=1)
-    evidence_boundary: str = "offline_diagnostic_evaluation_not_controller_validation"
+    evidence_boundary: str = "software_simulation_offline_diagnostic_evaluation"
 
 
 class DiagnosticEvaluationComparison(CFDCModel):
@@ -551,7 +747,7 @@ class DiagnosticEvaluationComparison(CFDCModel):
     deterministic: DiagnosticEvaluationResult
     llm: DiagnosticEvaluationResult
     metric_deltas_llm_minus_deterministic: dict[str, float]
-    evidence_boundary: str = "diagnostic_response_comparison_not_controller_or_physical_validation"
+    evidence_boundary: str = "software_simulation_diagnostic_response_comparison"
 
 
 class OnlineTuningState(CFDCModel):
@@ -561,6 +757,47 @@ class OnlineTuningState(CFDCModel):
     freeze_reason: str | None = None
     step_fraction: float = Field(default=0.05, ge=0.0, le=0.10)
     history: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class OnlineRefinementPolicy(CFDCModel):
+    step_multiplier: float = Field(default=1.05, ge=1.05, le=1.10)
+    minimum_dwell_s: float = Field(default=0.0, ge=0.0)
+    soft_violation_confirmations: int = Field(default=2, ge=2)
+    max_iterations: int = Field(default=20, ge=1)
+
+
+class Algorithm1Observation(CFDCModel):
+    dwell_time_s: float = Field(ge=0.0)
+    hard_safety_violation: bool = False
+    soft_performance_violation: bool = False
+    nmp_violation: bool = False
+    performance_target_met: bool = False
+    violation_reasons: list[str] = Field(default_factory=list)
+    metrics: dict[str, float | None] = Field(default_factory=dict)
+
+
+class Algorithm1State(CFDCModel):
+    accepted_gains: dict[str, float]
+    previous_safe_gains: dict[str, float]
+    candidate_gains: dict[str, float] | None = None
+    tunable_gain_names: list[str] = Field(min_length=1)
+    policy: OnlineRefinementPolicy = Field(default_factory=OnlineRefinementPolicy)
+    iteration_count: int = Field(default=0, ge=0)
+    consecutive_soft_violations: int = Field(default=0, ge=0)
+    status: Literal["ready", "probing", "frozen", "completed"] = "ready"
+    frozen: bool = False
+    freeze_reason: str | None = None
+    completion_reason: str | None = None
+    history: list[dict[str, Any]] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_tunable_gains(self) -> "Algorithm1State":
+        unknown = set(self.tunable_gain_names) - set(self.accepted_gains)
+        if unknown:
+            raise ValueError(
+                f"tunable gains must exist in accepted_gains: {', '.join(sorted(unknown))}"
+            )
+        return self
 
 
 class SafeGainSearchState(CFDCModel):
@@ -593,6 +830,64 @@ class FeatureTrackingUpdate(CFDCModel):
     smoothing_factor: float = Field(ge=0.0, le=1.0)
 
 
+class TrackingObservation(CFDCModel):
+    time_s: float = Field(ge=0.0)
+    steady_operating_mode: bool
+    tracking_error: float = Field(default=0.0, ge=0.0)
+    hard_safety_active: bool = False
+    aggressive_maneuver: bool = False
+    feature_id: str | None = None
+    signal_time_s: list[float] = Field(default_factory=list)
+    signal_values: list[float] = Field(default_factory=list)
+    regressor: float | None = None
+    response: float | None = None
+    control_effort: float | None = None
+    dt_s: float | None = Field(default=None, gt=0.0)
+
+
+class TrackingSchedulerState(CFDCModel):
+    duty_interval_s: float = Field(default=1.0, ge=0.0)
+    tracking_error_threshold: float = Field(default=0.05, ge=0.0)
+    last_eligible_time_s: float | None = Field(default=None, ge=0.0)
+    pause_reason: str | None = None
+    eligible_update_count: int = Field(default=0, ge=0)
+
+
+class FLLTrackerState(CFDCModel):
+    angular_frequency_rad_s: float = Field(gt=0.0)
+    bandwidth_rad_s: float = Field(default=1.0, gt=0.0)
+    smoothing_gain: float = Field(default=0.2, gt=0.0, le=1.0)
+    minimum_lock_quality: float = Field(default=0.5, ge=0.0, le=1.0)
+    last_lock_quality: float = Field(default=0.0, ge=0.0, le=1.0)
+    last_update_accepted: bool = False
+    accepted_update_count: int = Field(default=0, ge=0)
+    rejected_update_count: int = Field(default=0, ge=0)
+    window_time_s: list[float] = Field(default_factory=list)
+    window_signal: list[float] = Field(default_factory=list)
+
+
+class ScalarRLSTrackerState(CFDCModel):
+    parameter_estimate: float
+    covariance: float = Field(default=100.0, gt=0.0)
+    forgetting_factor: float = Field(default=0.95, gt=0.0, le=1.0)
+    update_count: int = Field(default=0, ge=0)
+    ignored_sample_count: int = Field(default=0, ge=0)
+
+
+class HoverAverageTrackerState(CFDCModel):
+    average_control_effort: float
+    time_constant_s: float = Field(default=10.0, gt=0.0)
+    update_count: int = Field(default=0, ge=0)
+
+
+class TrackingStateBundle(CFDCModel):
+    scheduler: TrackingSchedulerState = Field(default_factory=TrackingSchedulerState)
+    fll: FLLTrackerState | None = None
+    rls: ScalarRLSTrackerState | None = None
+    hover: HoverAverageTrackerState | None = None
+    nmp_retune_requested: bool = False
+
+
 class CartpoleState(CFDCModel):
     cart_position_m: float
     cart_velocity_m_s: float
@@ -613,7 +908,7 @@ class CartpoleSimulationResult(CFDCModel):
     events: list[dict[str, int | float | str | bool | None]] = Field(default_factory=list)
     final_gains: dict[str, float] = Field(default_factory=dict)
     trajectory: list[dict[str, float | str]] = Field(default_factory=list)
-    evidence_boundary: str = "deterministic_cartpole_simulation_not_hardware_validation"
+    evidence_boundary: str = "software_simulation_cartpole"
 
 
 class TrialSample(CFDCModel):
@@ -642,7 +937,7 @@ class TrialReport(CFDCModel):
     safety_violations: list[SafetyViolation] = Field(default_factory=list)
     tested_gains: dict[str, float] = Field(default_factory=dict)
     accepted_gains: dict[str, float] = Field(default_factory=dict)
-    evidence_boundary: str = "bounded_software_trial_not_physical_validation"
+    evidence_boundary: str = "software_simulation_bounded_trial"
 
 
 class CartpoleBoundaryResult(CFDCModel):
@@ -659,7 +954,7 @@ class CartpoleBoundaryResult(CFDCModel):
     performance: SimulationPerformanceSummary
     events: list[dict[str, Any]] = Field(default_factory=list)
     trajectory: list[dict[str, float | str]] = Field(default_factory=list)
-    evidence_boundary: str = "deterministic_cartpole_nmp_boundary_not_hardware_validation"
+    evidence_boundary: str = "software_simulation_cartpole_nmp_boundary"
 
 
 class VtolState(CFDCModel):
@@ -681,7 +976,7 @@ class VtolSimulationResult(CFDCModel):
     features: list[CoreFeatureArtifact] = Field(default_factory=list)
     events: list[dict[str, int | float | str | bool | None]] = Field(default_factory=list)
     trajectory: list[dict[str, float | str]] = Field(default_factory=list)
-    evidence_boundary: str = "deterministic_vtol_simulation_not_hardware_validation"
+    evidence_boundary: str = "software_simulation_vtol"
 
 
 class VtolVariationScenario(CFDCModel):
@@ -701,16 +996,15 @@ class VtolVariationResult(CFDCModel):
     updated_scenario_count: int = Field(ge=0)
     stale_scenario_count: int = Field(ge=0)
     notes: list[str] = Field(default_factory=list)
-    evidence_boundary: str = "deterministic_vtol_variation_study_not_online_or_hardware_validation"
+    evidence_boundary: str = "software_simulation_vtol_variation_study"
 
 
 class CFDCRunReport(CFDCModel):
     run_id: str
     route_id: str = "generic"
-    workflow_mode: WorkflowMode = WorkflowMode.SIMULATION
     status: Literal[
         "need_more_information",
-        "experiments_required",
+        "feature_extraction_failed",
         "controller_candidate_ready",
         "accepted",
         "rejected",
@@ -719,24 +1013,31 @@ class CFDCRunReport(CFDCModel):
     ]
     system_description: SystemDescription | None = None
     diagnosis: StructuralDiagnosis | None = None
+    diagnostic_session: DiagnosticSessionState | None = None
     classification: ArchetypeClassification | None = None
+    semantic_selection: SemanticRouteSelection | None = None
     experiment_plan: ExperimentPlan | None = None
     candidate_route: CandidateRouteIR | None = None
     compiled_route: CompiledRoute | None = None
-    experiment_results: list[ExperimentResult] = Field(default_factory=list)
+    experiment_results: list[SimulationExperimentRecord] = Field(default_factory=list)
     features: list[CoreFeatureArtifact] = Field(default_factory=list)
+    feature_quality_decision: FeatureQualityDecision | None = None
     controller: ControllerCandidate | None = None
     trial_reports: list[TrialReport] = Field(default_factory=list)
     online_tuning_state: OnlineTuningState | None = None
+    algorithm1_state: Algorithm1State | None = None
     safe_gain_search_state: SafeGainSearchState | None = None
     feature_tracking_updates: list[FeatureTrackingUpdate] = Field(default_factory=list)
+    tracking_state: TrackingStateBundle | None = None
     cartpole_simulation: CartpoleSimulationResult | None = None
     cartpole_boundary: CartpoleBoundaryResult | None = None
     vtol_simulation: VtolSimulationResult | None = None
     vtol_variation: VtolVariationResult | None = None
     baseline_comparison: ControllerComparison | None = None
+    stale_controller_performance: SimulationPerformanceSummary | None = None
+    adapted_controller_performance: SimulationPerformanceSummary | None = None
     final_gains: dict[str, float] = Field(default_factory=dict)
     final_feedforward: dict[str, float] = Field(default_factory=dict)
     go_no_go: GoNoGoDecision | None = None
     notes: list[str] = Field(default_factory=list)
-    evidence_boundary: str = "software_runtime_report_not_physical_validation"
+    evidence_boundary: str = "software_simulation_only"

@@ -72,9 +72,8 @@ def test_mechanism_cards_are_disabled_by_default_in_engine_pipeline_and_route():
     assert classification is not None
     assert classification.supplemental_mechanism_cards == []
 
-    features = [feature("static_gain", 2.0), feature("time_constant", 5.0)]
-    pipeline = run_cfdc_pipeline(description, features=features)
-    route = run_cfdc_route("generic", description=description, features=features)
+    pipeline = run_cfdc_pipeline(description)
+    route = run_cfdc_route("generic", description=description)
     assert pipeline["classification"]["supplemental_mechanism_cards"] == []
     assert route.classification is not None
     assert route.classification.supplemental_mechanism_cards == []
@@ -192,15 +191,9 @@ def test_enabling_cards_does_not_change_canonical_route_or_controller():
         actuators=["valve"],
         safety_bounds={"output_min": -2.0, "output_max": 2.0},
     )
-    features = [
-        feature("static_gain", 2.0),
-        feature("time_constant", 5.0),
-        feature("dead_time", 1.0),
-    ]
-    without_cards = run_cfdc_pipeline(description, features=features)
+    without_cards = run_cfdc_pipeline(description)
     with_cards = run_cfdc_pipeline(
         description,
-        features=features,
         use_mechanism_cards=True,
     )
 

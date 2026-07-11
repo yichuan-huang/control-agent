@@ -7,16 +7,31 @@ from urllib.parse import urlparse
 
 from openai import OpenAI
 
-from cfdc.models import DelayAssessment, StructuralDiagnosis, SystemDescription
+from cfdc.models import (
+    ArchetypeClassification,
+    SemanticRouteSelection,
+    SimulationProfileCatalog,
+    StructuralDiagnosis,
+    SystemDescription,
+)
 
 
-PROMPT_VERSION = "cfdc-stage0-v3-normalized-delay"
+PROMPT_VERSION = "cfdc-stage0-v4-eight-assessments"
 
 
 class DiagnosticAdapter(Protocol):
     """LLM-facing adapter: implementations must return structured data only."""
 
     def diagnose(self, description: SystemDescription) -> dict[str, Any]:
+        ...
+
+    def select_profile(
+        self,
+        description: SystemDescription,
+        diagnosis: StructuralDiagnosis,
+        classification: ArchetypeClassification,
+        catalog: SimulationProfileCatalog,
+    ) -> dict[str, Any]:
         ...
 
 
@@ -34,21 +49,22 @@ def build_diagnostic_prompt(description: SystemDescription) -> str:
         "Return ONLY one JSON object. Do not include markdown, prose, or code fences.\n\n"
         "The JSON object must match this shape exactly:\n"
         "{\n"
-        '  "open_loop_stability": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
-        '  "minimum_phase": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
+        '  "open_loop_stability": {"status": "known|inferred|unknown", "value": "...", "assessment": "stable|marginal|unstable|unknown", "confidence": 0.0, "evidence": ["..."]},\n'
+        '  "minimum_phase": {"status": "known|inferred|unknown", "value": "...", "assessment": "minimum_phase|nonminimum_phase|unknown", "confidence": 0.0, "evidence": ["..."]},\n'
         '  "significant_delay": {"status": "known|inferred|unknown", "value": "...", "assessment": "significant|not_significant|unknown", "confidence": 0.0, "evidence": ["..."]},\n'
-        '  "relative_degree": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
-        '  "controllability_observability": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
-        '  "nonlinearity_strength": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
-        '  "coupling_severity": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
-        '  "uncertainty_magnitude": {"status": "known|inferred|unknown", "value": "...", "confidence": 0.0, "evidence": ["..."]},\n'
+        '  "relative_degree": {"status": "known|inferred|unknown", "value": "...", "assessment": "low|high|unknown", "estimated_order": 1, "confidence": 0.0, "evidence": ["..."]},\n'
+        '  "controllability_observability": {"status": "known|inferred|unknown", "value": "...", "assessment": "adequate|inadequate|unknown", "confidence": 0.0, "evidence": ["..."]},\n'
+        '  "nonlinearity_strength": {"status": "known|inferred|unknown", "value": "...", "assessment": "weak|static_compensable|strong_dynamic|unknown", "confidence": 0.0, "evidence": ["..."]},\n'
+        '  "coupling_severity": {"status": "known|inferred|unknown", "value": "...", "assessment": "siso|weak_mimo|severe_mimo|underactuated|cascaded|unknown", "confidence": 0.0, "evidence": ["..."]},\n'
+        '  "uncertainty_magnitude": {"status": "known|inferred|unknown", "value": "...", "assessment": "small|moderate|large|unknown", "confidence": 0.0, "evidence": ["..."]},\n'
         '  "clarification_questions": ["..."],\n'
         '  "complete": true\n'
         "}\n\n"
         "Rules:\n"
         "- Fill all eight diagnostic fields.\n"
-        "- significant_delay.assessment must be exactly significant, not_significant, or unknown.\n"
-        "- significant_delay status=unknown if and only if assessment=unknown.\n"
+        "- Every field must use exactly one assessment value listed in the schema.\n"
+        "- status=unknown if and only if assessment=unknown.\n"
+        "- Every resolved field needs direct or analogy-based evidence and confidence at least 0.5.\n"
         "- If any field is unknown, set complete=false and ask 2-4 plain-language clarification questions.\n"
         "- If all fields are known or reasonably inferred, set complete=true and use an empty clarification_questions list.\n"
         "- An explicitly unobserved or unknown delay must remain unknown; absence of a delay statement is not evidence of zero delay.\n"
@@ -62,58 +78,6 @@ def build_diagnostic_prompt(description: SystemDescription) -> str:
     )
 
 
-def normalize_legacy_delay_assessment(value: str) -> DelayAssessment:
-    """Normalize recognized legacy wording only at the structured adapter boundary."""
-
-    normalized = " ".join(
-        value.lower().replace("_", " ").replace("-", " ").split()
-    )
-    negative_patterns = (
-        "no significant delay",
-        "not significant delay",
-        "negligible delay",
-        "without significant delay",
-        "no noticeable delay",
-        "no dead time",
-        "reacts instantly",
-        "no delay",
-    )
-    positive_patterns = (
-        "significant delay",
-        "noticeable dead time",
-        "dead time present",
-        "transport delay",
-        "noticeable pause",
-    )
-    unknown_patterns = (
-        "not enough information",
-        "unknown delay",
-        "delay unknown",
-        "dead time unknown",
-        "timing has not been observed",
-        "timing has not been measured",
-    )
-
-    matched_negative = any(pattern in normalized for pattern in negative_patterns)
-    positive_remainder = normalized
-    for pattern in negative_patterns:
-        positive_remainder = positive_remainder.replace(pattern, " ")
-    matched_positive = any(
-        pattern in positive_remainder for pattern in positive_patterns
-    )
-    matched_unknown = any(pattern in normalized for pattern in unknown_patterns)
-    match_count = sum((matched_negative, matched_positive, matched_unknown))
-    if match_count > 1:
-        raise ValueError(f"contradictory significant_delay value: {value!r}")
-    if matched_negative:
-        return DelayAssessment.NOT_SIGNIFICANT
-    if matched_positive:
-        return DelayAssessment.SIGNIFICANT
-    if matched_unknown:
-        return DelayAssessment.UNKNOWN
-    raise ValueError(f"unrecognized significant_delay value: {value!r}")
-
-
 def validate_agent_payload(payload: Any) -> StructuralDiagnosis:
     """Reject free text and parse only dictionary-like diagnostic payloads."""
 
@@ -121,20 +85,7 @@ def validate_agent_payload(payload: Any) -> StructuralDiagnosis:
         raise ValueError("Agent output must be a dictionary or JSON object, not free text")
     if not isinstance(payload, dict):
         raise ValueError("Agent output must be a dictionary")
-    normalized_payload = dict(payload)
-    delay_payload = normalized_payload.get("significant_delay")
-    if not isinstance(delay_payload, dict):
-        raise ValueError("significant_delay must be a dictionary")
-    normalized_delay = dict(delay_payload)
-    if "assessment" not in normalized_delay:
-        value = normalized_delay.get("value")
-        if not isinstance(value, str):
-            raise ValueError(
-                "legacy significant_delay payload requires a string value"
-            )
-        normalized_delay["assessment"] = normalize_legacy_delay_assessment(value)
-    normalized_payload["significant_delay"] = normalized_delay
-    return StructuralDiagnosis.model_validate(normalized_payload)
+    return StructuralDiagnosis.model_validate(payload)
 
 
 class DeterministicDiagnosticAdapter:
@@ -148,6 +99,10 @@ class DeterministicDiagnosticAdapter:
         from cfdc.diagnosis.engine import infer_structural_diagnosis
 
         return infer_structural_diagnosis(description).model_dump()
+
+    def select_profile(self, description, diagnosis, classification, catalog):
+        from cfdc.workflow.profiles import deterministic_profile_selection
+        return deterministic_profile_selection(description, diagnosis, classification, catalog).model_dump()
 
 
 class OpenAICompatibleDiagnosticAdapter:
@@ -174,14 +129,12 @@ class OpenAICompatibleDiagnosticAdapter:
             or os.getenv("CFDC_LLM_BASE_URL")
             or os.getenv("CONTROL_PROJECT_LLM_BASE_URL")
             or os.getenv("OPENAI_BASE_URL")
-            or "https://api.openai.com/v1"
         )
         self.model = (
             model
             or os.getenv("CFDC_LLM_MODEL")
             or os.getenv("CONTROL_PROJECT_LLM_MODEL")
             or os.getenv("OPENAI_MODEL")
-            or "gpt-4o-mini"
         )
         self.api_key = (
             api_key
@@ -189,15 +142,34 @@ class OpenAICompatibleDiagnosticAdapter:
             or os.getenv("CONTROL_PROJECT_LLM_API_KEY")
             or os.getenv("OPENAI_API_KEY")
         )
-        if not self.api_key:
-            raise ValueError(
-                "Missing LLM API key. Set CFDC_LLM_API_KEY, "
-                "CONTROL_PROJECT_LLM_API_KEY, or OPENAI_API_KEY."
+        missing = [
+            name
+            for name, value in (
+                ("base URL", self.base_url),
+                ("model", self.model),
+                ("API key", self.api_key),
             )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                "Missing OpenAI-compatible LLM configuration: "
+                f"{', '.join(missing)}. Set CFDC_LLM_BASE_URL, "
+                "CFDC_LLM_MODEL, and CFDC_LLM_API_KEY (or pass the matching "
+                "--llm-* flags)."
+            )
+        assert self.base_url is not None
+        assert self.model is not None
+        assert self.api_key is not None
         self.timeout_s = timeout_s
         self.temperature = temperature
         self.max_tokens = max_tokens
         client_base_url = self.base_url.rstrip("/").removesuffix("/chat/completions")
+        parsed_base_url = urlparse(client_base_url)
+        if parsed_base_url.scheme not in {"http", "https"} or not parsed_base_url.netloc:
+            raise ValueError(
+                "LLM base URL must be an absolute http(s) OpenAI-compatible API root."
+            )
         self._disable_thinking = (
             urlparse(client_base_url).hostname or ""
         ).lower() == "api.deepseek.com"
@@ -239,3 +211,35 @@ class OpenAICompatibleDiagnosticAdapter:
                 f"reasoning_content_present={bool(reasoning_content)})"
             )
         return parse_json_content(content)
+
+    def select_profile(self, description, diagnosis, classification, catalog):
+        compatible = [
+            profile.model_dump()
+            for profile in catalog.profiles
+            if str(profile.compatible_class) == str(classification.primary_class)
+        ]
+        prompt = (
+            "Select exactly one CFDC simulation profile from the supplied catalog. "
+            "Return only JSON with simulation_profile_id, feature_bundle_id, "
+            "selected_feature_ids, confidence, evidence, and rationale. The feature "
+            "IDs must exactly equal that profile's required_feature_ids; never invent "
+            "or add features.\n\n"
+            f"description={description.model_dump_json()}\n"
+            f"diagnosis={diagnosis.model_dump_json()}\n"
+            f"classification={classification.model_dump_json()}\n"
+            f"compatible_profiles={json.dumps(compatible)}"
+        )
+        options: dict[str, Any] = dict(
+            model=self.model,
+            messages=[{"role": "system", "content": "You select from a closed CFDC profile catalog and output strict JSON only."}, {"role": "user", "content": prompt}],
+            temperature=self.temperature,
+            max_tokens=min(self.max_tokens, 800),
+            response_format={"type": "json_object"},
+        )
+        if self._disable_thinking:
+            options["extra_body"] = {"thinking": {"type": "disabled"}}
+        response = self.client.chat.completions.create(**options)
+        content = response.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("semantic profile selection returned empty content")
+        return SemanticRouteSelection.model_validate(parse_json_content(content)).model_dump()

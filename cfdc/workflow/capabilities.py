@@ -7,10 +7,8 @@ from cfdc.models import (
     CapabilityGap,
     CompiledRoute,
     ControllerTemplateCapability,
-    DataProvenance,
     ExperimentPrimitive,
     PrimitiveSignalRequirement,
-    WorkflowMode,
 )
 
 
@@ -50,6 +48,9 @@ def default_capability_catalog() -> CapabilityCatalog:
             "angular_acceleration_gain": [ExperimentPrimitive.PULSE.value],
             "lateral_coupling_gain": [ExperimentPrimitive.PULSE.value],
             "coupling_gain": [ExperimentPrimitive.BOUNDED_SCAN.value],
+            "local_gain_matrix": [ExperimentPrimitive.BOUNDED_SCAN.value],
+            "local_time_constant": [ExperimentPrimitive.BOUNDED_SCAN.value],
+            "pairing_indicator": [ExperimentPrimitive.BOUNDED_SCAN.value],
         },
         controller_templates={
             "detuned_pi": ControllerTemplateCapability(
@@ -88,14 +89,15 @@ def default_capability_catalog() -> CapabilityCatalog:
             "mimo_decoupling_matrix": ControllerTemplateCapability(
                 compatible_classes=[class_v],
                 required_feature_ids=["local_gain_matrix", "pairing_indicator"],
-                implemented=False,
+                implemented=True,
             ),
         },
-        online_refinement_policies=["bounded_gain_refinement"],
+        online_refinement_policies=["algorithm1_safe_gain_search"],
         tracking_implementations=[
             "frequency_locked_loop",
             "scalar_rls",
             "hover_average",
+            "matrix_rls",
         ],
         simulation_fixture_routes=[
             "cartpole",
@@ -143,6 +145,7 @@ def compile_candidate_route(
     gaps: list[CapabilityGap] = []
     compiled_experiments: list[str] = []
     compiled_extractors: list[str] = []
+    requested_features: set[str] = set()
     canonical_class = str(route.canonical_class)
 
     for request in route.experiment_requests:
@@ -187,22 +190,8 @@ def compile_candidate_route(
                     resolvable_by_measurement=True,
                 )
             )
-        if (
-            WorkflowMode(route.workflow_mode) == WorkflowMode.REAL
-            and DataProvenance(request.provenance_requirement)
-            == DataProvenance.SYNTHETIC_FIXTURE
-        ):
-            gaps.append(
-                _gap(
-                    "synthetic_provenance_forbidden",
-                    "experiment_design",
-                    request.request_id,
-                    "Real workflow requests cannot be satisfied by synthetic fixture provenance.",
-                    "provide a real experiment protocol or externally reviewed features",
-                    resolvable_by_measurement=True,
-                )
-            )
         for feature_id in request.feature_ids:
+            requested_features.add(feature_id)
             permitted_sources = catalog.feature_extractors.get(feature_id)
             if permitted_sources is None:
                 gaps.append(
@@ -229,6 +218,19 @@ def compile_candidate_route(
             elif feature_id not in compiled_extractors:
                 compiled_extractors.append(feature_id)
         compiled_experiments.append(request.request_id)
+
+    missing_requests = set(route.required_core_feature_ids) - requested_features
+    for feature_id in sorted(missing_requests):
+        gaps.append(
+            _gap(
+                "missing_feature_experiment_request",
+                "experiment_design",
+                feature_id,
+                f"Required feature '{feature_id}' has no surviving experiment request.",
+                "select a permitted experiment or provide an externally reviewed feature",
+                resolvable_by_measurement=True,
+            )
+        )
 
     template = catalog.controller_templates.get(route.controller_template_id)
     compiled_controller: str | None = None

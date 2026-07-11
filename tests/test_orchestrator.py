@@ -161,6 +161,10 @@ def test_vtol_variation_route_records_six_stale_updated_scenarios():
     assert all(scenario.expectation_met for scenario in report.vtol_variation.scenarios)
     scenarios = {scenario.scenario_id: scenario for scenario in report.vtol_variation.scenarios}
     assert not scenarios["mass_plus_25_percent_stale_features"].simulation.success
+    assert report.stale_controller_performance == scenarios["mass_plus_25_percent_stale_features"].simulation.performance
+    assert report.adapted_controller_performance == scenarios["mass_plus_25_percent_updated_features"].simulation.performance
+    assert not report.stale_controller_performance.success
+    assert report.adapted_controller_performance.success
     for scenario in report.vtol_variation.scenarios:
         if scenario.feature_source == "updated":
             assert scenario.simulation.success
@@ -213,7 +217,6 @@ def test_route_class_mismatch_returns_structured_no_go():
             observed_outputs=["temperature"],
             actuators=["heater"],
         ),
-        features=[feature("static_gain", 2.0), feature("time_constant", 5.0)],
         run_id="route-mismatch-test",
     )
 
@@ -225,7 +228,7 @@ def test_route_class_mismatch_returns_structured_no_go():
     assert report.cartpole_simulation is None
 
 
-def test_route_missing_required_features_returns_structured_no_go():
+def test_generic_route_automatically_extracts_required_features():
     report = run_cfdc_route(
         "generic",
         description=SystemDescription(
@@ -233,37 +236,17 @@ def test_route_missing_required_features_returns_structured_no_go():
             observed_outputs=["temperature"],
             actuators=["heater"],
         ),
-        features=[feature("static_gain", 2.0)],
         run_id="missing-feature-test",
     )
 
-    assert report.status == "experiments_required"
+    assert report.status == "completed"
     assert report.go_no_go is not None
-    assert report.go_no_go.decision == "no_go"
-    assert report.go_no_go.missing_features == ["time_constant"]
-    assert report.controller is None
-
-
-def test_generic_route_rejects_large_delay_without_releasing_pi():
-    report = run_cfdc_route(
-        "generic",
-        description=SystemDescription(
-            text="A first order temperature process settles after a heater change with noticeable dead time.",
-            observed_outputs=["temperature"],
-            actuators=["heater"],
-        ),
-        features=[
-            feature("static_gain", 2.0),
-            feature("time_constant", 10.0),
-            feature("dead_time", 10.0),
-        ],
-        run_id="large-delay-refusal-test",
-    )
-
-    assert report.status == "rejected"
-    assert report.go_no_go is not None
-    assert report.go_no_go.decision == "no_go"
+    assert report.go_no_go.decision == "go"
+    assert {feature.feature_id for feature in report.features} == {"static_gain", "time_constant"}
     assert report.controller is not None
-    assert report.controller.status == "refuse"
-    assert report.controller.architecture == "large_delay_compensation_required"
-    assert "large_delay_compensation_required" in report.go_no_go.reasons[0]
+
+
+def test_route_api_does_not_accept_user_feature_packets():
+    import pytest
+    with pytest.raises(TypeError, match="features"):
+        run_cfdc_route("generic", features=[feature("static_gain", 2.0)])

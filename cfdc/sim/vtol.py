@@ -7,14 +7,25 @@ import numpy as np
 from scipy.linalg import solve_continuous_are
 
 from cfdc.models import (
+    Algorithm1Observation,
     ChannelPerformanceMetrics,
     CoreFeatureArtifact,
     ExperimentPrimitive,
+    HoverAverageTrackerState,
+    OnlineRefinementPolicy,
+    ScalarRLSTrackerState,
     SimulationPerformanceSummary,
     VtolSimulationResult,
     VtolState,
     VtolVariationResult,
     VtolVariationScenario,
+)
+from cfdc.online import (
+    evaluate_algorithm1_probe,
+    initialize_algorithm1,
+    propose_algorithm1_candidate,
+    update_hover_average,
+    update_scalar_rls,
 )
 from cfdc.performance import build_performance_summary, calculate_channel_performance
 from cfdc.sim.integrators import rk4_step
@@ -657,11 +668,64 @@ def run_vtol_variation(
     ]
     scenarios: list[VtolVariationScenario] = []
     for scenario_id, scenario_params, feature_source, expected_success in scenario_specs:
-        scenario_features = (
-            nominal_features
-            if feature_source == "stale"
-            else extract_vtol_core_features(scenario_params)
-        )
+        if feature_source == "stale":
+            scenario_features = nominal_features
+        else:
+            measured_features = extract_vtol_core_features(scenario_params)
+            nominal_map = {feature.feature_id: feature for feature in nominal_features}
+            measured_map = {feature.feature_id: feature for feature in measured_features}
+            hover_tracker = HoverAverageTrackerState(
+                average_control_effort=nominal_map["hover_thrust"].value
+            )
+            for _ in range(60):
+                hover_tracker = update_hover_average(
+                    hover_tracker,
+                    measured_map["hover_thrust"].value,
+                    1.0,
+                )
+            angular_tracker = ScalarRLSTrackerState(
+                parameter_estimate=nominal_map["angular_acceleration_gain"].value,
+                covariance=100.0,
+            )
+            lateral_tracker = ScalarRLSTrackerState(
+                parameter_estimate=nominal_map["lateral_coupling_gain"].value,
+                covariance=100.0,
+            )
+            for _ in range(60):
+                angular_tracker = update_scalar_rls(
+                    angular_tracker,
+                    1.0,
+                    measured_map["angular_acceleration_gain"].value,
+                )
+                lateral_tracker = update_scalar_rls(
+                    lateral_tracker,
+                    1.0,
+                    measured_map["lateral_coupling_gain"].value,
+                )
+            tracked_values = {
+                "hover_thrust": hover_tracker.average_control_effort,
+                "angular_acceleration_gain": angular_tracker.parameter_estimate,
+                "lateral_coupling_gain": lateral_tracker.parameter_estimate,
+            }
+            scenario_features = []
+            for feature in nominal_features:
+                value = tracked_values.get(feature.feature_id, feature.value)
+                width = max(0.05 * abs(value), 1e-9)
+                tracker_name = (
+                    "hover_ema"
+                    if feature.feature_id == "hover_thrust"
+                    else "scalar_rls"
+                )
+                scenario_features.append(
+                    feature.model_copy(
+                        update={
+                            "value": value,
+                            "lower_bound": value - width,
+                            "upper_bound": value + width,
+                            "method": f"{feature.method}+continuous_{tracker_name}",
+                        }
+                    )
+                )
         simulation = run_vtol_simulation(
             mode="position",
             params=scenario_params,
@@ -694,8 +758,8 @@ def run_vtol_variation(
         updated_scenario_count=sum(scenario.feature_source == "updated" for scenario in scenarios),
         stale_scenario_count=sum(scenario.feature_source == "stale" for scenario in scenarios),
         notes=[
-            "Updated scenarios re-extract hover thrust and angular acceleration gain from the changed software plant.",
-            "This is an explicit stale-versus-updated feature study, not continuous FLL or RLS tracking.",
+            "Updated scenarios start from nominal features and continuously track hover effort with a 10 s EMA and scalar gains with RLS.",
+            "Stale scenarios deliberately pause tracking to provide the comparison.",
         ],
     )
 
@@ -853,37 +917,33 @@ def run_vtol_boundary_scan(
     features = list(features or extract_vtol_core_features(params))
     gains = dict(gains or {}) or None
     feedforward = dict(feedforward or {})
-    candidates = [
-        0.25,
-        0.40,
-        0.55,
-        0.70,
-        0.85,
-        1.00,
-        1.025,
-        1.05,
-        1.075,
-        1.10,
-        1.125,
-        1.15,
-        1.30,
-        1.45,
-        1.60,
-        1.80,
-        2.00,
-        2.50,
-        3.00,
-        3.50,
-        4.00,
-        4.25,
-        4.50,
-    ]
     all_records: list[dict[str, float | str]] = []
     boundary_events: list[dict[str, int | float | str | bool | None]] = []
     last_records: list[dict[str, float | str]] = []
     last_accepted_gains: dict[str, float] = {}
     accepted_gain_history: list[dict[str, float]] = []
-    for trial_index, lateral_kp in enumerate(candidates, start=1):
+    boundary_state = initialize_algorithm1(
+        {"kp_y": 0.25},
+        ["kp_y"],
+        OnlineRefinementPolicy(
+            step_multiplier=1.10,
+            minimum_dwell_s=6.0,
+            max_iterations=40,
+        ),
+    )
+    lateral_kp = 0.25
+    trial_index = 0
+    seed_trial = True
+    while lateral_kp <= 5.0 + 1e-12:
+        proposal = None
+        if not seed_trial:
+            proposal = propose_algorithm1_candidate(boundary_state)
+            if proposal.status == "completed" or proposal.candidate_gains is None:
+                break
+            lateral_kp = proposal.candidate_gains["kp_y"]
+            if lateral_kp > 5.0 + 1e-12:
+                break
+        trial_index += 1
         controller_state = VtolControllerState(lateral_kp=lateral_kp, lateral_kd=1.60 * math.sqrt(lateral_kp))
         records, _, _ = _simulate_closed_loop(
             params,
@@ -935,8 +995,90 @@ def run_vtol_boundary_scan(
                 "kd_y": controller_state.lateral_kd,
             }
             accepted_gain_history.append(last_accepted_gains)
+            if proposal is not None:
+                boundary_state = evaluate_algorithm1_probe(
+                    proposal,
+                    Algorithm1Observation(
+                        dwell_time_s=6.0,
+                        metrics={
+                            "nmp_undershoot": float(metrics["nmp_undershoot"])
+                        },
+                    ),
+                )
         if not accepted:
+            if proposal is not None:
+                nmp_violation = (
+                    float(metrics["nmp_undershoot"])
+                    >= config.max_nmp_undershoot
+                )
+                boundary_state = evaluate_algorithm1_probe(
+                    proposal,
+                    Algorithm1Observation(
+                        dwell_time_s=6.0,
+                        hard_safety_violation=bool(safety_reasons),
+                        nmp_violation=nmp_violation,
+                        soft_performance_violation=(
+                            not safety_reasons and not nmp_violation
+                        ),
+                        violation_reasons=reasons,
+                    ),
+                )
+                if boundary_state.status == "probing":
+                    trial_index += 1
+                    confirmation_records, _, _ = _simulate_closed_loop(
+                        params,
+                        config,
+                        features,
+                        mode="boundary",
+                        duration_s=6.0,
+                        initial_state=[0.0, config.altitude_ref_m, 0.0, 0.0, 0.0, 0.0],
+                        x_ref_m=0.15,
+                        z_ref_m=config.altitude_ref_m,
+                        gains=gains,
+                        feedforward=feedforward,
+                        controller_state=controller_state,
+                    )
+                    confirmation_metrics, _, confirmation_safety = _evaluate_records(
+                        confirmation_records,
+                        config,
+                        config.altitude_ref_m,
+                        "lateral_position",
+                    )
+                    confirmation_nmp = (
+                        float(confirmation_metrics["nmp_undershoot"])
+                        >= config.max_nmp_undershoot
+                    )
+                    confirmation_reasons = list(confirmation_safety)
+                    if confirmation_nmp:
+                        confirmation_reasons.insert(0, "nmp_undershoot")
+                    boundary_events.append(
+                        {
+                            **event,
+                            "event": "candidate_confirmation_trial",
+                            "trial_index": trial_index,
+                            "accepted": not confirmation_reasons,
+                            "boundary_reason": "+".join(confirmation_reasons),
+                            "nmp_undershoot": float(
+                                confirmation_metrics["nmp_undershoot"]
+                            ),
+                        }
+                    )
+                    all_records.extend(confirmation_records)
+                    last_records = confirmation_records
+                    boundary_state = evaluate_algorithm1_probe(
+                        boundary_state,
+                        Algorithm1Observation(
+                            dwell_time_s=6.0,
+                            hard_safety_violation=bool(confirmation_safety),
+                            nmp_violation=confirmation_nmp,
+                            soft_performance_violation=(
+                                not confirmation_safety and not confirmation_nmp
+                            ),
+                            violation_reasons=confirmation_reasons,
+                        ),
+                    )
             break
+        seed_trial = False
     rejected = [event for event in boundary_events if event["accepted"] is False]
     first_rejected = rejected[0] if rejected else None
     rollback_applied = False
@@ -1012,6 +1154,8 @@ def run_vtol_boundary_scan(
     )
     final = final_records[-1]
     boundary_reason = str(first_rejected["boundary_reason"]) if first_rejected else "not_triggered"
+    if "nmp_undershoot" in boundary_reason:
+        boundary_reason = "nmp_undershoot"
     performance_violations = list(final_violations)
     rollback_nmp_safe = float(metrics["nmp_undershoot"]) < config.max_nmp_undershoot
     if not rollback_nmp_safe:
