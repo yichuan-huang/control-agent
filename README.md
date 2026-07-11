@@ -28,6 +28,7 @@ The eight diagnosis fields use strict assessments for stability, phase, delay, r
 | Path | Responsibility |
 | --- | --- |
 | `cfdc/` | Active Python package. Its top-level modules expose the programmatic pipeline, common validation, performance metrics, and demo entry points; the subpackages below own each workflow stage. |
+| `cfdc/app.py` | Gradio-facing application service: validates form input, manages clarification sessions, invokes the shared runtime, and converts typed reports into stage summaries and comparison views. |
 | `cfdc/models/` | Strict Pydantic contracts shared by every stage: diagnosis, profile catalog, experiment records, core features, controllers, tuning state, tracking state, and final reports. |
 | `cfdc/diagnosis/` | Stage 0 language diagnosis, the OpenAI-compatible LLM adapter, strict response validation, five-class classification, clarification sessions, safety checks, and offline diagnostic evaluation. |
 | `cfdc/workflow/` | Versioned simulation-profile catalog, candidate route construction, capability declarations, deterministic route compilation, and closed-catalog selection validation. |
@@ -46,6 +47,7 @@ The eight diagnosis fields use strict assessments for stability, phase, delay, r
 | `outputs/` | Generated local reports and simulation output; it is not source code and is ignored by Git. |
 | `tmp/` | Disposable local scratch data created during development or validation; it is ignored by Git and never imported by the runtime. |
 | `main.py` | CLI entry point for natural-language runs, diagnostic sessions, developer routes, benchmarks, and evaluation. |
+| `app.py` | Gradio UI entry point and local web-server launcher. |
 
 ## Simulation Profiles
 
@@ -68,6 +70,16 @@ python -m pip install -e '.[test]'
 pytest -q
 python main.py --validate-demo
 ```
+
+Start the Gradio application:
+
+```bash
+python app.py
+```
+
+Open `http://127.0.0.1:7860`. The application presents the same deterministic pipeline as the CLI in stage-oriented tables, supports clarification in the browser, and keeps the compact audit JSON available in a separate tab. To expose it on another interface or port, use `python app.py --host 0.0.0.0 --port 7860`.
+
+The default run mode is the natural-language workflow, where the entered description may be diagnosed with the configured LLM. CartPole and VTOL entries are developer validation scenarios: they always use preregistered descriptions, diagnoses, and profiles, never call the LLM, and ignore the natural-language form. Switching to a developer scenario disables but does not erase the form, so switching back restores the user's draft.
 
 Run a plain-language problem through the full automatic simulation:
 

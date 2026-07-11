@@ -57,17 +57,24 @@ def _advance_complete_diagnosis(state, diagnosis, engine, adapter):
     })
 
 
-def start_diagnostic_session(description: SystemDescription, *, route_id: str = "generic", diagnostic_adapter: DiagnosticAdapter | None = None, use_mechanism_cards: bool = False) -> DiagnosticSessionState:
+def start_diagnostic_session(
+    description: SystemDescription,
+    *,
+    route_id: str = "generic",
+    diagnostic_adapter: DiagnosticAdapter | None = None,
+    use_mechanism_cards: bool = False,
+    diagnosis: StructuralDiagnosis | None = None,
+) -> DiagnosticSessionState:
     engine = DiagnosticEngine(adapter=diagnostic_adapter, use_mechanism_cards=use_mechanism_cards)
-    diagnosis = engine.diagnose(description)
+    resolved_diagnosis = diagnosis or engine.diagnose(description)
     state = DiagnosticSessionState(
         session_id=f"diagnostic-{uuid4().hex[:16]}", route_id=route_id,
         initial_description=description, accumulated_description=description,
-        current_diagnosis=diagnosis,
-        pending_clarification_questions=list(diagnosis.clarification_questions),
-        status="ready_for_experiments" if diagnosis.complete else "collecting_information",
+        current_diagnosis=resolved_diagnosis,
+        pending_clarification_questions=list(resolved_diagnosis.clarification_questions),
+        status="ready_for_experiments" if resolved_diagnosis.complete else "collecting_information",
     )
-    return _advance_complete_diagnosis(state, diagnosis, engine, diagnostic_adapter) if diagnosis.complete else state
+    return _advance_complete_diagnosis(state, resolved_diagnosis, engine, diagnostic_adapter) if resolved_diagnosis.complete else state
 
 
 def continue_diagnostic_session(state: DiagnosticSessionState, answers: dict[str, str] | None = None, *, supplemental_description: str | None = None, diagnostic_adapter: DiagnosticAdapter | None = None, use_mechanism_cards: bool = False) -> DiagnosticSessionState:
@@ -86,7 +93,10 @@ def continue_diagnostic_session(state: DiagnosticSessionState, answers: dict[str
     if not normalized_answers and not (supplemental_description or "").strip():
         raise ValueError("provide at least one clarification answer or supplemental description")
 
-    evidence = [f"Question: {q}\nAnswer: {a}" for q, a in normalized_answers.items()]
+    evidence = [
+        f"Clarification {clarification_question_id(question)}: {answer}"
+        for question, answer in normalized_answers.items()
+    ]
     if supplemental_description and supplemental_description.strip():
         evidence.append(f"Supplemental description: {supplemental_description.strip()}")
     accumulated = state.accumulated_description.model_copy(update={"text": "\n\n".join([state.accumulated_description.text, *evidence])})

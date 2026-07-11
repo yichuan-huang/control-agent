@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Independent Core-Feature-Driven Control framework"
 requires-python = ">=3.11"
 dependencies = [
+  "gradio>=6.0,<7",
   "numpy>=2.0",
   "openai>=1.0",
   "pydantic>=2.0",

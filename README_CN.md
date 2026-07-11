@@ -28,6 +28,7 @@ LLM 只负责自然语言理解和闭 catalog 的语义选择，不能创造 fea
 | 路径 | 实现功能 |
 | --- | --- |
 | `cfdc/` | 当前生效的 Python package。顶层模块提供程序化 pipeline、通用校验、性能指标和 demo 入口，下面各子包分别负责工作流阶段。 |
+| `cfdc/app.py` | Gradio 应用服务层，负责校验表单、维护澄清 session、调用共享 runtime，并把类型化报告转换成阶段摘要和性能对比视图。 |
 | `cfdc/models/` | 定义各阶段共享的严格 Pydantic 数据契约，包括八字段诊断、profile catalog、仿真实验记录、核心特征、控制器、调优状态、tracking 状态和最终报告。 |
 | `cfdc/diagnosis/` | 实现 Stage 0 自然语言诊断、OpenAI-compatible LLM adapter、严格响应校验、五类归类、澄清 session、安全检查及离线诊断评测。 |
 | `cfdc/workflow/` | 实现版本化仿真 profile catalog、candidate route 构造、能力声明、确定性 route 编译以及闭集语义选择校验。 |
@@ -46,6 +47,7 @@ LLM 只负责自然语言理解和闭 catalog 的语义选择，不能创造 fea
 | `outputs/` | 本地生成的报告和仿真输出，不属于源代码并被 Git 忽略。 |
 | `tmp/` | 开发或验证过程中的可丢弃临时数据，被 Git 忽略且运行时不会导入。 |
 | `main.py` | 自然语言入口、诊断 session、开发验证 route、benchmark 和评测的 CLI 入口。 |
+| `app.py` | Gradio UI 入口和本地 Web 服务启动器。 |
 
 ## 仿真 Profile
 
@@ -68,6 +70,16 @@ python -m pip install -e '.[test]'
 pytest -q
 python main.py --validate-demo
 ```
+
+启动 Gradio 应用：
+
+```bash
+python app.py
+```
+
+浏览器访问 `http://127.0.0.1:7860`。应用与 CLI 使用同一条确定性流程，但会按阶段展示诊断、路由、实验、特征、控制器、调优和适应结果；信息不足时可以直接在页面回答澄清问题，审计 JSON 位于独立标签页。需要监听其他网卡或端口时使用 `python app.py --host 0.0.0.0 --port 7860`。
+
+默认运行方式是自然语言主流程，可以使用配置好的 LLM 诊断用户输入。CartPole 和 VTOL 属于开发验证场景，始终使用预注册 description、诊断和 profile，绝不会调用 LLM，也会在后端忽略自然语言表单。切换到开发验证时表单只会暂时禁用而不会清空，切回主流程后用户草稿仍然保留。
 
 直接从自然语言运行完整自动仿真：
 
