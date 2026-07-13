@@ -28,7 +28,9 @@ The eight diagnosis fields use strict assessments for stability, phase, delay, r
 | Path | Responsibility |
 | --- | --- |
 | `cfdc/` | Active Python package. Its top-level modules expose the programmatic pipeline, common validation, performance metrics, and demo entry points; the subpackages below own each workflow stage. |
-| `cfdc/app.py` | Gradio-facing application service: validates form input, manages clarification sessions, invokes the shared runtime, and converts typed reports into stage summaries and comparison views. |
+| `cfdc/web/service.py` | Gradio-facing application service: validates form input, manages clarification sessions, and invokes the shared runtime. |
+| `cfdc/web/presentation.py` | Converts typed reports into stage tables, status summaries, comparison views, and compact audit JSON. |
+| `cfdc/web/ui.py` | Defines the Gradio layout, CSS, UI callbacks, and event bindings. |
 | `cfdc/models/` | Strict Pydantic contracts shared by every stage: diagnosis, profile catalog, experiment records, core features, controllers, tuning state, tracking state, and final reports. |
 | `cfdc/diagnosis/` | Stage 0 language diagnosis, the OpenAI-compatible LLM adapter, strict response validation, five-class classification, clarification sessions, safety checks, and offline diagnostic evaluation. |
 | `cfdc/workflow/` | Versioned simulation-profile catalog, candidate route construction, capability declarations, deterministic route compilation, and closed-catalog selection validation. |
@@ -47,7 +49,7 @@ The eight diagnosis fields use strict assessments for stability, phase, delay, r
 | `outputs/` | Generated local reports and simulation output; it is not source code and is ignored by Git. |
 | `tmp/` | Disposable local scratch data created during development or validation; it is ignored by Git and never imported by the runtime. |
 | `main.py` | CLI entry point for natural-language runs, diagnostic sessions, developer routes, benchmarks, and evaluation. |
-| `app.py` | Gradio UI entry point and local web-server launcher. |
+| `app.py` | Thin Gradio launcher that parses server arguments and starts the UI defined in `cfdc.web.ui`. |
 
 ## Simulation Profiles
 

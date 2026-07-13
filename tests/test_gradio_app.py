@@ -1,15 +1,24 @@
-from cfdc.app import (
+from pathlib import Path
+
+from cfdc.web.presentation import render_report
+from cfdc.web.service import (
     ROUTE_CHOICES,
     continue_app_run,
     parse_names,
     parse_safety_bounds,
-    render_report,
     start_app_run,
 )
+from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, reset_ui, update_run_mode
 from cfdc.diagnosis import DeterministicDiagnosticAdapter
 from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.models import SystemDescription
-from app import EXAMPLES, NATURAL_LANGUAGE_MODE, reset_ui, update_run_mode
+
+
+def test_root_app_is_a_thin_launcher_and_legacy_package_app_is_removed():
+    assert not Path("cfdc/app.py").exists()
+    launcher = Path("app.py").read_text(encoding="utf-8")
+    assert "from cfdc.web.ui import CSS, build_app" in launcher
+    assert "def build_app" not in launcher
 
 
 def test_app_runs_clear_description_and_renders_stage_tables():
@@ -133,7 +142,7 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
             calls["select"] += 1
             return delegate.select_profile(description, diagnosis, classification, catalog)
 
-    monkeypatch.setattr("cfdc.app.build_adapter", lambda *args: CountingAdapter())
+    monkeypatch.setattr("cfdc.web.service.build_adapter", lambda *args: CountingAdapter())
     report, _ = start_app_run(
         "A measured first order heater settles after a small power change.",
         "temperature",
@@ -186,7 +195,7 @@ def test_developer_route_ignores_user_inputs_and_never_builds_llm(monkeypatch):
     def forbidden_adapter(*args, **kwargs):
         raise AssertionError("developer validation route must not build an LLM adapter")
 
-    monkeypatch.setattr("cfdc.app.build_adapter", forbidden_adapter)
+    monkeypatch.setattr("cfdc.web.service.build_adapter", forbidden_adapter)
     report, state = start_app_run(
         "This user description must be ignored.",
         "wrong output",
@@ -242,7 +251,7 @@ def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_
             return delegate.select_profile(description, diagnosis, classification, catalog)
 
     adapter = SequencedAdapter()
-    monkeypatch.setattr("cfdc.app.build_adapter", lambda *args: adapter)
+    monkeypatch.setattr("cfdc.web.service.build_adapter", lambda *args: adapter)
     _, state = start_app_run(
         "I have a machine.", "", "", "", NATURAL_LANGUAGE_MODE,
         True, "https://provider.example/v1", "provider-model", "test-key",

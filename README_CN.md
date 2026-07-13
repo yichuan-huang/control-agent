@@ -28,7 +28,9 @@ LLM 只负责自然语言理解和闭 catalog 的语义选择，不能创造 fea
 | 路径 | 实现功能 |
 | --- | --- |
 | `cfdc/` | 当前生效的 Python package。顶层模块提供程序化 pipeline、通用校验、性能指标和 demo 入口，下面各子包分别负责工作流阶段。 |
-| `cfdc/app.py` | Gradio 应用服务层，负责校验表单、维护澄清 session、调用共享 runtime，并把类型化报告转换成阶段摘要和性能对比视图。 |
+| `cfdc/web/service.py` | Gradio 应用服务层，负责校验表单、维护澄清 session，并调用共享 runtime。 |
+| `cfdc/web/presentation.py` | 将类型化报告转换成阶段表格、状态摘要、性能对比视图和紧凑审计 JSON。 |
+| `cfdc/web/ui.py` | 定义 Gradio 页面、CSS、UI 回调和事件绑定。 |
 | `cfdc/models/` | 定义各阶段共享的严格 Pydantic 数据契约，包括八字段诊断、profile catalog、仿真实验记录、核心特征、控制器、调优状态、tracking 状态和最终报告。 |
 | `cfdc/diagnosis/` | 实现 Stage 0 自然语言诊断、OpenAI-compatible LLM adapter、严格响应校验、五类归类、澄清 session、安全检查及离线诊断评测。 |
 | `cfdc/workflow/` | 实现版本化仿真 profile catalog、candidate route 构造、能力声明、确定性 route 编译以及闭集语义选择校验。 |
@@ -47,7 +49,7 @@ LLM 只负责自然语言理解和闭 catalog 的语义选择，不能创造 fea
 | `outputs/` | 本地生成的报告和仿真输出，不属于源代码并被 Git 忽略。 |
 | `tmp/` | 开发或验证过程中的可丢弃临时数据，被 Git 忽略且运行时不会导入。 |
 | `main.py` | 自然语言入口、诊断 session、开发验证 route、benchmark 和评测的 CLI 入口。 |
-| `app.py` | Gradio UI 入口和本地 Web 服务启动器。 |
+| `app.py` | 轻量 Gradio 启动入口，只负责解析服务参数并启动 `cfdc.web.ui` 中定义的页面。 |
 
 ## 仿真 Profile
 
