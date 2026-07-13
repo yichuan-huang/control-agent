@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本仓库是 `IEEE TCST.pdf` 中 Core-Feature-Driven Control（CFDC）流程的独立软件实现。项目当前只有软件仿真，不接入实体机器、不读取物理实验日志，也不部署 actuator command。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。项目当前只有软件仿真，不接入实体机器、不读取物理实验日志，也不部署 actuator command。
 
 ## 工作流程
 

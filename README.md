@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-This repository is an independent software implementation of the Core-Feature-Driven Control (CFDC) workflow described in `IEEE TCST.pdf`. Its scope is one end-to-end software simulation workflow.
+This repository is an independent software implementation of the Core-Feature-Driven Control (CFDC) workflow. Its scope is one end-to-end software simulation workflow.
 
 ## Workflow
 
