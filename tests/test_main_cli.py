@@ -1,11 +1,19 @@
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
 from cfdc.diagnosis import DeterministicDiagnosticAdapter, start_diagnostic_session
 from cfdc.models import DiagnosticSessionState, SystemDescription
 from main import main, parse_args
+
+
+def test_documented_deepseek_model_is_v4_pro():
+    for readme in (Path("README.md"), Path("README_CN.md")):
+        content = readme.read_text(encoding="utf-8")
+        assert "deepseek" + "-chat" not in content
+        assert '--llm-model "deepseek-v4-pro"' in content
 
 
 def test_cli_description_runs_full_automatic_simulation(monkeypatch, capsys):

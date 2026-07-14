@@ -17,19 +17,29 @@ NATURAL_LANGUAGE_MODE = "自然语言自动分析（主流程）"
 
 EXAMPLES = [
     [
-        "这是一个由电加热器调节的恒温箱，可视为 first-order self-regulating temperature process。输入是归一化加热功率，输出是连续测量的箱内温度。小幅提高功率后，温度立即沿预期方向平滑上升，不会先反向变化，也没有可察觉的等待；随后以单调、近似指数的方式收敛到新的稳定值，撤去变化后会回到原工作点。对象只有一个输入和一个主要输出，执行器和温度传感器均可用，非线性较弱。环境温度和装载量可能缓慢变化，因此增益和时间尺度存在中等不确定性，但不会改变其自稳结构。",
+        "这是一个由电加热器调节的恒温箱。控制输入是归一化加热功率，输出是温度传感器连续记录的箱内温度（temperature）。在多个小幅且可逆的功率试验中，提高功率后一个采样周期内就能看到温度开始上升，初始变化方向始终与加热作用一致，没有先下降或停顿；之后变化速度逐渐减小并停在新的恒定水平，功率恢复原值后温度也逐渐回到原工作水平。试验曲线平滑，没有持续往复波动，也没有明显分开的多个快慢阶段。当前工作区间只有一个加热器和一个主要温度输出，传感器覆盖整个试验过程；相同幅度的正负功率变化会产生方向相反、大小近似成比例的温度变化，未观察到死区、滞回或饱和。环境温度和装载量缓慢变化时，最终温差和达到恒定水平所需时间会有小幅到中等变化，但上述运动方向、响应时机和回到工作水平的现象保持不变。",
         "temperature",
         "heater",
     ],
     [
-        "这是一个带粘性阻尼的 spring-mass-damper oscillator，输入是施加在质量块上的水平力，输出是连续测量的位置。质量块从小位移释放后会围绕平衡点往复振动，振幅逐周期衰减并最终回到平衡位置；小力脉冲产生相同的衰减振荡，初始运动方向与施力方向一致，没有反向响应。系统是单输入单输出，位置传感器和力执行器均可用，在小位移范围内近似线性、可控且可观。质量和阻尼会随载荷略有变化，因此固有频率、阻尼比和输入增益存在中等不确定性，但开环响应保持稳定。",
+        "这是一个质量块通过弹簧（spring）和粘性阻尼器连接在固定支架上的装置。控制输入是施加在质量块上的双向水平力，输出是位置传感器连续记录的位置。质量块从小位移静止释放后，会反复穿过平衡位置，往复移动的幅度逐次减小，最后停回平衡位置附近；这一现象在多次小幅释放试验中都能重复观察到。施加小幅且可逆的力脉冲后，一个采样周期内就能看到位置开始变化，初始移动方向始终与施力方向一致，没有先向相反方向移动或停顿。加力后位置保持连续、不会突然跳变，位置曲线的斜率由零逐渐建立；撤去脉冲后仍会出现幅度逐次减小的往复移动。装置只有一个力执行器和一个主要位置输出，传感器能记录完整的移动过程；在小位移范围内，把脉冲幅度增大一倍时，初始弯曲程度和最大位移也近似按比例增大，未观察到死区、滞回或饱和。载荷小幅改变时，往复移动的周期、衰减速度和位移大小会有小幅到中等变化，但最终仍会回到平衡位置附近。",
         "position",
         "force",
     ],
     [
-        "这是一个水平轨道上的 low-friction cart，输入是双向电机力，输出是可连续测量的小车位置和速度。短时施加恒定小力时，小车产生近似恒定加速度；撤去力后速度基本保持、位置继续线性 drift，不会自行回到原位置，因此对象表现为 double integrator / non-restoring motion。力方向反转时加速度也立即反转，没有先反向的异常响应。系统只有一个控制输入，位置和速度传感器均可用，在限定行程和速度范围内近似线性、可控且可观。摩擦和负载可能小幅变化，使输入到加速度的增益存在中等不确定性，但不改变积分结构。",
+        "这是一个在水平轨道上运动的低摩擦小车（low-friction cart）。控制输入是双向电机施加的水平力，输出是位置传感器和速度传感器连续记录的小车位置与速度。在多个小幅且可逆的试验中，施加恒定小力后一个采样周期内速度就开始沿施力方向变化，初始运动不会反向或停顿；保持施力时，速度近似以恒定速率变化，位置曲线连续弯曲而不会突然跳变。撤去力后，速度会在较长时间内保持接近撤力瞬间的数值，位置继续沿原方向以近似恒定斜率移动，不会自行减速并返回起点。正向和负向力会产生方向相反的速度变化，力幅增大一倍时速度变化率也近似增大一倍，限定行程和速度范围内未观察到死区、滞回或饱和。装置只有一个电机执行器；位置和速度两个读数描述的是同一段平移运动，不存在第二个执行器或其他独立运动通道。摩擦和负载小幅改变时，速度变化率会有小幅到中等变化，但撤力后的持续移动现象保持不变。",
         "position, velocity",
         "motor force",
+    ],
+    [
+        "这是一个带蒸汽析出的加热储液容器（tank）。控制输入是进液阀门开度，输出是液位传感器连续记录的容器液位。在多个小幅且可逆的阀门试验中，稍微增大阀门开度后一个采样周期内液位就开始变化，但初始会短暂下降，与之后的上升方向相反（opposite direction）；随后下降停止，液位转为上升并逐渐停在更高的恒定位置。稍微减小阀门开度时会观察到镜像过程：液位先短暂上升，随后转为下降并停在较低位置。整个过程中没有纯等待，液位曲线连续且不会突然跳变；阀门恢复原开度后，液位也会逐渐回到原工作位置。装置只有一个阀门执行器和一个主要液位输出，传感器覆盖完整变化过程；在当前工作范围内，把小幅阀门变化增大一倍时，初始反向幅度和最终液位变化也近似按比例增大，未观察到死区、滞回或饱和。蒸汽负荷和进液温度缓慢改变时，短暂反向移动的持续时间、幅度以及最终液位会有小幅到中等变化，但先反向再转向并停稳的现象保持不变。",
+        "liquid level",
+        "inlet valve",
+    ],
+    [
+        "这是两个通过下部连通管相连的储液容器（interconnected tank levels）。控制输入是分别向两个容器供液的泵 A 和泵 B，输出是两个液位传感器连续记录的液位 A 与液位 B。在多个小幅且可逆的单泵试验中，只提高泵 A 后一个采样周期内两个液位都开始变化，初始均沿上升方向移动，其中液位 A 变化较大、液位 B 变化较小；只提高泵 B 时也会同时看到两个液位上升，但液位 B 的变化更大。分别降低任一泵时，两个液位都会沿相反方向变化，没有先反向或停顿。保持新的泵速后，两个液位最终都会停在新的恒定位置；泵速恢复后，两个液位也逐渐回到原工作位置。两个泵都是独立可调的执行器，两个传感器覆盖完整变化过程；每个泵都会明显改变两个输出，因此不能在试验中把任何一个液位视为只受其中一个泵影响。在当前工作范围内，泵速小幅变化增大一倍时，两条液位曲线的最终变化也近似按比例增大，未观察到死区、滞回或饱和。连通管阻力、泵效率和总出液负荷缓慢变化时，各液位的变化幅度和达到恒定位置所需时间会有中等变化，但每个泵都会影响两个液位的现象保持不变。",
+        "level A, level B",
+        "pump A, pump B",
     ],
     [
         "一个稳定过程对阀门阶跃先反向运动，随后才向最终方向稳定。",
@@ -211,15 +221,21 @@ def build_app() -> gr.Blocks:
                 )
                 description = gr.Textbox(
                     label="控制问题",
+                    value="",
                     lines=6,
                     placeholder="描述对象如何运动、能够测量什么、可以施加什么控制，以及已知约束。",
                 )
                 with gr.Row():
-                    observed_outputs = gr.Textbox(label="可观察输出", placeholder="temperature, position")
-                    actuators = gr.Textbox(label="执行器", placeholder="heater, motor force")
+                    observed_outputs = gr.Textbox(
+                        label="可观察输出", value="", placeholder="temperature, position"
+                    )
+                    actuators = gr.Textbox(
+                        label="执行器", value="", placeholder="heater, motor force"
+                    )
                 with gr.Accordion("高级仿真设置", open=False):
                     safety_bounds = gr.Textbox(
                         label="安全边界",
+                        value="",
                         lines=3,
                         placeholder="max_abs_control=1.0\nmax_abs_output=2.0",
                     )
@@ -236,14 +252,14 @@ def build_app() -> gr.Blocks:
                         value=os.getenv("CFDC_LLM_MODEL", ""),
                         placeholder="provider-model",
                     )
-                    api_key = gr.Textbox(label="API Key", type="password")
+                    api_key = gr.Textbox(label="API Key", value="", type="password")
                 with gr.Row():
                     run_button = gr.Button("运行完整仿真", variant="primary", elem_classes="primary-run", scale=4)
                     clear_button = gr.Button("清空", scale=1)
                 gr.Examples(
                     examples=EXAMPLES,
                     inputs=[description, observed_outputs, actuators],
-                    label="可直接完成全流程的控制问题（含详细 Type I / II / III）",
+                    label="可直接完成全流程的详细控制问题示例",
                 )
 
             with gr.Column(scale=8, min_width=560):
@@ -253,11 +269,11 @@ def build_app() -> gr.Blocks:
                 performance_visual = gr.HTML()
                 with gr.Group(visible=False) as clarification_group:
                     gr.Markdown("### 补充诊断证据")
-                    question_1 = gr.Textbox(visible=False)
-                    question_2 = gr.Textbox(visible=False)
-                    question_3 = gr.Textbox(visible=False)
-                    question_4 = gr.Textbox(visible=False)
-                    supplemental = gr.Textbox(label="补充描述", lines=2)
+                    question_1 = gr.Textbox(value="", visible=False)
+                    question_2 = gr.Textbox(value="", visible=False)
+                    question_3 = gr.Textbox(value="", visible=False)
+                    question_4 = gr.Textbox(value="", visible=False)
+                    supplemental = gr.Textbox(label="补充描述", value="", lines=2)
                     continue_button = gr.Button("提交并继续仿真", variant="primary")
 
                 with gr.Tabs():

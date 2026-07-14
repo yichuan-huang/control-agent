@@ -17,6 +17,10 @@ from cfdc.models import (
     SignificantDelayField,
     SystemDescription,
 )
+from cfdc.workflow import (
+    default_simulation_profile_catalog,
+    deterministic_profile_selection,
+)
 
 
 def test_public_model_json_roundtrip():
@@ -194,6 +198,54 @@ def test_openai_compatible_adapter_uses_sdk(monkeypatch):
     assert "extra_body" not in calls["completion"]
     assert calls["completion"]["messages"][1]["role"] == "user"
     assert "open_loop_stability" in calls["completion"]["messages"][1]["content"]
+
+
+def test_profile_selection_prompt_declares_exact_json_field_types(monkeypatch):
+    calls = {}
+    description = SystemDescription(
+        text="A measured first order heater settles after a small power change.",
+        observed_outputs=["temperature"],
+        actuators=["heater"],
+    )
+    diagnosis, classification = DiagnosticEngine().run(description)
+    catalog = default_simulation_profile_catalog()
+    expected = deterministic_profile_selection(
+        description,
+        diagnosis,
+        classification,
+        catalog,
+    )
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            calls["completion"] = kwargs
+            message = type("Message", (), {"content": expected.model_dump_json()})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            completions = FakeCompletions()
+            self.chat = type("Chat", (), {"completions": completions})()
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
+    adapter = OpenAICompatibleDiagnosticAdapter(
+        base_url="https://example.test/v1",
+        model="test-model",
+        api_key="test-key",
+    )
+
+    result = adapter.select_profile(description, diagnosis, classification, catalog)
+
+    assert result == expected.model_dump()
+    system_prompt = calls["completion"]["messages"][0]["content"]
+    user_prompt = calls["completion"]["messages"][1]["content"]
+    assert "exact JSON schema" in system_prompt
+    assert '"selected_feature_ids": ["string"]' in user_prompt
+    assert '"evidence": ["string"]' in user_prompt
+    assert "evidence must be a non-empty JSON array of strings" in user_prompt
+    assert "even when there is only one evidence item" in user_prompt
+    assert "Do not add any other keys" in user_prompt
 
 
 def test_openai_compatible_adapter_requires_explicit_provider_configuration(monkeypatch):

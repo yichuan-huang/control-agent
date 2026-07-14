@@ -114,7 +114,7 @@ The same settings can be supplied entirely on the command line:
 ```bash
 python main.py --use-llm \
   --llm-base-url "https://api.deepseek.com/v1" \
-  --llm-model "deepseek-chat" \
+  --llm-model "deepseek-v4-pro" \
   --llm-api-key "$DEEPSEEK_API_KEY" \
   --description "A spring-mass process oscillates after a force pulse." \
   --observed-output position \

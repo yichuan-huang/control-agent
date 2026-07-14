@@ -220,10 +220,23 @@ class OpenAICompatibleDiagnosticAdapter:
         ]
         prompt = (
             "Select exactly one CFDC simulation profile from the supplied catalog. "
-            "Return only JSON with simulation_profile_id, feature_bundle_id, "
-            "selected_feature_ids, confidence, evidence, and rationale. The feature "
-            "IDs must exactly equal that profile's required_feature_ids; never invent "
-            "or add features.\n\n"
+            "Return ONLY one JSON object. Do not include markdown, prose, or code fences.\n\n"
+            "The JSON object must match this shape and these field types exactly:\n"
+            "{\n"
+            '  "simulation_profile_id": "string",\n'
+            '  "feature_bundle_id": "string",\n'
+            '  "selected_feature_ids": ["string"],\n'
+            '  "confidence": 0.0,\n'
+            '  "evidence": ["string"],\n'
+            '  "rationale": "string"\n'
+            "}\n\n"
+            "Rules:\n"
+            "- Include all six keys exactly once. Do not add any other keys.\n"
+            "- simulation_profile_id, feature_bundle_id, and rationale must be non-empty JSON strings.\n"
+            "- selected_feature_ids must be a non-empty JSON array of strings and must exactly equal the selected profile's required_feature_ids; never invent or add features.\n"
+            "- confidence must be a JSON number from 0.0 through 1.0.\n"
+            "- evidence must be a non-empty JSON array of strings, even when there is only one evidence item; never return evidence as a single string.\n"
+            "- Do not use null for any field.\n\n"
             f"description={description.model_dump_json()}\n"
             f"diagnosis={diagnosis.model_dump_json()}\n"
             f"classification={classification.model_dump_json()}\n"
@@ -231,7 +244,17 @@ class OpenAICompatibleDiagnosticAdapter:
         )
         options: dict[str, Any] = dict(
             model=self.model,
-            messages=[{"role": "system", "content": "You select from a closed CFDC profile catalog and output strict JSON only."}, {"role": "user", "content": prompt}],
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You select from a closed CFDC profile catalog and output "
+                        "strict JSON only. Follow the exact JSON schema and field "
+                        "types in the user prompt."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
             temperature=self.temperature,
             max_tokens=min(self.max_tokens, 800),
             response_format={"type": "json_object"},

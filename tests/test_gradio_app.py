@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from cfdc.web.presentation import render_report
 from cfdc.web.service import (
     ROUTE_CHOICES,
@@ -8,7 +10,7 @@ from cfdc.web.service import (
     parse_safety_bounds,
     start_app_run,
 )
-from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, reset_ui, update_run_mode
+from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, build_app, reset_ui, update_run_mode
 from cfdc.diagnosis import DeterministicDiagnosticAdapter
 from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.models import SystemDescription
@@ -118,9 +120,114 @@ def test_app_input_parsers_accept_common_multiline_forms():
     }.issubset(set(ROUTE_CHOICES.values()))
 
 
-def test_app_rejects_nonfinite_duplicate_bounds_and_unknown_routes():
-    import pytest
+def test_app_input_parsers_treat_uninitialized_textboxes_as_empty():
+    assert parse_names(None) == []
+    assert parse_safety_bounds(None) == {}
 
+
+def test_gradio_textboxes_start_with_string_values():
+    app = build_app()
+    provider_labels = {"Base URL", "Model"}
+    textbox_values = [
+        component["props"].get("value")
+        for component in app.config["components"]
+        if component["type"] == "textbox"
+        and component["props"].get("label") not in provider_labels
+    ]
+
+    assert textbox_values
+    assert all(value == "" for value in textbox_values)
+
+
+def test_first_example_accepts_uninitialized_optional_textboxes():
+    description, outputs, actuators = EXAMPLES[0]
+
+    report, state = start_app_run(
+        description,
+        outputs,
+        actuators,
+        None,
+        NATURAL_LANGUAGE_MODE,
+        False,
+        None,
+        None,
+        None,
+    )
+
+    assert report.status in {"completed", "frozen"}
+    assert state["session"] is None
+
+
+def test_uninitialized_required_description_uses_validation_error():
+    with pytest.raises(ValueError, match="请描述需要控制的对象"):
+        start_app_run(
+            None,
+            None,
+            None,
+            None,
+            NATURAL_LANGUAGE_MODE,
+            False,
+            None,
+            None,
+            None,
+        )
+
+
+def test_uninitialized_llm_fields_use_configuration_error(monkeypatch):
+    description, outputs, actuators = EXAMPLES[0]
+    for name in [
+        "CFDC_LLM_BASE_URL",
+        "CONTROL_PROJECT_LLM_BASE_URL",
+        "OPENAI_BASE_URL",
+        "CFDC_LLM_MODEL",
+        "CONTROL_PROJECT_LLM_MODEL",
+        "OPENAI_MODEL",
+        "CFDC_LLM_API_KEY",
+        "CONTROL_PROJECT_LLM_API_KEY",
+        "OPENAI_API_KEY",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(ValueError, match="Missing OpenAI-compatible LLM configuration"):
+        start_app_run(
+            description,
+            outputs,
+            actuators,
+            None,
+            NATURAL_LANGUAGE_MODE,
+            True,
+            None,
+            None,
+            None,
+        )
+
+
+def test_uninitialized_answer_textboxes_use_validation_error():
+    report, state = start_app_run(
+        "I have a machine.",
+        "",
+        "",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+    )
+    assert report.status == "need_more_information"
+
+    with pytest.raises(
+        ValueError,
+        match="provide at least one clarification answer or supplemental description",
+    ):
+        continue_app_run(
+            state,
+            [None, None, None, None],
+            None,
+        )
+
+
+def test_app_rejects_nonfinite_duplicate_bounds_and_unknown_routes():
     with pytest.raises(ValueError, match="有限数字"):
         parse_safety_bounds("max_abs_output=nan")
     with pytest.raises(ValueError, match="重复定义"):
@@ -189,6 +296,144 @@ def test_detailed_type_i_to_iii_examples_complete_the_full_pipeline():
         assert report.algorithm1_state is not None
         assert report.adapted_controller_performance is not None
         assert state["session"] is None
+
+
+def test_detailed_type_iv_and_v_examples_complete_the_full_pipeline():
+    expected = [
+        ("class_iv_higher_order_unstable_nonlinear_or_nmp", "nmp_inverse_response"),
+        ("class_v_multivariable_significant_coupling", "mimo_2x2_coupled"),
+    ]
+
+    for example, (archetype, profile) in zip(EXAMPLES[3:5], expected):
+        description, outputs, actuators = example
+        report, state = start_app_run(
+            description,
+            outputs,
+            actuators,
+            "",
+            NATURAL_LANGUAGE_MODE,
+            False,
+            "",
+            "",
+            "",
+        )
+
+        assert report.status in {"completed", "frozen"}
+        assert str(report.classification.primary_class) == archetype
+        assert report.semantic_selection.simulation_profile_id == profile
+        assert report.experiment_results
+        assert report.features
+        assert report.controller is not None
+        assert report.algorithm1_state is not None
+        assert report.adapted_controller_performance is not None
+        assert state["session"] is None
+
+
+def test_last_two_examples_are_preserved_for_clarification_flow():
+    expected_incomplete_examples = [
+        [
+            "一个稳定过程对阀门阶跃先反向运动，随后才向最终方向稳定。",
+            "output",
+            "valve",
+        ],
+        [
+            "强耦合双输入双输出过程，每个输入都会明显影响两个输出。",
+            "y1, y2",
+            "u1, u2",
+        ],
+    ]
+
+    assert len(EXAMPLES) == 7
+    assert EXAMPLES[-2:] == expected_incomplete_examples
+
+    for description, outputs, actuators in EXAMPLES[-2:]:
+        report, state = start_app_run(
+            description,
+            outputs,
+            actuators,
+            "",
+            NATURAL_LANGUAGE_MODE,
+            False,
+            "",
+            "",
+            "",
+        )
+        questions = render_report(report)["clarifications"]
+
+        assert report.status == "need_more_information"
+        assert state["session"] is not None
+        assert 2 <= len(questions) <= 4
+
+
+def test_first_five_examples_use_observations_without_diagnostic_answer_leakage():
+    forbidden_terms = [
+        "first-order",
+        "first order",
+        "self-regulating",
+        "oscillator",
+        "double integrator",
+        "integrator",
+        "non-restoring",
+        "relative degree",
+        "estimated_order",
+        "open_loop_stability",
+        "minimum_phase",
+        "significant_delay",
+        "controllability_observability",
+        "nonlinearity_strength",
+        "coupling_severity",
+        "uncertainty_magnitude",
+        "clarification_questions",
+        "complete=true",
+        "stage 0",
+        "type i",
+        "type ii",
+        "type iii",
+        "type iv",
+        "type v",
+        "class_i",
+        "class_ii",
+        "class_iii",
+        "class_iv",
+        "class_v",
+        "higher-order",
+        "higher order",
+        "inverse response",
+        "nmp",
+        "mimo",
+        "multivariable",
+        "一阶系统",
+        "二阶系统",
+        "高阶系统",
+        "不稳定系统",
+        "双积分",
+        "相对阶",
+        "最小相位",
+        "非最小相位",
+        "逆响应",
+        "多变量系统",
+        "强耦合",
+        "双输入双输出",
+        "开环稳定",
+        "边界稳定",
+        "单输入单输出",
+    ]
+
+    for description, _, _ in EXAMPLES[:5]:
+        normalized = description.lower()
+        leaked = [term for term in forbidden_terms if term in normalized]
+
+        assert not leaked
+        assert "=" not in description
+        assert "一个采样周期内" in description
+        assert "初始" in description
+        assert "传感器" in description
+        assert "小幅" in description
+        assert "输入" in description
+        assert "输出" in description
+
+    ui_source = Path("cfdc/web/ui.py").read_text(encoding="utf-8")
+    assert "Type I / II / III" not in ui_source
 
 
 def test_developer_route_ignores_user_inputs_and_never_builds_llm(monkeypatch):

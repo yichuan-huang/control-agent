@@ -37,13 +37,19 @@ LEGACY_ROUTE_LABELS = {
 }
 
 
-def parse_names(value: str) -> list[str]:
-    return [item.strip() for item in value.replace("\n", ",").split(",") if item.strip()]
+def _textbox_text(value: str | None) -> str:
+    return "" if value is None else value
 
 
-def parse_safety_bounds(value: str) -> dict[str, float]:
+def parse_names(value: str | None) -> list[str]:
+    text = _textbox_text(value)
+    return [item.strip() for item in text.replace("\n", ",").split(",") if item.strip()]
+
+
+def parse_safety_bounds(value: str | None) -> dict[str, float]:
+    text = _textbox_text(value)
     bounds: dict[str, float] = {}
-    for line in value.replace(",", "\n").splitlines():
+    for line in text.replace(",", "\n").splitlines():
         if not line.strip():
             continue
         key, separator, raw = line.partition("=")
@@ -64,16 +70,16 @@ def parse_safety_bounds(value: str) -> dict[str, float]:
 
 def build_adapter(
     use_llm: bool,
-    base_url: str,
-    model: str,
-    api_key: str,
+    base_url: str | None,
+    model: str | None,
+    api_key: str | None,
 ):
     if not use_llm:
         return None
     return OpenAICompatibleDiagnosticAdapter(
-        base_url=base_url.strip() or None,
-        model=model.strip() or None,
-        api_key=api_key.strip() or None,
+        base_url=_textbox_text(base_url).strip() or None,
+        model=_textbox_text(model).strip() or None,
+        api_key=_textbox_text(api_key).strip() or None,
     )
 
 
@@ -110,15 +116,15 @@ def _run_ready_session(
 
 
 def start_app_run(
-    description: str,
-    observed_outputs: str,
-    actuators: str,
-    safety_bounds: str,
-    route_label: str,
+    description: str | None,
+    observed_outputs: str | None,
+    actuators: str | None,
+    safety_bounds: str | None,
+    route_label: str | None,
     use_llm: bool,
-    base_url: str,
-    model: str,
-    api_key: str,
+    base_url: str | None,
+    model: str | None,
+    api_key: str | None,
     include_trajectory: bool = False,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     route_id = ROUTE_CHOICES.get(
@@ -144,12 +150,16 @@ def start_app_run(
             "input_source": "preregistered_developer_scenario",
         }
 
-    if not description.strip():
+    description_text = _textbox_text(description).strip()
+    base_url_text = _textbox_text(base_url)
+    model_text = _textbox_text(model)
+    api_key_text = _textbox_text(api_key)
+    if not description_text:
         raise ValueError("请描述需要控制的对象、可观察输出和可用执行器。")
-    adapter = build_adapter(use_llm, base_url, model, api_key)
+    adapter = build_adapter(use_llm, base_url_text, model_text, api_key_text)
 
     system = SystemDescription(
-        text=description.strip(),
+        text=description_text,
         observed_outputs=parse_names(observed_outputs),
         actuators=parse_names(actuators),
         safety_bounds=parse_safety_bounds(safety_bounds),
@@ -175,9 +185,9 @@ def start_app_run(
     return report, {
         "session": session.model_dump(mode="json") if session is not None else None,
         "use_llm": use_llm if awaiting_clarification else False,
-        "base_url": base_url if awaiting_clarification else "",
-        "model": model if awaiting_clarification else "",
-        "api_key": api_key if awaiting_clarification else "",
+        "base_url": base_url_text if awaiting_clarification else "",
+        "model": model_text if awaiting_clarification else "",
+        "api_key": api_key_text if awaiting_clarification else "",
         "include_trajectory": include_trajectory,
         "input_source": "natural_language",
     }
@@ -185,25 +195,25 @@ def start_app_run(
 
 def continue_app_run(
     app_state: dict[str, Any],
-    answers: list[str],
-    supplemental_description: str,
+    answers: list[str | None],
+    supplemental_description: str | None,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     if not app_state or not app_state.get("session"):
         raise ValueError("当前没有等待回答的诊断会话。")
     session = DiagnosticSessionState.model_validate(app_state["session"])
     adapter = build_adapter(
         bool(app_state.get("use_llm")),
-        str(app_state.get("base_url", "")),
-        str(app_state.get("model", "")),
-        str(app_state.get("api_key", "")),
+        _textbox_text(app_state.get("base_url")),
+        _textbox_text(app_state.get("model")),
+        _textbox_text(app_state.get("api_key")),
     )
     question_ids = list(clarification_question_map(session))
     question_map = clarification_question_map(session)
-    keyed_answers = {
-        question_id: answer.strip()
-        for question_id, answer in zip(question_ids, answers)
-        if answer.strip()
-    }
+    keyed_answers = {}
+    for question_id, answer in zip(question_ids, answers):
+        answer_text = _textbox_text(answer).strip()
+        if answer_text:
+            keyed_answers[question_id] = answer_text
     observed_outputs = list(session.accumulated_description.observed_outputs)
     actuators = list(session.accumulated_description.actuators)
     for question_id, answer in keyed_answers.items():
@@ -226,7 +236,7 @@ def continue_app_run(
     updated = continue_diagnostic_session(
         session,
         keyed_answers,
-        supplemental_description=supplemental_description.strip() or None,
+        supplemental_description=_textbox_text(supplemental_description).strip() or None,
         diagnostic_adapter=adapter,
     )
     report = _run_ready_session(
