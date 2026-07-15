@@ -43,6 +43,7 @@ The eight diagnosis fields use strict assessments for stability, phase, delay, r
 | `cfdc/pipeline.py` | Small programmatic facade for applications that call the CFDC stages from Python instead of the CLI. |
 | `cfdc/performance.py` | Shared channel and closed-loop performance metrics used by all simulator backends. |
 | `cfdc/validation.py` | Cross-stage route, feature-completeness, and go/no-go validation helpers. |
+| `dataset/` | Source-audited control-problem corpus sampled from all 10 chapters of *Feedback Control of Dynamic Systems* (8th ed.): 200 technical summaries plus aligned English and Chinese six-field prompts in `control_problems.md`, `control_problem_prompts.md`, and `control_problem_prompts_cn.md`. |
 | `tests/` | Unit, integration, CLI, Class I-V end-to-end, retry/failure, Algorithm 1, tracking, CartPole, VTOL, and Class V regression tests. |
 | `docs/` | Design notes and migration records for the current simulation-first architecture. |
 | `archive/` | Historical implementation retained for reference only. Active code must not import it. |

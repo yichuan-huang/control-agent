@@ -1,8 +1,10 @@
 from pathlib import Path
+from collections import Counter
 import math
 import re
 
 
+TECHNICAL_PATH = Path("dataset/control_problems.md")
 ENGLISH_PATH = Path("dataset/control_problem_prompts.md")
 CHINESE_PATH = Path("dataset/control_problem_prompts_cn.md")
 ENGLISH_HEADINGS = [
@@ -23,6 +25,26 @@ CHINESE_HEADINGS = [
 ]
 HAN_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 MATH_NOTATION_PATTERN = re.compile(r"[0-9=<>+*/^\\{}\[\]$]")
+
+
+def _technical_ids() -> list[int]:
+    markdown = TECHNICAL_PATH.read_text(encoding="utf-8")
+    matches = re.findall(
+        r"^### (\d+)\. \[Ch(\d+)-(\d+)\] ", markdown, re.MULTILINE
+    )
+    ids = [int(global_id) for global_id, _chapter, _local_id in matches]
+    chapter_counts = Counter(int(chapter) for _global_id, chapter, _local_id in matches)
+
+    assert ids == list(range(1, 201))
+    assert chapter_counts == Counter({chapter: 20 for chapter in range(1, 11)})
+    for chapter in range(1, 11):
+        local_ids = [
+            int(local_id)
+            for _global_id, item_chapter, local_id in matches
+            if int(item_chapter) == chapter
+        ]
+        assert local_ids == list(range(1, 21))
+    return ids
 
 
 def _field(entry: str, heading: str) -> str:
@@ -49,9 +71,10 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
     markdown = path.read_text(encoding="utf-8")
     title_matches = re.findall(r"^## (\d+)\. (.+)$", markdown, re.MULTILINE)
     entries = re.split(r"^## \d+\. .+$", markdown, flags=re.MULTILINE)[1:]
+    expected_ids = _technical_ids()
 
-    assert len(title_matches) == len(entries) == 20
-    assert [int(number) for number, _ in title_matches] == list(range(1, 21))
+    assert len(title_matches) == len(entries) == len(expected_ids)
+    assert [int(number) for number, _ in title_matches] == expected_ids
     assert "~~~json" not in markdown
 
     parsed = []
@@ -110,8 +133,25 @@ def test_english_and_chinese_prompt_documents_preserve_numeric_and_structural_pa
     english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
     chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
 
-    assert len(english) == len(chinese) == 20
+    assert len(english) == len(chinese) == len(_technical_ids())
     for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
         assert english_item["bounds"] == chinese_item["bounds"], index
         assert english_item["time_scale"] == chinese_item["time_scale"], index
         assert len(english_item["actions"]) == len(chinese_item["actions"]), index
+
+
+def test_technical_corpus_has_four_required_fields_and_source_for_every_entry():
+    markdown = TECHNICAL_PATH.read_text(encoding="utf-8")
+    entries = re.split(
+        r"^### \d+\. \[Ch\d+-\d+\] .+$", markdown, flags=re.MULTILINE
+    )[1:]
+
+    assert len(entries) == len(_technical_ids())
+    for index, entry in enumerate(entries, 1):
+        assert "**来源定位：**" in entry, index
+        assert re.findall(r"^#### (.+)$", entry, re.MULTILINE) == [
+            "问题表述",
+            "数学模型",
+            "解决方法",
+            "控制器与参数",
+        ], index
