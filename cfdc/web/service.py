@@ -46,6 +46,11 @@ def parse_names(value: str | None) -> list[str]:
     return [item.strip() for item in text.replace("\n", ",").split(",") if item.strip()]
 
 
+def parse_forbidden_actions(value: str | None) -> list[str]:
+    text = _textbox_text(value)
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
 def parse_safety_bounds(value: str | None) -> dict[str, float]:
     text = _textbox_text(value)
     bounds: dict[str, float] = {}
@@ -66,6 +71,21 @@ def parse_safety_bounds(value: str | None) -> dict[str, float]:
             raise ValueError(f"安全边界 {clean_key!r} 必须是有限数字")
         bounds[clean_key] = parsed
     return bounds
+
+
+def parse_time_scale_hint(value: str | float | None) -> float | None:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        parsed = float(raw)
+    except ValueError as exc:
+        raise ValueError("主导时间尺度必须是有限的正数，单位为秒") from exc
+    if not math.isfinite(parsed) or parsed <= 0.0:
+        raise ValueError("主导时间尺度必须是有限的正数，单位为秒")
+    return parsed
 
 
 def build_adapter(
@@ -126,6 +146,8 @@ def start_app_run(
     model: str | None,
     api_key: str | None,
     include_trajectory: bool = False,
+    forbidden_actions: str | None = None,
+    time_scale_hint_s: str | float | None = None,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     route_id = ROUTE_CHOICES.get(
         route_label,
@@ -163,6 +185,8 @@ def start_app_run(
         observed_outputs=parse_names(observed_outputs),
         actuators=parse_names(actuators),
         safety_bounds=parse_safety_bounds(safety_bounds),
+        forbidden_actions=parse_forbidden_actions(forbidden_actions),
+        time_scale_hint_s=parse_time_scale_hint(time_scale_hint_s),
     )
     report = run_cfdc_route(
         route_id,

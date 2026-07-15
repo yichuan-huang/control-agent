@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from cfdc.web.presentation import render_report
+from cfdc.web import service as web_service
 from cfdc.web.service import (
     ROUTE_CHOICES,
     continue_app_run,
@@ -120,6 +121,60 @@ def test_app_input_parsers_accept_common_multiline_forms():
     }.issubset(set(ROUTE_CHOICES.values()))
 
 
+def test_time_scale_hint_parser_accepts_blank_and_positive_finite_values():
+    assert web_service.parse_time_scale_hint(None) is None
+    assert web_service.parse_time_scale_hint("") is None
+    assert web_service.parse_time_scale_hint(" 2.5 ") == 2.5
+    assert web_service.parse_time_scale_hint(0.05) == 0.05
+
+
+def test_forbidden_actions_parser_preserves_commas_inside_one_action_per_line():
+    assert web_service.parse_forbidden_actions(
+        "free release\ncontinue after angle, rate, torque, or duration limits are reached"
+    ) == [
+        "free release",
+        "continue after angle, rate, torque, or duration limits are reached",
+    ]
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "fast"])
+def test_time_scale_hint_parser_rejects_nonpositive_or_nonfinite_values(value):
+    with pytest.raises(ValueError, match="主导时间尺度"):
+        web_service.parse_time_scale_hint(value)
+
+
+def test_start_app_run_passes_forbidden_actions_and_time_scale_to_system_description(monkeypatch):
+    captured = {}
+    real_system_description = SystemDescription
+
+    def capture_system_description(**kwargs):
+        captured.update(kwargs)
+        return real_system_description(**kwargs)
+
+    monkeypatch.setattr(web_service, "SystemDescription", capture_system_description)
+
+    report, _ = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature",
+        "heater",
+        "max_abs_control=1.0",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+        forbidden_actions="free release\nphysical deployment",
+        time_scale_hint_s="2.5",
+    )
+
+    assert report.status == "completed"
+    assert captured["forbidden_actions"] == ["free release", "physical deployment"]
+    assert captured["time_scale_hint_s"] == 2.5
+    assert report.system_description.forbidden_actions == ["free release", "physical deployment"]
+    assert report.system_description.time_scale_hint_s == 2.5
+    assert report.experiment_plan.instructions[0].duration_s == 20.0
+
+
 def test_app_input_parsers_treat_uninitialized_textboxes_as_empty():
     assert parse_names(None) == []
     assert parse_safety_bounds(None) == {}
@@ -137,6 +192,26 @@ def test_gradio_textboxes_start_with_string_values():
 
     assert textbox_values
     assert all(value == "" for value in textbox_values)
+
+
+def test_gradio_exposes_all_six_domain_inputs_with_blank_optional_defaults():
+    app = build_app()
+    textboxes = {
+        component["props"].get("label"): component["props"]
+        for component in app.config["components"]
+        if component["type"] == "textbox"
+    }
+
+    assert {
+        "控制问题",
+        "可观察输出",
+        "执行器",
+        "安全边界",
+        "禁止实验动作",
+        "主导时间尺度（秒）",
+    }.issubset(textboxes)
+    assert textboxes["禁止实验动作"]["value"] == ""
+    assert textboxes["主导时间尺度（秒）"]["value"] == ""
 
 
 def test_first_example_accepts_uninitialized_optional_textboxes():
@@ -466,12 +541,14 @@ def test_run_mode_disables_inputs_without_clearing_their_values():
     natural_updates = update_run_mode(NATURAL_LANGUAGE_MODE)
 
     assert "不会调用 LLM" in validation_updates[0]
-    assert validation_updates[1]["interactive"] is False
-    assert "value" not in validation_updates[1]
-    assert validation_updates[5]["interactive"] is False
-    assert validation_updates[5]["value"] is False
-    assert natural_updates[1]["interactive"] is True
-    assert natural_updates[6]["interactive"] is True
+    assert "六项" in natural_updates[0]
+    for update in validation_updates[1:7]:
+        assert update["interactive"] is False
+        assert "value" not in update
+    assert validation_updates[7]["interactive"] is False
+    assert validation_updates[7]["value"] is False
+    assert all(update["interactive"] is True for update in natural_updates[1:7])
+    assert natural_updates[8]["interactive"] is True
 
 
 def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_calls(monkeypatch):
@@ -545,11 +622,13 @@ def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     monkeypatch.setenv("CFDC_LLM_MODEL", "provider-model")
     reset = reset_ui()
 
-    assert len(reset) == 30
+    assert len(reset) == 32
     assert reset[0] == NATURAL_LANGUAGE_MODE
-    assert reset[6] is False
-    assert reset[7] is False
-    assert reset[8] == "https://provider.example/v1"
-    assert reset[9] == "provider-model"
-    assert reset[10] == ""
-    assert reset[12] == {}
+    assert "六项" in reset[1]
+    assert reset[2:8] == ("", "", "", "", "", "")
+    assert reset[8] is False
+    assert reset[9] is False
+    assert reset[10] == "https://provider.example/v1"
+    assert reset[11] == "provider-model"
+    assert reset[12] == ""
+    assert reset[14] == {}

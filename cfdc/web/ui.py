@@ -126,9 +126,35 @@ def _outputs(report, state):
     )
 
 
-def run_from_ui(*args):
+def run_from_ui(
+    description,
+    observed_outputs,
+    actuators,
+    safety_bounds,
+    forbidden_actions,
+    time_scale_hint_s,
+    route,
+    use_llm,
+    base_url,
+    model,
+    api_key,
+    include_trajectory,
+):
     try:
-        report, state = start_app_run(*args)
+        report, state = start_app_run(
+            description,
+            observed_outputs,
+            actuators,
+            safety_bounds,
+            route,
+            use_llm,
+            base_url,
+            model,
+            api_key,
+            include_trajectory,
+            forbidden_actions=forbidden_actions,
+            time_scale_hint_s=time_scale_hint_s,
+        )
         return _outputs(report, state)
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
@@ -152,12 +178,14 @@ def update_run_mode(route_label: str):
     llm_update = gr.update(interactive=natural_language, value=False if not natural_language else None)
     provider_update = gr.update(interactive=natural_language)
     note = (
-        "**自然语言自动分析：** 使用下方描述、输出和执行器；可选择启用 LLM。"
+        "**自然语言自动分析：** 使用下方六项控制问题输入；可选择启用 LLM。"
         if natural_language
         else "**开发验证场景：** 使用预注册描述、诊断和 Profile；不会调用 LLM。下方用户输入仅暂时禁用并会被后端忽略，切回主流程后内容仍保留。"
     )
     return (
         note,
+        input_update,
+        input_update,
         input_update,
         input_update,
         input_update,
@@ -172,7 +200,9 @@ def update_run_mode(route_label: str):
 def reset_ui():
     return (
         NATURAL_LANGUAGE_MODE,
-        "**自然语言自动分析：** 使用下方描述、输出和执行器；可选择启用 LLM。",
+        "**自然语言自动分析：** 使用下方六项控制问题输入；可选择启用 LLM。",
+        "",
+        "",
         "",
         "",
         "",
@@ -217,7 +247,7 @@ def build_app() -> gr.Blocks:
                     label="运行方式",
                 )
                 mode_note = gr.Markdown(
-                    "**自然语言自动分析：** 使用下方描述、输出和执行器；可选择启用 LLM。"
+                    "**自然语言自动分析：** 使用下方六项控制问题输入；可选择启用 LLM。"
                 )
                 description = gr.Textbox(
                     label="控制问题",
@@ -238,6 +268,17 @@ def build_app() -> gr.Blocks:
                         value="",
                         lines=3,
                         placeholder="max_abs_control=1.0\nmax_abs_output=2.0",
+                    )
+                    forbidden_actions = gr.Textbox(
+                        label="禁止实验动作",
+                        value="",
+                        lines=3,
+                        placeholder="free release\npulse",
+                    )
+                    time_scale_hint_s = gr.Textbox(
+                        label="主导时间尺度（秒）",
+                        value="",
+                        placeholder="例如：2.0；留空时使用默认时间尺度",
                     )
                     include_trajectory = gr.Checkbox(label="保留完整轨迹", value=False)
                 with gr.Accordion("LLM Provider", open=False):
@@ -355,6 +396,8 @@ def build_app() -> gr.Blocks:
                 observed_outputs,
                 actuators,
                 safety_bounds,
+                forbidden_actions,
+                time_scale_hint_s,
                 route,
                 use_llm,
                 base_url,
@@ -373,6 +416,8 @@ def build_app() -> gr.Blocks:
                 observed_outputs,
                 actuators,
                 safety_bounds,
+                forbidden_actions,
+                time_scale_hint_s,
                 use_llm,
                 base_url,
                 model,
@@ -393,6 +438,8 @@ def build_app() -> gr.Blocks:
                 observed_outputs,
                 actuators,
                 safety_bounds,
+                forbidden_actions,
+                time_scale_hint_s,
                 include_trajectory,
                 use_llm,
                 base_url,

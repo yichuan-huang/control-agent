@@ -85,3 +85,4 @@ archive/
 # Codex / agent local metadata
 .agents/
 .codex/
+docs/superpowers/
