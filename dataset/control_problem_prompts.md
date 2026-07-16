@@ -2,7 +2,7 @@
 
 > Each entry matches the global identifier in control_problems.md. Safety limits and dominant time scales are conservative normalized scheduling defaults for software simulation, not textbook hardware ratings or measured textbook parameters. For analysis-only examples with no controller, the Actuators field records the prescribed excitation or test input.
 
-Every description contains exactly eight formula-free diagnostic sentences in the order stability, sign, delay, dynamic order, sensing and actuation, nonlinearity, coupling, and uncertainty.
+Every problem description is one formula-free natural-language test narrative with eight sentences in the exact Stage 0 evidence order. Diagnostic labels are not shown; the observable evidence is embedded in problem-specific prose so the engine can proceed without a clarification turn.
 
 ---
 
@@ -10,7 +10,7 @@ Every description contains exactly eight formula-free diagnostic sentences in th
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are room temperature, heater state, and the available actuation is binary heater command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use binary heater command as the available control or test action and continuously record room temperature, heater state; when the bounded input returns to its baseline, no autonomous mode grows and room temperature settles or remains bounded. After a small reversible change in binary heater command, observe room temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from binary heater command to room temperature, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From binary heater command to room temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording room temperature, heater state while applying binary heater command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of binary heater command are applied while recording room temperature, heater state, the thermostat changes heater state through a fixed hysteresis band rather than a smooth dynamic law, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering binary heater command together with the recorded quantities room temperature, heater state, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from binary heater command to room temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -22,16 +22,17 @@ binary heater command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=80.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -43,11 +44,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are vehicle speed, road grade, and the available actuation is throttle angle. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use throttle angle as the available control or test action and continuously record vehicle speed; when the bounded input returns to its baseline, no autonomous mode grows and vehicle speed settles or remains bounded. After a small reversible change in throttle angle, observe vehicle speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from throttle angle to vehicle speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From throttle angle to vehicle speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording vehicle speed while applying throttle angle makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of throttle angle are applied while recording vehicle speed, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering throttle angle together with the recorded quantities vehicle speed, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from throttle angle to vehicle speed is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-vehicle speed, road grade
+vehicle speed
 
 ### Actuators
 
@@ -55,9 +56,9 @@ throttle angle
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=100.0
 
 ### Forbidden Actions
@@ -65,6 +66,7 @@ max_test_duration_s=100.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -76,7 +78,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are heading angle, lane error, and the available actuation is steering wheel angle. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use steering wheel angle as the available control or test action and continuously record heading angle, lane error; when the bounded input returns to its baseline, no autonomous mode grows and heading angle settles or remains bounded. After a small reversible change in steering wheel angle, observe heading angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from steering wheel angle to heading angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From steering wheel angle to heading angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording heading angle, lane error while applying steering wheel angle makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of steering wheel angle are applied while recording heading angle, lane error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering steering wheel angle together with the recorded quantities heading angle, lane error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from steering wheel angle to heading angle is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -88,16 +90,17 @@ steering wheel angle
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=120.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -109,7 +112,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are incubator temperature, and the available actuation is air or fuel valve position. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use air or fuel valve position as the available control or test action and continuously record incubator temperature; when the bounded input returns to its baseline, no autonomous mode grows and incubator temperature settles or remains bounded. After a small reversible change in air or fuel valve position, observe incubator temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from air or fuel valve position to incubator temperature, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From air or fuel valve position to incubator temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording incubator temperature while applying air or fuel valve position makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of air or fuel valve position are applied while recording incubator temperature, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering air or fuel valve position together with the recorded quantities incubator temperature, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from air or fuel valve position to incubator temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -121,16 +124,17 @@ air or fuel valve position
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=240.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -142,7 +146,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are tank liquid level, and the available actuation is inlet valve opening. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use inlet valve opening as the available control or test action and continuously record tank liquid level; when the bounded input returns to its baseline, no autonomous mode grows and tank liquid level settles or remains bounded. After a small reversible change in inlet valve opening, observe tank liquid level; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from inlet valve opening to tank liquid level, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From inlet valve opening to tank liquid level, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording tank liquid level while applying inlet valve opening makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of inlet valve opening are applied while recording tank liquid level, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering inlet valve opening together with the recorded quantities tank liquid level, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from inlet valve opening to tank liquid level is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -154,16 +158,17 @@ inlet valve opening
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=120.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -175,7 +180,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are engine shaft speed, governor displacement, and the available actuation is steam valve opening. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use steam valve opening as the available control or test action and continuously record engine shaft speed, governor displacement; when the bounded input returns to its baseline, no autonomous mode grows and engine shaft speed settles or remains bounded. After a small reversible change in steam valve opening, observe engine shaft speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from steam valve opening to engine shaft speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From steam valve opening to engine shaft speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording engine shaft speed, governor displacement while applying steam valve opening makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of steam valve opening are applied while recording engine shaft speed, governor displacement, governor displacement follows a fixed nonlinear speed map around the chosen operating point, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering steam valve opening together with the recorded quantities engine shaft speed, governor displacement, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from steam valve opening to engine shaft speed is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -187,16 +192,17 @@ steam valve opening
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=80.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -208,7 +214,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are stock consistency, and the available actuation is dilution water valve. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use dilution water valve as the available control or test action and continuously record stock consistency; when the bounded input returns to its baseline, no autonomous mode grows and stock consistency settles or remains bounded. After a small reversible change in dilution water valve, observe stock consistency; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from dilution water valve to stock consistency, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From dilution water valve to stock consistency, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording stock consistency while applying dilution water valve makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of dilution water valve are applied while recording stock consistency, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering dilution water valve together with the recorded quantities stock consistency, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from dilution water valve to stock consistency is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -220,16 +226,17 @@ dilution water valve
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=120.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -241,7 +248,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are paper moisture, and the available actuation is dryer steam command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use dryer steam command as the available control or test action and continuously record paper moisture; when the bounded input returns to its baseline, no autonomous mode grows and paper moisture settles or remains bounded. After a small reversible change in dryer steam command, observe paper moisture; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from dryer steam command to paper moisture, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From dryer steam command to paper moisture, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording paper moisture while applying dryer steam command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of dryer steam command are applied while recording paper moisture, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering dryer steam command together with the recorded quantities paper moisture, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from dryer steam command to paper moisture is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -253,16 +260,17 @@ dryer steam command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=120.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -274,7 +282,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are arterial pressure, heart rate, and the available actuation is neural cardiac and vascular commands. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use neural cardiac and vascular commands as the available control or test action and continuously record arterial pressure, heart rate; when the bounded input returns to its baseline, no autonomous mode grows and arterial pressure settles or remains bounded. After a small reversible change in neural cardiac and vascular commands, observe arterial pressure; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from neural cardiac and vascular commands to arterial pressure, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From neural cardiac and vascular commands to arterial pressure, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording arterial pressure, heart rate while applying neural cardiac and vascular commands makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of neural cardiac and vascular commands are applied while recording arterial pressure, heart rate, vascular resistance, cardiac output, and baroreflex activity all change with the physiological state, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering neural cardiac and vascular commands together with the recorded quantities arterial pressure, heart rate, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from neural cardiac and vascular commands to arterial pressure is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -286,16 +294,17 @@ neural cardiac and vascular commands
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -307,7 +316,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are blood glucose, insulin level, and the available actuation is endogenous insulin and counterregulation. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use endogenous insulin and counterregulation as the available control or test action and continuously record blood glucose, insulin level; when the bounded input returns to its baseline, no autonomous mode grows and blood glucose settles or remains bounded. After a small reversible change in endogenous insulin and counterregulation, observe blood glucose; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from endogenous insulin and counterregulation to blood glucose, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From endogenous insulin and counterregulation to blood glucose, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording blood glucose, insulin level while applying endogenous insulin and counterregulation makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of endogenous insulin and counterregulation are applied while recording blood glucose, insulin level, insulin release, glucose uptake, and meal disturbances change with blood-glucose level and time, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering endogenous insulin and counterregulation together with the recorded quantities blood glucose, insulin level, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from endogenous insulin and counterregulation to blood glucose is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -319,16 +328,17 @@ endogenous insulin and counterregulation
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -340,7 +350,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are heart rate, and the available actuation is sympathetic and parasympathetic drive. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sympathetic and parasympathetic drive as the available control or test action and continuously record heart rate; when the bounded input returns to its baseline, no autonomous mode grows and heart rate settles or remains bounded. After a small reversible change in sympathetic and parasympathetic drive, observe heart rate; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sympathetic and parasympathetic drive to heart rate, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From sympathetic and parasympathetic drive to heart rate, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording heart rate while applying sympathetic and parasympathetic drive makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sympathetic and parasympathetic drive are applied while recording heart rate, autonomic drive and cardiac response rates change with exertion and the current heart state, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering sympathetic and parasympathetic drive together with the recorded quantities heart rate, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from sympathetic and parasympathetic drive to heart rate is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -352,16 +362,17 @@ sympathetic and parasympathetic drive
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -373,7 +384,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are eye angle, retinal error, and the available actuation is ocular muscle torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use ocular muscle torque as the available control or test action and continuously record eye angle, retinal error; when the bounded input returns to its baseline, no autonomous mode grows and eye angle settles or remains bounded. After a small reversible change in ocular muscle torque, observe eye angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from ocular muscle torque to eye angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From ocular muscle torque to eye angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording eye angle, retinal error while applying ocular muscle torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of ocular muscle torque are applied while recording eye angle, retinal error, ocular-muscle torque and visual-error feedback vary with gaze angle and muscle state, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering ocular muscle torque together with the recorded quantities eye angle, retinal error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from ocular muscle torque to eye angle is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -385,16 +396,17 @@ ocular muscle torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -406,7 +418,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pupil diameter, retinal illumination, and the available actuation is iris muscle activation. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use iris muscle activation as the available control or test action and continuously record pupil diameter, retinal illumination; when the bounded input returns to its baseline, no autonomous mode grows and pupil diameter settles or remains bounded. After a small reversible change in iris muscle activation, observe pupil diameter; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from iris muscle activation to pupil diameter, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From iris muscle activation to pupil diameter, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pupil diameter, retinal illumination while applying iris muscle activation makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of iris muscle activation are applied while recording pupil diameter, retinal illumination, iris-muscle action and retinal illumination change together with pupil diameter, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering iris muscle activation together with the recorded quantities pupil diameter, retinal illumination, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from iris muscle activation to pupil diameter is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -418,16 +430,17 @@ iris muscle activation
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -439,7 +452,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are car position, landing error, cable stretch, and the available actuation is hoist motor torque and brake. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use hoist motor torque and brake as the available control or test action and continuously record car position, landing error, cable stretch; when the bounded input returns to its baseline, no autonomous mode grows and car position settles or remains bounded. After a small reversible change in hoist motor torque and brake, observe car position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from hoist motor torque and brake to car position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From hoist motor torque and brake to car position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording car position, landing error, cable stretch while applying hoist motor torque and brake makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of hoist motor torque and brake are applied while recording car position, landing error, cable stretch, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering hoist motor torque and brake together with the recorded quantities car position, landing error, cable stretch, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from hoist motor torque and brake to car position is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -451,16 +464,17 @@ hoist motor torque and brake
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=120.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -472,7 +486,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are temperature, sensor voltage, and the available actuation is electrical heater voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use electrical heater voltage as the available control or test action and continuously record temperature, sensor voltage; when the bounded input returns to its baseline, no autonomous mode grows and temperature settles or remains bounded. After a small reversible change in electrical heater voltage, observe temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from electrical heater voltage to temperature, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From electrical heater voltage to temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording temperature, sensor voltage while applying electrical heater voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of electrical heater voltage are applied while recording temperature, sensor voltage, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering electrical heater voltage together with the recorded quantities temperature, sensor voltage, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from electrical heater voltage to temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -484,16 +498,17 @@ electrical heater voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=240.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -505,7 +520,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pressure, sensor voltage, and the available actuation is valve command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use valve command as the available control or test action and continuously record pressure, sensor voltage; when the bounded input returns to its baseline, no autonomous mode grows and pressure settles or remains bounded. After a small reversible change in valve command, observe pressure; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from valve command to pressure, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From valve command to pressure, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pressure, sensor voltage while applying valve command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of valve command are applied while recording pressure, sensor voltage, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering valve command together with the recorded quantities pressure, sensor voltage, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from valve command to pressure is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -517,16 +532,17 @@ valve command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=120.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -538,7 +554,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are liquid level, transmitter signal, and the available actuation is pump speed or valve position. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use pump speed or valve position as the available control or test action and continuously record liquid level, transmitter signal; when the bounded input returns to its baseline, no autonomous mode grows and liquid level settles or remains bounded. After a small reversible change in pump speed or valve position, observe liquid level; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from pump speed or valve position to liquid level, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From pump speed or valve position to liquid level, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording liquid level, transmitter signal while applying pump speed or valve position makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of pump speed or valve position are applied while recording liquid level, transmitter signal, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering pump speed or valve position together with the recorded quantities liquid level, transmitter signal, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from pump speed or valve position to liquid level is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -550,16 +566,17 @@ pump speed or valve position
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=120.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -571,7 +588,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pipe flow rate, and the available actuation is control valve position. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use control valve position as the available control or test action and continuously record pipe flow rate; when the bounded input returns to its baseline, no autonomous mode grows and pipe flow rate settles or remains bounded. After a small reversible change in control valve position, observe pipe flow rate; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from control valve position to pipe flow rate, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From control valve position to pipe flow rate, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pipe flow rate while applying control valve position makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of control valve position are applied while recording pipe flow rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering control valve position together with the recorded quantities pipe flow rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from control valve position to pipe flow rate is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -583,16 +600,17 @@ control valve position
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=120.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -604,7 +622,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are hormone concentrations, and the available actuation is endogenous secretion rates. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use endogenous secretion rates as the available control or test action and continuously record hormone concentrations; when the bounded input returns to its baseline, no autonomous mode grows and hormone concentrations settles or remains bounded. After a small reversible change in endogenous secretion rates, observe hormone concentrations; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from endogenous secretion rates to hormone concentrations, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From endogenous secretion rates to hormone concentrations, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording hormone concentrations while applying endogenous secretion rates makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of endogenous secretion rates are applied while recording hormone concentrations, hormone secretion rates and feedback sensitivity vary with the endocrine state, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering endogenous secretion rates together with the recorded quantities hormone concentrations, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from endogenous secretion rates to hormone concentrations is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -616,16 +634,17 @@ endogenous secretion rates
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -637,7 +656,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are oxytocin level, contraction intensity, and the available actuation is endogenous oxytocin release. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use endogenous oxytocin release as the available control or test action and continuously record oxytocin level, contraction intensity; when the bounded input returns to its baseline, the reinforcing oxytocin-contraction loop amplifies a departure instead of restoring the labor state, so the deviation continues to grow rather than return. After a small reversible change in endogenous oxytocin release, observe oxytocin level; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from endogenous oxytocin release to oxytocin level, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From endogenous oxytocin release to oxytocin level, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording oxytocin level, contraction intensity while applying endogenous oxytocin release makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of endogenous oxytocin release are applied while recording oxytocin level, contraction intensity, oxytocin release and contraction intensity reinforce one another as labor progresses, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering endogenous oxytocin release together with the recorded quantities oxytocin level, contraction intensity, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from endogenous oxytocin release to oxytocin level is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -649,16 +668,17 @@ endogenous oxytocin release
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=100.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=60.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -670,7 +690,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are vehicle speed, and the available actuation is longitudinal drive force. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use longitudinal drive force as the available control or test action and continuously record vehicle speed; when the bounded input returns to its baseline, no autonomous mode grows and vehicle speed settles or remains bounded. After a small reversible change in longitudinal drive force, observe vehicle speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from longitudinal drive force to vehicle speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From longitudinal drive force to vehicle speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording vehicle speed while applying longitudinal drive force makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of longitudinal drive force are applied while recording vehicle speed, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering longitudinal drive force together with the recorded quantities vehicle speed, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from longitudinal drive force to vehicle speed is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -682,9 +702,9 @@ longitudinal drive force
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -692,6 +712,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -703,21 +724,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are body and wheel displacement, suspension travel, and the available actuation is prescribed road displacement as an analysis input; no control actuator. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use prescribed road-displacement test input as the available control or test action and continuously record body displacement, wheel displacement, and suspension travel; when the bounded input returns to its baseline, no autonomous mode grows and body displacement settles or remains bounded. After a small reversible change in prescribed road-displacement test input, observe body displacement; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from prescribed road-displacement test input to body displacement, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From prescribed road-displacement test input to body displacement, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording body displacement, wheel displacement, and suspension travel while applying prescribed road-displacement test input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of prescribed road-displacement test input are applied while recording body displacement, wheel displacement, and suspension travel, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering prescribed road-displacement test input together with the recorded quantities body displacement, wheel displacement, and suspension travel, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from prescribed road-displacement test input to body displacement is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-body and wheel displacement, suspension travel
+body displacement, wheel displacement, and suspension travel
 
 ### Actuators
 
-prescribed road displacement as an analysis input; no control actuator
+prescribed road-displacement test input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -725,6 +746,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -736,7 +758,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are attitude angle, angular rate, and the available actuation is thruster force or body torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use thruster force or body torque as the available control or test action and continuously record attitude angle, angular rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets attitude angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in thruster force or body torque, observe attitude angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from thruster force or body torque to attitude angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From thruster force or body torque to attitude angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording attitude angle, angular rate while applying thruster force or body torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of thruster force or body torque are applied while recording attitude angle, angular rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering thruster force or body torque together with the recorded quantities attitude angle, angular rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from thruster force or body torque to attitude angle is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -748,16 +770,17 @@ thruster force or body torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -769,7 +792,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are both body angles and rates, and the available actuation is body torque on the main inertia. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use body torque on the main inertia as the available control or test action and continuously record both body angles and rates; when the bounded input returns to its baseline, an integrating or non-restoring mode lets both body angles retain an offset or drift after the prescribed drive is removed. After a small reversible change in body torque on the main inertia, observe both body angles; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from body torque on the main inertia to both body angles, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From body torque on the main inertia to both body angles, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording both body angles and rates while applying body torque on the main inertia makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of body torque on the main inertia are applied while recording both body angles and rates, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering body torque on the main inertia together with the recorded quantities both body angles and rates, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from body torque on the main inertia to both body angles is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -781,16 +804,17 @@ body torque on the main inertia
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -802,28 +826,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are roll, pitch, yaw, and the available actuation is four rotor torque perturbations. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use four rotor thrust perturbations as the available control or test action and continuously record roll, pitch, and yaw response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets roll retain an offset or drift after the prescribed drive is removed. After a small reversible change in four rotor thrust perturbations, observe roll; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from four rotor thrust perturbations to roll, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From four rotor thrust perturbations to roll, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording roll, pitch, and yaw response while applying four rotor thrust perturbations makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of four rotor thrust perturbations are applied while recording roll, pitch, and yaw response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering four rotor thrust perturbations together with the recorded quantities roll, pitch, and yaw response, changing any one of several actuators visibly moves several recordings, so actuator directions must be allocated or paired together. When the bounded test from four rotor thrust perturbations to roll is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-roll, pitch, yaw
+roll, pitch, and yaw response
 
 ### Actuators
 
-four rotor torque perturbations
+four rotor thrust perturbations
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+change several actuator channels simultaneously during the first identification test
 
 ### Dominant Time Scale (Seconds)
 
@@ -835,7 +860,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pendulum angle and angular rate, and the available actuation is pivot torque. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use pivot torque as the available control or test action and continuously record pendulum angle and angular rate; when the bounded input returns to its baseline, no autonomous mode grows and pendulum angle settles or remains bounded. After a small reversible change in pivot torque, observe pendulum angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from pivot torque to pendulum angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From pivot torque to pendulum angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pendulum angle and angular rate while applying pivot torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of pivot torque are applied while recording pendulum angle and angular rate, gravity torque changes with pendulum angle and departs materially from its local small-angle approximation, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering pivot torque together with the recorded quantities pendulum angle and angular rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from pivot torque to pendulum angle is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -847,16 +872,17 @@ pivot torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -868,7 +894,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are cart position, pendulum angle, and the available actuation is cart force. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use cart force as the available control or test action and continuously record cart position, pendulum angle; when the bounded input returns to its baseline, the upright pendulum mode drives the cart-pendulum state away from equilibrium when cart feedback is absent, so the deviation continues to grow rather than return. After a small reversible change in cart force, observe cart position; the first useful output change moves in an unfavorable or opposite direction before turning toward its eventual value. For the same small change from cart force to cart position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From cart force to cart position, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording cart position, pendulum angle while applying cart force makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of cart force are applied while recording cart position, pendulum angle, cart motion, cable geometry, and pendulum gravity couple through the evolving swing state, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering cart force together with the recorded quantities cart position, pendulum angle, there are fewer independent actuators than regulated coordinates, so natural motion and state interaction must supply the missing direction. When the bounded test from cart force to cart position is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -880,16 +906,17 @@ cart force
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=12.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+command an unactuated coordinate as though it had a direct actuator
 
 ### Dominant Time Scale (Seconds)
 
@@ -901,7 +928,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are output and capacitor voltages, and the available actuation is input voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use input voltage as the available control or test action and continuously record output and capacitor voltages; when the bounded input returns to its baseline, no autonomous mode grows and output settles or remains bounded. After a small reversible change in input voltage, observe output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from input voltage to output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From input voltage to output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording output and capacitor voltages while applying input voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of input voltage are applied while recording output and capacitor voltages, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering input voltage together with the recorded quantities output and capacitor voltages, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from input voltage to output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -913,9 +940,9 @@ input voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -923,6 +950,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -934,7 +962,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are two capacitor voltages and inductor current, and the available actuation is source current. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use source current as the available control or test action and continuously record two capacitor voltages and inductor current; when the bounded input returns to its baseline, no autonomous mode grows and two capacitor voltages settles or remains bounded. After a small reversible change in source current, observe two capacitor voltages; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from source current to two capacitor voltages, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From source current to two capacitor voltages, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording two capacitor voltages and inductor current while applying source current makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of source current are applied while recording two capacitor voltages and inductor current, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering source current together with the recorded quantities two capacitor voltages and inductor current, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from source current to two capacitor voltages is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -946,9 +974,9 @@ source current
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -956,6 +984,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -967,7 +996,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are summed output voltage, and the available actuation is input voltages. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use input voltages as the available control or test action and continuously record summed output voltage; when the bounded input returns to its baseline, no autonomous mode grows and summed output voltage settles or remains bounded. After a small reversible change in input voltages, observe summed output voltage; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from input voltages to summed output voltage, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From input voltages to summed output voltage, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording summed output voltage while applying input voltages makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of input voltages are applied while recording summed output voltage, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering input voltages together with the recorded quantities summed output voltage, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from input voltages to summed output voltage is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -979,9 +1008,9 @@ input voltages
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -989,6 +1018,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1000,7 +1030,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are integrator output voltage, and the available actuation is input voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use input voltage as the available control or test action and continuously record integrator output voltage; when the bounded input returns to its baseline, an integrating or non-restoring mode lets integrator output voltage retain an offset or drift after the prescribed drive is removed. After a small reversible change in input voltage, observe integrator output voltage; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from input voltage to integrator output voltage, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From input voltage to integrator output voltage, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording integrator output voltage while applying input voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of input voltage are applied while recording integrator output voltage, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering input voltage together with the recorded quantities integrator output voltage, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from input voltage to integrator output voltage is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1012,16 +1042,17 @@ input voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1033,7 +1064,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are cone displacement, coil current, and the available actuation is amplifier voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use amplifier voltage as the available control or test action and continuously record cone displacement, coil current; when the bounded input returns to its baseline, an integrating or non-restoring mode lets cone displacement retain an offset or drift after the prescribed drive is removed. After a small reversible change in amplifier voltage, observe cone displacement; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from amplifier voltage to cone displacement, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From amplifier voltage to cone displacement, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording cone displacement, coil current while applying amplifier voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of amplifier voltage are applied while recording cone displacement, coil current, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering amplifier voltage together with the recorded quantities cone displacement, coil current, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from amplifier voltage to cone displacement is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -1045,16 +1076,17 @@ amplifier voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1066,7 +1098,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor position, speed, armature current, and the available actuation is armature voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use armature voltage as the available control or test action and continuously record motor position, speed, armature current; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in armature voltage, observe motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from armature voltage to motor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From armature voltage to motor position, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording motor position, speed, armature current while applying armature voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of armature voltage are applied while recording motor position, speed, armature current, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering armature voltage together with the recorded quantities motor position, speed, armature current, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from armature voltage to motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -1078,16 +1110,17 @@ armature voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1099,7 +1132,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor and load angle, shaft torque, and the available actuation is motor torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use motor torque as the available control or test action and continuously record motor and load angle, shaft torque; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor retain an offset or drift after the prescribed drive is removed. After a small reversible change in motor torque, observe motor; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from motor torque to motor, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From motor torque to motor, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor and load angle, shaft torque while applying motor torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of motor torque are applied while recording motor and load angle, shaft torque, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering motor torque together with the recorded quantities motor and load angle, shaft torque, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from motor torque to motor is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -1111,16 +1144,17 @@ motor torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1132,7 +1166,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are room temperature, and the available actuation is heating rate in the labeled control extension. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use heating rate in the labeled control extension as the available control or test action and continuously record room temperature; when the bounded input returns to its baseline, no autonomous mode grows and room temperature settles or remains bounded. After a small reversible change in heating rate in the labeled control extension, observe room temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from heating rate in the labeled control extension to room temperature, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From heating rate in the labeled control extension to room temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording room temperature while applying heating rate in the labeled control extension makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of heating rate in the labeled control extension are applied while recording room temperature, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering heating rate in the labeled control extension together with the recorded quantities room temperature, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from heating rate in the labeled control extension to room temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -1144,9 +1178,9 @@ heating rate in the labeled control extension
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=200.0
 
 ### Forbidden Actions
@@ -1154,6 +1188,7 @@ max_test_duration_s=200.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1165,7 +1200,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are two body temperatures, and the available actuation is heater power. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use heater power as the available control or test action and continuously record two body temperatures; when the bounded input returns to its baseline, no autonomous mode grows and two body temperatures settles or remains bounded. After a small reversible change in heater power, observe two body temperatures; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from heater power to two body temperatures, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From heater power to two body temperatures, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording two body temperatures while applying heater power makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of heater power are applied while recording two body temperatures, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering heater power together with the recorded quantities two body temperatures, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from heater power to two body temperatures is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -1177,9 +1212,9 @@ heater power
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=200.0
 
 ### Forbidden Actions
@@ -1187,6 +1222,7 @@ max_test_duration_s=200.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1198,7 +1234,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are measured outlet water temperature, and the available actuation is steam inlet valve area. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use steam inlet valve area as the available control or test action and continuously record measured outlet water temperature; when the bounded input returns to its baseline, no autonomous mode grows and measured outlet water temperature settles or remains bounded. After a small reversible change in steam inlet valve area, observe measured outlet water temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from steam inlet valve area to measured outlet water temperature, heat transport and temperature measurement hold back the outlet response, and a visible pause separates the command from the first recorded response. From steam inlet valve area to measured outlet water temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording measured outlet water temperature while applying steam inlet valve area makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of steam inlet valve area are applied while recording measured outlet water temperature, steam-valve geometry gives a static flow map before the delayed thermal dynamics, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering steam inlet valve area together with the recorded quantities measured outlet water temperature, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from steam inlet valve area to measured outlet water temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -1210,16 +1246,17 @@ steam inlet valve area
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=160.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -1231,7 +1268,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are tank level and outlet flow, and the available actuation is inlet mass flow. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Start from a fixed liquid-level operating point and use inlet mass flow as the available control or test action and continuously record tank level and outlet flow; when the bounded input returns to its baseline, no autonomous mode grows and tank level settles or remains bounded. After a small reversible change in inlet mass flow, observe tank level; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from inlet mass flow to tank level, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From inlet mass flow to tank level, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording tank level and outlet flow while applying inlet mass flow makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of inlet mass flow are applied while recording tank level and outlet flow, tank outflow follows a static square-root level law around the selected operating point, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering inlet mass flow together with the recorded quantities tank level and outlet flow, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from inlet mass flow to tank level is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -1243,16 +1280,17 @@ inlet mass flow
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -1264,28 +1302,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are piston position, acceleration, chamber pressure, and the available actuation is chamber pressure input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use chamber pressure difference as the available control or test action and continuously record piston position and velocity; when the bounded input returns to its baseline, an integrating or non-restoring mode lets piston position retain an offset or drift after the prescribed drive is removed. After a small reversible change in chamber pressure difference, observe piston position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from chamber pressure difference to piston position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From chamber pressure difference to piston position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording piston position and velocity while applying chamber pressure difference makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of chamber pressure difference are applied while recording piston position and velocity, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering chamber pressure difference together with the recorded quantities piston position and velocity, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from chamber pressure difference to piston position is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-piston position, acceleration, chamber pressure
+piston position and velocity
 
 ### Actuators
 
-chamber pressure input
+chamber pressure difference
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1297,7 +1336,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are surface angle and load force, and the available actuation is servo valve displacement. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use servo valve displacement as the available control or test action and continuously record surface angle and load force; when the bounded input returns to its baseline, an integrating or non-restoring mode lets surface angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in servo valve displacement, observe surface angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from servo valve displacement to surface angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From servo valve displacement to surface angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording surface angle and load force while applying servo valve displacement makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of servo valve displacement are applied while recording surface angle and load force, hydraulic flow gain and surface motion change with load force and valve operating point, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering servo valve displacement together with the recorded quantities surface angle and load force, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from servo valve displacement to surface angle is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -1309,16 +1348,17 @@ servo valve displacement
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1330,21 +1370,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are system response, and the available actuation is test input signal. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use prescribed test signal as the available control or test action and continuously record system output response; when the bounded input returns to its baseline, no autonomous mode grows and system output response settles or remains bounded. After a small reversible change in prescribed test signal, observe system output response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from prescribed test signal to system output response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From prescribed test signal to system output response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording system output response while applying prescribed test signal makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of prescribed test signal are applied while recording system output response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering prescribed test signal together with the recorded quantities system output response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from prescribed test signal to system output response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-system response
+system output response
 
 ### Actuators
 
-test input signal
+prescribed test signal
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1352,6 +1392,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1363,7 +1404,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are output response, and the available actuation is input signal. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use input signal as the available control or test action and continuously record output response; when the bounded input returns to its baseline, no autonomous mode grows and output response settles or remains bounded. After a small reversible change in input signal, observe output response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from input signal to output response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From input signal to output response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording output response while applying input signal makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of input signal are applied while recording output response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering input signal together with the recorded quantities output response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from input signal to output response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1375,9 +1416,9 @@ input signal
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1385,6 +1426,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1396,21 +1438,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are system output, and the available actuation is forcing input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use prescribed forcing signal as the available control or test action and continuously record system output response; when the bounded input returns to its baseline, no autonomous mode grows and system output response settles or remains bounded. After a small reversible change in prescribed forcing signal, observe system output response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from prescribed forcing signal to system output response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From prescribed forcing signal to system output response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording system output response while applying prescribed forcing signal makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of prescribed forcing signal are applied while recording system output response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering prescribed forcing signal together with the recorded quantities system output response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from prescribed forcing signal to system output response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-system output
+system output response
 
 ### Actuators
 
-forcing input
+prescribed forcing signal
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1418,6 +1460,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1429,7 +1472,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are capacitor voltage, and the available actuation is input voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use input voltage as the available control or test action and continuously record capacitor voltage; when the bounded input returns to its baseline, no autonomous mode grows and capacitor voltage settles or remains bounded. After a small reversible change in input voltage, observe capacitor voltage; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from input voltage to capacitor voltage, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From input voltage to capacitor voltage, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording capacitor voltage while applying input voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of input voltage are applied while recording capacitor voltage, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering input voltage together with the recorded quantities capacitor voltage, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from input voltage to capacitor voltage is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1441,9 +1484,9 @@ input voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1451,6 +1494,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1462,7 +1506,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are sinusoidal output amplitude and phase, and the available actuation is sinusoidal input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sinusoidal input as the available control or test action and continuously record sinusoidal output amplitude and phase; when the bounded input returns to its baseline, no autonomous mode grows and sinusoidal output amplitude settles or remains bounded. After a small reversible change in sinusoidal input, observe sinusoidal output amplitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sinusoidal input to sinusoidal output amplitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From sinusoidal input to sinusoidal output amplitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording sinusoidal output amplitude and phase while applying sinusoidal input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sinusoidal input are applied while recording sinusoidal output amplitude and phase, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering sinusoidal input together with the recorded quantities sinusoidal output amplitude and phase, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sinusoidal input to sinusoidal output amplitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1474,9 +1518,9 @@ sinusoidal input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1484,6 +1528,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1495,21 +1540,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are transformed input and output, and the available actuation is canonical test input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use canonical test signal as the available control or test action and continuously record transformed system response; when the bounded input returns to its baseline, no autonomous mode grows and transformed system response settles or remains bounded. After a small reversible change in canonical test signal, observe transformed system response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from canonical test signal to transformed system response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From canonical test signal to transformed system response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording transformed system response while applying canonical test signal makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of canonical test signal are applied while recording transformed system response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering canonical test signal together with the recorded quantities transformed system response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from canonical test signal to transformed system response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-transformed input and output
+transformed system response
 
 ### Actuators
 
-canonical test input
+canonical test signal
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1517,6 +1562,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1528,21 +1574,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are time response, and the available actuation is Laplace-domain signal. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use prescribed transformed input as the available control or test action and continuously record time-domain output response; when the bounded input returns to its baseline, no autonomous mode grows and time-domain output response settles or remains bounded. After a small reversible change in prescribed transformed input, observe time-domain output response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from prescribed transformed input to time-domain output response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From prescribed transformed input to time-domain output response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording time-domain output response while applying prescribed transformed input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of prescribed transformed input are applied while recording time-domain output response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering prescribed transformed input together with the recorded quantities time-domain output response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from prescribed transformed input to time-domain output response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-time response
+time-domain output response
 
 ### Actuators
 
-Laplace-domain signal
+prescribed transformed input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1550,6 +1596,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1561,7 +1608,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are steady-state output, and the available actuation is test input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use test input as the available control or test action and continuously record steady-state output; when the bounded input returns to its baseline, no autonomous mode grows and steady-state output settles or remains bounded. After a small reversible change in test input, observe steady-state output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from test input to steady-state output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From test input to steady-state output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording steady-state output while applying test input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of test input are applied while recording steady-state output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering test input together with the recorded quantities steady-state output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from test input to steady-state output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1573,9 +1620,9 @@ test input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1583,6 +1630,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1594,7 +1642,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are steady output, and the available actuation is unit-step input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use unit-step input as the available control or test action and continuously record steady output; when the bounded input returns to its baseline, no autonomous mode grows and steady output settles or remains bounded. After a small reversible change in unit-step input, observe steady output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from unit-step input to steady output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From unit-step input to steady output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording steady output while applying unit-step input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of unit-step input are applied while recording steady output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering unit-step input together with the recorded quantities steady output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from unit-step input to steady output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1606,9 +1654,9 @@ unit-step input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1616,6 +1664,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1627,7 +1676,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are state and output response, and the available actuation is forcing input and initial condition. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use forcing input and prescribed initial-state release as the available control or test action and continuously record state and output response; when the bounded input returns to its baseline, no autonomous mode grows and state settles or remains bounded. After a small reversible change in forcing input and prescribed initial-state release, observe state; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from forcing input and prescribed initial-state release to state, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From forcing input and prescribed initial-state release to state, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording state and output response while applying forcing input and prescribed initial-state release makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of forcing input and prescribed initial-state release are applied while recording state and output response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering forcing input and prescribed initial-state release together with the recorded quantities state and output response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from forcing input and prescribed initial-state release to state is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1635,13 +1684,13 @@ state and output response
 
 ### Actuators
 
-forcing input and initial condition
+forcing input and prescribed initial-state release
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1649,6 +1698,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1660,7 +1710,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are vehicle position and speed, and the available actuation is drive force. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use drive force as the available control or test action and continuously record vehicle position and speed; when the bounded input returns to its baseline, an integrating or non-restoring mode lets vehicle position retain an offset or drift after the prescribed drive is removed. After a small reversible change in drive force, observe vehicle position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from drive force to vehicle position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From drive force to vehicle position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording vehicle position and speed while applying drive force makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of drive force are applied while recording vehicle position and speed, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering drive force together with the recorded quantities vehicle position and speed, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from drive force to vehicle position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1672,16 +1722,17 @@ drive force
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1693,7 +1744,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor speed and position, and the available actuation is armature voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use armature voltage as the available control or test action and continuously record motor speed and position; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor speed retain an offset or drift after the prescribed drive is removed. After a small reversible change in armature voltage, observe motor speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from armature voltage to motor speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From armature voltage to motor speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor speed and position while applying armature voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of armature voltage are applied while recording motor speed and position, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering armature voltage together with the recorded quantities motor speed and position, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from armature voltage to motor speed is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1705,16 +1756,17 @@ armature voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1726,7 +1778,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are attitude angle and rate, and the available actuation is finite thruster-force pulse. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use finite thruster-force pulse as the available control or test action and continuously record attitude angle and rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets attitude angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in finite thruster-force pulse, observe attitude angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from finite thruster-force pulse to attitude angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From finite thruster-force pulse to attitude angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording attitude angle and rate while applying finite thruster-force pulse makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of finite thruster-force pulse are applied while recording attitude angle and rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering finite thruster-force pulse together with the recorded quantities attitude angle and rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from finite thruster-force pulse to attitude angle is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1738,16 +1790,17 @@ finite thruster-force pulse
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1759,7 +1812,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are closed-loop output, and the available actuation is reference input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use reference input as the available control or test action and continuously record closed-loop output; when the bounded input returns to its baseline, no autonomous mode grows and closed-loop output settles or remains bounded. After a small reversible change in reference input, observe closed-loop output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from reference input to closed-loop output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From reference input to closed-loop output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording closed-loop output while applying reference input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of reference input are applied while recording closed-loop output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering reference input together with the recorded quantities closed-loop output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from reference input to closed-loop output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1771,9 +1824,9 @@ reference input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1781,6 +1834,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1792,21 +1846,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are signal-flow output, and the available actuation is source node input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use prescribed source-node signal as the available control or test action and continuously record signal-flow output response; when the bounded input returns to its baseline, no autonomous mode grows and signal-flow output response settles or remains bounded. After a small reversible change in prescribed source-node signal, observe signal-flow output response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from prescribed source-node signal to signal-flow output response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From prescribed source-node signal to signal-flow output response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording signal-flow output response while applying prescribed source-node signal makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of prescribed source-node signal are applied while recording signal-flow output response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering prescribed source-node signal together with the recorded quantities signal-flow output response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from prescribed source-node signal to signal-flow output response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-signal-flow output
+signal-flow output response
 
 ### Actuators
 
-source node input
+prescribed source-node signal
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1814,6 +1868,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1825,21 +1880,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are transient output, and the available actuation is impulse input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded impulse test as the available control or test action and continuously record transient output response; when the bounded input returns to its baseline, no autonomous mode grows and transient output response settles or remains bounded. After a small reversible change in bounded impulse test, observe transient output response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded impulse test to transient output response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded impulse test to transient output response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording transient output response while applying bounded impulse test makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded impulse test are applied while recording transient output response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded impulse test together with the recorded quantities transient output response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded impulse test to transient output response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-transient output
+transient output response
 
 ### Actuators
 
-impulse input
+bounded impulse test
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1847,6 +1902,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1858,21 +1914,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are step response metrics, and the available actuation is command input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded command step as the available control or test action and continuously record step response and its transient features; when the bounded input returns to its baseline, no autonomous mode grows and step response settles or remains bounded. After a small reversible change in bounded command step, observe step response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded command step to step response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded command step to step response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording step response and its transient features while applying bounded command step makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded command step are applied while recording step response and its transient features, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded command step together with the recorded quantities step response and its transient features, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded command step to step response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-step response metrics
+step response and its transient features
 
 ### Actuators
 
-command input
+bounded command step
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -1880,6 +1936,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -1891,7 +1948,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are aircraft altitude, and the available actuation is impulsive elevator deflection. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use impulsive elevator deflection as the available control or test action and continuously record aircraft altitude; when the bounded input returns to its baseline, an integrating or non-restoring mode lets aircraft altitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in impulsive elevator deflection, observe aircraft altitude; the first useful output change moves in an unfavorable or opposite direction before turning toward its eventual value. For the same small change from impulsive elevator deflection to aircraft altitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From impulsive elevator deflection to aircraft altitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording aircraft altitude while applying impulsive elevator deflection makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of impulsive elevator deflection are applied while recording aircraft altitude, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering impulsive elevator deflection together with the recorded quantities aircraft altitude, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from impulsive elevator deflection to aircraft altitude is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -1903,16 +1960,17 @@ impulsive elevator deflection
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1924,7 +1982,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are capacitor voltage, and the available actuation is bounded source current. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded source current as the available control or test action and continuously record capacitor voltage; when the bounded input returns to its baseline, an integrating or non-restoring mode lets capacitor voltage retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded source current, observe capacitor voltage; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded source current to capacitor voltage, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded source current to capacitor voltage, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording capacitor voltage while applying bounded source current makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded source current are applied while recording capacitor voltage, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded source current together with the recorded quantities capacitor voltage, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded source current to capacitor voltage is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -1936,16 +1994,17 @@ bounded source current
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1957,28 +2016,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are closed-loop poles and stability region, and the available actuation is proportional or PI controller gains. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded controller command during proportional and integral setting sweeps as the available control or test action and continuously record regulated output response across the tested settings; when the bounded input returns to its baseline, the first Routh-design case retains a growing mode until a stabilizing controller setting is introduced, so the deviation continues to grow rather than return. After a small reversible change in bounded controller command during proportional and integral setting sweeps, observe regulated output response across the tested settings; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded controller command during proportional and integral setting sweeps to regulated output response across the tested settings, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded controller command during proportional and integral setting sweeps to regulated output response across the tested settings, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording regulated output response across the tested settings while applying bounded controller command during proportional and integral setting sweeps makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded controller command during proportional and integral setting sweeps are applied while recording regulated output response across the tested settings, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded controller command during proportional and integral setting sweeps together with the recorded quantities regulated output response across the tested settings, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded controller command during proportional and integral setting sweeps to regulated output response across the tested settings is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-closed-loop poles and stability region
+regulated output response across the tested settings
 
 ### Actuators
 
-proportional or PI controller gains
+bounded controller command during proportional and integral setting sweeps
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=12.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -1990,21 +2050,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are output, error, control, sensitivity, complementary sensitivity, and the available actuation is reference, plant-input disturbance, and sensor-noise test inputs. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use reference command with prescribed plant disturbance and sensor noise as the available control or test action and continuously record regulated output, tracking error, and control effort; when the bounded input returns to its baseline, no autonomous mode grows and regulated output settles or remains bounded. After a small reversible change in reference command with prescribed plant disturbance and sensor noise, observe regulated output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from reference command with prescribed plant disturbance and sensor noise to regulated output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From reference command with prescribed plant disturbance and sensor noise to regulated output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording regulated output, tracking error, and control effort while applying reference command with prescribed plant disturbance and sensor noise makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of reference command with prescribed plant disturbance and sensor noise are applied while recording regulated output, tracking error, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering reference command with prescribed plant disturbance and sensor noise together with the recorded quantities regulated output, tracking error, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from reference command with prescribed plant disturbance and sensor noise to regulated output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-output, error, control, sensitivity, complementary sensitivity
+regulated output, tracking error, and control effort
 
 ### Actuators
 
-reference, plant-input disturbance, and sensor-noise test inputs
+reference command with prescribed plant disturbance and sensor noise
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2012,6 +2072,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2023,28 +2084,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pendulum output and closed-loop poles, and the available actuation is dynamic compensator command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded dynamic-compensator command as the available control or test action and continuously record pendulum angle and compensator output; when the bounded input returns to its baseline, the inverted-pendulum angle moves farther from upright after a small displacement unless the dynamic compensator closes the loop, so the deviation continues to grow rather than return. After a small reversible change in bounded dynamic-compensator command, observe pendulum angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded dynamic-compensator command to pendulum angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded dynamic-compensator command to pendulum angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pendulum angle and compensator output while applying bounded dynamic-compensator command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded dynamic-compensator command are applied while recording pendulum angle and compensator output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded dynamic-compensator command together with the recorded quantities pendulum angle and compensator output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded dynamic-compensator command to pendulum angle is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-pendulum output and closed-loop poles
+pendulum angle and compensator output
 
 ### Actuators
 
-dynamic compensator command
+bounded dynamic-compensator command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=12.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2056,21 +2118,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are closed-loop gain, and the available actuation is controller input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded controller command as the available control or test action and continuously record regulated output and tracking error; when the bounded input returns to its baseline, no autonomous mode grows and regulated output settles or remains bounded. After a small reversible change in bounded controller command, observe regulated output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded controller command to regulated output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded controller command to regulated output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording regulated output and tracking error while applying bounded controller command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded controller command are applied while recording regulated output and tracking error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded controller command together with the recorded quantities regulated output and tracking error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded controller command to regulated output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-closed-loop gain
+regulated output and tracking error
 
 ### Actuators
 
-controller input
+bounded controller command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2078,6 +2140,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2089,7 +2152,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are regulated output, error, and sensor-noise response, and the available actuation is plant disturbance and sensor-noise test inputs. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use plant disturbance and sensor-noise test inputs as the available control or test action and continuously record regulated output, error, and sensor-noise response; when the bounded input returns to its baseline, no autonomous mode grows and regulated output settles or remains bounded. After a small reversible change in plant disturbance and sensor-noise test inputs, observe regulated output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from plant disturbance and sensor-noise test inputs to regulated output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From plant disturbance and sensor-noise test inputs to regulated output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording regulated output, error, and sensor-noise response while applying plant disturbance and sensor-noise test inputs makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of plant disturbance and sensor-noise test inputs are applied while recording regulated output, error, and sensor-noise response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering plant disturbance and sensor-noise test inputs together with the recorded quantities regulated output, error, and sensor-noise response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from plant disturbance and sensor-noise test inputs to regulated output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2101,9 +2164,9 @@ plant disturbance and sensor-noise test inputs
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2111,6 +2174,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2122,7 +2186,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are speed and tracking error, and the available actuation is proportional control command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use proportional control command as the available control or test action and continuously record speed and tracking error; when the bounded input returns to its baseline, no autonomous mode grows and speed settles or remains bounded. After a small reversible change in proportional control command, observe speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from proportional control command to speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From proportional control command to speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording speed and tracking error while applying proportional control command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of proportional control command are applied while recording speed and tracking error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering proportional control command together with the recorded quantities speed and tracking error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from proportional control command to speed is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2134,9 +2198,9 @@ proportional control command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2144,6 +2208,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2155,7 +2220,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are speed and tracking error, and the available actuation is PI control command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use PI control command as the available control or test action and continuously record speed and tracking error; when the bounded input returns to its baseline, no autonomous mode grows and speed settles or remains bounded. After a small reversible change in PI control command, observe speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from PI control command to speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From PI control command to speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording speed and tracking error while applying PI control command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of PI control command are applied while recording speed and tracking error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering PI control command together with the recorded quantities speed and tracking error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from PI control command to speed is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2167,9 +2232,9 @@ PI control command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2177,6 +2242,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2188,28 +2254,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are position, speed, and tracking error, and the available actuation is motor control and tachometer feedback signals. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use armature voltage under tachometer feedback as the available control or test action and continuously record motor position, speed, and tracking error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in armature voltage under tachometer feedback, observe motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from armature voltage under tachometer feedback to motor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From armature voltage under tachometer feedback to motor position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor position, speed, and tracking error while applying armature voltage under tachometer feedback makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of armature voltage under tachometer feedback are applied while recording motor position, speed, and tracking error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering armature voltage under tachometer feedback together with the recorded quantities motor position, speed, and tracking error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from armature voltage under tachometer feedback to motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-position, speed, and tracking error
+motor position, speed, and tracking error
 
 ### Actuators
 
-motor control and tachometer feedback signals
+armature voltage under tachometer feedback
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2221,28 +2288,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor position error and disturbance response, and the available actuation is disturbance torque and controller command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use armature voltage with prescribed load-torque disturbance as the available control or test action and continuously record motor position, speed, and disturbance response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in armature voltage with prescribed load-torque disturbance, observe motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from armature voltage with prescribed load-torque disturbance to motor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From armature voltage with prescribed load-torque disturbance to motor position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor position, speed, and disturbance response while applying armature voltage with prescribed load-torque disturbance makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of armature voltage with prescribed load-torque disturbance are applied while recording motor position, speed, and disturbance response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering armature voltage with prescribed load-torque disturbance together with the recorded quantities motor position, speed, and disturbance response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from armature voltage with prescribed load-torque disturbance to motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-motor position error and disturbance response
+motor position, speed, and disturbance response
 
 ### Actuators
 
-disturbance torque and controller command
+armature voltage with prescribed load-torque disturbance
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2254,7 +2322,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are regulated output, tracking error, and control effort, and the available actuation is proportional actuator command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use proportional actuator command as the available control or test action and continuously record regulated output, tracking error, and control effort; when the bounded input returns to its baseline, no autonomous mode grows and regulated output settles or remains bounded. After a small reversible change in proportional actuator command, observe regulated output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from proportional actuator command to regulated output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From proportional actuator command to regulated output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording regulated output, tracking error, and control effort while applying proportional actuator command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of proportional actuator command are applied while recording regulated output, tracking error, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering proportional actuator command together with the recorded quantities regulated output, tracking error, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from proportional actuator command to regulated output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2266,9 +2334,9 @@ proportional actuator command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2276,6 +2344,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2287,7 +2356,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are tracking error, plant output, and control effort, and the available actuation is integral control command and test disturbance. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use integral control command and test disturbance as the available control or test action and continuously record tracking error, plant output, and control effort; when the bounded input returns to its baseline, no autonomous mode grows and tracking error settles or remains bounded. After a small reversible change in integral control command and test disturbance, observe tracking error; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from integral control command and test disturbance to tracking error, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From integral control command and test disturbance to tracking error, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording tracking error, plant output, and control effort while applying integral control command and test disturbance makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of integral control command and test disturbance are applied while recording tracking error, plant output, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering integral control command and test disturbance together with the recorded quantities tracking error, plant output, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from integral control command and test disturbance to tracking error is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2299,9 +2368,9 @@ integral control command and test disturbance
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2309,6 +2378,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2320,7 +2390,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are output and output rate, and the available actuation is proportional and rate command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use proportional and rate command as the available control or test action and continuously record output and output rate; when the bounded input returns to its baseline, no autonomous mode grows and output settles or remains bounded. After a small reversible change in proportional and rate command, observe output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from proportional and rate command to output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From proportional and rate command to output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording output and output rate while applying proportional and rate command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of proportional and rate command are applied while recording output and output rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering proportional and rate command together with the recorded quantities output and output rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from proportional and rate command to output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2332,9 +2402,9 @@ proportional and rate command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2342,6 +2412,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2353,7 +2424,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are controlled temperature and control effort, and the available actuation is heater command. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use heater command as the available control or test action and continuously record controlled temperature and control effort; when the bounded input returns to its baseline, no autonomous mode grows and controlled temperature settles or remains bounded. After a small reversible change in heater command, observe controlled temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from heater command to controlled temperature, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From heater command to controlled temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording controlled temperature and control effort while applying heater command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of heater command are applied while recording controlled temperature and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering heater command together with the recorded quantities controlled temperature and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from heater command to controlled temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -2365,9 +2436,9 @@ heater command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=200.0
 
 ### Forbidden Actions
@@ -2375,6 +2446,7 @@ max_test_duration_s=200.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2386,7 +2458,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor speed, tracking error, and disturbance response, and the available actuation is armature voltage and disturbance torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use armature voltage with prescribed load-torque disturbance as the available control or test action and continuously record motor speed, tracking error, and disturbance response; when the bounded input returns to its baseline, no autonomous mode grows and motor speed settles or remains bounded. After a small reversible change in armature voltage with prescribed load-torque disturbance, observe motor speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from armature voltage with prescribed load-torque disturbance to motor speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From armature voltage with prescribed load-torque disturbance to motor speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor speed, tracking error, and disturbance response while applying armature voltage with prescribed load-torque disturbance makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of armature voltage with prescribed load-torque disturbance are applied while recording motor speed, tracking error, and disturbance response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering armature voltage with prescribed load-torque disturbance together with the recorded quantities motor speed, tracking error, and disturbance response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from armature voltage with prescribed load-torque disturbance to motor speed is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2394,13 +2466,13 @@ motor speed, tracking error, and disturbance response
 
 ### Actuators
 
-armature voltage and disturbance torque
+armature voltage with prescribed load-torque disturbance
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2408,6 +2480,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2419,28 +2492,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor position, sensed error, and disturbance response, and the available actuation is controller command and disturbance torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use motor voltage with prescribed disturbance torque as the available control or test action and continuously record motor position, speed, and sensed error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in motor voltage with prescribed disturbance torque, observe motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from motor voltage with prescribed disturbance torque to motor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From motor voltage with prescribed disturbance torque to motor position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor position, speed, and sensed error while applying motor voltage with prescribed disturbance torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of motor voltage with prescribed disturbance torque are applied while recording motor position, speed, and sensed error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering motor voltage with prescribed disturbance torque together with the recorded quantities motor position, speed, and sensed error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from motor voltage with prescribed disturbance torque to motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-motor position, sensed error, and disturbance response
+motor position, speed, and sensed error
 
 ### Actuators
 
-controller command and disturbance torque
+motor voltage with prescribed disturbance torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2452,28 +2526,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are attitude angle, error, and disturbance response, and the available actuation is body torque and controller command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use body-torque command with prescribed disturbance torque as the available control or test action and continuously record attitude angle, angular rate, and tracking error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets attitude angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in body-torque command with prescribed disturbance torque, observe attitude angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from body-torque command with prescribed disturbance torque to attitude angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From body-torque command with prescribed disturbance torque to attitude angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording attitude angle, angular rate, and tracking error while applying body-torque command with prescribed disturbance torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of body-torque command with prescribed disturbance torque are applied while recording attitude angle, angular rate, and tracking error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering body-torque command with prescribed disturbance torque together with the recorded quantities attitude angle, angular rate, and tracking error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from body-torque command with prescribed disturbance torque to attitude angle is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-attitude angle, error, and disturbance response
+attitude angle, angular rate, and tracking error
 
 ### Actuators
 
-body torque and controller command
+body-torque command with prescribed disturbance torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2485,7 +2560,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are process output and quarter-decay response, and the available actuation is P, PI, or PID process command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use P, PI, or PID process command as the available control or test action and continuously record process output and quarter-decay response; when the bounded input returns to its baseline, no autonomous mode grows and process output settles or remains bounded. After a small reversible change in P, PI, or PID process command, observe process output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from P, PI, or PID process command to process output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From P, PI, or PID process command to process output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording process output and quarter-decay response while applying P, PI, or PID process command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of P, PI, or PID process command are applied while recording process output and quarter-decay response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering P, PI, or PID process command together with the recorded quantities process output and quarter-decay response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from P, PI, or PID process command to process output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2497,9 +2572,9 @@ P, PI, or PID process command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2507,6 +2582,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2518,7 +2594,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are marginal oscillation and tuned response, and the available actuation is proportional or PID process command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use proportional or PID process command as the available control or test action and continuously record marginal oscillation and tuned response; when the bounded input returns to its baseline, no autonomous mode grows and marginal oscillation settles or remains bounded. After a small reversible change in proportional or PID process command, observe marginal oscillation; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from proportional or PID process command to marginal oscillation, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From proportional or PID process command to marginal oscillation, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording marginal oscillation and tuned response while applying proportional or PID process command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of proportional or PID process command are applied while recording marginal oscillation and tuned response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering proportional or PID process command together with the recorded quantities marginal oscillation and tuned response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from proportional or PID process command to marginal oscillation is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2530,9 +2606,9 @@ proportional or PID process command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2540,6 +2616,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2551,7 +2628,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are heat-exchanger temperature and step response, and the available actuation is steam-valve P or PI command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use steam-valve P or PI command as the available control or test action and continuously record heat-exchanger temperature and step response; when the bounded input returns to its baseline, no autonomous mode grows and heat-exchanger temperature settles or remains bounded. After a small reversible change in steam-valve P or PI command, observe heat-exchanger temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from steam-valve P or PI command to heat-exchanger temperature, heat transport and temperature measurement hold back the outlet response, and a visible pause separates the command from the first recorded response. From steam-valve P or PI command to heat-exchanger temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording heat-exchanger temperature and step response while applying steam-valve P or PI command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of steam-valve P or PI command are applied while recording heat-exchanger temperature and step response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering steam-valve P or PI command together with the recorded quantities heat-exchanger temperature and step response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from steam-valve P or PI command to heat-exchanger temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -2563,16 +2640,17 @@ steam-valve P or PI command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=240.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -2584,7 +2662,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are heat-exchanger temperature and oscillation, and the available actuation is steam-valve P or PI command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use steam-valve P or PI command as the available control or test action and continuously record heat-exchanger temperature and oscillation; when the bounded input returns to its baseline, no autonomous mode grows and heat-exchanger temperature settles or remains bounded. After a small reversible change in steam-valve P or PI command, observe heat-exchanger temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from steam-valve P or PI command to heat-exchanger temperature, heat transport and temperature measurement hold back the outlet response, and a visible pause separates the command from the first recorded response. From steam-valve P or PI command to heat-exchanger temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording heat-exchanger temperature and oscillation while applying steam-valve P or PI command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of steam-valve P or PI command are applied while recording heat-exchanger temperature and oscillation, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering steam-valve P or PI command together with the recorded quantities heat-exchanger temperature and oscillation, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from steam-valve P or PI command to heat-exchanger temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -2596,16 +2674,17 @@ steam-valve P or PI command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=240.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -2617,7 +2696,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor speed, tracking error, and disturbance response, and the available actuation is feedback plus reference or measured-disturbance feedforward. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use armature voltage combining feedback and feedforward as the available control or test action and continuously record motor speed, tracking error, and disturbance response; when the bounded input returns to its baseline, no autonomous mode grows and motor speed settles or remains bounded. After a small reversible change in armature voltage combining feedback and feedforward, observe motor speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from armature voltage combining feedback and feedforward to motor speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From armature voltage combining feedback and feedforward to motor speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor speed, tracking error, and disturbance response while applying armature voltage combining feedback and feedforward makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of armature voltage combining feedback and feedforward are applied while recording motor speed, tracking error, and disturbance response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering armature voltage combining feedback and feedforward together with the recorded quantities motor speed, tracking error, and disturbance response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from armature voltage combining feedback and feedforward to motor speed is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2625,13 +2704,13 @@ motor speed, tracking error, and disturbance response
 
 ### Actuators
 
-feedback plus reference or measured-disturbance feedforward
+armature voltage combining feedback and feedforward
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -2639,6 +2718,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -2650,28 +2730,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor position and closed-loop poles, and the available actuation is position-loop gain. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use motor armature voltage as the available control or test action and continuously record motor position and tracking response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in motor armature voltage, observe motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from motor armature voltage to motor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From motor armature voltage to motor position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor position and tracking response while applying motor armature voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of motor armature voltage are applied while recording motor position and tracking response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering motor armature voltage together with the recorded quantities motor position and tracking response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from motor armature voltage to motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-motor position and closed-loop poles
+motor position and tracking response
 
 ### Actuators
 
-position-loop gain
+motor armature voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2683,28 +2764,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are modal poles and damping, and the available actuation is physical pole and damping coefficient. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded modal test input while damping is varied as the available control or test action and continuously record modal response and decay envelope; when the bounded input returns to its baseline, an integrating or non-restoring mode lets modal response retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded modal test input while damping is varied, observe modal response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded modal test input while damping is varied to modal response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded modal test input while damping is varied to modal response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording modal response and decay envelope while applying bounded modal test input while damping is varied makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded modal test input while damping is varied are applied while recording modal response and decay envelope, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded modal test input while damping is varied together with the recorded quantities modal response and decay envelope, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded modal test input while damping is varied to modal response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-modal poles and damping
+modal response and decay envelope
 
 ### Actuators
 
-physical pole and damping coefficient
+bounded modal test input while damping is varied
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2716,28 +2798,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are closed-loop poles, damping, and velocity constant, and the available actuation is loop gain. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded command during a loop-strength sweep as the available control or test action and continuously record controlled output and transient response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets controlled output retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded command during a loop-strength sweep, observe controlled output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded command during a loop-strength sweep to controlled output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded command during a loop-strength sweep to controlled output, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording controlled output and transient response while applying bounded command during a loop-strength sweep makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded command during a loop-strength sweep are applied while recording controlled output and transient response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded command during a loop-strength sweep together with the recorded quantities controlled output and transient response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded command during a loop-strength sweep to controlled output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-closed-loop poles, damping, and velocity constant
+controlled output and transient response
 
 ### Actuators
 
-loop gain
+bounded command during a loop-strength sweep
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2749,7 +2832,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are satellite attitude and angular rate, and the available actuation is PD body-torque command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use PD body-torque command as the available control or test action and continuously record satellite attitude and angular rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets satellite attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in PD body-torque command, observe satellite attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from PD body-torque command to satellite attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From PD body-torque command to satellite attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording satellite attitude and angular rate while applying PD body-torque command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of PD body-torque command are applied while recording satellite attitude and angular rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering PD body-torque command together with the recorded quantities satellite attitude and angular rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from PD body-torque command to satellite attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -2761,16 +2844,17 @@ PD body-torque command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2782,28 +2866,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are satellite attitude and lead-pole effects, and the available actuation is lead-compensated torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use lead-compensated body torque as the available control or test action and continuously record satellite attitude and angular rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets satellite attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in lead-compensated body torque, observe satellite attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from lead-compensated body torque to satellite attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From lead-compensated body torque to satellite attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording satellite attitude and angular rate while applying lead-compensated body torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of lead-compensated body torque are applied while recording satellite attitude and angular rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering lead-compensated body torque together with the recorded quantities satellite attitude and angular rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from lead-compensated body torque to satellite attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-satellite attitude and lead-pole effects
+satellite attitude and angular rate
 
 ### Actuators
 
-lead-compensated torque
+lead-compensated body torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2815,11 +2900,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are collocated attitude and flexible-mode poles, and the available actuation is collocated body torque. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use collocated body torque as the available control or test action and continuously record collocated attitude and flexible deflection; when the bounded input returns to its baseline, an integrating or non-restoring mode lets collocated attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in collocated body torque, observe collocated attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from collocated body torque to collocated attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From collocated body torque to collocated attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording collocated attitude and flexible deflection while applying collocated body torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of collocated body torque are applied while recording collocated attitude and flexible deflection, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering collocated body torque together with the recorded quantities collocated attitude and flexible deflection, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from collocated body torque to collocated attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-collocated attitude and flexible-mode poles
+collocated attitude and flexible deflection
 
 ### Actuators
 
@@ -2827,16 +2912,17 @@ collocated body torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2848,11 +2934,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are remote attitude and flexible-mode poles, and the available actuation is main-body torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use main-body torque as the available control or test action and continuously record remote attitude and flexible deflection; when the bounded input returns to its baseline, an integrating or non-restoring mode lets remote attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in main-body torque, observe remote attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from main-body torque to remote attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From main-body torque to remote attitude, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording remote attitude and flexible deflection while applying main-body torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of main-body torque are applied while recording remote attitude and flexible deflection, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering main-body torque together with the recorded quantities remote attitude and flexible deflection, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from main-body torque to remote attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-remote attitude and flexible-mode poles
+remote attitude and flexible deflection
 
 ### Actuators
 
@@ -2860,16 +2946,17 @@ main-body torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2881,28 +2968,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are closed-loop pole multiplicity, and the available actuation is loop gain. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded command during a loop-strength sweep as the available control or test action and continuously record closed-loop output near the repeated-root condition; when the bounded input returns to its baseline, an integrating or non-restoring mode lets closed-loop output near the repeated-root condition retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded command during a loop-strength sweep, observe closed-loop output near the repeated-root condition; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded command during a loop-strength sweep to closed-loop output near the repeated-root condition, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded command during a loop-strength sweep to closed-loop output near the repeated-root condition, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording closed-loop output near the repeated-root condition while applying bounded command during a loop-strength sweep makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded command during a loop-strength sweep are applied while recording closed-loop output near the repeated-root condition, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded command during a loop-strength sweep together with the recorded quantities closed-loop output near the repeated-root condition, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded command during a loop-strength sweep to closed-loop output near the repeated-root condition is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-closed-loop pole multiplicity
+closed-loop output near the repeated-root condition
 
 ### Actuators
 
-loop gain
+bounded command during a loop-strength sweep
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2914,28 +3002,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are servo position and step-response metrics, and the available actuation is lead-compensated command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use lead-compensated servo command as the available control or test action and continuously record servo position, tracking error, and control effort; when the bounded input returns to its baseline, an integrating or non-restoring mode lets servo position retain an offset or drift after the prescribed drive is removed. After a small reversible change in lead-compensated servo command, observe servo position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from lead-compensated servo command to servo position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From lead-compensated servo command to servo position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording servo position, tracking error, and control effort while applying lead-compensated servo command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of lead-compensated servo command are applied while recording servo position, tracking error, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering lead-compensated servo command together with the recorded quantities servo position, tracking error, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from lead-compensated servo command to servo position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-servo position and step-response metrics
+servo position, tracking error, and control effort
 
 ### Actuators
 
-lead-compensated command
+lead-compensated servo command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2947,28 +3036,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are tracking error, position, and slow pole, and the available actuation is lead-lag command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use lead-lag servo command as the available control or test action and continuously record servo position, tracking error, and control effort; when the bounded input returns to its baseline, an integrating or non-restoring mode lets servo position retain an offset or drift after the prescribed drive is removed. After a small reversible change in lead-lag servo command, observe servo position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from lead-lag servo command to servo position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From lead-lag servo command to servo position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording servo position, tracking error, and control effort while applying lead-lag servo command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of lead-lag servo command are applied while recording servo position, tracking error, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering lead-lag servo command together with the recorded quantities servo position, tracking error, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from lead-lag servo command to servo position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-tracking error, position, and slow pole
+servo position, tracking error, and control effort
 
 ### Actuators
 
-lead-lag command
+lead-lag servo command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -2980,11 +3070,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are flexible-mode response and nominal output, and the available actuation is notch-filtered actuator command. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use notch-filtered actuator command as the available control or test action and continuously record nominal output and flexible displacement; when the bounded input returns to its baseline, an integrating or non-restoring mode lets nominal output retain an offset or drift after the prescribed drive is removed. After a small reversible change in notch-filtered actuator command, observe nominal output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from notch-filtered actuator command to nominal output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From notch-filtered actuator command to nominal output, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording nominal output and flexible displacement while applying notch-filtered actuator command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of notch-filtered actuator command are applied while recording nominal output and flexible displacement, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering notch-filtered actuator command together with the recorded quantities nominal output and flexible displacement, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from notch-filtered actuator command to nominal output is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
-flexible-mode response and nominal output
+nominal output and flexible displacement
 
 ### Actuators
 
@@ -2992,16 +3082,17 @@ notch-filtered actuator command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3013,7 +3104,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are lead-network output voltage, and the available actuation is input error voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use input error voltage as the available control or test action and continuously record lead-network output voltage; when the bounded input returns to its baseline, no autonomous mode grows and lead-network output voltage settles or remains bounded. After a small reversible change in input error voltage, observe lead-network output voltage; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from input error voltage to lead-network output voltage, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From input error voltage to lead-network output voltage, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording lead-network output voltage while applying input error voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of input error voltage are applied while recording lead-network output voltage, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering input error voltage together with the recorded quantities lead-network output voltage, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from input error voltage to lead-network output voltage is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3025,9 +3116,9 @@ input error voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -3035,6 +3126,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -3046,11 +3138,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are quadrotor pitch angle, rate, and closed-loop poles, and the available actuation is pitch rotor-torque command. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use pitch rotor-torque command as the available control or test action and continuously record quadrotor pitch angle and angular rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets quadrotor pitch angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in pitch rotor-torque command, observe quadrotor pitch angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from pitch rotor-torque command to quadrotor pitch angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From pitch rotor-torque command to quadrotor pitch angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording quadrotor pitch angle and angular rate while applying pitch rotor-torque command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of pitch rotor-torque command are applied while recording quadrotor pitch angle and angular rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering pitch rotor-torque command together with the recorded quantities quadrotor pitch angle and angular rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from pitch rotor-torque command to quadrotor pitch angle is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-quadrotor pitch angle, rate, and closed-loop poles
+quadrotor pitch angle and angular rate
 
 ### Actuators
 
@@ -3058,16 +3150,17 @@ pitch rotor-torque command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3079,7 +3172,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pitch attitude, elevator, and trim-tab deflections, and the available actuation is elevator and trim-tab commands. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use elevator and trim-tab commands as the available control or test action and continuously record pitch attitude, elevator, and trim-tab deflections; when the bounded input returns to its baseline, no autonomous mode grows and pitch attitude settles or remains bounded. After a small reversible change in elevator and trim-tab commands, observe pitch attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from elevator and trim-tab commands to pitch attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From elevator and trim-tab commands to pitch attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pitch attitude, elevator, and trim-tab deflections while applying elevator and trim-tab commands makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of elevator and trim-tab commands are applied while recording pitch attitude, elevator, and trim-tab deflections, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering elevator and trim-tab commands together with the recorded quantities pitch attitude, elevator, and trim-tab deflections, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from elevator and trim-tab commands to pitch attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -3091,9 +3184,9 @@ elevator and trim-tab commands
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -3101,6 +3194,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -3112,28 +3206,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are aircraft altitude and closed-loop poles, and the available actuation is elevator-loop gain. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use elevator command as the available control or test action and continuously record aircraft altitude response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets aircraft altitude response retain an offset or drift after the prescribed drive is removed. After a small reversible change in elevator command, observe aircraft altitude response; the first useful output change moves in an unfavorable or opposite direction before turning toward its eventual value. For the same small change from elevator command to aircraft altitude response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From elevator command to aircraft altitude response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording aircraft altitude response while applying elevator command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of elevator command are applied while recording aircraft altitude response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering elevator command together with the recorded quantities aircraft altitude response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from elevator command to aircraft altitude response is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-aircraft altitude and closed-loop poles
+aircraft altitude response
 
 ### Actuators
 
-elevator-loop gain
+elevator command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3145,28 +3240,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are servomechanism position, speed, and poles, and the available actuation is tachometer and amplifier gains. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use servo amplifier voltage under tachometer feedback as the available control or test action and continuously record servomechanism position and speed response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets servomechanism position retain an offset or drift after the prescribed drive is removed. After a small reversible change in servo amplifier voltage under tachometer feedback, observe servomechanism position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from servo amplifier voltage under tachometer feedback to servomechanism position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From servo amplifier voltage under tachometer feedback to servomechanism position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording servomechanism position and speed response while applying servo amplifier voltage under tachometer feedback makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of servo amplifier voltage under tachometer feedback are applied while recording servomechanism position and speed response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering servo amplifier voltage under tachometer feedback together with the recorded quantities servomechanism position and speed response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from servo amplifier voltage under tachometer feedback to servomechanism position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-servomechanism position, speed, and poles
+servomechanism position and speed response
 
 ### Actuators
 
-tachometer and amplifier gains
+servo amplifier voltage under tachometer feedback
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3178,11 +3274,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are horizontal position, pitch attitude, and all closed-loop poles, and the available actuation is outer position command and inner rotor-torque command. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use outer position command and inner rotor-torque command as the available control or test action and continuously record horizontal position, pitch attitude, and angular rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets horizontal position retain an offset or drift after the prescribed drive is removed. After a small reversible change in outer position command and inner rotor-torque command, observe horizontal position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from outer position command and inner rotor-torque command to horizontal position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From outer position command and inner rotor-torque command to horizontal position, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording horizontal position, pitch attitude, and angular rate while applying outer position command and inner rotor-torque command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of outer position command and inner rotor-torque command are applied while recording horizontal position, pitch attitude, and angular rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering outer position command and inner rotor-torque command together with the recorded quantities horizontal position, pitch attitude, and angular rate, the outer response appears only through a separately stabilized inner attitude, rate, or biochemical path. When the bounded test from outer position command and inner rotor-torque command to horizontal position is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-horizontal position, pitch attitude, and all closed-loop poles
+horizontal position, pitch attitude, and angular rate
 
 ### Actuators
 
@@ -3190,16 +3286,17 @@ outer position command and inner rotor-torque command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+disable the inner stabilizing channel while testing the outer command
 
 ### Dominant Time Scale (Seconds)
 
@@ -3211,11 +3308,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are machine-tool position and closed-loop poles, and the available actuation is lead-compensated servo command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use lead-compensated servo command as the available control or test action and continuously record machine-tool position, tracking error, and control effort; when the bounded input returns to its baseline, an integrating or non-restoring mode lets machine-tool position retain an offset or drift after the prescribed drive is removed. After a small reversible change in lead-compensated servo command, observe machine-tool position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from lead-compensated servo command to machine-tool position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From lead-compensated servo command to machine-tool position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording machine-tool position, tracking error, and control effort while applying lead-compensated servo command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of lead-compensated servo command are applied while recording machine-tool position, tracking error, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering lead-compensated servo command together with the recorded quantities machine-tool position, tracking error, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from lead-compensated servo command to machine-tool position is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-machine-tool position and closed-loop poles
+machine-tool position, tracking error, and control effort
 
 ### Actuators
 
@@ -3223,16 +3320,17 @@ lead-compensated servo command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3244,7 +3342,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are ball position, sensor voltage, and coil current, and the available actuation is electromagnet current command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use electromagnet current command as the available control or test action and continuously record ball position, sensor voltage, and coil current; when the bounded input returns to its baseline, magnetic force weakens in the direction that lets a displaced ball move farther from its levitation point, so the deviation continues to grow rather than return. After a small reversible change in electromagnet current command, observe ball position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from electromagnet current command to ball position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From electromagnet current command to ball position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording ball position, sensor voltage, and coil current while applying electromagnet current command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of electromagnet current command are applied while recording ball position, sensor voltage, and coil current, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering electromagnet current command together with the recorded quantities ball position, sensor voltage, and coil current, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from electromagnet current command to ball position is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -3256,16 +3354,17 @@ electromagnet current command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=12.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3277,7 +3376,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are ship heading, yaw rate, rudder angle, and wind response, and the available actuation is rudder command and prescribed wind-gust input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use rudder command and prescribed wind-gust input as the available control or test action and continuously record ship heading, yaw rate, rudder angle, and wind response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets ship heading retain an offset or drift after the prescribed drive is removed. After a small reversible change in rudder command and prescribed wind-gust input, observe ship heading; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from rudder command and prescribed wind-gust input to ship heading, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From rudder command and prescribed wind-gust input to ship heading, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording ship heading, yaw rate, rudder angle, and wind response while applying rudder command and prescribed wind-gust input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of rudder command and prescribed wind-gust input are applied while recording ship heading, yaw rate, rudder angle, and wind response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering rudder command and prescribed wind-gust input together with the recorded quantities ship heading, yaw rate, rudder angle, and wind response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from rudder command and prescribed wind-gust input to ship heading is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -3289,16 +3388,17 @@ rudder command and prescribed wind-gust input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3310,7 +3410,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are capacitor current magnitude and phase, and the available actuation is sinusoidal voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sinusoidal voltage as the available control or test action and continuously record capacitor current magnitude and phase; when the bounded input returns to its baseline, no autonomous mode grows and capacitor current magnitude settles or remains bounded. After a small reversible change in sinusoidal voltage, observe capacitor current magnitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sinusoidal voltage to capacitor current magnitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From sinusoidal voltage to capacitor current magnitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording capacitor current magnitude and phase while applying sinusoidal voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sinusoidal voltage are applied while recording capacitor current magnitude and phase, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering sinusoidal voltage together with the recorded quantities capacitor current magnitude and phase, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sinusoidal voltage to capacitor current magnitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3322,9 +3422,9 @@ sinusoidal voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -3332,6 +3432,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -3343,7 +3444,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are lead-compensator magnitude and phase, and the available actuation is sinusoidal error signal. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sinusoidal error signal as the available control or test action and continuously record lead-compensator magnitude and phase; when the bounded input returns to its baseline, no autonomous mode grows and lead-compensator magnitude settles or remains bounded. After a small reversible change in sinusoidal error signal, observe lead-compensator magnitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sinusoidal error signal to lead-compensator magnitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From sinusoidal error signal to lead-compensator magnitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording lead-compensator magnitude and phase while applying sinusoidal error signal makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sinusoidal error signal are applied while recording lead-compensator magnitude and phase, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering sinusoidal error signal together with the recorded quantities lead-compensator magnitude and phase, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sinusoidal error signal to lead-compensator magnitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3355,9 +3456,9 @@ sinusoidal error signal
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -3365,6 +3466,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -3376,7 +3478,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are open-loop magnitude and phase, and the available actuation is sinusoidal plant input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sinusoidal plant input as the available control or test action and continuously record open-loop magnitude and phase; when the bounded input returns to its baseline, an integrating or non-restoring mode lets open-loop magnitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in sinusoidal plant input, observe open-loop magnitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sinusoidal plant input to open-loop magnitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From sinusoidal plant input to open-loop magnitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording open-loop magnitude and phase while applying sinusoidal plant input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sinusoidal plant input are applied while recording open-loop magnitude and phase, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering sinusoidal plant input together with the recorded quantities open-loop magnitude and phase, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sinusoidal plant input to open-loop magnitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3388,16 +3490,17 @@ sinusoidal plant input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3409,7 +3512,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are plant displacement magnitude and phase, and the available actuation is sinusoidal applied force. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sinusoidal applied force as the available control or test action and continuously record plant displacement magnitude and phase; when the bounded input returns to its baseline, an integrating or non-restoring mode lets plant displacement magnitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in sinusoidal applied force, observe plant displacement magnitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sinusoidal applied force to plant displacement magnitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From sinusoidal applied force to plant displacement magnitude, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording plant displacement magnitude and phase while applying sinusoidal applied force makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sinusoidal applied force are applied while recording plant displacement magnitude and phase, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering sinusoidal applied force together with the recorded quantities plant displacement magnitude and phase, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sinusoidal applied force to plant displacement magnitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3421,16 +3524,17 @@ sinusoidal applied force
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3442,11 +3546,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are tracking error and low-frequency loop gain, and the available actuation is unit-ramp reference. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use unit-ramp reference as the available control or test action and continuously record tracking error and regulated output; when the bounded input returns to its baseline, an integrating or non-restoring mode lets tracking error retain an offset or drift after the prescribed drive is removed. After a small reversible change in unit-ramp reference, observe tracking error; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from unit-ramp reference to tracking error, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From unit-ramp reference to tracking error, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording tracking error and regulated output while applying unit-ramp reference makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of unit-ramp reference are applied while recording tracking error and regulated output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering unit-ramp reference together with the recorded quantities tracking error and regulated output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from unit-ramp reference to tracking error is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-tracking error and low-frequency loop gain
+tracking error and regulated output
 
 ### Actuators
 
@@ -3454,16 +3558,17 @@ unit-ramp reference
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3475,21 +3580,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are Nyquist locus and closed-loop poles, and the available actuation is loop gain K. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded loop command during a gain sweep as the available control or test action and continuously record closed-loop output and frequency response; when the bounded input returns to its baseline, no autonomous mode grows and closed-loop output settles or remains bounded. After a small reversible change in bounded loop command during a gain sweep, observe closed-loop output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded loop command during a gain sweep to closed-loop output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded loop command during a gain sweep to closed-loop output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording closed-loop output and frequency response while applying bounded loop command during a gain sweep makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded loop command during a gain sweep are applied while recording closed-loop output and frequency response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded loop command during a gain sweep together with the recorded quantities closed-loop output and frequency response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded loop command during a gain sweep to closed-loop output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-Nyquist locus and closed-loop poles
+closed-loop output and frequency response
 
 ### Actuators
 
-loop gain K
+bounded loop command during a gain sweep
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -3497,6 +3602,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -3508,28 +3614,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are Nyquist locus and stability region, and the available actuation is loop gain K. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded loop command during a gain sweep as the available control or test action and continuously record closed-loop output and frequency response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets closed-loop output retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded loop command during a gain sweep, observe closed-loop output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded loop command during a gain sweep to closed-loop output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded loop command during a gain sweep to closed-loop output, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording closed-loop output and frequency response while applying bounded loop command during a gain sweep makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded loop command during a gain sweep are applied while recording closed-loop output and frequency response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded loop command during a gain sweep together with the recorded quantities closed-loop output and frequency response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded loop command during a gain sweep to closed-loop output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-Nyquist locus and stability region
+closed-loop output and frequency response
 
 ### Actuators
 
-loop gain K
+bounded loop command during a gain sweep
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3541,28 +3648,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are Nyquist loci and closed-loop stability, and the available actuation is the two loop gains. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded commands used in the two loop tests as the available control or test action and continuously record closed-loop outputs and frequency responses of both cases; when the bounded input returns to its baseline, the first Nyquist case contains a growing open-loop mode that must be counted before any encirclement conclusion, so the deviation continues to grow rather than return. After a small reversible change in bounded commands used in the two loop tests, observe closed-loop outputs; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded commands used in the two loop tests to closed-loop outputs, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded commands used in the two loop tests to closed-loop outputs, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording closed-loop outputs and frequency responses of both cases while applying bounded commands used in the two loop tests makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded commands used in the two loop tests are applied while recording closed-loop outputs and frequency responses of both cases, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded commands used in the two loop tests together with the recorded quantities closed-loop outputs and frequency responses of both cases, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded commands used in the two loop tests to closed-loop outputs is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-Nyquist loci and closed-loop stability
+closed-loop outputs and frequency responses of both cases
 
 ### Actuators
 
-the two loop gains
+bounded commands used in the two loop tests
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=12.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3574,28 +3682,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are stability region and margins, and the available actuation is loop gain K. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded loop command during a gain sweep as the available control or test action and continuously record closed-loop output and frequency response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets closed-loop output retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded loop command during a gain sweep, observe closed-loop output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded loop command during a gain sweep to closed-loop output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded loop command during a gain sweep to closed-loop output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording closed-loop output and frequency response while applying bounded loop command during a gain sweep makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded loop command during a gain sweep are applied while recording closed-loop output and frequency response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded loop command during a gain sweep together with the recorded quantities closed-loop output and frequency response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded loop command during a gain sweep to closed-loop output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-stability region and margins
+closed-loop output and frequency response
 
 ### Actuators
 
-loop gain K
+bounded loop command during a gain sweep
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3607,28 +3716,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are multiple crossover margins, and the available actuation is loop excitation. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded sinusoidal loop excitation as the available control or test action and continuously record closed-loop output and open-loop frequency response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets closed-loop output retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded sinusoidal loop excitation, observe closed-loop output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded sinusoidal loop excitation to closed-loop output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded sinusoidal loop excitation to closed-loop output, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording closed-loop output and open-loop frequency response while applying bounded sinusoidal loop excitation makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded sinusoidal loop excitation are applied while recording closed-loop output and open-loop frequency response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded sinusoidal loop excitation together with the recorded quantities closed-loop output and open-loop frequency response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded sinusoidal loop excitation to closed-loop output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-multiple crossover margins
+closed-loop output and open-loop frequency response
 
 ### Actuators
 
-loop excitation
+bounded sinusoidal loop excitation
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3640,11 +3750,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are attitude, sensitivity, and bandwidth, and the available actuation is body-torque command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use body-torque command as the available control or test action and continuously record attitude, angular rate, and control effort; when the bounded input returns to its baseline, an integrating or non-restoring mode lets attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in body-torque command, observe attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from body-torque command to attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From body-torque command to attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording attitude, angular rate, and control effort while applying body-torque command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of body-torque command are applied while recording attitude, angular rate, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering body-torque command together with the recorded quantities attitude, angular rate, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from body-torque command to attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-attitude, sensitivity, and bandwidth
+attitude, angular rate, and control effort
 
 ### Actuators
 
@@ -3652,16 +3762,17 @@ body-torque command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3673,21 +3784,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are closed-loop magnitude and bandwidth, and the available actuation is open-loop frequency sweep. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded sinusoidal command sweep as the available control or test action and continuously record closed-loop output and bandwidth response; when the bounded input returns to its baseline, no autonomous mode grows and closed-loop output settles or remains bounded. After a small reversible change in bounded sinusoidal command sweep, observe closed-loop output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded sinusoidal command sweep to closed-loop output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded sinusoidal command sweep to closed-loop output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording closed-loop output and bandwidth response while applying bounded sinusoidal command sweep makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded sinusoidal command sweep are applied while recording closed-loop output and bandwidth response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded sinusoidal command sweep together with the recorded quantities closed-loop output and bandwidth response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded sinusoidal command sweep to closed-loop output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-closed-loop magnitude and bandwidth
+closed-loop output and bandwidth response
 
 ### Actuators
 
-open-loop frequency sweep
+bounded sinusoidal command sweep
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -3695,6 +3806,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -3706,7 +3818,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor position, error, and step response, and the available actuation is lead-compensated motor command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use lead-compensated motor command as the available control or test action and continuously record motor position, error, and step response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in lead-compensated motor command, observe motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from lead-compensated motor command to motor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From lead-compensated motor command to motor position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor position, error, and step response while applying lead-compensated motor command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of lead-compensated motor command are applied while recording motor position, error, and step response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering lead-compensated motor command together with the recorded quantities motor position, error, and step response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from lead-compensated motor command to motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3718,16 +3830,17 @@ lead-compensated motor command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3739,7 +3852,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are temperature or servo output, and the available actuation is single- or double-lead command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use single- or double-lead command as the available control or test action and continuously record temperature or servo output; when the bounded input returns to its baseline, an integrating or non-restoring mode lets temperature or servo output retain an offset or drift after the prescribed drive is removed. After a small reversible change in single- or double-lead command, observe temperature or servo output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from single- or double-lead command to temperature or servo output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From single- or double-lead command to temperature or servo output, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording temperature or servo output while applying single- or double-lead command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of single- or double-lead command are applied while recording temperature or servo output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering single- or double-lead command together with the recorded quantities temperature or servo output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from single- or double-lead command to temperature or servo output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3751,16 +3864,17 @@ single- or double-lead command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=160.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3772,7 +3886,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are thermal or motor response and slow tail, and the available actuation is lag-compensated command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use lag-compensated command as the available control or test action and continuously record thermal or motor response and slow tail; when the bounded input returns to its baseline, an integrating or non-restoring mode lets thermal or motor response retain an offset or drift after the prescribed drive is removed. After a small reversible change in lag-compensated command, observe thermal or motor response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from lag-compensated command to thermal or motor response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From lag-compensated command to thermal or motor response, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording thermal or motor response and slow tail while applying lag-compensated command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of lag-compensated command are applied while recording thermal or motor response and slow tail, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering lag-compensated command together with the recorded quantities thermal or motor response and slow tail, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from lag-compensated command to thermal or motor response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3784,16 +3898,17 @@ lag-compensated command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=160.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3805,28 +3920,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are attitude, sensitivity, and disturbance response, and the available actuation is controller and disturbance torques. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use body-torque command with prescribed disturbance torque as the available control or test action and continuously record attitude, angular rate, and disturbance response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in body-torque command with prescribed disturbance torque, observe attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from body-torque command with prescribed disturbance torque to attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From body-torque command with prescribed disturbance torque to attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording attitude, angular rate, and disturbance response while applying body-torque command with prescribed disturbance torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of body-torque command with prescribed disturbance torque are applied while recording attitude, angular rate, and disturbance response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering body-torque command with prescribed disturbance torque together with the recorded quantities attitude, angular rate, and disturbance response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from body-torque command with prescribed disturbance torque to attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-attitude, sensitivity, and disturbance response
+attitude, angular rate, and disturbance response
 
 ### Actuators
 
-controller and disturbance torques
+body-torque command with prescribed disturbance torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3838,28 +3954,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are tracking error and sensitivity bound, and the available actuation is prescribed sinusoidal references. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use prescribed sinusoidal reference command as the available control or test action and continuously record tracking error and regulated output; when the bounded input returns to its baseline, an integrating or non-restoring mode lets tracking error retain an offset or drift after the prescribed drive is removed. After a small reversible change in prescribed sinusoidal reference command, observe tracking error; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from prescribed sinusoidal reference command to tracking error, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From prescribed sinusoidal reference command to tracking error, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording tracking error and regulated output while applying prescribed sinusoidal reference command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of prescribed sinusoidal reference command are applied while recording tracking error and regulated output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering prescribed sinusoidal reference command together with the recorded quantities tracking error and regulated output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from prescribed sinusoidal reference command to tracking error is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-tracking error and sensitivity bound
+tracking error and regulated output
 
 ### Actuators
 
-prescribed sinusoidal references
+prescribed sinusoidal reference command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3871,28 +3988,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are robustness bounds and sensitivity, and the available actuation is loop-shaped feedback command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use loop-shaped feedback command under prescribed plant variation as the available control or test action and continuously record regulated output, tracking error, and control effort; when the bounded input returns to its baseline, no autonomous mode grows and regulated output settles or remains bounded. After a small reversible change in loop-shaped feedback command under prescribed plant variation, observe regulated output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from loop-shaped feedback command under prescribed plant variation to regulated output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From loop-shaped feedback command under prescribed plant variation to regulated output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording regulated output, tracking error, and control effort while applying loop-shaped feedback command under prescribed plant variation makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of loop-shaped feedback command under prescribed plant variation are applied while recording regulated output, tracking error, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering loop-shaped feedback command under prescribed plant variation together with the recorded quantities regulated output, tracking error, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from loop-shaped feedback command under prescribed plant variation to regulated output is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
-robustness bounds and sensitivity
+regulated output, tracking error, and control effort
 
 ### Actuators
 
-loop-shaped feedback command
+loop-shaped feedback command under prescribed plant variation
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=24.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -3904,11 +4022,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are phase margin and sampled step response, and the available actuation is digitally sampled control command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digitally sampled control command as the available control or test action and continuously record sampled plant output, tracking error, and control effort; when the bounded input returns to its baseline, no autonomous mode grows and sampled plant output settles or remains bounded. After a small reversible change in digitally sampled control command, observe sampled plant output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digitally sampled control command to sampled plant output, sampling and causal computation hold back the effect of each updated command, and a visible pause separates the command from the first recorded response. From digitally sampled control command to sampled plant output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording sampled plant output, tracking error, and control effort while applying digitally sampled control command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digitally sampled control command are applied while recording sampled plant output, tracking error, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digitally sampled control command together with the recorded quantities sampled plant output, tracking error, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digitally sampled control command to sampled plant output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-phase margin and sampled step response
+sampled plant output, tracking error, and control effort
 
 ### Actuators
 
@@ -3916,16 +4034,17 @@ digitally sampled control command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=24.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -3937,28 +4056,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are Nichols locus and closed-loop response, and the available actuation is frequency-swept loop excitation. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded frequency-swept input as the available control or test action and continuously record closed-loop output and frequency response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets closed-loop output retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded frequency-swept input, observe closed-loop output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded frequency-swept input to closed-loop output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded frequency-swept input to closed-loop output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording closed-loop output and frequency response while applying bounded frequency-swept input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded frequency-swept input are applied while recording closed-loop output and frequency response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded frequency-swept input together with the recorded quantities closed-loop output and frequency response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded frequency-swept input to closed-loop output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-Nichols locus and closed-loop response
+closed-loop output and frequency response
 
 ### Actuators
 
-frequency-swept loop excitation
+bounded frequency-swept input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -3970,7 +4090,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are attitude angle and angular rate, and the available actuation is thruster force. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use thruster force as the available control or test action and continuously record attitude angle and angular rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets attitude angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in thruster force, observe attitude angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from thruster force to attitude angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From thruster force to attitude angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording attitude angle and angular rate while applying thruster force makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of thruster force are applied while recording attitude angle and angular rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering thruster force together with the recorded quantities attitude angle and angular rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from thruster force to attitude angle is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -3982,16 +4102,17 @@ thruster force
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4003,7 +4124,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor position, speed, current, and the available actuation is armature voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use armature voltage as the available control or test action and continuously record motor position, speed, current; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in armature voltage, observe motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from armature voltage to motor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From armature voltage to motor position, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording motor position, speed, current while applying armature voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of armature voltage are applied while recording motor position, speed, current, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering armature voltage together with the recorded quantities motor position, speed, current, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from armature voltage to motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4015,16 +4136,17 @@ armature voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4036,7 +4158,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are quarter-car output and modal states, and the available actuation is realization input. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use realization input as the available control or test action and continuously record quarter-car output and modal states; when the bounded input returns to its baseline, an integrating or non-restoring mode lets quarter-car output retain an offset or drift after the prescribed drive is removed. After a small reversible change in realization input, observe quarter-car output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from realization input to quarter-car output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From realization input to quarter-car output, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording quarter-car output and modal states while applying realization input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of realization input are applied while recording quarter-car output and modal states, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering realization input together with the recorded quantities quarter-car output and modal states, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from realization input to quarter-car output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4048,16 +4170,17 @@ realization input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4069,7 +4192,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are thermal modal states and output, and the available actuation is heat input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use heat input as the available control or test action and continuously record thermal modal states and output; when the bounded input returns to its baseline, no autonomous mode grows and thermal modal states settles or remains bounded. After a small reversible change in heat input, observe thermal modal states; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from heat input to thermal modal states, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From heat input to thermal modal states, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording thermal modal states and output while applying heat input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of heat input are applied while recording thermal modal states and output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering heat input together with the recorded quantities thermal modal states and output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from heat input to thermal modal states is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4081,9 +4204,9 @@ heat input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=200.0
 
 ### Forbidden Actions
@@ -4091,6 +4214,7 @@ max_test_duration_s=200.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4102,7 +4226,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pitch attitude and modal states, and the available actuation is elevator input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use elevator input as the available control or test action and continuously record pitch attitude and modal states; when the bounded input returns to its baseline, no autonomous mode grows and pitch attitude settles or remains bounded. After a small reversible change in elevator input, observe pitch attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from elevator input to pitch attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From elevator input to pitch attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pitch attitude and modal states while applying elevator input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of elevator input are applied while recording pitch attitude and modal states, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering elevator input together with the recorded quantities pitch attitude and modal states, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from elevator input to pitch attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4114,9 +4238,9 @@ elevator input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -4124,6 +4248,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4135,21 +4260,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are state modes and rank tests, and the available actuation is test excitation. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded state-space test excitation as the available control or test action and continuously record state trajectories and declared output response; when the bounded input returns to its baseline, no autonomous mode grows and state trajectories settles or remains bounded. After a small reversible change in bounded state-space test excitation, observe state trajectories; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded state-space test excitation to state trajectories, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded state-space test excitation to state trajectories, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording state trajectories and declared output response while applying bounded state-space test excitation leaves one pole-zero-canceled mode absent from the recordings and unreachable from the prescribed excitation. When permitted changes in the direction or amplitude of bounded state-space test excitation are applied while recording state trajectories and declared output response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded state-space test excitation together with the recorded quantities state trajectories and declared output response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded state-space test excitation to state trajectories is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-state modes and rank tests
+state trajectories and declared output response
 
 ### Actuators
 
-test excitation
+bounded state-space test excitation
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -4157,6 +4282,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4168,7 +4294,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pendulum angle and rate, and the available actuation is pivot torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use pivot torque as the available control or test action and continuously record pendulum angle and rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets pendulum angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in pivot torque, observe pendulum angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from pivot torque to pendulum angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From pivot torque to pendulum angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pendulum angle and rate while applying pivot torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of pivot torque are applied while recording pendulum angle and rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering pivot torque together with the recorded quantities pendulum angle and rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from pivot torque to pendulum angle is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4180,16 +4306,17 @@ pivot torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4201,28 +4328,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are closed-loop poles, gains, and control effort, and the available actuation is state-feedback command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded state-feedback command as the available control or test action and continuously record closed-loop state response and control effort; when the bounded input returns to its baseline, no autonomous mode grows and closed-loop state response settles or remains bounded. After a small reversible change in bounded state-feedback command, observe closed-loop state response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded state-feedback command to closed-loop state response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded state-feedback command to closed-loop state response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording closed-loop state response and control effort while applying bounded state-feedback command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded state-feedback command are applied while recording closed-loop state response and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering bounded state-feedback command together with the recorded quantities closed-loop state response and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded state-feedback command to closed-loop state response is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
-closed-loop poles, gains, and control effort
+closed-loop state response and control effort
 
 ### Actuators
 
-state-feedback command
+bounded state-feedback command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=24.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -4234,7 +4362,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor position and speed, and the available actuation is state feedback voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use state feedback voltage as the available control or test action and continuously record motor position and speed; when the bounded input returns to its baseline, an integrating or non-restoring mode lets motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in state feedback voltage, observe motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from state feedback voltage to motor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From state feedback voltage to motor position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor position and speed while applying state feedback voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of state feedback voltage are applied while recording motor position and speed, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering state feedback voltage together with the recorded quantities motor position and speed, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from state feedback voltage to motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4246,16 +4374,17 @@ state feedback voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4267,7 +4396,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are drone attitude response, and the available actuation is control moment. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use control moment as the available control or test action and continuously record drone attitude response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets drone attitude response retain an offset or drift after the prescribed drive is removed. After a small reversible change in control moment, observe drone attitude response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from control moment to drone attitude response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From control moment to drone attitude response, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording drone attitude response while applying control moment makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of control moment are applied while recording drone attitude response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering control moment together with the recorded quantities drone attitude response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from control moment to drone attitude response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4279,16 +4408,17 @@ control moment
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4300,7 +4430,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are drone state and control effort, and the available actuation is optimal control moment. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use optimal control moment as the available control or test action and continuously record drone state and control effort; when the bounded input returns to its baseline, an integrating or non-restoring mode lets drone state retain an offset or drift after the prescribed drive is removed. After a small reversible change in optimal control moment, observe drone state; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from optimal control moment to drone state, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From optimal control moment to drone state, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording drone state and control effort while applying optimal control moment makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of optimal control moment are applied while recording drone state and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering optimal control moment together with the recorded quantities drone state and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from optimal control moment to drone state is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4312,16 +4442,17 @@ optimal control moment
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4333,7 +4464,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are measured angle and estimated state, and the available actuation is known pivot torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use known pivot torque as the available control or test action and continuously record measured angle and estimated state; when the bounded input returns to its baseline, an integrating or non-restoring mode lets measured angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in known pivot torque, observe measured angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from known pivot torque to measured angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From known pivot torque to measured angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording measured angle and estimated state while applying known pivot torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of known pivot torque are applied while recording measured angle and estimated state, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering known pivot torque together with the recorded quantities measured angle and estimated state, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from known pivot torque to measured angle is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4345,16 +4476,17 @@ known pivot torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4366,7 +4498,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are measured angle and estimated rate, and the available actuation is known pivot torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use known pivot torque as the available control or test action and continuously record measured angle and estimated rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets measured angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in known pivot torque, observe measured angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from known pivot torque to measured angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From known pivot torque to measured angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording measured angle and estimated rate while applying known pivot torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of known pivot torque are applied while recording measured angle and estimated rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering known pivot torque together with the recorded quantities measured angle and estimated rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from known pivot torque to measured angle is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4378,16 +4510,17 @@ known pivot torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4399,7 +4532,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are state estimate and innovation, and the available actuation is known plant input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use known plant input as the available control or test action and continuously record state estimate and innovation; when the bounded input returns to its baseline, an integrating or non-restoring mode lets state estimate retain an offset or drift after the prescribed drive is removed. After a small reversible change in known plant input, observe state estimate; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from known plant input to state estimate, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From known plant input to state estimate, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording state estimate and innovation while applying known plant input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of known plant input are applied while recording state estimate and innovation, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering known plant input together with the recorded quantities state estimate and innovation, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from known plant input to state estimate is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4411,16 +4544,17 @@ known plant input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4432,11 +4566,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are servo output, estimated state, and poles, and the available actuation is dynamic compensator voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use dynamic compensator voltage as the available control or test action and continuously record servo output, estimated state, and control effort; when the bounded input returns to its baseline, an integrating or non-restoring mode lets servo output retain an offset or drift after the prescribed drive is removed. After a small reversible change in dynamic compensator voltage, observe servo output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from dynamic compensator voltage to servo output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From dynamic compensator voltage to servo output, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording servo output, estimated state, and control effort while applying dynamic compensator voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of dynamic compensator voltage are applied while recording servo output, estimated state, and control effort, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering dynamic compensator voltage together with the recorded quantities servo output, estimated state, and control effort, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from dynamic compensator voltage to servo output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-servo output, estimated state, and poles
+servo output, estimated state, and control effort
 
 ### Actuators
 
@@ -4444,16 +4578,17 @@ dynamic compensator voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4465,7 +4600,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are servo position, tracking error, and slow tail, and the available actuation is two-input or equivalent lag-lead command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use two-input or equivalent lag-lead command as the available control or test action and continuously record servo position, tracking error, and slow tail; when the bounded input returns to its baseline, an integrating or non-restoring mode lets servo position retain an offset or drift after the prescribed drive is removed. After a small reversible change in two-input or equivalent lag-lead command, observe servo position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from two-input or equivalent lag-lead command to servo position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From two-input or equivalent lag-lead command to servo position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording servo position, tracking error, and slow tail while applying two-input or equivalent lag-lead command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of two-input or equivalent lag-lead command are applied while recording servo position, tracking error, and slow tail, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering two-input or equivalent lag-lead command together with the recorded quantities servo position, tracking error, and slow tail, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from two-input or equivalent lag-lead command to servo position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4477,16 +4612,17 @@ two-input or equivalent lag-lead command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4498,7 +4634,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are motor speed and integral error, and the available actuation is motor voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use motor voltage as the available control or test action and continuously record motor speed and integral error; when the bounded input returns to its baseline, no autonomous mode grows and motor speed settles or remains bounded. After a small reversible change in motor voltage, observe motor speed; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from motor voltage to motor speed, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From motor voltage to motor speed, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording motor speed and integral error while applying motor voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of motor voltage are applied while recording motor speed and integral error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering motor voltage together with the recorded quantities motor speed and integral error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from motor voltage to motor speed is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4510,9 +4646,9 @@ motor voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -4520,6 +4656,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4531,7 +4668,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are disk-head position and sinusoidal error, and the available actuation is voice-coil force. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use voice-coil force as the available control or test action and continuously record disk-head position and sinusoidal error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets disk-head position retain an offset or drift after the prescribed drive is removed. After a small reversible change in voice-coil force, observe disk-head position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from voice-coil force to disk-head position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From voice-coil force to disk-head position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording disk-head position and sinusoidal error while applying voice-coil force makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of voice-coil force are applied while recording disk-head position and sinusoidal error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering voice-coil force together with the recorded quantities disk-head position and sinusoidal error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from voice-coil force to disk-head position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4543,16 +4680,17 @@ voice-coil force
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4564,28 +4702,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are attitude, loop gain, margins, and control RMS, and the available actuation is body torque under sensor noise. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use body torque under prescribed sensor noise as the available control or test action and continuously record attitude response and body-torque activity; when the bounded input returns to its baseline, an integrating or non-restoring mode lets attitude response retain an offset or drift after the prescribed drive is removed. After a small reversible change in body torque under prescribed sensor noise, observe attitude response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from body torque under prescribed sensor noise to attitude response, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From body torque under prescribed sensor noise to attitude response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording attitude response and body-torque activity while applying body torque under prescribed sensor noise makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of body torque under prescribed sensor noise are applied while recording attitude response and body-torque activity, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering body torque under prescribed sensor noise together with the recorded quantities attitude response and body-torque activity, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from body torque under prescribed sensor noise to attitude response is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
-attitude, loop gain, margins, and control RMS
+attitude response and body-torque activity
 
 ### Actuators
 
-body torque under sensor noise
+body torque under prescribed sensor noise
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4597,7 +4736,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are delayed heat-exchanger temperature, and the available actuation is steam command through Smith predictor. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use steam command through Smith predictor as the available control or test action and continuously record delayed heat-exchanger temperature; when the bounded input returns to its baseline, no autonomous mode grows and delayed heat-exchanger temperature settles or remains bounded. After a small reversible change in steam command through Smith predictor, observe delayed heat-exchanger temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from steam command through Smith predictor to delayed heat-exchanger temperature, heat transport and temperature measurement hold back the outlet response, and a visible pause separates the command from the first recorded response. From steam command through Smith predictor to delayed heat-exchanger temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording delayed heat-exchanger temperature while applying steam command through Smith predictor makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of steam command through Smith predictor are applied while recording delayed heat-exchanger temperature, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering steam command through Smith predictor together with the recorded quantities delayed heat-exchanger temperature, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from steam command through Smith predictor to delayed heat-exchanger temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -4609,16 +4748,17 @@ steam command through Smith predictor
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=240.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -4630,7 +4770,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are sampled motor position and error, and the available actuation is digital motor voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digital motor voltage as the available control or test action and continuously record sampled motor position and error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets sampled motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in digital motor voltage, observe sampled motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital motor voltage to sampled motor position, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital motor voltage to sampled motor position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording sampled motor position and error while applying digital motor voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital motor voltage are applied while recording sampled motor position and error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital motor voltage together with the recorded quantities sampled motor position and error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital motor voltage to sampled motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4642,16 +4782,17 @@ digital motor voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=4.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4663,7 +4804,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are sampled motor position and error, and the available actuation is held motor voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use held motor voltage as the available control or test action and continuously record sampled motor position and error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets sampled motor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in held motor voltage, observe sampled motor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from held motor voltage to sampled motor position, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From held motor voltage to sampled motor position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording sampled motor position and error while applying held motor voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of held motor voltage are applied while recording sampled motor position and error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering held motor voltage together with the recorded quantities sampled motor position and error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from held motor voltage to sampled motor position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4675,16 +4816,17 @@ held motor voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=4.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4696,7 +4838,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are space station attitude, and the available actuation is digital body torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+With a sampled controller obtained by mapping a verified continuous attitude design, use digital body torque as the available control or test action and continuously record space station attitude; when the bounded input returns to its baseline, an integrating or non-restoring mode lets space station attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in digital body torque, observe space station attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital body torque to space station attitude, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital body torque to space station attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording space station attitude while applying digital body torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital body torque are applied while recording space station attitude, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital body torque together with the recorded quantities space station attitude, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital body torque to space station attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4708,16 +4850,17 @@ digital body torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4729,7 +4872,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are sampled first-order output, and the available actuation is held proportional command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use held proportional command as the available control or test action and continuously record sampled first-order output; when the bounded input returns to its baseline, no autonomous mode grows and sampled first-order output settles or remains bounded. After a small reversible change in held proportional command, observe sampled first-order output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from held proportional command to sampled first-order output, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From held proportional command to sampled first-order output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording sampled first-order output while applying held proportional command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of held proportional command are applied while recording sampled first-order output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering held proportional command together with the recorded quantities sampled first-order output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from held proportional command to sampled first-order output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4741,9 +4884,9 @@ held proportional command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=5.0
 
 ### Forbidden Actions
@@ -4751,6 +4894,7 @@ max_test_duration_s=5.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4762,7 +4906,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are space station attitude, and the available actuation is digital body torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+With a sampled controller whose compensator is designed directly from the discrete response, use digital body torque as the available control or test action and continuously record space station attitude; when the bounded input returns to its baseline, an integrating or non-restoring mode lets space station attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in digital body torque, observe space station attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital body torque to space station attitude, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital body torque to space station attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording space station attitude while applying digital body torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital body torque are applied while recording space station attitude, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital body torque together with the recorded quantities space station attitude, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital body torque to space station attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4774,16 +4918,17 @@ digital body torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=4.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4795,7 +4940,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are continuous and sampled step responses, and the available actuation is continuous or digital command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use continuous or digital command as the available control or test action and continuously record continuous and sampled step responses; when the bounded input returns to its baseline, an integrating or non-restoring mode lets continuous retain an offset or drift after the prescribed drive is removed. After a small reversible change in continuous or digital command, observe continuous; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from continuous or digital command to continuous, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From continuous or digital command to continuous, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording continuous and sampled step responses while applying continuous or digital command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of continuous or digital command are applied while recording continuous and sampled step responses, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering continuous or digital command together with the recorded quantities continuous and sampled step responses, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from continuous or digital command to continuous is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4807,16 +4952,17 @@ continuous or digital command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=4.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -4828,7 +4974,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are filter output, and the available actuation is discrete filter input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use discrete filter input as the available control or test action and continuously record filter output; when the bounded input returns to its baseline, no autonomous mode grows and filter output settles or remains bounded. After a small reversible change in discrete filter input, observe filter output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from discrete filter input to filter output, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From discrete filter input to filter output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording filter output while applying discrete filter input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of discrete filter input are applied while recording filter output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering discrete filter input together with the recorded quantities filter output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from discrete filter input to filter output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4840,9 +4986,9 @@ discrete filter input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=5.0
 
 ### Forbidden Actions
@@ -4850,6 +4996,7 @@ max_test_duration_s=5.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4861,7 +5008,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are discrete sequence output, and the available actuation is ramp sequence input. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use ramp sequence input as the available control or test action and continuously record discrete sequence output; when the bounded input returns to its baseline, no autonomous mode grows and discrete sequence output settles or remains bounded. After a small reversible change in ramp sequence input, observe discrete sequence output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from ramp sequence input to discrete sequence output, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From ramp sequence input to discrete sequence output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording discrete sequence output while applying ramp sequence input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of ramp sequence input are applied while recording discrete sequence output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering ramp sequence input together with the recorded quantities discrete sequence output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from ramp sequence input to discrete sequence output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4873,9 +5020,9 @@ ramp sequence input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=5.0
 
 ### Forbidden Actions
@@ -4883,6 +5030,7 @@ max_test_duration_s=5.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4894,21 +5042,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are mapped pole locations, and the available actuation is continuous pole location. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use prescribed modal mapping test as the available control or test action and continuously record continuous and sampled free-response modes; when the bounded input returns to its baseline, no autonomous mode grows and continuous settles or remains bounded. After a small reversible change in prescribed modal mapping test, observe continuous; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from prescribed modal mapping test to continuous, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From prescribed modal mapping test to continuous, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording continuous and sampled free-response modes while applying prescribed modal mapping test makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of prescribed modal mapping test are applied while recording continuous and sampled free-response modes, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering prescribed modal mapping test together with the recorded quantities continuous and sampled free-response modes, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from prescribed modal mapping test to continuous is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-mapped pole locations
+continuous and sampled free-response modes
 
 ### Actuators
 
-continuous pole location
+prescribed modal mapping test
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=5.0
 
 ### Forbidden Actions
@@ -4916,6 +5064,7 @@ max_test_duration_s=5.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4927,7 +5076,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are regulated output and digital error, and the available actuation is digital lag command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digital lag command as the available control or test action and continuously record regulated output and digital error; when the bounded input returns to its baseline, no autonomous mode grows and regulated output settles or remains bounded. After a small reversible change in digital lag command, observe regulated output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital lag command to regulated output, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital lag command to regulated output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording regulated output and digital error while applying digital lag command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital lag command are applied while recording regulated output and digital error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital lag command together with the recorded quantities regulated output and digital error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital lag command to regulated output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4939,9 +5088,9 @@ digital lag command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=5.0
 
 ### Forbidden Actions
@@ -4949,6 +5098,7 @@ max_test_duration_s=5.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4960,7 +5110,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are lead network magnitude and phase, and the available actuation is sampled error. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sampled error as the available control or test action and continuously record lead network magnitude and phase; when the bounded input returns to its baseline, no autonomous mode grows and lead network magnitude settles or remains bounded. After a small reversible change in sampled error, observe lead network magnitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sampled error to lead network magnitude, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From sampled error to lead network magnitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording lead network magnitude and phase while applying sampled error makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sampled error are applied while recording lead network magnitude and phase, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering sampled error together with the recorded quantities lead network magnitude and phase, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sampled error to lead network magnitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -4972,9 +5122,9 @@ sampled error
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=5.0
 
 ### Forbidden Actions
@@ -4982,6 +5132,7 @@ max_test_duration_s=5.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -4993,7 +5144,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are lag network magnitude and phase, and the available actuation is sampled error. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sampled error as the available control or test action and continuously record lag network magnitude and phase; when the bounded input returns to its baseline, no autonomous mode grows and lag network magnitude settles or remains bounded. After a small reversible change in sampled error, observe lag network magnitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sampled error to lag network magnitude, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From sampled error to lag network magnitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording lag network magnitude and phase while applying sampled error makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sampled error are applied while recording lag network magnitude and phase, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering sampled error together with the recorded quantities lag network magnitude and phase, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sampled error to lag network magnitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5005,9 +5156,9 @@ sampled error
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=5.0
 
 ### Forbidden Actions
@@ -5015,6 +5166,7 @@ max_test_duration_s=5.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -5026,7 +5178,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are sampled step response, and the available actuation is digital PID command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digital PID command as the available control or test action and continuously record sampled step response; when the bounded input returns to its baseline, an integrating or non-restoring mode lets sampled step response retain an offset or drift after the prescribed drive is removed. After a small reversible change in digital PID command, observe sampled step response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital PID command to sampled step response, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital PID command to sampled step response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording sampled step response while applying digital PID command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital PID command are applied while recording sampled step response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital PID command together with the recorded quantities sampled step response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital PID command to sampled step response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5038,16 +5190,17 @@ digital PID command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=4.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5059,7 +5212,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are sampled plant output, and the available actuation is held proportional command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use held proportional command as the available control or test action and continuously record sampled plant output; when the bounded input returns to its baseline, sampling does not remove the plant's growing mode, so a bounded stabilizing gain range is still required, so the deviation continues to grow rather than return. After a small reversible change in held proportional command, observe sampled plant output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from held proportional command to sampled plant output, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From held proportional command to sampled plant output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording sampled plant output while applying held proportional command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of held proportional command are applied while recording sampled plant output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering held proportional command together with the recorded quantities sampled plant output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from held proportional command to sampled plant output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5071,16 +5224,17 @@ held proportional command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=3.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5092,7 +5246,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are satellite attitude and sampled rate, and the available actuation is digital torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digital torque as the available control or test action and continuously record satellite attitude and sampled rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets satellite attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in digital torque, observe satellite attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital torque to satellite attitude, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital torque to satellite attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording satellite attitude and sampled rate while applying digital torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital torque are applied while recording satellite attitude and sampled rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital torque together with the recorded quantities satellite attitude and sampled rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital torque to satellite attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5104,16 +5258,17 @@ digital torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5125,7 +5280,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are ball displacement and current, and the available actuation is electromagnet current. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use electromagnet current as the available control or test action and continuously record ball displacement and current; when the bounded input returns to its baseline, the levitated ball moves farther from its operating gap after a small open-loop displacement, so the deviation continues to grow rather than return. After a small reversible change in electromagnet current, observe ball displacement; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from electromagnet current to ball displacement, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From electromagnet current to ball displacement, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording ball displacement and current while applying electromagnet current makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of electromagnet current are applied while recording ball displacement and current, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering electromagnet current together with the recorded quantities ball displacement and current, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from electromagnet current to ball displacement is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -5137,16 +5292,17 @@ electromagnet current
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=3.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5158,7 +5314,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are servo position and ramp error, and the available actuation is digital servo voltage. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digital servo voltage as the available control or test action and continuously record servo position and ramp error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets servo position retain an offset or drift after the prescribed drive is removed. After a small reversible change in digital servo voltage, observe servo position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital servo voltage to servo position, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital servo voltage to servo position, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording servo position and ramp error while applying digital servo voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital servo voltage are applied while recording servo position and ramp error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital servo voltage together with the recorded quantities servo position and ramp error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital servo voltage to servo position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5170,16 +5326,17 @@ digital servo voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=4.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5191,7 +5348,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are antenna angle, and the available actuation is digital motor torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digital motor torque as the available control or test action and continuously record antenna angle; when the bounded input returns to its baseline, an integrating or non-restoring mode lets antenna angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in digital motor torque, observe antenna angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital motor torque to antenna angle, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital motor torque to antenna angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording antenna angle while applying digital motor torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital motor torque are applied while recording antenna angle, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital motor torque together with the recorded quantities antenna angle, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital motor torque to antenna angle is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -5203,16 +5360,17 @@ digital motor torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=4.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5224,7 +5382,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are sampled plant output, and the available actuation is digital compensated command. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digital compensated command as the available control or test action and continuously record sampled plant output; when the bounded input returns to its baseline, no autonomous mode grows and sampled plant output settles or remains bounded. After a small reversible change in digital compensated command, observe sampled plant output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digital compensated command to sampled plant output, the stated sample-and-hold action is modeled directly and no additional transport or computation pause dominates the loop, so the first recorded change begins promptly without a separate silent interval. From digital compensated command to sampled plant output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording sampled plant output while applying digital compensated command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digital compensated command are applied while recording sampled plant output, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering digital compensated command together with the recorded quantities sampled plant output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from digital compensated command to sampled plant output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5236,9 +5394,9 @@ digital compensated command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=5.0
 
 ### Forbidden Actions
@@ -5246,6 +5404,7 @@ max_test_duration_s=5.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -5257,28 +5416,29 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are estimated error derivative, and the available actuation is digital derivative command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sampled error sequence as the available control or test action and continuously record estimated error-rate response; when the bounded input returns to its baseline, no autonomous mode grows and estimated error-rate response settles or remains bounded. After a small reversible change in sampled error sequence, observe estimated error-rate response; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sampled error sequence to estimated error-rate response, sampling and causal computation hold back the effect of each updated command, and a visible pause separates the command from the first recorded response. From sampled error sequence to estimated error-rate response, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording estimated error-rate response while applying sampled error sequence makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sampled error sequence are applied while recording estimated error-rate response, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering sampled error sequence together with the recorded quantities estimated error-rate response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sampled error sequence to estimated error-rate response is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-estimated error derivative
+estimated error-rate response
 
 ### Actuators
 
-digital derivative command
+sampled error sequence
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=5.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=6.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -5290,7 +5450,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pendulum angle and angular rate, and the available actuation is pivot torque. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use pivot torque as the available control or test action and continuously record pendulum angle and angular rate; when the bounded input returns to its baseline, the upright pendulum equilibrium sends a small angular displacement away even though the hanging equilibrium is neutral, so the deviation continues to grow rather than return. After a small reversible change in pivot torque, observe pendulum angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from pivot torque to pendulum angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From pivot torque to pendulum angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pendulum angle and angular rate while applying pivot torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of pivot torque are applied while recording pendulum angle and angular rate, gravity torque changes with pendulum angle and produces distinct hanging and upright equilibria, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering pivot torque together with the recorded quantities pendulum angle and angular rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from pivot torque to pendulum angle is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -5302,16 +5462,17 @@ pivot torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=12.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5323,7 +5484,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are ball displacement, velocity, coil current, and the available actuation is electromagnet current perturbation. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use electromagnet current perturbation as the available control or test action and continuously record ball displacement, velocity, coil current; when the bounded input returns to its baseline, the measured magnetic-force slope makes a small ball displacement grow away from the levitation point, so the deviation continues to grow rather than return. After a small reversible change in electromagnet current perturbation, observe ball displacement; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from electromagnet current perturbation to ball displacement, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From electromagnet current perturbation to ball displacement, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording ball displacement, velocity, coil current while applying electromagnet current perturbation makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of electromagnet current perturbation are applied while recording ball displacement, velocity, coil current, magnetic force changes jointly with air gap and coil current along the measured force curves, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering electromagnet current perturbation together with the recorded quantities ball displacement, velocity, coil current, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from electromagnet current perturbation to ball displacement is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -5335,16 +5496,17 @@ electromagnet current perturbation
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.1
+max_abs_output_normalized=1.0
+max_abs_actuator_normalized=0.75
+max_test_duration_s=12.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5356,7 +5518,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are tank level and outlet flow, and the available actuation is inlet mass flow. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Repeat the bounded test at several nearby steady liquid levels and use inlet mass flow as the available control or test action and continuously record tank level and outlet flow; when the bounded input returns to its baseline, no autonomous mode grows and tank level settles or remains bounded. After a small reversible change in inlet mass flow, observe tank level; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from inlet mass flow to tank level, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From inlet mass flow to tank level, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording tank level and outlet flow while applying inlet mass flow makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of inlet mass flow are applied while recording tank level and outlet flow, tank outflow follows a static square-root level law around the selected operating point, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering inlet mass flow together with the recorded quantities tank level and outlet flow, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from inlet mass flow to tank level is repeated after varying relevant physical parameters and operating conditions within safe limits, reasonable component, load, sensing, and actuator changes shift the response rate and final level modestly while preserving motion direction and channel structure.
 
 ### Observable Outputs
 
@@ -5368,16 +5530,17 @@ inlet mass flow
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5389,7 +5552,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are pendulum angle and angular rate, and the available actuation is computed pivot torque. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use computed pivot torque as the available control or test action and continuously record pendulum angle and angular rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets pendulum angle retain an offset or drift after the prescribed drive is removed. After a small reversible change in computed pivot torque, observe pendulum angle; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from computed pivot torque to pendulum angle, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From computed pivot torque to pendulum angle, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording pendulum angle and angular rate while applying computed pivot torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of computed pivot torque are applied while recording pendulum angle and angular rate, the computed-torque law must cancel the full angle-dependent gravity torque along the motion, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering computed pivot torque together with the recorded quantities pendulum angle and angular rate, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from computed pivot torque to pendulum angle is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5401,16 +5564,17 @@ computed pivot torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5422,7 +5586,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are lamp voltage and delivered power, and the available actuation is commanded lamp voltage. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use commanded lamp voltage as the available control or test action and continuously record lamp voltage and delivered power; when the bounded input returns to its baseline, no autonomous mode grows and lamp voltage settles or remains bounded. After a small reversible change in commanded lamp voltage, observe lamp voltage; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from commanded lamp voltage to lamp voltage, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From commanded lamp voltage to lamp voltage, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording lamp voltage and delivered power while applying commanded lamp voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of commanded lamp voltage are applied while recording lamp voltage and delivered power, delivered lamp power follows a static square law that can be inverted over the positive command range, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering commanded lamp voltage together with the recorded quantities lamp voltage and delivered power, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from commanded lamp voltage to lamp voltage is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5434,16 +5598,17 @@ commanded lamp voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=160.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5455,7 +5620,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are output, error, saturated control, and the available actuation is amplitude-limited command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use amplitude-limited command as the available control or test action and continuously record output, error, saturated control; when the bounded input returns to its baseline, an integrating or non-restoring mode lets output retain an offset or drift after the prescribed drive is removed. After a small reversible change in amplitude-limited command, observe output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from amplitude-limited command to output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From amplitude-limited command to output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording output, error, saturated control while applying amplitude-limited command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of amplitude-limited command are applied while recording output, error, saturated control, the actuator clips the proportional command at a fixed amplitude and changes the effective loop gain, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering amplitude-limited command together with the recorded quantities output, error, saturated control, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from amplitude-limited command to output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5467,16 +5632,17 @@ amplitude-limited command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5488,11 +5654,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are output, loop error, effective gain, and the available actuation is saturated proportional command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use saturated proportional command as the available control or test action and continuously record regulated output, loop error, and saturated control signal; when the bounded input returns to its baseline, an integrating or non-restoring mode lets regulated output retain an offset or drift after the prescribed drive is removed. After a small reversible change in saturated proportional command, observe regulated output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from saturated proportional command to regulated output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From saturated proportional command to regulated output, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording regulated output, loop error, and saturated control signal while applying saturated proportional command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of saturated proportional command are applied while recording regulated output, loop error, and saturated control signal, command saturation lowers the effective gain until the conditionally stable loop can cross its stability boundary, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering saturated proportional command together with the recorded quantities regulated output, loop error, and saturated control signal, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from saturated proportional command to regulated output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-output, loop error, effective gain
+regulated output, loop error, and saturated control signal
 
 ### Actuators
 
@@ -5500,16 +5666,17 @@ saturated proportional command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5521,7 +5688,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are flexible displacement and saturated command, and the available actuation is notch-shaped limited command. The declared nonlinearity is preserved and tested over a bounded operating region. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use notch-shaped limited command as the available control or test action and continuously record flexible displacement and saturated command; when the bounded input returns to its baseline, an integrating or non-restoring mode lets flexible displacement retain an offset or drift after the prescribed drive is removed. After a small reversible change in notch-shaped limited command, observe flexible displacement; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from notch-shaped limited command to flexible displacement, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From notch-shaped limited command to flexible displacement, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording flexible displacement and saturated command while applying notch-shaped limited command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of notch-shaped limited command are applied while recording flexible displacement and saturated command, the limited actuator changes its effective gain with oscillation amplitude and can sustain the flexible mode, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering notch-shaped limited command together with the recorded quantities flexible displacement and saturated command, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from notch-shaped limited command to flexible displacement is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5533,16 +5700,17 @@ notch-shaped limited command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5554,7 +5722,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are integrator output, plant output, actuator command, and the available actuation is saturated PI command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use saturated PI command as the available control or test action and continuously record integrator output, plant output, actuator command; when the bounded input returns to its baseline, an integrating or non-restoring mode lets integrator output retain an offset or drift after the prescribed drive is removed. After a small reversible change in saturated PI command, observe integrator output; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from saturated PI command to integrator output, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From saturated PI command to integrator output, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording integrator output, plant output, actuator command while applying saturated PI command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of saturated PI command are applied while recording integrator output, plant output, actuator command, the actuator limit is static, while back-calculation prevents the separate integral state from winding up, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering saturated PI command together with the recorded quantities integrator output, plant output, actuator command, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from saturated PI command to integrator output is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5566,16 +5734,17 @@ saturated PI command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5587,7 +5756,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are nonlinear input and fundamental output, and the available actuation is sinusoidal test amplitude. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded sinusoidal nonlinearity test as the available control or test action and continuously record nonlinear input and fundamental output; when the bounded input returns to its baseline, no autonomous mode grows and nonlinear input settles or remains bounded. After a small reversible change in bounded sinusoidal nonlinearity test, observe nonlinear input; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded sinusoidal nonlinearity test to nonlinear input, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded sinusoidal nonlinearity test to nonlinear input, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording nonlinear input and fundamental output while applying bounded sinusoidal nonlinearity test makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded sinusoidal nonlinearity test are applied while recording nonlinear input and fundamental output, the saturation element is a memoryless amplitude map evaluated by its fundamental response, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering bounded sinusoidal nonlinearity test together with the recorded quantities nonlinear input and fundamental output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded sinusoidal nonlinearity test to nonlinear input is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5595,20 +5764,21 @@ nonlinear input and fundamental output
 
 ### Actuators
 
-sinusoidal test amplitude
+bounded sinusoidal nonlinearity test
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5620,7 +5790,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are relay input and fundamental output, and the available actuation is binary relay output. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use binary relay command as the available control or test action and continuously record relay input and fundamental output; when the bounded input returns to its baseline, no autonomous mode grows and relay input settles or remains bounded. After a small reversible change in binary relay command, observe relay input; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from binary relay command to relay input, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From binary relay command to relay input, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording relay input and fundamental output while applying binary relay command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of binary relay command are applied while recording relay input and fundamental output, the ideal relay switches between two fixed output levels according to the input sign, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering binary relay command together with the recorded quantities relay input and fundamental output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from binary relay command to relay input is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5628,20 +5798,21 @@ relay input and fundamental output
 
 ### Actuators
 
-binary relay output
+binary relay command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5653,7 +5824,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are hysteresis input and fundamental output, and the available actuation is hysteretic relay output. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use hysteretic relay command as the available control or test action and continuously record hysteresis input and fundamental output; when the bounded input returns to its baseline, no autonomous mode grows and hysteresis input settles or remains bounded. After a small reversible change in hysteretic relay command, observe hysteresis input; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from hysteretic relay command to hysteresis input, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From hysteretic relay command to hysteresis input, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording hysteresis input and fundamental output while applying hysteretic relay command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of hysteretic relay command are applied while recording hysteresis input and fundamental output, the relay retains a fixed switching memory band that appears as hysteresis in its input-output map, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering hysteretic relay command together with the recorded quantities hysteresis input and fundamental output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from hysteretic relay command to hysteresis input is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5661,20 +5832,21 @@ hysteresis input and fundamental output
 
 ### Actuators
 
-hysteretic relay output
+hysteretic relay command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5686,7 +5858,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are oscillation amplitude and frequency, and the available actuation is saturated loop command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use saturated loop command as the available control or test action and continuously record oscillation amplitude and frequency; when the bounded input returns to its baseline, an integrating or non-restoring mode lets oscillation amplitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in saturated loop command, observe oscillation amplitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from saturated loop command to oscillation amplitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From saturated loop command to oscillation amplitude, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording oscillation amplitude and frequency while applying saturated loop command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of saturated loop command are applied while recording oscillation amplitude and frequency, the saturation map changes effective loop gain with candidate oscillation amplitude, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering saturated loop command together with the recorded quantities oscillation amplitude and frequency, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from saturated loop command to oscillation amplitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5698,16 +5870,17 @@ saturated loop command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5719,7 +5892,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are hysteretic oscillation amplitude and frequency, and the available actuation is hysteretic relay command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use hysteretic relay command as the available control or test action and continuously record hysteretic oscillation amplitude and frequency; when the bounded input returns to its baseline, an integrating or non-restoring mode lets hysteretic oscillation amplitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in hysteretic relay command, observe hysteretic oscillation amplitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from hysteretic relay command to hysteretic oscillation amplitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From hysteretic relay command to hysteretic oscillation amplitude, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording hysteretic oscillation amplitude and frequency while applying hysteretic relay command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of hysteretic relay command are applied while recording hysteretic oscillation amplitude and frequency, the hysteretic relay contributes an amplitude-dependent magnitude and phase shift, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering hysteretic relay command together with the recorded quantities hysteretic oscillation amplitude and frequency, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from hysteretic relay command to hysteretic oscillation amplitude is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5731,16 +5904,17 @@ hysteretic relay command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5752,11 +5926,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are position, velocity, switching function, and the available actuation is bounded acceleration command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded acceleration command as the available control or test action and continuously record position and velocity; when the bounded input returns to its baseline, an integrating or non-restoring mode lets position retain an offset or drift after the prescribed drive is removed. After a small reversible change in bounded acceleration command, observe position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded acceleration command to position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded acceleration command to position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording position and velocity while applying bounded acceleration command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded acceleration command are applied while recording position and velocity, the time-optimal command switches between bounded acceleration levels according to position and velocity, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering bounded acceleration command together with the recorded quantities position and velocity, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded acceleration command to position is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-position, velocity, switching function
+position and velocity
 
 ### Actuators
 
@@ -5764,16 +5938,17 @@ bounded acceleration command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5785,21 +5960,21 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are state vector and Lyapunov energy, and the available actuation is initial state perturbation. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use prescribed initial-state release as the available control or test action and continuously record state trajectory and decay behavior; when the bounded input returns to its baseline, no autonomous mode grows and state trajectory settles or remains bounded. After a small reversible change in prescribed initial-state release, observe state trajectory; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from prescribed initial-state release to state trajectory, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From prescribed initial-state release to state trajectory, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording state trajectory and decay behavior while applying prescribed initial-state release makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of prescribed initial-state release are applied while recording state trajectory and decay behavior, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering prescribed initial-state release together with the recorded quantities state trajectory and decay behavior, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from prescribed initial-state release to state trajectory is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-state vector and Lyapunov energy
+state trajectory and decay behavior
 
 ### Actuators
 
-initial state perturbation
+prescribed initial-state release
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
+max_abs_reference_normalized=0.5
 max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
+max_abs_actuator_normalized=1.5
 max_test_duration_s=20.0
 
 ### Forbidden Actions
@@ -5807,6 +5982,7 @@ max_test_duration_s=20.0
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the normalized excitation beyond the declared local operating range
 
 ### Dominant Time Scale (Seconds)
 
@@ -5818,11 +5994,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are position error, velocity, Lyapunov function, and the available actuation is nonlinear restoring feedback. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use nonlinear restoring feedback as the available control or test action and continuously record position error, velocity, and state trajectory; when the bounded input returns to its baseline, no autonomous mode grows and position error settles or remains bounded. After a small reversible change in nonlinear restoring feedback, observe position error; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from nonlinear restoring feedback to position error, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From nonlinear restoring feedback to position error, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording position error, velocity, and state trajectory while applying nonlinear restoring feedback makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of nonlinear restoring feedback are applied while recording position error, velocity, and state trajectory, the restoring feedback changes with position error and shapes the state energy throughout the trajectory, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering nonlinear restoring feedback together with the recorded quantities position error, velocity, and state trajectory, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from nonlinear restoring feedback to position error is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-position error, velocity, Lyapunov function
+position error, velocity, and state trajectory
 
 ### Actuators
 
@@ -5830,16 +6006,17 @@ nonlinear restoring feedback
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5851,7 +6028,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are nonlinearity input and output, and the available actuation is signum feedback output. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use bounded signum test signal as the available control or test action and continuously record nonlinearity input and output; when the bounded input returns to its baseline, no autonomous mode grows and nonlinearity input settles or remains bounded. After a small reversible change in bounded signum test signal, observe nonlinearity input; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from bounded signum test signal to nonlinearity input, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From bounded signum test signal to nonlinearity input, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording nonlinearity input and output while applying bounded signum test signal makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of bounded signum test signal are applied while recording nonlinearity input and output, the sign map is a memoryless sector-bounded relation outside its switching point, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering bounded signum test signal together with the recorded quantities nonlinearity input and output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from bounded signum test signal to nonlinearity input is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5859,20 +6036,21 @@ nonlinearity input and output
 
 ### Actuators
 
-signum feedback output
+bounded signum test signal
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5884,7 +6062,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are saturation input and output, and the available actuation is amplitude-limited actuator. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use amplitude-limited actuator command as the available control or test action and continuously record saturation input and output; when the bounded input returns to its baseline, no autonomous mode grows and saturation input settles or remains bounded. After a small reversible change in amplitude-limited actuator command, observe saturation input; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from amplitude-limited actuator command to saturation input, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From amplitude-limited actuator command to saturation input, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording saturation input and output while applying amplitude-limited actuator command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of amplitude-limited actuator command are applied while recording saturation input and output, the actuator clips its input through a memoryless sector-bounded saturation map, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering amplitude-limited actuator command together with the recorded quantities saturation input and output, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from amplitude-limited actuator command to saturation input is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
@@ -5892,20 +6070,21 @@ saturation input and output
 
 ### Actuators
 
-amplitude-limited actuator
+amplitude-limited actuator command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5917,11 +6096,11 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are loop signals and Nyquist locus, and the available actuation is sector-bounded actuator command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use sector-bounded actuator command as the available control or test action and continuously record loop input, output, and closed-loop response; when the bounded input returns to its baseline, no autonomous mode grows and loop input settles or remains bounded. After a small reversible change in sector-bounded actuator command, observe loop input; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from sector-bounded actuator command to loop input, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From sector-bounded actuator command to loop input, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording loop input, output, and closed-loop response while applying sector-bounded actuator command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of sector-bounded actuator command are applied while recording loop input, output, and closed-loop response, the actuator belongs to a declared static sector used by the circle-criterion test, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering sector-bounded actuator command together with the recorded quantities loop input, output, and closed-loop response, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from sector-bounded actuator command to loop input is repeated after varying relevant physical parameters and operating conditions within safe limits, the motion direction, response timing, and final level remain almost unchanged, leaving only numerical or sampling variation.
 
 ### Observable Outputs
 
-loop signals and Nyquist locus
+loop input, output, and closed-loop response
 
 ### Actuators
 
@@ -5929,16 +6108,17 @@ sector-bounded actuator command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=20.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=16.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -5950,7 +6130,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are two satellite angles, rates, pointing error, and the available actuation is body control torque. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use body control torque as the available control or test action and continuously record two satellite angles, rates, pointing error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets two satellite angles retain an offset or drift after the prescribed drive is removed. After a small reversible change in body control torque, observe two satellite angles; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from body control torque to two satellite angles, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From body control torque to two satellite angles, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording two satellite angles, rates, pointing error while applying body control torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of body control torque are applied while recording two satellite angles, rates, pointing error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering body control torque together with the recorded quantities two satellite angles, rates, pointing error, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from body control torque to two satellite angles is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -5962,16 +6142,17 @@ body control torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -5983,7 +6164,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are satellite pointing and flexible deflection, and the available actuation is gain-shaped or notch-shaped torque. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use gain-shaped or notch-shaped torque as the available control or test action and continuously record satellite pointing and flexible deflection; when the bounded input returns to its baseline, an integrating or non-restoring mode lets satellite pointing retain an offset or drift after the prescribed drive is removed. After a small reversible change in gain-shaped or notch-shaped torque, observe satellite pointing; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from gain-shaped or notch-shaped torque to satellite pointing, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From gain-shaped or notch-shaped torque to satellite pointing, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording satellite pointing and flexible deflection while applying gain-shaped or notch-shaped torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of gain-shaped or notch-shaped torque are applied while recording satellite pointing and flexible deflection, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering gain-shaped or notch-shaped torque together with the recorded quantities satellite pointing and flexible deflection, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from gain-shaped or notch-shaped torque to satellite pointing is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -5995,16 +6176,17 @@ gain-shaped or notch-shaped torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -6016,7 +6198,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are measured attitude and estimated flexible states, and the available actuation is estimated-state feedback torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use estimated-state feedback torque as the available control or test action and continuously record measured attitude and estimated flexible states; when the bounded input returns to its baseline, an integrating or non-restoring mode lets measured attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in estimated-state feedback torque, observe measured attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from estimated-state feedback torque to measured attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From estimated-state feedback torque to measured attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording measured attitude and estimated flexible states while applying estimated-state feedback torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of estimated-state feedback torque are applied while recording measured attitude and estimated flexible states, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering estimated-state feedback torque together with the recorded quantities measured attitude and estimated flexible states, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from estimated-state feedback torque to measured attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6028,16 +6210,17 @@ estimated-state feedback torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -6049,7 +6232,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are collocated attitude and remote flexible angle, and the available actuation is collocated body torque. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use collocated body torque as the available control or test action and continuously record collocated attitude and remote flexible angle; when the bounded input returns to its baseline, an integrating or non-restoring mode lets collocated attitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in collocated body torque, observe collocated attitude; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from collocated body torque to collocated attitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From collocated body torque to collocated attitude, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording collocated attitude and remote flexible angle while applying collocated body torque makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of collocated body torque are applied while recording collocated attitude and remote flexible angle, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering collocated body torque together with the recorded quantities collocated attitude and remote flexible angle, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from collocated body torque to collocated attitude is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6061,16 +6244,17 @@ collocated body torque
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Dominant Time Scale (Seconds)
 
@@ -6082,7 +6266,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are aircraft rates, attitude, speed, altitude, and the available actuation is rudder, elevator, aileron, thrust. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use rudder, elevator, aileron, thrust as the available control or test action and continuously record aircraft rates, attitude, speed, altitude; when the bounded input returns to its baseline, no autonomous mode grows and aircraft rates settles or remains bounded. After a small reversible change in rudder, elevator, aileron, thrust, observe aircraft rates; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from rudder, elevator, aileron, thrust to aircraft rates, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From rudder, elevator, aileron, thrust to aircraft rates, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording aircraft rates, attitude, speed, altitude while applying rudder, elevator, aileron, thrust makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of rudder, elevator, aileron, thrust are applied while recording aircraft rates, attitude, speed, altitude, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering rudder, elevator, aileron, thrust together with the recorded quantities aircraft rates, attitude, speed, altitude, changing any one of several actuators visibly moves several recordings, so actuator directions must be allocated or paired together. When the bounded test from rudder, elevator, aileron, thrust to aircraft rates is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6094,16 +6278,17 @@ rudder, elevator, aileron, thrust
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+change several actuator channels simultaneously during the first identification test
 
 ### Dominant Time Scale (Seconds)
 
@@ -6115,7 +6300,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are yaw rate, sideslip, rudder position, and the available actuation is rudder command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use rudder command as the available control or test action and continuously record yaw rate, sideslip, rudder position; when the bounded input returns to its baseline, no autonomous mode grows and yaw rate settles or remains bounded. After a small reversible change in rudder command, observe yaw rate; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from rudder command to yaw rate, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From rudder command to yaw rate, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording yaw rate, sideslip, rudder position while applying rudder command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of rudder command are applied while recording yaw rate, sideslip, rudder position, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering rudder command together with the recorded quantities yaw rate, sideslip, rudder position, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from rudder command to yaw rate is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6127,16 +6312,17 @@ rudder command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=60.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -6148,7 +6334,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are yaw rate and estimated lateral states, and the available actuation is rudder command from low or high order control. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use rudder command from low or high order control as the available control or test action and continuously record yaw rate and estimated lateral states; when the bounded input returns to its baseline, no autonomous mode grows and yaw rate settles or remains bounded. After a small reversible change in rudder command from low or high order control, observe yaw rate; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from rudder command from low or high order control to yaw rate, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From rudder command from low or high order control to yaw rate, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording yaw rate and estimated lateral states while applying rudder command from low or high order control makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of rudder command from low or high order control are applied while recording yaw rate and estimated lateral states, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering rudder command from low or high order control together with the recorded quantities yaw rate and estimated lateral states, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from rudder command from low or high order control to yaw rate is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6160,16 +6346,17 @@ rudder command from low or high order control
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=60.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -6181,7 +6368,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are altitude, pitch angle, pitch rate, and the available actuation is elevator command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use elevator command as the available control or test action and continuously record altitude, pitch angle, pitch rate; when the bounded input returns to its baseline, an integrating or non-restoring mode lets altitude retain an offset or drift after the prescribed drive is removed. After a small reversible change in elevator command, observe altitude; the first useful output change moves in an unfavorable or opposite direction before turning toward its eventual value. For the same small change from elevator command to altitude, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From elevator command to altitude, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording altitude, pitch angle, pitch rate while applying elevator command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of elevator command are applied while recording altitude, pitch angle, pitch rate, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering elevator command together with the recorded quantities altitude, pitch angle, pitch rate, the outer response appears only through a separately stabilized inner attitude, rate, or biochemical path. When the bounded test from elevator command to altitude is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6193,16 +6380,17 @@ elevator command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+disable the inner stabilizing channel while testing the outer command
 
 ### Dominant Time Scale (Seconds)
 
@@ -6214,7 +6402,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are fuel air ratio and oxygen sensor signal, and the available actuation is fuel injection command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use fuel injection command as the available control or test action and continuously record fuel air ratio and oxygen sensor signal; when the bounded input returns to its baseline, no autonomous mode grows and fuel air ratio settles or remains bounded. After a small reversible change in fuel injection command, observe fuel air ratio; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from fuel injection command to fuel air ratio, mixture transport, combustion, and oxygen sensing hold back the measured response to a fuel command, and a visible pause separates the command from the first recorded response. From fuel injection command to fuel air ratio, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording fuel air ratio and oxygen sensor signal while applying fuel injection command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of fuel injection command are applied while recording fuel air ratio and oxygen sensor signal, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering fuel injection command together with the recorded quantities fuel air ratio and oxygen sensor signal, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from fuel injection command to fuel air ratio is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -6226,16 +6414,17 @@ fuel injection command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=60.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -6247,7 +6436,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are air fuel error and oxygen sensor oscillation, and the available actuation is fuel injection command. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use fuel injection command as the available control or test action and continuously record air fuel error and oxygen sensor oscillation; when the bounded input returns to its baseline, no autonomous mode grows and air fuel error settles or remains bounded. After a small reversible change in fuel injection command, observe air fuel error; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from fuel injection command to air fuel error, mixture transport, combustion, and oxygen sensing hold back the measured response to a fuel command, and a visible pause separates the command from the first recorded response. From fuel injection command to air fuel error, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording air fuel error and oxygen sensor oscillation while applying fuel injection command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of fuel injection command are applied while recording air fuel error and oxygen sensor oscillation, the oxygen sensor applies a steep static map to air-fuel error and can sustain a switching oscillation, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering fuel injection command together with the recorded quantities air fuel error and oxygen sensor oscillation, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from fuel injection command to air fuel error is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -6259,16 +6448,17 @@ fuel injection command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -6280,7 +6470,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are average fuel-air ratio and switching signal, and the available actuation is fuel injection command through relay-conditioned sensing. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use fuel injection command through relay-conditioned sensing as the available control or test action and continuously record average fuel-air ratio and switching signal; when the bounded input returns to its baseline, no autonomous mode grows and average fuel-air ratio settles or remains bounded. After a small reversible change in fuel injection command through relay-conditioned sensing, observe average fuel-air ratio; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from fuel injection command through relay-conditioned sensing to average fuel-air ratio, mixture transport, combustion, and oxygen sensing hold back the measured response to a fuel command, and a visible pause separates the command from the first recorded response. From fuel injection command through relay-conditioned sensing to average fuel-air ratio, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording average fuel-air ratio and switching signal while applying fuel injection command through relay-conditioned sensing makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of fuel injection command through relay-conditioned sensing are applied while recording average fuel-air ratio and switching signal, relay conditioning replaces the uncertain sensor slope by fixed output levels before fuel control, and the departure from proportional behavior stays in this fixed input-output rule without adding another dynamic state. Considering fuel injection command through relay-conditioned sensing together with the recorded quantities average fuel-air ratio and switching signal, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from fuel injection command through relay-conditioned sensing to average fuel-air ratio is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -6292,16 +6482,17 @@ fuel injection command through relay-conditioned sensing
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.25
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+increase the command again before the delayed response becomes visible
 
 ### Dominant Time Scale (Seconds)
 
@@ -6313,7 +6504,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are position, attitude, angular rates, altitude, and the available actuation is four rotor thrust commands. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use four rotor thrust commands as the available control or test action and continuously record position, attitude, angular rates, altitude; when the bounded input returns to its baseline, an integrating or non-restoring mode lets position retain an offset or drift after the prescribed drive is removed. After a small reversible change in four rotor thrust commands, observe position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from four rotor thrust commands to position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From four rotor thrust commands to position, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording position, attitude, angular rates, altitude while applying four rotor thrust commands makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of four rotor thrust commands are applied while recording position, attitude, angular rates, altitude, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering four rotor thrust commands together with the recorded quantities position, attitude, angular rates, altitude, changing any one of several actuators visibly moves several recordings, so actuator directions must be allocated or paired together. When the bounded test from four rotor thrust commands to position is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6325,16 +6516,17 @@ four rotor thrust commands
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+change several actuator channels simultaneously during the first identification test
 
 ### Dominant Time Scale (Seconds)
 
@@ -6346,7 +6538,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are quadrotor position, attitude, path error, and the available actuation is mixed rotor thrusts. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use mixed rotor thrusts as the available control or test action and continuously record quadrotor position, attitude, path error; when the bounded input returns to its baseline, an integrating or non-restoring mode lets quadrotor position retain an offset or drift after the prescribed drive is removed. After a small reversible change in mixed rotor thrusts, observe quadrotor position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from mixed rotor thrusts to quadrotor position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From mixed rotor thrusts to quadrotor position, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording quadrotor position, attitude, path error while applying mixed rotor thrusts makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of mixed rotor thrusts are applied while recording quadrotor position, attitude, path error, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering mixed rotor thrusts together with the recorded quantities quadrotor position, attitude, path error, the outer response appears only through a separately stabilized inner attitude, rate, or biochemical path. When the bounded test from mixed rotor thrusts to quadrotor position is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6358,16 +6550,17 @@ mixed rotor thrusts
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+disable the inner stabilizing channel while testing the outer command
 
 ### Dominant Time Scale (Seconds)
 
@@ -6379,7 +6572,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are measured and estimated quadrotor axis states, and the available actuation is LQR mixed rotor commands. The working model is locally linear, while saturation and operating range are still checked during simulation. Multiple states or channels exchange energy and must be evaluated as a coupled system. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use LQR mixed rotor commands as the available control or test action and continuously record measured and estimated quadrotor axis states; when the bounded input returns to its baseline, an integrating or non-restoring mode lets measured retain an offset or drift after the prescribed drive is removed. After a small reversible change in LQR mixed rotor commands, observe measured; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from LQR mixed rotor commands to measured, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From LQR mixed rotor commands to measured, the actuator effect reaches the main output only after three or more successive storage or integration stages, or after a separately closed inner path. Recording measured and estimated quadrotor axis states while applying LQR mixed rotor commands makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of LQR mixed rotor commands are applied while recording measured and estimated quadrotor axis states, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering LQR mixed rotor commands together with the recorded quantities measured and estimated quadrotor axis states, changing any one of several actuators visibly moves several recordings, so actuator directions must be allocated or paired together. When the bounded test from LQR mixed rotor commands to measured is repeated after varying relevant physical parameters and operating conditions within safe limits, changes in inertia, flexible or aerodynamic motion, loading, sensing, or actuator effectiveness can materially alter both the response rate and channel interaction.
 
 ### Observable Outputs
 
@@ -6391,16 +6584,17 @@ LQR mixed rotor commands
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+change several actuator channels simultaneously during the first identification test
 
 ### Dominant Time Scale (Seconds)
 
@@ -6412,7 +6606,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are plate center and support temperatures, and the available actuation is common command to three lamps. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use common command to three lamps as the available control or test action and continuously record plate center and support temperatures; when the bounded input returns to its baseline, no autonomous mode grows and plate center settles or remains bounded. After a small reversible change in common command to three lamps, observe plate center; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from common command to three lamps to plate center, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From common command to three lamps to plate center, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording plate center and support temperatures while applying common command to three lamps makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of common command to three lamps are applied while recording plate center and support temperatures, radiation, lamp effectiveness, saturation, and the lack of active cooling change the thermal dynamics across the trajectory, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering common command to three lamps together with the recorded quantities plate center and support temperatures, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from common command to three lamps to plate center is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -6424,16 +6618,17 @@ common command to three lamps
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=160.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -6445,7 +6640,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are temperature trajectory and tracking error, and the available actuation is nonnegative lamp power. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use nonnegative lamp power as the available control or test action and continuously record temperature trajectory and tracking error; when the bounded input returns to its baseline, no autonomous mode grows and temperature trajectory settles or remains bounded. After a small reversible change in nonnegative lamp power, observe temperature trajectory; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from nonnegative lamp power to temperature trajectory, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From nonnegative lamp power to temperature trajectory, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording temperature trajectory and tracking error while applying nonnegative lamp power makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of nonnegative lamp power are applied while recording temperature trajectory and tracking error, radiation, lamp effectiveness, saturation, and the lack of active cooling change the thermal dynamics across the trajectory, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering nonnegative lamp power together with the recorded quantities temperature trajectory and tracking error, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from nonnegative lamp power to temperature trajectory is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -6457,16 +6652,17 @@ nonnegative lamp power
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=160.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -6478,7 +6674,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are center temperature, estimated three-node temperatures, and uniformity, and the available actuation is common lamp command. The working model is locally linear, while saturation and operating range are still checked during simulation. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use common lamp command as the available control or test action and continuously record center temperature, estimated three-node temperatures, and uniformity; when the bounded input returns to its baseline, no autonomous mode grows and center temperature settles or remains bounded. After a small reversible change in common lamp command, observe center temperature; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from common lamp command to center temperature, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From common lamp command to center temperature, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording center temperature, estimated three-node temperatures, and uniformity while applying common lamp command makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of common lamp command are applied while recording center temperature, estimated three-node temperatures, and uniformity, radiation, lamp effectiveness, saturation, and the lack of active cooling change the thermal dynamics across the trajectory, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering common lamp command together with the recorded quantities center temperature, estimated three-node temperatures, and uniformity, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from common lamp command to center temperature is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -6490,16 +6686,17 @@ common lamp command
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=160.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -6511,7 +6708,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. Sampling, computation, sensing, or transport delay is retained as a material part of the loop. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are wafer temperatures, lamp voltage, integrator state, and the available actuation is digitally commanded lamp voltage. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use digitally commanded lamp voltage as the available control or test action and continuously record wafer temperatures, lamp voltage, integrator state; when the bounded input returns to its baseline, no autonomous mode grows and wafer temperatures settles or remains bounded. After a small reversible change in digitally commanded lamp voltage, observe wafer temperatures; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from digitally commanded lamp voltage to wafer temperatures, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From digitally commanded lamp voltage to wafer temperatures, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording wafer temperatures, lamp voltage, integrator state while applying digitally commanded lamp voltage makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of digitally commanded lamp voltage are applied while recording wafer temperatures, lamp voltage, integrator state, radiation, lamp effectiveness, saturation, and the lack of active cooling change the thermal dynamics across the trajectory, so the response law changes with the evolving state and one fixed local gain cannot represent the full motion. Considering digitally commanded lamp voltage together with the recorded quantities wafer temperatures, lamp voltage, integrator state, several recordings share internal motion, yet each declared channel can be exercised without a large cross-channel correction. When the bounded test from digitally commanded lamp voltage to wafer temperatures is repeated after varying relevant physical parameters and operating conditions within safe limits, operating point, load, unmodeled motion, sensing, or actuator effectiveness can materially change the response rate, final level, or safe excursion.
 
 ### Observable Outputs
 
@@ -6523,16 +6720,17 @@ digitally commanded lamp voltage
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=200.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=160.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+replace the declared nonlinearity by an unrestricted linear element during safety verification
 
 ### Dominant Time Scale (Seconds)
 
@@ -6544,7 +6742,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are receptor activity and methylation state, and the available actuation is ligand concentration and endogenous methylation feedback. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use ligand concentration as the prescribed pathway input as the available control or test action and continuously record receptor activity and methylation state; when the bounded input returns to its baseline, no autonomous mode grows and receptor activity settles or remains bounded. After a small reversible change in ligand concentration as the prescribed pathway input, observe receptor activity; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from ligand concentration as the prescribed pathway input to receptor activity, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From ligand concentration as the prescribed pathway input to receptor activity, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording receptor activity and methylation state while applying ligand concentration as the prescribed pathway input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of ligand concentration as the prescribed pathway input are applied while recording receptor activity and methylation state, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering ligand concentration as the prescribed pathway input together with the recorded quantities receptor activity and methylation state, one principal action-to-recording path carries the experiment and any listed disturbance enters separately. When the bounded test from ligand concentration as the prescribed pathway input to receptor activity is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -6552,20 +6750,21 @@ receptor activity and methylation state
 
 ### Actuators
 
-ligand concentration and endogenous methylation feedback
+ligand concentration as the prescribed pathway input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.3
+max_abs_output_normalized=1.5
+max_abs_actuator_normalized=1.25
+max_test_duration_s=60.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+reuse nominal gains outside the declared operating region without bounded validation
 
 ### Dominant Time Scale (Seconds)
 
@@ -6577,7 +6776,7 @@ continue after an output or actuator limit is crossed
 
 ### Control Problem Description
 
-The relevant unforced behavior is assessed explicitly, and unstable or marginal modes are treated before performance tuning. A positive actuator perturbation follows the sign convention declared in the model, and any inverse response is checked explicitly. No separate pure delay is assumed beyond the dynamic lags stated in the model. The path from actuation to the regulated output contains the storage and integration stages stated in the technical model. The recorded quantities are mean cell position, receptor activity, and methylation, and the available actuation is ligand perturbation through the endogenous pathway. The declared nonlinearity is preserved and tested over a bounded operating region. The main input and output form one control channel, with listed disturbances entering separately. Plant coefficients, sensing, loading, and actuator effectiveness are treated as uncertain during verification.
+Use ligand perturbation as the prescribed pathway input as the available control or test action and continuously record mean cell position, receptor activity, and methylation; when the bounded input returns to its baseline, an integrating or non-restoring mode lets mean cell position retain an offset or drift after the prescribed drive is removed. After a small reversible change in ligand perturbation as the prescribed pathway input, observe mean cell position; the first useful output change follows its eventual direction and does not move the opposite way first. For the same small change from ligand perturbation as the prescribed pathway input to mean cell position, dynamic lag is present but no separate transport, sensing, or computation pause precedes useful output motion, so the first recorded change begins promptly without a separate silent interval. From ligand perturbation as the prescribed pathway input to mean cell position, the actuator effect reaches the measured output through no more than two dominant storage or integration stages, while any additional modes shape the later waveform rather than postponing the first response. Recording mean cell position, receptor activity, and methylation while applying ligand perturbation as the prescribed pathway input makes every relevant motion mode appear in at least one recording and change under an available input. When permitted changes in the direction or amplitude of ligand perturbation as the prescribed pathway input are applied while recording mean cell position, receptor activity, and methylation, small positive and negative trials remain smooth, reversible, and nearly proportional, with no observed dead zone, hysteresis, or amplitude clipping. Considering ligand perturbation as the prescribed pathway input together with the recorded quantities mean cell position, receptor activity, and methylation, the outer response appears only through a separately stabilized inner attitude, rate, or biochemical path. When the bounded test from ligand perturbation as the prescribed pathway input to mean cell position is repeated after varying relevant physical parameters and operating conditions within safe limits, subject variation, physiological condition, sensing, and endogenous actuation can materially change the response rate and final recorded level.
 
 ### Observable Outputs
 
@@ -6585,20 +6784,21 @@ mean cell position, receptor activity, and methylation
 
 ### Actuators
 
-ligand perturbation through the endogenous pathway
+ligand perturbation as the prescribed pathway input
 
 ### Safety Bounds
 
-max_abs_reference_normalized=1.0
-max_abs_output_normalized=2.0
-max_abs_actuator_normalized=2.0
-max_test_duration_s=50.0
+max_abs_reference_normalized=0.2
+max_abs_output_normalized=1.25
+max_abs_actuator_normalized=1.0
+max_test_duration_s=40.0
 
 ### Forbidden Actions
 
 issue commands to physical hardware
 disable simulated saturation or automatic stopping checks
 continue after an output or actuator limit is crossed
+disable the inner stabilizing channel while testing the outer command
 
 ### Dominant Time Scale (Seconds)
 
