@@ -9,6 +9,8 @@ from cfdc.web.service import (
     ROUTE_CHOICES,
     continue_app_run,
     start_app_run,
+    submit_app_evidence,
+    submit_app_specifications,
 )
 
 
@@ -61,7 +63,7 @@ CSS = """
 .stage-table table { font-size: 13px; }
 .stage-table td, .stage-table th { white-space: normal !important; }
 .primary-run { min-height: 46px; }
-.flow-strip { display: grid; grid-template-columns: repeat(8, minmax(92px, 1fr)); gap: 6px; margin: 4px 0 12px; }
+.flow-strip { display: grid; grid-template-columns: repeat(5, minmax(108px, 1fr)); gap: 6px; margin: 4px 0 12px; }
 .flow-step { min-height: 68px; border: 1px solid #d8dee8; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; background: #f7f9fc; color: #687386; }
 .flow-step span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: #dfe5ee; font-weight: 700; }
 .flow-step small { font-size: 12px; }
@@ -107,6 +109,12 @@ def _question_updates(items: list[tuple[str, str]]):
 def _outputs(report, state):
     view = render_report(report)
     questions = view["clarifications"]
+    show_evidence = report.status in {
+        "awaiting_specifications",
+        "need_more_specifications",
+        "specification_conflict",
+        "evidence_rejected",
+    }
     return (
         state,
         view["status"],
@@ -123,6 +131,8 @@ def _outputs(report, state):
         view["raw"],
         gr.update(visible=bool(questions)),
         *_question_updates(questions),
+        gr.update(visible=show_evidence),
+        view["specification_guidance"],
     )
 
 
@@ -172,6 +182,34 @@ def continue_from_ui(state, answer_1, answer_2, answer_3, answer_4, supplemental
         raise gr.Error(str(exc)) from exc
 
 
+def submit_evidence_from_ui(
+    state,
+    model_json,
+    validation_json,
+    demo_confirmed,
+):
+    try:
+        report, state = submit_app_evidence(
+            state,
+            model_json=model_json,
+            trace_files=None,
+            trace_manifest_json="",
+            validation_json=validation_json,
+            demo_confirmed=demo_confirmed,
+        )
+        return _outputs(report, state)
+    except Exception as exc:
+        raise gr.Error(str(exc)) from exc
+
+
+def submit_specifications_from_ui(state, specification_text):
+    try:
+        report, state = submit_app_specifications(state, specification_text)
+        return _outputs(report, state)
+    except Exception as exc:
+        raise gr.Error(str(exc)) from exc
+
+
 def update_run_mode(route_label: str):
     natural_language = ROUTE_CHOICES.get(route_label) == "generic"
     input_update = gr.update(interactive=natural_language)
@@ -213,6 +251,10 @@ def reset_ui():
         os.getenv("CFDC_LLM_MODEL", ""),
         "",
         "",
+        "",
+        "",
+        "",
+        False,
         {},
         "### 等待控制问题",
         "",
@@ -231,6 +273,8 @@ def reset_ui():
         gr.update(visible=False, value=""),
         gr.update(visible=False, value=""),
         gr.update(visible=False, value=""),
+        gr.update(visible=False),
+        "",
     )
 
 
@@ -262,7 +306,7 @@ def build_app() -> gr.Blocks:
                     actuators = gr.Textbox(
                         label="执行器", value="", placeholder="heater, motor force"
                     )
-                with gr.Accordion("高级仿真设置", open=False):
+                with gr.Accordion("已知边界与时间尺度（可选）", open=False):
                     safety_bounds = gr.Textbox(
                         label="安全边界",
                         value="",
@@ -278,11 +322,11 @@ def build_app() -> gr.Blocks:
                     time_scale_hint_s = gr.Textbox(
                         label="主导时间尺度（秒）",
                         value="",
-                        placeholder="例如：2.0；留空时使用默认时间尺度",
+                        placeholder="例如：2.0；用户模型实验不允许使用默认时间尺度",
                     )
                     include_trajectory = gr.Checkbox(label="保留完整轨迹", value=False)
                 with gr.Accordion("LLM Provider", open=False):
-                    use_llm = gr.Checkbox(label="启用 LLM 诊断与语义路由", value=False)
+                    use_llm = gr.Checkbox(label="启用 LLM 诊断、语义路由与规格整理", value=False)
                     base_url = gr.Textbox(
                         label="Base URL",
                         value=os.getenv("CFDC_LLM_BASE_URL", ""),
@@ -295,12 +339,12 @@ def build_app() -> gr.Blocks:
                     )
                     api_key = gr.Textbox(label="API Key", value="", type="password")
                 with gr.Row():
-                    run_button = gr.Button("运行完整仿真", variant="primary", elem_classes="primary-run", scale=4)
+                    run_button = gr.Button("开始诊断", variant="primary", elem_classes="primary-run", scale=4)
                     clear_button = gr.Button("清空", scale=1)
                 gr.Examples(
                     examples=EXAMPLES,
                     inputs=[description, observed_outputs, actuators],
-                    label="可直接完成全流程的详细控制问题示例",
+                    label="可完成结构诊断的详细示例（随后会按具体对象追问设备规格）",
                 )
 
             with gr.Column(scale=8, min_width=560):
@@ -315,7 +359,43 @@ def build_app() -> gr.Blocks:
                     question_3 = gr.Textbox(value="", visible=False)
                     question_4 = gr.Textbox(value="", visible=False)
                     supplemental = gr.Textbox(label="补充描述", value="", lines=2)
-                    continue_button = gr.Button("提交并继续仿真", variant="primary")
+                    continue_button = gr.Button("提交诊断补充", variant="primary")
+
+                with gr.Group(visible=False) as evidence_group:
+                    evidence_requirements = gr.Markdown()
+                    gr.Markdown("**方式 1（推荐）· 回答当前设备规格问题**")
+                    specification_text = gr.Textbox(
+                        label="用自然语言补充设备规格",
+                        value="",
+                        lines=6,
+                        placeholder="可以描述已知参数、粘贴手册原文，或说明暂时不知道。未启用 LLM 时，请按上方问题顺序每行填写一个“数值 + 单位”。",
+                    )
+                    specification_button = gr.Button("提交规格信息", variant="primary")
+                    with gr.Accordion("方式 2（高级）· 提供完整数值模型", open=False):
+                        model_json = gr.Textbox(
+                            label="数学模型 JSON",
+                            value="",
+                            lines=8,
+                            placeholder=(
+                                '{"kind":"transfer_function","numerator":[1.0],'
+                                '"denominator":[2.0,1.0],"input_signal_id":"heater",'
+                                '"output_signal_id":"temperature","input_units":"power",'
+                                '"output_units":"degC"}'
+                            ),
+                        )
+                        validation_json = gr.Textbox(
+                            label="闭环验证条件 JSON（可选）",
+                            value="",
+                            lines=6,
+                            placeholder="参考输入、时长、初始状态、执行器/状态边界和性能指标。",
+                        )
+                    with gr.Accordion("方式 3 · 运行标准对象演示", open=False):
+                        demo_confirmed = gr.Checkbox(
+                            label="确认仅运行标准对象演示",
+                            value=False,
+                            info="演示结果只代表标准 Fixture，不代表我的真实对象。",
+                        )
+                    evidence_button = gr.Button("提交高级模型 / 运行演示", variant="secondary")
 
                 with gr.Tabs():
                     with gr.Tab("结构诊断"):
@@ -332,7 +412,7 @@ def build_app() -> gr.Blocks:
                             interactive=False,
                             elem_classes="stage-table",
                         )
-                    with gr.Tab("安全实验"):
+                    with gr.Tab("模型响应"):
                         experiments = gr.Dataframe(
                             headers=["#", "实验", "重复", "提取目标", "采样数", "信号"],
                             datatype=["number", "str", "number", "str", "number", "str"],
@@ -388,6 +468,8 @@ def build_app() -> gr.Blocks:
             question_2,
             question_3,
             question_4,
+            evidence_group,
+            evidence_requirements,
         ]
         run_button.click(
             run_from_ui,
@@ -429,6 +511,21 @@ def build_app() -> gr.Blocks:
             inputs=[app_state, question_1, question_2, question_3, question_4, supplemental],
             outputs=output_components,
         )
+        specification_button.click(
+            submit_specifications_from_ui,
+            inputs=[app_state, specification_text],
+            outputs=output_components,
+        )
+        evidence_button.click(
+            submit_evidence_from_ui,
+            inputs=[
+                app_state,
+                model_json,
+                validation_json,
+                demo_confirmed,
+            ],
+            outputs=output_components,
+        )
         clear_button.click(
             reset_ui,
             outputs=[
@@ -446,6 +543,10 @@ def build_app() -> gr.Blocks:
                 model,
                 api_key,
                 supplemental,
+                specification_text,
+                model_json,
+                validation_json,
+                demo_confirmed,
                 *output_components,
             ],
         )

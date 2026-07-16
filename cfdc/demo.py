@@ -17,7 +17,7 @@ def _cartpole_result(report) -> dict[str, Any]:
     position = performance.channels.get("cart_position") if performance is not None else None
     angle = performance.channels.get("pole_angle") if performance is not None else None
     passed = bool(
-        report.status == "completed"
+        report.status == "demo_completed"
         and simulation is not None
         and simulation.success
         and performance is not None
@@ -76,7 +76,7 @@ def _vtol_result(report) -> dict[str, Any]:
             else []
         )
         passed = bool(
-            report.status == "completed"
+            report.status == "demo_completed"
             and variation is not None
             and variation.success
             and len(variation.scenarios) == 6
@@ -107,7 +107,7 @@ def _vtol_result(report) -> dict[str, Any]:
         altitude = performance.channels.get("altitude") if performance is not None else None
         attitude = performance.channels.get("attitude") if performance is not None else None
         passed = bool(
-            report.status == "completed"
+            report.status == "demo_completed"
             and simulation is not None
             and simulation.success
             and performance is not None
@@ -139,7 +139,7 @@ def _vtol_result(report) -> dict[str, Any]:
             )
         )
         passed = bool(
-            report.status == "completed"
+            report.status == "demo_completed"
             and simulation is not None
             and simulation.success
             and performance is not None

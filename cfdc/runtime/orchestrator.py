@@ -8,22 +8,38 @@ from uuid import uuid4
 import numpy as np
 
 from cfdc.controllers import synthesize_controller
-from cfdc.diagnosis import DiagnosticEngine, continue_diagnostic_session
+from cfdc.diagnosis import (
+    DiagnosticEngine,
+    continue_diagnostic_session,
+    submit_evidence_to_session,
+    submit_specifications_to_session,
+)
 from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.diagnosis.safety import validate_diagnostic_controller_release
 from cfdc.experiments import plan_safe_experiments
+from cfdc.evidence import (
+    build_evidence_requirement_plan,
+    load_measured_experiments,
+    run_model_experiments,
+    validate_controller_on_model,
+    validate_evidence_package,
+)
 from cfdc.features import evaluate_feature_quality, extract_features_from_repeated_results
 from cfdc.models import (
     Algorithm1Observation,
     Algorithm1State,
     CandidateRouteIR,
+    CapabilityGap,
     CFDCRunReport,
     CompiledRoute,
+    CompiledSpecificationModel,
     ControllerCandidate,
     ControllerComparison,
     CoreFeatureArtifact,
     DiagnosticSessionState,
     ExperimentPlan,
+    EvidenceReadinessDecision,
+    EvidenceRequirementPlan,
     ExperimentPrimitive,
     SimulationExperimentRecord,
     ExperimentTrace,
@@ -33,6 +49,7 @@ from cfdc.models import (
     GoNoGoDecision,
     OnlineTuningState,
     OnlineRefinementPolicy,
+    PlantEvidencePackage,
     HoverAverageTrackerState,
     ScalarRLSTrackerState,
     StructuralDiagnosis,
@@ -41,6 +58,12 @@ from cfdc.models import (
     TrackingObservation,
     TrackingStateBundle,
     SemanticRouteSelection,
+)
+from cfdc.specifications import (
+    assess_specification_text,
+    build_initial_specification_assessment,
+    compile_specification_model,
+    specification_template_for_profile,
 )
 from cfdc.online import (
     evaluate_algorithm1_probe,
@@ -74,8 +97,10 @@ from cfdc.workflow import (
     build_candidate_route,
     compile_candidate_route,
     default_capability_catalog,
+    default_control_method_profile_catalog,
     default_simulation_profile_catalog,
     deterministic_profile_selection,
+    profile_by_id,
     validate_semantic_selection,
     apply_profile_to_classification,
 )
@@ -542,6 +567,224 @@ def _validate_experimental_classification(
     )
 
 
+def _object_evidence_report(
+    *,
+    route_id: str,
+    description: SystemDescription,
+    diagnosis: StructuralDiagnosis,
+    classification,
+    semantic_selection: SemanticRouteSelection,
+    plan: ExperimentPlan,
+    evidence_requirement_plan: EvidenceRequirementPlan,
+    candidate_route: CandidateRouteIR,
+    compiled_route: CompiledRoute,
+    profile,
+    evidence_package: PlantEvidencePackage,
+    route_gate: GoNoGoDecision,
+    run_id: str | None,
+) -> CFDCRunReport:
+    readiness = validate_evidence_package(
+        evidence_package,
+        evidence_requirement_plan,
+        description,
+    )
+    base_fields = {
+        "run_id": run_id or f"cfdc-{uuid4().hex[:12]}",
+        "route_id": route_id,
+        "system_description": description,
+        "diagnosis": diagnosis,
+        "classification": classification,
+        "semantic_selection": semantic_selection,
+        "experiment_plan": plan,
+        "evidence_requirement_plan": evidence_requirement_plan,
+        "evidence_readiness": readiness,
+        "candidate_route": candidate_route,
+        "compiled_route": compiled_route,
+    }
+    if readiness.decision != "ready":
+        reasons = [gap.explanation for gap in readiness.gaps]
+        return CFDCRunReport(
+            **base_fields,
+            status="evidence_rejected",
+            go_no_go=GoNoGoDecision(decision="no_go", reasons=reasons),
+            notes=reasons,
+            evidence_boundary="object_evidence_rejected",
+        )
+
+    try:
+        if evidence_package.measured_traces:
+            results = load_measured_experiments(evidence_package)
+            evidence_source = "measured_trace"
+            boundary = "user_object_measured_trace"
+        else:
+            results = run_model_experiments(evidence_package, plan)
+            evidence_source = "model_simulation"
+            boundary = "user_object_model_simulation"
+        if not results:
+            raise ValueError("the accepted evidence package produced no experiment records")
+        features = extract_features_from_repeated_results(results)
+    except (KeyError, TypeError, ValueError) as exc:
+        failure = EvidenceReadinessDecision(
+            decision="rejected",
+            source_types=readiness.source_types,
+            gaps=[
+                CapabilityGap(
+                    code="invalid_object_evidence",
+                    stage="object_evidence",
+                    capability_id=evidence_package.evidence_package_id,
+                    explanation=str(exc),
+                    resolvable_by_measurement=True,
+                    required_next_action="correct the model or trace package and resubmit it",
+                )
+            ],
+        )
+        return CFDCRunReport(
+            **{**base_fields, "evidence_readiness": failure},
+            status="evidence_rejected",
+            experiment_results=[],
+            go_no_go=GoNoGoDecision(decision="no_go", reasons=[str(exc)]),
+            notes=[str(exc)],
+            evidence_boundary="object_evidence_rejected",
+        )
+
+    quality = evaluate_feature_quality(classification, features)
+    if quality.decision != "accept":
+        reasons = [issue.explanation for issue in quality.issues]
+        return CFDCRunReport(
+            **base_fields,
+            status="evidence_rejected",
+            experiment_results=results,
+            features=features,
+            feature_quality_decision=quality,
+            go_no_go=GoNoGoDecision(
+                decision="no_go",
+                reasons=reasons,
+                feature_complete=False,
+            ),
+            notes=reasons,
+            evidence_boundary="object_evidence_rejected",
+        )
+    feature_gate = validate_required_features(classification, features)
+    experimental_class_gate = _validate_experimental_classification(profile, features)
+    evidence_gate = merge_go_no_go(route_gate, feature_gate, experimental_class_gate)
+    if evidence_gate.decision == "no_go":
+        return CFDCRunReport(
+            **base_fields,
+            status="evidence_rejected",
+            experiment_results=results,
+            features=features,
+            feature_quality_decision=quality,
+            go_no_go=evidence_gate,
+            notes=evidence_gate.reasons,
+            evidence_boundary="object_evidence_rejected",
+        )
+
+    controller_limits = dict(description.safety_bounds)
+    if evidence_package.validation_spec is not None:
+        controller_limits.update(evidence_package.validation_spec.actuator_limits)
+        controller_limits.update(evidence_package.validation_spec.state_limits)
+    controller = synthesize_controller(
+        classification,
+        features,
+        controller_limits,
+        release_context="user_object",
+    )
+    release_level = "refuse" if controller.status == "refuse" else "candidate_unvalidated"
+    controller = controller.model_copy(
+        update={
+            "plant_id": evidence_package.plant_id,
+            "method_profile_id": evidence_requirement_plan.method_profile_id,
+            "source_feature_artifact_ids": [
+                feature.object_id for feature in features if feature.object_id is not None
+            ],
+            "parameter_provenance": {
+                gain_name: [
+                    *controller.source_features,
+                    "cfdc conservative synthesis policy",
+                ]
+                for gain_name in controller.gains
+            },
+            "release_level": release_level,
+        }
+    )
+    if controller.status == "refuse":
+        return CFDCRunReport(
+            **base_fields,
+            status="rejected",
+            experiment_results=results,
+            features=features,
+            feature_quality_decision=quality,
+            controller=controller,
+            go_no_go=GoNoGoDecision(decision="no_go", reasons=controller.notes),
+            notes=controller.notes,
+            evidence_boundary=boundary,
+        )
+
+    if evidence_package.model is not None and evidence_package.validation_spec is not None:
+        validation = validate_controller_on_model(evidence_package, controller)
+        if validation.status == "passed":
+            controller = controller.model_copy(
+                update={"release_level": "validated_in_simulation"}
+            )
+            return CFDCRunReport(
+                **base_fields,
+                status="validated_in_simulation",
+                experiment_results=results,
+                features=features,
+                feature_quality_decision=quality,
+                controller=controller,
+                controller_validation=validation,
+                final_gains=dict(controller.gains),
+                final_feedforward=dict(controller.feedforward),
+                go_no_go=evidence_gate,
+                notes=[
+                    "The object-specific controller candidate passed the user-declared closed-loop model validation scenario."
+                ],
+                evidence_boundary="user_object_model_validated_in_simulation",
+            )
+        failed_controller = controller.model_copy(update={"release_level": "refuse"})
+        return CFDCRunReport(
+            **base_fields,
+            status="rejected",
+            experiment_results=results,
+            features=features,
+            feature_quality_decision=quality,
+            controller=failed_controller,
+            controller_validation=validation,
+            go_no_go=GoNoGoDecision(
+                decision="no_go",
+                reasons=validation.violations,
+            ),
+            notes=validation.violations,
+            evidence_boundary="user_object_model_validation_failed",
+        )
+
+    status = (
+        "candidate_unvalidated"
+        if evidence_source == "measured_trace" and evidence_package.model is None
+        else "validation_pending"
+    )
+    return CFDCRunReport(
+        **base_fields,
+        status=status,
+        experiment_results=results,
+        features=features,
+        feature_quality_decision=quality,
+        controller=controller,
+        final_gains=dict(controller.gains),
+        final_feedforward=dict(controller.feedforward),
+        go_no_go=evidence_gate,
+        notes=[
+            (
+                "Object-specific measured evidence produced an unvalidated controller candidate."
+                if status == "candidate_unvalidated"
+                else "Object-specific model evidence produced a controller candidate; closed-loop validation requirements are still pending."
+            )
+        ],
+        evidence_boundary=boundary,
+    )
+
+
 def run_cfdc_route(
     route_id: RouteId = "generic",
     description: SystemDescription | None = None,
@@ -555,6 +798,9 @@ def run_cfdc_route(
     diagnostic_session_state: DiagnosticSessionState | None = None,
     diagnostic_answers: dict[str, str] | None = None,
     supplemental_description: str | None = None,
+    evidence_package: PlantEvidencePackage | None = None,
+    specification_text: str | None = None,
+    execution_mode: Literal["user_object", "demo_fixture"] = "user_object",
     experiment_runner: Callable[[object, int], list[SimulationExperimentRecord]] = run_profile_experiments,
 ) -> CFDCRunReport:
     """Run an auditable end-to-end CFDC route.
@@ -565,6 +811,16 @@ def run_cfdc_route(
 
     if diagnostic_session_state is not None:
         session = diagnostic_session_state
+        if specification_text is not None:
+            if diagnostic_answers is not None or supplemental_description:
+                raise ValueError(
+                    "specification_text cannot be combined with structural diagnostic answers"
+                )
+            session = submit_specifications_to_session(
+                session,
+                specification_text,
+                specification_adapter=diagnostic_adapter,
+            )
         if diagnostic_answers is not None or supplemental_description:
             session = continue_diagnostic_session(
                 session,
@@ -573,8 +829,117 @@ def run_cfdc_route(
                 diagnostic_adapter=diagnostic_adapter,
                 use_mechanism_cards=use_mechanism_cards,
             )
+        if evidence_package is not None:
+            if (
+                session.current_diagnosis is None
+                or session.semantic_selection is None
+                or session.classification is None
+            ):
+                raise ValueError(
+                    "structured object evidence requires a complete diagnostic session"
+                )
+
+            class EvidenceSessionReplayAdapter:
+                def diagnose(self, supplied_description):
+                    del supplied_description
+                    return session.current_diagnosis.model_dump(mode="json")
+
+                def select_profile(
+                    self, supplied_description, diagnosis, classification, catalog
+                ):
+                    del supplied_description, diagnosis, classification, catalog
+                    return session.semantic_selection.model_dump(mode="json")
+
+            reviewed_session = submit_evidence_to_session(session, evidence_package)
+            result = run_cfdc_route(
+                session.route_id,
+                description=session.accumulated_description,
+                diagnostic_adapter=EvidenceSessionReplayAdapter(),
+                include_trajectory=include_trajectory,
+                run_id=run_id,
+                evidence_package=evidence_package,
+                execution_mode="user_object",
+            )
+            return result.model_copy(update={"diagnostic_session": reviewed_session})
+        if session.status == "specification_model_ready":
+            if (
+                session.compiled_specification_model is None
+                or session.semantic_selection is None
+            ):
+                raise RuntimeError(
+                    "ready specification session is missing its compiled model or route selection"
+                )
+
+            class SessionReplayAdapter:
+                def diagnose(self, supplied_description):
+                    del supplied_description
+                    return session.current_diagnosis.model_dump(mode="json")
+
+                def select_profile(self, supplied_description, diagnosis, classification, catalog):
+                    del supplied_description, diagnosis, classification, catalog
+                    return session.semantic_selection.model_dump(mode="json")
+
+            package = PlantEvidencePackage(
+                plant_id=session.compiled_specification_model.plant_id,
+                model=session.compiled_specification_model.model,
+                provenance=[
+                    "Deterministically compiled from explicit declared specifications",
+                    *session.compiled_specification_model.assumptions,
+                ],
+            )
+            result = run_cfdc_route(
+                session.route_id,
+                description=session.accumulated_description,
+                diagnostic_adapter=SessionReplayAdapter(),
+                include_trajectory=include_trajectory,
+                run_id=run_id,
+                evidence_package=package,
+                execution_mode="user_object",
+            )
+            controller = (
+                result.controller.model_copy(
+                    update={"release_level": "candidate_unvalidated"}
+                )
+                if result.controller is not None
+                and result.controller.status != "refuse"
+                and result.status not in {"rejected", "evidence_rejected"}
+                else None
+            )
+            if controller is None:
+                return result.model_copy(
+                    update={
+                        "diagnostic_session": session,
+                        "specification_templates": session.specification_templates,
+                        "specification_assessment": session.specification_assessment,
+                        "compiled_specification_model": session.compiled_specification_model,
+                        "controller_validation": None,
+                        "evidence_boundary": "declared_specification_model_only",
+                    }
+                )
+            return result.model_copy(
+                update={
+                    "status": (
+                        "candidate_unvalidated"
+                        if controller is not None
+                        else result.status
+                    ),
+                    "diagnostic_session": session,
+                    "specification_templates": session.specification_templates,
+                    "specification_assessment": session.specification_assessment,
+                    "compiled_specification_model": session.compiled_specification_model,
+                    "controller": controller,
+                    "controller_validation": None,
+                    "evidence_boundary": "declared_specification_model_only",
+                }
+            )
         status_map = {
             "collecting_information": "need_more_information",
+            "awaiting_specifications": "awaiting_specifications",
+            "need_more_specifications": "need_more_specifications",
+            "specification_conflict": "specification_conflict",
+            "specification_model_ready": "specification_model_ready",
+            "awaiting_evidence": "awaiting_evidence",
+            "evidence_rejected": "evidence_rejected",
             "ready_for_experiments": "controller_candidate_ready",
             "feature_extraction_failed": "feature_extraction_failed",
             "ready_for_controller": "controller_candidate_ready",
@@ -591,6 +956,11 @@ def run_cfdc_route(
             classification=session.classification,
             semantic_selection=session.semantic_selection,
             experiment_plan=session.experiment_plan,
+            evidence_requirement_plan=session.evidence_requirement_plan,
+            evidence_readiness=session.evidence_readiness,
+            specification_templates=session.specification_templates,
+            specification_assessment=session.specification_assessment,
+            compiled_specification_model=session.compiled_specification_model,
             candidate_route=session.candidate_route,
             compiled_route=session.compiled_route,
             notes=[
@@ -601,6 +971,24 @@ def run_cfdc_route(
     if diagnostic_answers is not None:
         raise ValueError("diagnostic_answers requires diagnostic_session_state")
     description = description or _default_description(route_id)
+    if (
+        execution_mode == "user_object"
+        and evidence_package is not None
+        and evidence_package.validation_spec is not None
+    ):
+        # Validation limits are user-declared object boundaries too.  Make
+        # previously missing limits available to experiment planning while
+        # preserving any description value so the evidence gate can still
+        # report disagreements between the two declarations.
+        safety_bounds = dict(description.safety_bounds)
+        for name, value in {
+            **evidence_package.validation_spec.actuator_limits,
+            **evidence_package.validation_spec.state_limits,
+        }.items():
+            safety_bounds.setdefault(name, value)
+        description = description.model_copy(
+            update={"safety_bounds": safety_bounds}
+        )
     engine = DiagnosticEngine(
         adapter=diagnostic_adapter,
         use_mechanism_cards=use_mechanism_cards,
@@ -615,7 +1003,7 @@ def run_cfdc_route(
         )
 
     raw_classification = engine.classify(diagnosis, description)
-    profile_catalog = default_simulation_profile_catalog()
+    profile_catalog = default_control_method_profile_catalog()
     if diagnostic_adapter is not None and hasattr(diagnostic_adapter, "select_profile"):
         semantic_selection = SemanticRouteSelection.model_validate(
             diagnostic_adapter.select_profile(description, diagnosis, raw_classification, profile_catalog)
@@ -637,6 +1025,119 @@ def run_cfdc_route(
         candidate_route,
         default_capability_catalog(),
     )
+    evidence_requirement_plan = build_evidence_requirement_plan(
+        description,
+        diagnosis,
+        classification,
+        semantic_selection,
+    )
+    specification_template = specification_template_for_profile(
+        semantic_selection.simulation_profile_id
+    )
+    specification_assessment = build_initial_specification_assessment(
+        description,
+        specification_template,
+    )
+    compiled_specification_model: CompiledSpecificationModel | None = None
+    if specification_text is not None and execution_mode == "user_object":
+        specification_assessment = assess_specification_text(
+            description,
+            specification_template,
+            specification_text,
+            previous=specification_assessment,
+            adapter=diagnostic_adapter,
+            diagnosis=diagnosis,
+            classification=classification,
+            method_profile_id=semantic_selection.simulation_profile_id,
+        )
+        if specification_assessment.status != "ready":
+            report_status = (
+                "specification_conflict"
+                if specification_assessment.status == "conflict"
+                else "need_more_specifications"
+            )
+            return CFDCRunReport(
+                run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
+                route_id=route_id,
+                status=report_status,
+                system_description=description,
+                diagnosis=diagnosis,
+                classification=classification,
+                semantic_selection=semantic_selection,
+                experiment_plan=plan,
+                evidence_requirement_plan=evidence_requirement_plan,
+                specification_templates=[specification_template],
+                specification_assessment=specification_assessment,
+                candidate_route=candidate_route,
+                compiled_route=compiled_route,
+                notes=[specification_assessment.rationale],
+                evidence_boundary="declared_specification_only",
+            )
+        compiled_specification_model = compile_specification_model(
+            description=description,
+            template=specification_template,
+            assessment=specification_assessment,
+            plant_id=evidence_requirement_plan.plant_id,
+        )
+        description = description.model_copy(
+            update={
+                "safety_bounds": {
+                    **description.safety_bounds,
+                    **compiled_specification_model.safety_bounds,
+                },
+                "time_scale_hint_s": (
+                    description.time_scale_hint_s
+                    or compiled_specification_model.time_scale_hint_s
+                ),
+            }
+        )
+        plan = plan_safe_experiments(diagnosis, classification, description)
+        candidate_route = build_candidate_route(
+            route_id,
+            diagnosis,
+            classification,
+            description,
+            plan,
+            profile,
+        )
+        compiled_route = compile_candidate_route(
+            candidate_route,
+            default_capability_catalog(),
+        )
+        evidence_package = PlantEvidencePackage(
+            plant_id=evidence_requirement_plan.plant_id,
+            model=compiled_specification_model.model,
+            provenance=[
+                "Deterministically compiled from explicit declared specifications",
+                *compiled_specification_model.assumptions,
+            ],
+        )
+    explicit_demo_route = route_id != "generic"
+    is_demo_fixture = execution_mode == "demo_fixture" or explicit_demo_route
+    if (
+        execution_mode == "user_object"
+        and not explicit_demo_route
+        and evidence_package is None
+    ):
+        return CFDCRunReport(
+            run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
+            route_id=route_id,
+            status="awaiting_specifications",
+            system_description=description,
+            diagnosis=diagnosis,
+            classification=classification,
+            semantic_selection=semantic_selection,
+            experiment_plan=plan,
+            evidence_requirement_plan=evidence_requirement_plan,
+            specification_templates=[specification_template],
+            specification_assessment=specification_assessment,
+            candidate_route=candidate_route,
+            compiled_route=compiled_route,
+            notes=[
+                specification_template.user_summary
+            ],
+            evidence_boundary="structural_diagnosis_only",
+        )
     diagnostic_gate = validate_diagnostic_controller_release(
         description,
         diagnosis,
@@ -667,12 +1168,87 @@ def run_cfdc_route(
             compiled_route,
             status="rejected",
         )
+    if (
+        execution_mode == "user_object"
+        and route_id == "generic"
+        and evidence_package is not None
+    ):
+        evidence_report = _object_evidence_report(
+            route_id=route_id,
+            description=description,
+            diagnosis=diagnosis,
+            classification=classification,
+            semantic_selection=semantic_selection,
+            plan=plan,
+            evidence_requirement_plan=evidence_requirement_plan,
+            candidate_route=candidate_route,
+            compiled_route=compiled_route,
+            profile=profile,
+            evidence_package=evidence_package,
+            route_gate=route_gate,
+            run_id=run_id,
+        )
+        evidence_report = evidence_report.model_copy(
+            update={
+                "specification_templates": [specification_template],
+                "specification_assessment": specification_assessment,
+                "compiled_specification_model": compiled_specification_model,
+            }
+        )
+        if (
+            compiled_specification_model is not None
+            and evidence_report.controller is not None
+            and evidence_report.controller.status != "refuse"
+            and evidence_report.status not in {"rejected", "evidence_rejected"}
+        ):
+            controller = evidence_report.controller.model_copy(
+                update={"release_level": "candidate_unvalidated"}
+            )
+            return evidence_report.model_copy(
+                update={
+                    "status": "candidate_unvalidated",
+                    "controller": controller,
+                    "controller_validation": None,
+                    "notes": [
+                        *evidence_report.notes,
+                        "The candidate was simulated only on a canonical model compiled from declared specifications and has not been validated on the real object.",
+                    ],
+                    "evidence_boundary": "declared_specification_model_only",
+                }
+            )
+        if compiled_specification_model is not None:
+            return evidence_report.model_copy(
+                update={
+                    "controller_validation": None,
+                    "evidence_boundary": "declared_specification_model_only",
+                }
+            )
+        return evidence_report
+    if not is_demo_fixture:
+        raise RuntimeError(
+            "method-profile experiments are restricted to explicit Demo Fixtures"
+        )
+    profile = profile_by_id(
+        default_simulation_profile_catalog(),
+        semantic_selection.simulation_profile_id,
+    )
     notes = ["Completed structured diagnosis, closed-catalog semantic selection, and deterministic simulation planning."]
     resolved_results: list[SimulationExperimentRecord] = []
     resolved_features: list[CoreFeatureArtifact] = []
     feature_quality_decision = None
     for repeat_index in range(1, 6):
-        resolved_results.extend(experiment_runner(profile, repeat_index))
+        new_results = experiment_runner(profile, repeat_index)
+        if is_demo_fixture:
+            new_results = [
+                record.model_copy(
+                    update={
+                        "evidence_source": "demo_fixture",
+                        "evidence_boundary": "demo_fixture_only",
+                    }
+                )
+                for record in new_results
+            ]
+        resolved_results.extend(new_results)
         if repeat_index < 3:
             continue
         resolved_features = extract_features_from_repeated_results(resolved_results)
@@ -1061,6 +1637,13 @@ def run_cfdc_route(
     if tuning_state is not None and tuning_state.frozen:
         status = "frozen"
 
+    report_evidence_boundary = "software_simulation_only"
+    if is_demo_fixture:
+        controller = controller.model_copy(update={"release_level": "demo_fixture_only"})
+        report_evidence_boundary = "demo_fixture_only"
+        if status in {"completed", "accepted", "controller_candidate_ready"}:
+            status = "demo_completed"
+
     return CFDCRunReport(
         run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
         route_id=route_id,
@@ -1093,6 +1676,7 @@ def run_cfdc_route(
         final_feedforward=final_feedforward,
         go_no_go=go_no_go,
         notes=notes,
+        evidence_boundary=report_evidence_boundary,
     )
 
 

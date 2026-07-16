@@ -164,6 +164,45 @@ def test_first_order_dead_time_detunes_gain_and_integral_speed():
     assert delayed.source_features == ["static_gain", "time_constant", "dead_time"]
 
 
+def test_user_vtol_candidate_carries_declared_thrust_and_torque_limits():
+    classification = ArchetypeClassification(
+        primary_class=ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP,
+        control_architecture="vtol_cascaded",
+        required_core_features=[
+            "hover_thrust",
+            "angular_acceleration_gain",
+            "lateral_coupling_gain",
+        ],
+        safety_constraints=[],
+        rationale="test",
+    )
+    controller = synthesize_controller(
+        classification,
+        [
+            feature("hover_thrust", 12.0),
+            feature("angular_acceleration_gain", 25.0),
+            feature("lateral_coupling_gain", 9.81),
+        ],
+        {
+            "gravity": 9.81,
+            "vertical_bandwidth_rad_s": 0.2,
+            "max_tilt_rad": 0.2,
+            "max_torque": 0.8,
+            "min_thrust": 0.0,
+            "max_thrust": 18.0,
+            "max_altitude_error": 0.5,
+        },
+        release_context="user_object",
+    )
+
+    assert controller.saturation == {
+        "min_thrust": 0.0,
+        "max_thrust": 18.0,
+        "max_tilt_rad": 0.2,
+        "max_torque": 0.8,
+    }
+
+
 def test_first_order_delay_strategy_uses_conservative_uncertainty_boundaries():
     classification = ArchetypeClassification(
         primary_class=ArchetypeClass.CLASS_I_FIRST_ORDER_LAG,

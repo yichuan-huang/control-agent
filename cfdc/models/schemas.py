@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -203,6 +203,38 @@ class SimulationProfileCatalog(CFDCModel):
     profiles: list[SimulationProfile] = Field(min_length=1)
 
 
+class ControlMethodProfile(CFDCModel):
+    profile_id: str = Field(min_length=1)
+    compatible_class: ArchetypeClass
+    semantic_description: str = Field(min_length=1)
+    feature_bundle_id: str = Field(min_length=1)
+    required_feature_ids: list[str] = Field(min_length=1)
+    controller_template_id: str = Field(min_length=1)
+    experiment_primitives: list[str] = Field(min_length=1)
+    tunable_gain_names: list[str] = Field(default_factory=list)
+    tracking_ids: list[str] = Field(default_factory=list)
+
+
+class ControlMethodProfileCatalog(CFDCModel):
+    schema_version: str = "2.0"
+    profiles: list[ControlMethodProfile] = Field(min_length=1)
+
+
+class DemoPlantFixture(CFDCModel):
+    fixture_id: str = Field(min_length=1)
+    method_profile_id: str = Field(min_length=1)
+    simulator_backend: str = Field(min_length=1)
+    nominal_parameters: dict[str, Any] = Field(min_length=1)
+    initial_state: dict[str, float] = Field(default_factory=dict)
+    change_scenario_id: str = Field(min_length=1)
+    evidence_boundary: str = "demo_fixture_only"
+
+
+class DemoPlantFixtureCatalog(CFDCModel):
+    schema_version: str = "2.0"
+    fixtures: list[DemoPlantFixture] = Field(min_length=1)
+
+
 class SemanticRouteSelection(CFDCModel):
     simulation_profile_id: str = Field(min_length=1)
     feature_bundle_id: str = Field(min_length=1)
@@ -210,6 +242,448 @@ class SemanticRouteSelection(CFDCModel):
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: list[str] = Field(min_length=1)
     rationale: str = Field(min_length=1)
+
+
+class EvidenceExperimentRequirement(CFDCModel):
+    primitive: str = Field(min_length=1)
+    feature_ids: list[str] = Field(min_length=1)
+    required_signal_ids: list[str] = Field(min_length=1)
+    minimum_measured_repeats: int = Field(default=3, ge=1)
+    metadata_requirements: list[str] = Field(
+        default_factory=lambda: [
+            "signal_units",
+            "operating_region",
+            "trial_id",
+            "data_source",
+        ]
+    )
+
+
+class EvidenceRequirementPlan(CFDCModel):
+    plant_id: str = Field(min_length=1)
+    method_profile_id: str = Field(min_length=1)
+    required_feature_ids: list[str] = Field(min_length=1)
+    accepted_sources: list[
+        Literal[
+            "declared_specification",
+            "structured_mathematical_model",
+            "measured_traces_reserved_for_later",
+        ]
+    ] = Field(min_length=2)
+    experiment_requirements: list[EvidenceExperimentRequirement] = Field(min_length=1)
+    missing_items: list[str] = Field(default_factory=list)
+    supplemental_questions: list[str] = Field(default_factory=list)
+    evidence_boundary: str = "object_evidence_requirements_only"
+
+
+class SpecificationFieldDefinition(CFDCModel):
+    fact_id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    canonical_unit: str = Field(min_length=1)
+    accepted_units: list[str] = Field(min_length=1)
+    unit_policy: Literal[
+        "dimensioned",
+        "open",
+        "motion_acceleration",
+        "actuator_per_input",
+        "structured",
+    ] = "dimensioned"
+    prompt_template: str = Field(min_length=1)
+    why_needed: str = Field(min_length=1)
+    where_to_find: str = Field(min_length=1)
+    example_template: str = Field(min_length=1)
+    answer_kind: Literal["number", "matrix", "structured_model"] = "number"
+
+
+class SpecificationCompletionPath(CFDCModel):
+    path_id: str = Field(min_length=1)
+    required_fact_ids: list[str] = Field(min_length=1)
+
+
+class SpecificationTemplate(CFDCModel):
+    template_id: str = Field(min_length=1)
+    method_profile_id: str = Field(min_length=1)
+    user_summary: str = Field(min_length=1)
+    fields: list[SpecificationFieldDefinition] = Field(default_factory=list)
+    completion_paths: list[SpecificationCompletionPath] = Field(min_length=1)
+    compiler_id: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_completion_paths(self) -> "SpecificationTemplate":
+        known = {item.fact_id for item in self.fields}
+        referenced = {
+            fact_id
+            for path in self.completion_paths
+            for fact_id in path.required_fact_ids
+        }
+        if referenced - known:
+            raise ValueError(
+                "completion paths reference unknown specification facts: "
+                + ", ".join(sorted(referenced - known))
+            )
+        return self
+
+
+class SpecificationTemplateCatalog(CFDCModel):
+    schema_version: str = "1.0"
+    templates: list[SpecificationTemplate] = Field(min_length=1)
+
+
+SpecificationValue = Union[float, list[float], list[list[float]]]
+
+
+class SpecificationFact(CFDCModel):
+    fact_id: str = Field(min_length=1)
+    value: SpecificationValue
+    unit: str = Field(min_length=1)
+    source_type: Literal[
+        "manufacturer_document",
+        "user_known_behavior",
+        "structured_answer",
+    ]
+    source_text: str = Field(min_length=1)
+    lower_bound: float | None = None
+    upper_bound: float | None = None
+
+    @model_validator(mode="after")
+    def validate_uncertainty_bounds(self) -> "SpecificationFact":
+        if isinstance(self.value, float):
+            if self.lower_bound is not None and self.lower_bound > self.value:
+                raise ValueError("lower_bound cannot exceed the specification value")
+            if self.upper_bound is not None and self.upper_bound < self.value:
+                raise ValueError("upper_bound cannot be below the specification value")
+        elif self.lower_bound is not None or self.upper_bound is not None:
+            raise ValueError("matrix/list specification facts do not use scalar bounds")
+        return self
+
+
+class SpecificationQuestion(CFDCModel):
+    question_id: str = Field(min_length=1)
+    requested_fact_ids: list[str] = Field(min_length=1)
+    prompt: str = Field(min_length=1)
+    why_needed: str = Field(min_length=1)
+    where_to_find: str = Field(min_length=1)
+    answer_kind: Literal["number", "matrix", "structured_model"] = "number"
+    unit_hint: str = Field(min_length=1)
+    example: str = Field(min_length=1)
+    answer_options: list[str] = Field(
+        default_factory=lambda: [
+            "填写已知数值",
+            "粘贴手册规格",
+            "暂时不知道",
+            "改用完整数值模型",
+        ],
+        min_length=4,
+        max_length=4,
+    )
+
+
+class SpecificationAssessment(CFDCModel):
+    status: Literal["need_more", "conflict", "ready"]
+    template_id: str = Field(min_length=1)
+    facts: list[SpecificationFact] = Field(default_factory=list)
+    missing_fact_ids: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    questions: list[SpecificationQuestion] = Field(default_factory=list, max_length=4)
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_status_consistency(self) -> "SpecificationAssessment":
+        if self.status == "ready" and (self.missing_fact_ids or self.conflicts):
+            raise ValueError("a ready specification assessment cannot contain gaps or conflicts")
+        if self.status == "conflict" and not self.conflicts:
+            raise ValueError("a conflict assessment must explain at least one conflict")
+        return self
+
+
+class TransferFunctionModelSpec(CFDCModel):
+    kind: Literal["transfer_function"] = "transfer_function"
+    numerator: list[float] = Field(min_length=1)
+    denominator: list[float] = Field(min_length=1)
+    time_domain: Literal["continuous", "discrete"] = "continuous"
+    sample_time_s: float | None = Field(default=None, gt=0.0)
+    input_delay_s: float = Field(default=0.0, ge=0.0)
+    input_signal_id: str = Field(min_length=1)
+    output_signal_id: str = Field(min_length=1)
+    input_units: str = "unspecified"
+    output_units: str = "unspecified"
+    parameter_uncertainty: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_transfer_function(self) -> "TransferFunctionModelSpec":
+        if not any(abs(value) > 0.0 for value in self.denominator):
+            raise ValueError("denominator must contain a non-zero coefficient")
+        if self.time_domain == "discrete" and self.sample_time_s is None:
+            raise ValueError("sample_time_s is required for a discrete transfer function")
+        if self.time_domain == "continuous" and self.sample_time_s is not None:
+            raise ValueError("sample_time_s is only valid for a discrete transfer function")
+        return self
+
+
+class StateSpaceModelSpec(CFDCModel):
+    kind: Literal["state_space"] = "state_space"
+    a: list[list[float]] = Field(min_length=1)
+    b: list[list[float]] = Field(min_length=1)
+    c: list[list[float]] = Field(min_length=1)
+    d: list[list[float]] = Field(min_length=1)
+    time_domain: Literal["continuous", "discrete"] = "continuous"
+    sample_time_s: float | None = Field(default=None, gt=0.0)
+    state_names: list[str] = Field(min_length=1)
+    input_signal_ids: list[str] = Field(min_length=1)
+    output_signal_ids: list[str] = Field(min_length=1)
+    initial_state: list[float] = Field(min_length=1)
+    signal_units: dict[str, str] = Field(default_factory=dict)
+    parameter_uncertainty: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_state_space_dimensions(self) -> "StateSpaceModelSpec":
+        n = len(self.a)
+        m = len(self.input_signal_ids)
+        p = len(self.output_signal_ids)
+        if any(len(row) != n for row in self.a):
+            raise ValueError("A must be square")
+        if len(self.b) != n or any(len(row) != m for row in self.b):
+            raise ValueError("B dimensions must be state_count x input_count")
+        if len(self.c) != p or any(len(row) != n for row in self.c):
+            raise ValueError("C dimensions must be output_count x state_count")
+        if len(self.d) != p or any(len(row) != m for row in self.d):
+            raise ValueError("D dimensions must be output_count x input_count")
+        if len(self.state_names) != n:
+            raise ValueError("state_names must match A dimensions")
+        if len(self.initial_state) != n:
+            raise ValueError("initial_state must match A dimensions")
+        if self.time_domain == "discrete" and self.sample_time_s is None:
+            raise ValueError("sample_time_s is required for a discrete state-space model")
+        if self.time_domain == "continuous" and self.sample_time_s is not None:
+            raise ValueError("sample_time_s is only valid for a discrete state-space model")
+        return self
+
+
+class RegisteredNonlinearModelSpec(CFDCModel):
+    kind: Literal["registered_nonlinear"] = "registered_nonlinear"
+    template_id: Literal["underactuated_cartpole", "vtol_cascaded"]
+    parameters: dict[str, float] = Field(min_length=1)
+    initial_state: dict[str, float] = Field(default_factory=dict)
+    input_signal_ids: list[str] = Field(min_length=1)
+    output_signal_ids: list[str] = Field(min_length=1)
+    signal_units: dict[str, str] = Field(default_factory=dict)
+    parameter_uncertainty: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_registered_model_is_complete(self) -> "RegisteredNonlinearModelSpec":
+        required_parameters = {
+            "underactuated_cartpole": {
+                "cart_mass_kg",
+                "pole_mass_kg",
+                "com_length_m",
+                "pole_inertia_kg_m2",
+                "cart_friction_n_s_m",
+                "gravity_m_s2",
+                "force_limit_n",
+                "cart_position_limit_m",
+            },
+            "vtol_cascaded": {
+                "mass_kg",
+                "pitch_inertia_kg_m2",
+                "gravity_m_s2",
+                "linear_drag_n_s_m",
+                "pitch_damping_n_m_s",
+                "thrust_min_n",
+                "thrust_max_n",
+                "torque_limit_n_m",
+            },
+        }[self.template_id]
+        required_initial_state = {
+            "underactuated_cartpole": {
+                "position_m", "velocity_m_s", "angle_rad", "angular_rate_rad_s"
+            },
+            "vtol_cascaded": {
+                "x_m", "z_m", "pitch_rad", "x_velocity_m_s",
+                "z_velocity_m_s", "pitch_rate_rad_s",
+            },
+        }[self.template_id]
+        if set(self.parameters) != required_parameters:
+            missing = sorted(required_parameters - set(self.parameters))
+            unknown = sorted(set(self.parameters) - required_parameters)
+            raise ValueError(
+                "registered nonlinear models require the complete parameter set; "
+                f"missing={missing}, unknown={unknown}"
+            )
+        strictly_positive = {
+            "underactuated_cartpole": {
+                "cart_mass_kg",
+                "pole_mass_kg",
+                "com_length_m",
+                "pole_inertia_kg_m2",
+                "gravity_m_s2",
+                "force_limit_n",
+                "cart_position_limit_m",
+            },
+            "vtol_cascaded": {
+                "mass_kg",
+                "pitch_inertia_kg_m2",
+                "gravity_m_s2",
+                "thrust_max_n",
+                "torque_limit_n_m",
+            },
+        }[self.template_id]
+        nonnegative = {
+            "underactuated_cartpole": {"cart_friction_n_s_m"},
+            "vtol_cascaded": {
+                "linear_drag_n_s_m",
+                "pitch_damping_n_m_s",
+                "thrust_min_n",
+            },
+        }[self.template_id]
+        invalid_positive = sorted(
+            name for name in strictly_positive if self.parameters[name] <= 0.0
+        )
+        invalid_nonnegative = sorted(
+            name for name in nonnegative if self.parameters[name] < 0.0
+        )
+        if invalid_positive or invalid_nonnegative:
+            raise ValueError(
+                "registered nonlinear model parameters are outside their physical domain; "
+                f"must_be_positive={invalid_positive}, must_be_nonnegative={invalid_nonnegative}"
+            )
+        if (
+            self.template_id == "vtol_cascaded"
+            and self.parameters["thrust_min_n"] >= self.parameters["thrust_max_n"]
+        ):
+            raise ValueError("thrust_min_n must be less than thrust_max_n")
+        if set(self.initial_state) != required_initial_state:
+            missing = sorted(required_initial_state - set(self.initial_state))
+            unknown = sorted(set(self.initial_state) - required_initial_state)
+            raise ValueError(
+                "registered nonlinear models require the complete initial state; "
+                f"missing={missing}, unknown={unknown}"
+            )
+        if (
+            self.template_id == "underactuated_cartpole"
+            and abs(self.initial_state["position_m"])
+            > self.parameters["cart_position_limit_m"]
+        ):
+            raise ValueError(
+                "initial cart position exceeds cart_position_limit_m"
+            )
+        return self
+
+
+ExecutableModelSpec = Annotated[
+    Union[
+        TransferFunctionModelSpec,
+        StateSpaceModelSpec,
+        RegisteredNonlinearModelSpec,
+    ],
+    Field(discriminator="kind"),
+]
+
+
+class MeasuredTraceManifest(CFDCModel):
+    csv_path: str = Field(min_length=1)
+    primitive: ExperimentPrimitive
+    repeat_index: int = Field(ge=1)
+    time_column: str = Field(min_length=1)
+    signal_columns: dict[str, str] = Field(min_length=1)
+    signal_units: dict[str, str] = Field(min_length=1)
+    estimates: list[str] = Field(min_length=1)
+    operating_region: str = Field(min_length=1)
+    trial_id: str = Field(min_length=1)
+    data_source: str = Field(min_length=1)
+
+
+class ClosedLoopValidationSpec(CFDCModel):
+    reference: dict[str, float] = Field(min_length=1)
+    horizon_s: float = Field(gt=0.0)
+    sample_time_s: float = Field(gt=0.0)
+    actuator_limits: dict[str, float] = Field(min_length=1)
+    state_limits: dict[str, float] = Field(min_length=1)
+    performance_limits: dict[str, float] = Field(min_length=1)
+    initial_state: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_required_limits(self) -> "ClosedLoopValidationSpec":
+        required = {
+            "actuator_limits": {"input_min", "input_max"},
+            "state_limits": {"output_min", "output_max"},
+            "performance_limits": {
+                "max_abs_final_error",
+                "max_overshoot",
+                "max_settling_time_s",
+                "max_saturation_fraction",
+            },
+        }
+        for field_name, keys in required.items():
+            values = getattr(self, field_name)
+            missing = sorted(keys - set(values))
+            if missing:
+                raise ValueError(
+                    f"{field_name} is missing required key(s): {', '.join(missing)}"
+                )
+        if self.actuator_limits["input_min"] >= self.actuator_limits["input_max"]:
+            raise ValueError("input_min must be less than input_max")
+        if self.state_limits["output_min"] >= self.state_limits["output_max"]:
+            raise ValueError("output_min must be less than output_max")
+        if not 0.0 <= self.performance_limits["max_saturation_fraction"] <= 1.0:
+            raise ValueError("max_saturation_fraction must lie between 0 and 1")
+        if self.sample_time_s * 2.0 > self.horizon_s:
+            raise ValueError("validation horizon must contain at least three samples")
+        return self
+
+
+class PlantEvidencePackage(CFDCModel):
+    evidence_package_id: str | None = None
+    plant_id: str = Field(min_length=1)
+    model: ExecutableModelSpec | None = None
+    measured_traces: list[MeasuredTraceManifest] = Field(default_factory=list)
+    validation_spec: ClosedLoopValidationSpec | None = None
+    provenance: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_evidence_source(self) -> "PlantEvidencePackage":
+        if self.model is None and not self.measured_traces:
+            raise ValueError("evidence package requires a model or measured trace manifest")
+        if self.evidence_package_id is None:
+            payload = self.model_dump_json(exclude={"evidence_package_id"})
+            self.evidence_package_id = f"evidence-{hashlib.sha256(payload.encode()).hexdigest()[:20]}"
+        return self
+
+
+class DeclaredSpecificationEvidence(CFDCModel):
+    plant_id: str = Field(min_length=1)
+    template_id: str = Field(min_length=1)
+    facts: list[SpecificationFact] = Field(min_length=1)
+    answer_history: list[str] = Field(default_factory=list)
+    evidence_boundary: str = "declared_specification_only"
+
+
+class CompiledSpecificationModel(CFDCModel):
+    plant_id: str = Field(min_length=1)
+    template_id: str = Field(min_length=1)
+    model: ExecutableModelSpec
+    derived_features: dict[str, float | list[list[float]]] = Field(default_factory=dict)
+    parameter_sources: dict[str, list[str]] = Field(default_factory=dict)
+    safety_bounds: dict[str, float] = Field(default_factory=dict)
+    time_scale_hint_s: float = Field(gt=0.0)
+    assumptions: list[str] = Field(default_factory=list)
+    model_sha256: str | None = None
+    evidence_boundary: str = "declared_specification_model_only"
+
+    @model_validator(mode="after")
+    def populate_model_hash(self) -> "CompiledSpecificationModel":
+        if self.model_sha256 is None:
+            payload = self.model.model_dump_json()
+            self.model_sha256 = hashlib.sha256(payload.encode()).hexdigest()
+        return self
+
+
+class EvidenceReadinessDecision(CFDCModel):
+    decision: Literal["ready", "rejected"]
+    source_types: list[Literal["mathematical_model", "measured_traces"]] = Field(
+        default_factory=list
+    )
+    gaps: list[CapabilityGap] = Field(default_factory=list)
+    evidence_boundary: str = "object_evidence_readiness"
 
 
 class ExperimentPrimitive(str, Enum):
@@ -284,6 +758,15 @@ class ExperimentTrace(CFDCModel):
 
 
 class SimulationExperimentRecord(CFDCModel):
+    plant_id: str | None = None
+    evidence_package_id: str | None = None
+    model_sha256: str | None = None
+    evidence_source: Literal[
+        "legacy_simulation",
+        "model_simulation",
+        "measured_trace",
+        "demo_fixture",
+    ] = "legacy_simulation"
     primitive: ExperimentPrimitive
     estimates: list[str] = Field(min_length=1)
     trace: ExperimentTrace
@@ -309,6 +792,15 @@ class SimulationExperimentRecord(CFDCModel):
 
 class CoreFeatureArtifact(CFDCModel):
     object_id: str | None = None
+    plant_id: str | None = None
+    evidence_package_id: str | None = None
+    model_sha256: str | None = None
+    evidence_source: Literal[
+        "legacy",
+        "model_simulation",
+        "measured_trace",
+        "demo_fixture",
+    ] = "legacy"
     feature_id: str
     value: float | list[list[float]]
     lower_bound: float | None = None
@@ -378,6 +870,8 @@ class FeatureQualityDecision(CFDCModel):
 
 
 class ControllerCandidate(CFDCModel):
+    plant_id: str | None = None
+    method_profile_id: str | None = None
     architecture: str
     gains: dict[str, float] = Field(default_factory=dict)
     design_parameters: dict[str, float] = Field(default_factory=dict)
@@ -386,6 +880,15 @@ class ControllerCandidate(CFDCModel):
     saturation: dict[str, float] = Field(default_factory=dict)
     constraints: list[str] = Field(default_factory=list)
     source_features: list[str] = Field(default_factory=list)
+    source_feature_artifact_ids: list[str] = Field(default_factory=list)
+    parameter_provenance: dict[str, list[str]] = Field(default_factory=dict)
+    release_level: Literal[
+        "legacy",
+        "candidate_unvalidated",
+        "validated_in_simulation",
+        "demo_fixture_only",
+        "refuse",
+    ] = "legacy"
     status: Literal["ready_for_conservative_trial", "requires_online_search", "refuse"]
     notes: list[str] = Field(default_factory=list)
 
@@ -572,7 +1075,7 @@ class DiagnosticTurn(CFDCModel):
 
 class DiagnosticSessionState(CFDCModel):
     session_id: str = Field(min_length=1)
-    schema_version: str = "1.0"
+    schema_version: str = "3.0"
     route_id: str = "generic"
     initial_description: SystemDescription
     accumulated_description: SystemDescription
@@ -581,11 +1084,23 @@ class DiagnosticSessionState(CFDCModel):
     classification: ArchetypeClassification | None = None
     semantic_selection: SemanticRouteSelection | None = None
     experiment_plan: ExperimentPlan | None = None
+    evidence_requirement_plan: EvidenceRequirementPlan | None = None
+    evidence_readiness: EvidenceReadinessDecision | None = None
+    specification_templates: list[SpecificationTemplate] = Field(default_factory=list)
+    specification_assessment: SpecificationAssessment | None = None
+    specification_answer_history: list[str] = Field(default_factory=list)
+    compiled_specification_model: CompiledSpecificationModel | None = None
     pending_clarification_questions: list[str] = Field(default_factory=list)
     candidate_route: CandidateRouteIR | None = None
     compiled_route: CompiledRoute | None = None
     status: Literal[
         "collecting_information",
+        "awaiting_specifications",
+        "need_more_specifications",
+        "specification_conflict",
+        "specification_model_ready",
+        "awaiting_evidence",
+        "evidence_rejected",
         "ready_for_experiments",
         "feature_extraction_failed",
         "ready_for_controller",
@@ -999,11 +1514,29 @@ class VtolVariationResult(CFDCModel):
     evidence_boundary: str = "software_simulation_vtol_variation_study"
 
 
+class ControllerValidationResult(CFDCModel):
+    status: Literal["passed", "failed", "not_supported"]
+    performance: SimulationPerformanceSummary | None = None
+    violations: list[str] = Field(default_factory=list)
+    trace_sha256: str | None = None
+    evidence_boundary: str = "user_object_model_closed_loop_validation"
+
+
 class CFDCRunReport(CFDCModel):
     run_id: str
     route_id: str = "generic"
     status: Literal[
         "need_more_information",
+        "awaiting_specifications",
+        "need_more_specifications",
+        "specification_conflict",
+        "specification_model_ready",
+        "awaiting_evidence",
+        "evidence_rejected",
+        "candidate_unvalidated",
+        "validation_pending",
+        "validated_in_simulation",
+        "demo_completed",
         "feature_extraction_failed",
         "controller_candidate_ready",
         "accepted",
@@ -1017,12 +1550,18 @@ class CFDCRunReport(CFDCModel):
     classification: ArchetypeClassification | None = None
     semantic_selection: SemanticRouteSelection | None = None
     experiment_plan: ExperimentPlan | None = None
+    evidence_requirement_plan: EvidenceRequirementPlan | None = None
+    evidence_readiness: EvidenceReadinessDecision | None = None
+    specification_templates: list[SpecificationTemplate] = Field(default_factory=list)
+    specification_assessment: SpecificationAssessment | None = None
+    compiled_specification_model: CompiledSpecificationModel | None = None
     candidate_route: CandidateRouteIR | None = None
     compiled_route: CompiledRoute | None = None
     experiment_results: list[SimulationExperimentRecord] = Field(default_factory=list)
     features: list[CoreFeatureArtifact] = Field(default_factory=list)
     feature_quality_decision: FeatureQualityDecision | None = None
     controller: ControllerCandidate | None = None
+    controller_validation: ControllerValidationResult | None = None
     trial_reports: list[TrialReport] = Field(default_factory=list)
     online_tuning_state: OnlineTuningState | None = None
     algorithm1_state: Algorithm1State | None = None

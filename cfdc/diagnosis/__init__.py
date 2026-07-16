@@ -26,12 +26,18 @@ from cfdc.diagnosis.session import (
     clarification_question_map,
     continue_diagnostic_session,
     start_diagnostic_session,
+    submit_evidence_to_session,
+    submit_specifications_to_session,
+    migrate_diagnostic_session_payload,
 )
 
 __all__ = [
     "continue_diagnostic_session",
     "clarification_question_map",
     "start_diagnostic_session",
+    "submit_evidence_to_session",
+    "submit_specifications_to_session",
+    "migrate_diagnostic_session_payload",
     "DiagnosticEngine",
     "DeterministicDiagnosticAdapter",
     "OpenAICompatibleDiagnosticAdapter",

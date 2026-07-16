@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -10,11 +11,14 @@ from cfdc.web.service import (
     parse_names,
     parse_safety_bounds,
     start_app_run,
+    submit_app_evidence,
+    submit_app_specifications,
 )
 from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, build_app, reset_ui, update_run_mode
 from cfdc.diagnosis import DeterministicDiagnosticAdapter
 from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.models import SystemDescription
+from cfdc.runtime import run_cfdc_route
 
 
 def test_root_app_is_a_thin_launcher_and_legacy_package_app_is_removed():
@@ -38,20 +42,19 @@ def test_app_runs_clear_description_and_renders_stage_tables():
     )
     view = render_report(report)
 
-    assert report.status == "completed"
-    assert state["session"] is None
+    assert report.status == "awaiting_specifications"
+    assert state["session"] is not None
     assert state["api_key"] == ""
     assert len(view["diagnosis"]) == 8
-    assert dict(view["route"])["仿真 Profile"] == "first_order_lag"
-    assert view["experiments"]
-    assert view["features"]
-    assert view["controller"]
-    assert view["performance"]
-    assert "flow-step done" in view["progress"]
+    assert dict(view["route"])["方法 Profile"] == "first_order_lag"
+    assert view["experiments"] == []
+    assert view["features"] == []
+    assert view["controller"] == []
+    assert view["performance"] == []
+    assert "flow-step waiting" in view["progress"]
     assert "first_order_lag" in view["summary"]
-    assert "原控制器" in view["performance_visual"]
-    assert "适应控制器" in view["performance_visual"]
-    assert view["raw"]["evidence_boundary"] == "software_simulation_only"
+    assert "不会提取核心特征" in view["specification_guidance"]
+    assert view["raw"]["evidence_boundary"] == "structural_diagnosis_only"
 
 
 def test_app_clarification_state_can_continue_into_full_simulation():
@@ -79,24 +82,22 @@ def test_app_clarification_state_can_continue_into_full_simulation():
         "It is a measured first-order thermal process that settles after a heater change.",
     )
 
-    assert completed.status == "completed"
+    assert completed.status == "awaiting_specifications"
     assert completed.semantic_selection.simulation_profile_id == "first_order_lag"
-    assert completed.experiment_results
-    assert next_state["session"] is None
+    assert completed.experiment_results == []
+    assert next_state["session"] is not None
     assert next_state["api_key"] == ""
 
 
 def test_app_renders_matrix_core_feature_without_scalar_collapse():
-    report, _ = start_app_run(
-        "A strongly coupled MIMO process has multiple inputs and multiple outputs.",
-        "y1, y2",
-        "u1, u2",
-        "",
-        "自动选择",
-        False,
-        "",
-        "",
-        "",
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text="A strongly coupled MIMO process has multiple inputs and multiple outputs.",
+            observed_outputs=["y1", "y2"],
+            actuators=["u1", "u2"],
+        ),
+        execution_mode="demo_fixture",
     )
     feature_by_id = {row[0]: row for row in render_report(report)["features"]}
 
@@ -119,6 +120,261 @@ def test_app_input_parsers_accept_common_multiline_forms():
         "vtol-hover",
         "vtol-variation",
     }.issubset(set(ROUTE_CHOICES.values()))
+
+
+def test_app_can_submit_structured_model_evidence_after_diagnosis():
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature",
+        "heater",
+        "input_min=-1\ninput_max=1\noutput_min=-10\noutput_max=10",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+        time_scale_hint_s="4",
+    )
+    assert report.status == "awaiting_specifications"
+
+    resolved, next_state = submit_app_evidence(
+        state,
+        model_json='{"kind":"transfer_function","numerator":[1.0],"denominator":[2.0,1.0],"input_signal_id":"heater","output_signal_id":"temperature","input_units":"V","output_units":"degC"}',
+        trace_files=None,
+        trace_manifest_json="",
+        validation_json="",
+        demo_confirmed=False,
+    )
+
+    assert resolved.status == "validation_pending"
+    assert resolved.controller.release_level == "candidate_unvalidated"
+    assert next_state["session"] is None
+
+
+def test_app_trace_manifest_cannot_read_an_unuploaded_server_path(tmp_path):
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature",
+        "heater",
+        "input_min=-1\ninput_max=1\noutput_min=-10\noutput_max=10",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+        time_scale_hint_s="4",
+    )
+    assert report.status == "awaiting_specifications"
+    server_file = tmp_path / "server-local.csv"
+    server_file.write_text("time,input,output\n0,0,0\n1,1,1\n2,1,1\n", encoding="utf-8")
+    manifest = {
+        "csv_path": str(server_file),
+        "primitive": "ramp_step",
+        "repeat_index": 1,
+        "time_column": "time",
+        "signal_columns": {"input": "input", "output": "output"},
+        "signal_units": {"time": "s", "input": "V", "output": "degC"},
+        "estimates": ["static_gain", "time_constant"],
+        "operating_region": "nominal",
+        "trial_id": "server-file",
+        "data_source": "claimed upload",
+    }
+
+    with pytest.raises(ValueError, match="上传的 CSV"):
+        submit_app_evidence(
+            state,
+            model_json="",
+            trace_files=None,
+            trace_manifest_json=json.dumps([manifest]),
+            validation_json="",
+            demo_confirmed=False,
+        )
+
+
+def test_app_can_submit_plain_language_specifications_as_default_path():
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature", "heater power", "", NATURAL_LANGUAGE_MODE,
+        False, "", "", "",
+    )
+    assert report.status == "awaiting_specifications"
+
+    resolved, next_state = submit_app_specifications(
+        state,
+        (
+            "From the manual: input_change=1 normalized_input; "
+            "steady_output_change=10 degC; response_time_s=20 s; "
+            "input_min=-2 normalized_input; input_max=2 normalized_input; "
+            "output_min=-30 degC; output_max=80 degC."
+        ),
+    )
+
+    assert resolved.status == "candidate_unvalidated"
+    assert resolved.evidence_boundary == "declared_specification_model_only"
+    assert resolved.controller.release_level == "candidate_unvalidated"
+    assert next_state["session"] is None
+
+
+def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_acceleration_units(monkeypatch):
+    report, state = start_app_run(
+        (
+            "A low-friction motor positioning axis accelerates under applied voltage "
+            "and keeps drifting after voltage is removed. Position and speed are measured."
+        ),
+        "motor position, motor speed",
+        "motor voltage",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+    )
+    assert report.status == "awaiting_specifications"
+    assert report.semantic_selection.simulation_profile_id == "double_integrator"
+    paragraph = (
+        "The held motor voltage has a baseline of 0.0 V and an allowed operating "
+        "range of −5.0 V to +5.0 V. The voltage is changed by +0.5 V. "
+        "This produces an angular-acceleration change of approximately +1.0 rad/s². "
+        "A typical target change takes approximately 2.0 s. "
+        "The permitted position range is −2.5 rad to +2.5 rad."
+    )
+
+    class MotorSpecificationAdapter:
+        def assess_specifications(self, *args):
+            template = args[4][0]
+            def fact(fact_id, value, unit, source_text):
+                return {
+                    "fact_id": fact_id,
+                    "value": value,
+                    "unit": unit,
+                    "source_type": "user_known_behavior",
+                    "source_text": source_text,
+                }
+
+            return {
+                "status": "ready",
+                "template_id": template.template_id,
+                "facts": [
+                    fact("input_change", 0.5, "V", "voltage is changed by +0.5 V"),
+                    fact(
+                        "acceleration_change",
+                        1.0,
+                        "rad/s²",
+                        "angular-acceleration change of approximately +1.0 rad/s²",
+                    ),
+                    fact("motion_time_scale_s", 2.0, "s", "takes approximately 2.0 s"),
+                    fact("input_min", -5.0, "V", "range of −5.0 V to +5.0 V"),
+                    fact("input_max", 5.0, "V", "range of −5.0 V to +5.0 V"),
+                    fact(
+                        "output_min", -2.5, "rad", "position range is −2.5 rad to +2.5 rad"
+                    ),
+                    fact(
+                        "output_max", 2.5, "rad", "position range is −2.5 rad to +2.5 rad"
+                    ),
+                ],
+                "missing_fact_ids": [],
+                "conflicts": [],
+                "questions": [],
+                "rationale": "All required facts were explicitly stated.",
+            }
+
+    state["use_llm"] = True
+    monkeypatch.setattr(
+        "cfdc.web.service.build_adapter",
+        lambda *args: MotorSpecificationAdapter(),
+    )
+
+    resolved, next_state = submit_app_specifications(state, paragraph)
+
+    assert resolved.status == "candidate_unvalidated"
+    assert resolved.compiled_specification_model.model.input_units == "V"
+    assert resolved.compiled_specification_model.model.output_units == "rad"
+    input_gain = {item.feature_id: item for item in resolved.features}["input_gain"]
+    assert input_gain.value == pytest.approx(2.0)
+    assert input_gain.units == "rad/s^2/V"
+    assert resolved.controller.saturation == {
+        "input_min": -5.0,
+        "input_max": 5.0,
+    }
+    assert next_state["session"] is None
+
+
+def test_gradio_missing_unit_returns_to_specification_questions_instead_of_error(monkeypatch):
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature",
+        "heater power",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+    )
+    assert report.status == "awaiting_specifications"
+
+    class MissingUnitAdapter:
+        def assess_specifications(self, *args):
+            template = args[4][0]
+            return {
+                "status": "need_more",
+                "template_id": template.template_id,
+                "facts": [{
+                    "fact_id": "input_change",
+                    "value": 1.0,
+                    "unit": "",
+                    "source_type": "user_known_behavior",
+                    "source_text": "input change is 1",
+                }],
+                "missing_fact_ids": ["input_change"],
+                "conflicts": [],
+                "questions": [],
+                "rationale": "The value is explicit but its unit is missing.",
+            }
+
+    state["use_llm"] = True
+    monkeypatch.setattr(
+        "cfdc.web.service.build_adapter",
+        lambda *args: MissingUnitAdapter(),
+    )
+
+    unresolved, next_state = submit_app_specifications(
+        state,
+        "The input change is 1, but I do not know the unit yet.",
+    )
+
+    assert unresolved.status == "need_more_specifications"
+    assert "input_change" in unresolved.specification_assessment.missing_fact_ids
+    assert next_state["session"] is not None
+
+
+def test_no_llm_specification_form_accepts_answers_in_visible_question_order():
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature", "heater power", "", NATURAL_LANGUAGE_MODE,
+        False, "", "", "",
+    )
+    assert report.status == "awaiting_specifications"
+
+    partial, state = submit_app_specifications(
+        state,
+        "1 normalized_input\n10 degC\n20 s\n-2 normalized_input",
+    )
+
+    assert partial.status == "need_more_specifications"
+    facts = partial.specification_assessment.facts
+    assert {item.fact_id for item in facts} == {
+        "input_change", "steady_output_change", "response_time_s", "input_min"
+    }
+
+    resolved, state = submit_app_specifications(
+        state,
+        "2 normalized_input\n-30 degC\n80 degC",
+    )
+
+    assert resolved.status == "candidate_unvalidated"
+    assert state["session"] is None
 
 
 def test_time_scale_hint_parser_accepts_blank_and_positive_finite_values():
@@ -167,7 +423,7 @@ def test_start_app_run_passes_forbidden_actions_and_time_scale_to_system_descrip
         time_scale_hint_s="2.5",
     )
 
-    assert report.status == "completed"
+    assert report.status == "awaiting_specifications"
     assert captured["forbidden_actions"] == ["free release", "physical deployment"]
     assert captured["time_scale_hint_s"] == 2.5
     assert report.system_description.forbidden_actions == ["free release", "physical deployment"]
@@ -214,6 +470,38 @@ def test_gradio_exposes_all_six_domain_inputs_with_blank_optional_defaults():
     assert textboxes["主导时间尺度（秒）"]["value"] == ""
 
 
+def test_gradio_exposes_object_evidence_inputs_and_five_stage_progress():
+    app = build_app()
+    labels = {
+        component["props"].get("label")
+        for component in app.config["components"]
+    }
+    buttons = {
+        component["props"].get("value")
+        for component in app.config["components"]
+        if component["type"] == "button"
+    }
+
+    assert {
+        "用自然语言补充设备规格",
+        "数学模型 JSON",
+        "闭环验证条件 JSON（可选）",
+        "确认仅运行标准对象演示",
+    }.issubset(labels)
+    assert "实测 CSV（可多选）" not in labels
+    assert "实测数据 Manifest JSON" not in labels
+    assert {"开始诊断", "提交规格信息", "提交高级模型 / 运行演示"}.issubset(buttons)
+
+    report, _ = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature", "heater", "", NATURAL_LANGUAGE_MODE,
+        False, "", "", "",
+    )
+    progress = render_report(report)["progress"]
+    assert progress.count('class="flow-step') == 5
+    assert "规格模型" in progress
+
+
 def test_first_example_accepts_uninitialized_optional_textboxes():
     description, outputs, actuators = EXAMPLES[0]
 
@@ -229,8 +517,8 @@ def test_first_example_accepts_uninitialized_optional_textboxes():
         None,
     )
 
-    assert report.status in {"completed", "frozen"}
-    assert state["session"] is None
+    assert report.status == "awaiting_specifications"
+    assert state["session"] is not None
 
 
 def test_uninitialized_required_description_uses_validation_error():
@@ -337,11 +625,11 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
         "test-key",
     )
 
-    assert report.status == "completed"
+    assert report.status == "awaiting_specifications"
     assert calls == {"diagnose": 1, "select": 1}
 
 
-def test_detailed_type_i_to_iii_examples_complete_the_full_pipeline():
+def test_detailed_type_i_to_iii_examples_stop_at_object_evidence_gate():
     expected = [
         ("class_i_first_order_lag", "first_order_lag"),
         ("class_ii_second_order_oscillator", "second_order_oscillator"),
@@ -362,18 +650,18 @@ def test_detailed_type_i_to_iii_examples_complete_the_full_pipeline():
             "",
         )
 
-        assert report.status == "completed"
+        assert report.status == "awaiting_specifications"
         assert str(report.classification.primary_class) == archetype
         assert report.semantic_selection.simulation_profile_id == profile
-        assert report.experiment_results
-        assert report.features
-        assert report.controller is not None
-        assert report.algorithm1_state is not None
-        assert report.adapted_controller_performance is not None
-        assert state["session"] is None
+        assert report.experiment_results == []
+        assert report.features == []
+        assert report.controller is None
+        assert report.algorithm1_state is None
+        assert report.adapted_controller_performance is None
+        assert state["session"] is not None
 
 
-def test_detailed_type_iv_and_v_examples_complete_the_full_pipeline():
+def test_detailed_type_iv_and_v_examples_stop_at_object_evidence_gate():
     expected = [
         ("class_iv_higher_order_unstable_nonlinear_or_nmp", "nmp_inverse_response"),
         ("class_v_multivariable_significant_coupling", "mimo_2x2_coupled"),
@@ -393,15 +681,15 @@ def test_detailed_type_iv_and_v_examples_complete_the_full_pipeline():
             "",
         )
 
-        assert report.status in {"completed", "frozen"}
+        assert report.status == "awaiting_specifications"
         assert str(report.classification.primary_class) == archetype
         assert report.semantic_selection.simulation_profile_id == profile
-        assert report.experiment_results
-        assert report.features
-        assert report.controller is not None
-        assert report.algorithm1_state is not None
-        assert report.adapted_controller_performance is not None
-        assert state["session"] is None
+        assert report.experiment_results == []
+        assert report.features == []
+        assert report.controller is None
+        assert report.algorithm1_state is None
+        assert report.adapted_controller_performance is None
+        assert state["session"] is not None
 
 
 def test_last_two_examples_are_preserved_for_clarification_flow():
@@ -528,7 +816,7 @@ def test_developer_route_ignores_user_inputs_and_never_builds_llm(monkeypatch):
         "wrong-key",
     )
 
-    assert report.status == "completed"
+    assert report.status == "demo_completed"
     assert report.semantic_selection.simulation_profile_id == "underactuated_cartpole"
     assert "rod hinged on a cart" in report.system_description.text
     assert "This user description" not in report.system_description.text
@@ -584,7 +872,7 @@ def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_
         "It is a first order measured thermal process that settles.",
     )
 
-    assert completed.status == "completed"
+    assert completed.status == "awaiting_specifications"
     assert completed.semantic_selection.simulation_profile_id == "first_order_lag"
     assert calls == {"diagnose": 2, "select": 1}
 
@@ -622,7 +910,7 @@ def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     monkeypatch.setenv("CFDC_LLM_MODEL", "provider-model")
     reset = reset_ui()
 
-    assert len(reset) == 32
+    assert len(reset) == 38
     assert reset[0] == NATURAL_LANGUAGE_MODE
     assert "六项" in reset[1]
     assert reset[2:8] == ("", "", "", "", "", "")
@@ -631,4 +919,5 @@ def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     assert reset[10] == "https://provider.example/v1"
     assert reset[11] == "provider-model"
     assert reset[12] == ""
-    assert reset[14] == {}
+    assert reset[14:18] == ("", "", "", False)
+    assert reset[18] == {}

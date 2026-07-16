@@ -9,8 +9,10 @@ from openai import OpenAI
 
 from cfdc.models import (
     ArchetypeClassification,
+    ControlMethodProfileCatalog,
     SemanticRouteSelection,
-    SimulationProfileCatalog,
+    SpecificationAssessment,
+    SpecificationTemplate,
     StructuralDiagnosis,
     SystemDescription,
 )
@@ -30,7 +32,19 @@ class DiagnosticAdapter(Protocol):
         description: SystemDescription,
         diagnosis: StructuralDiagnosis,
         classification: ArchetypeClassification,
-        catalog: SimulationProfileCatalog,
+        catalog: ControlMethodProfileCatalog,
+    ) -> dict[str, Any]:
+        ...
+
+    def assess_specifications(
+        self,
+        description: SystemDescription,
+        diagnosis: StructuralDiagnosis,
+        classification: ArchetypeClassification,
+        method_profile_id: str,
+        allowed_specification_templates: list[SpecificationTemplate],
+        accumulated_specification_answers: list[str],
+        previous_assessment: SpecificationAssessment | None,
     ) -> dict[str, Any]:
         ...
 
@@ -75,6 +89,61 @@ def build_diagnostic_prompt(description: SystemDescription) -> str:
         "- Do not synthesize controller gains. Numeric control computation happens later in deterministic code.\n\n"
         "System description artifact:\n"
         f"{description.model_dump_json()}"
+    )
+
+
+def build_specification_prompt(
+    description: SystemDescription,
+    diagnosis: StructuralDiagnosis,
+    classification: ArchetypeClassification,
+    method_profile_id: str,
+    allowed_specification_templates: list[SpecificationTemplate],
+    accumulated_specification_answers: list[str],
+    previous_assessment: SpecificationAssessment | None,
+) -> str:
+    return (
+        "You are the object-specification evidence assessor for CFDC. "
+        "Return ONLY one JSON object and no markdown.\n\n"
+        "Required JSON shape:\n"
+        "{\n"
+        '  "status": "need_more|conflict|ready",\n'
+        '  "template_id": "string",\n'
+        '  "facts": [{"fact_id":"string","value":0.0,"unit":"string",'
+        '"source_type":"manufacturer_document|user_known_behavior|structured_answer",'
+        '"source_text":"verbatim excerpt","lower_bound":null,"upper_bound":null}],\n'
+        '  "missing_fact_ids": ["string"],\n'
+        '  "conflicts": ["string"],\n'
+        '  "questions": [{"question_id":"string","requested_fact_ids":["string"],'
+        '"prompt":"plain-language object-specific question","why_needed":"string",'
+        '"where_to_find":"plain-language source hint",'
+        '"answer_kind":"number|matrix|structured_model","unit_hint":"string",'
+        '"example":"object-specific example","answer_options":'
+        '["填写已知数值","粘贴手册规格","暂时不知道","改用完整数值模型"]}],\n'
+        '  "rationale": "string"\n'
+        "}\n\n"
+        "Rules:\n"
+        "- Select only one supplied template and only its declared fact IDs.\n"
+        "- Do not infer or invent any numeric value. A fact is allowed only when its source_text is a verbatim excerpt from the user description or answer history.\n"
+        "- Qualitative words such as fast, slow, weak, or strong are not numeric facts.\n"
+        "- Every numeric fact must include the unit explicitly stated by the user. Preserve that raw unit in source_text.\n"
+        "- accepted_units are examples, not a finite whitelist. Device-specific command or sensor units are allowed for fields whose unit_policy is open.\n"
+        "- Never guess a missing unit. If a value has no unit, leave the fact missing and ask for its unit.\n"
+        "- Do not use demo fixture values or general engineering knowledge to fill gaps.\n"
+        "- Do not produce controller gains or claim real-object validation.\n"
+        "- Ask at most four current questions, using the actual object, sensor, and actuator names.\n"
+        "- Questions must explain why the value is needed and where an ordinary user might find it.\n"
+        "- Never require the user to perform repeated experiments or upload CSV files in this stage.\n"
+        "- Avoid internal feature identifiers in user-facing prompt text.\n\n"
+        f"description={description.model_dump_json()}\n"
+        f"diagnosis={diagnosis.model_dump_json()}\n"
+        f"classification={classification.model_dump_json()}\n"
+        f"method_profile_id={method_profile_id}\n"
+        "allowed_templates="
+        f"{json.dumps([item.model_dump(mode='json') for item in allowed_specification_templates], ensure_ascii=False)}\n"
+        "answer_history="
+        f"{json.dumps(accumulated_specification_answers, ensure_ascii=False)}\n"
+        "previous_assessment="
+        f"{previous_assessment.model_dump_json() if previous_assessment else 'null'}"
     )
 
 
@@ -266,3 +335,49 @@ class OpenAICompatibleDiagnosticAdapter:
         if not isinstance(content, str) or not content.strip():
             raise ValueError("semantic profile selection returned empty content")
         return SemanticRouteSelection.model_validate(parse_json_content(content)).model_dump()
+
+    def assess_specifications(
+        self,
+        description,
+        diagnosis,
+        classification,
+        method_profile_id,
+        allowed_specification_templates,
+        accumulated_specification_answers,
+        previous_assessment,
+    ):
+        prompt = build_specification_prompt(
+            description,
+            diagnosis,
+            classification,
+            method_profile_id,
+            allowed_specification_templates,
+            accumulated_specification_answers,
+            previous_assessment,
+        )
+        options: dict[str, Any] = dict(
+            model=self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract auditable object specifications into strict JSON. "
+                        "You never invent numbers and never design controller gains."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
+            max_tokens=min(max(self.max_tokens, 1400), 2400),
+            response_format={"type": "json_object"},
+        )
+        if self._disable_thinking:
+            options["extra_body"] = {"thinking": {"type": "disabled"}}
+        response = self.client.chat.completions.create(**options)
+        content = response.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("specification assessment returned empty content")
+        payload = parse_json_content(content)
+        if not isinstance(payload, dict):
+            raise ValueError("specification assessment must return one JSON object")
+        return payload

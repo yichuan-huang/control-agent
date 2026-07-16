@@ -1,11 +1,13 @@
 import math
 
 import numpy as np
+import pytest
 
 from cfdc.diagnosis import DiagnosticEngine
 from cfdc.experiments import plan_safe_experiments
 from cfdc.features import (
     extract_features_from_result,
+    extract_features_from_repeated_results,
     estimate_damping_ratio,
     estimate_hover_thrust,
     estimate_natural_frequency,
@@ -136,6 +138,48 @@ def test_experiment_trace_rejects_mismatched_signal_lengths():
     raise AssertionError("mismatched experiment trace was accepted")
 
 
+def test_inconsistent_repeated_mimo_matrices_are_not_silently_averaged(monkeypatch):
+    records = [
+        SimulationExperimentRecord(
+            primitive="bounded_scan",
+            estimates=["local_gain_matrix"],
+            repeat_index=index,
+            operating_region="nominal",
+            trace=ExperimentTrace(
+                time_s=[0.0, 1.0, 2.0],
+                signals={"output": [0.0, 0.0, 0.0]},
+            ),
+        )
+        for index in range(1, 4)
+    ]
+    matrices = {
+        1: [[2.0, 0.4], [0.3, 1.5]],
+        2: [[2.1, 0.42], [0.28, 1.55]],
+        3: [[8.0, 3.0], [2.5, 6.0]],
+    }
+
+    def fake_extract(record):
+        return [
+            CoreFeatureArtifact(
+                feature_id="local_gain_matrix",
+                value=matrices[record.repeat_index],
+                confidence=0.9,
+                units="output/input",
+                method="test matrix",
+                source_experiment="bounded_scan",
+                operating_region="nominal",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "cfdc.features.dispatcher.extract_features_from_result",
+        fake_extract,
+    )
+
+    with pytest.raises(ValueError, match="inconsistent local gain matrices"):
+        extract_features_from_repeated_results(records)
+
+
 def test_free_decay_dispatcher_returns_frequency_and_damping():
     omega = 5.0
     damping = 0.12
@@ -228,7 +272,7 @@ def test_hover_and_bounded_scan_dispatchers_return_scalar_features():
     assert math.isclose(coupling_feature.value, 0.4, rel_tol=0.02)
 
 
-def test_pipeline_runs_automatic_experiments_and_synthesizes_controller():
+def test_pipeline_waits_for_object_specifications_before_experiments_or_controller():
     result = run_cfdc_pipeline(
         SystemDescription(
             text="A first order temperature process settles after a small heater change.",
@@ -236,13 +280,13 @@ def test_pipeline_runs_automatic_experiments_and_synthesizes_controller():
             actuators=["heater"],
         ),
     )
-    assert result["status"] == "completed"
-    assert result["experiment_results"]
-    assert {feature["feature_id"] for feature in result["features"]} == {"static_gain", "time_constant"}
-    assert result["controller"]["architecture"] == "detuned_PI"
+    assert result["status"] == "awaiting_specifications"
+    assert result["experiment_results"] == []
+    assert result["features"] == []
+    assert result["controller"] is None
 
 
-def test_pipeline_automatically_covers_all_required_features():
+def test_pipeline_reports_required_features_without_fabricating_them():
     result = run_cfdc_pipeline(
         SystemDescription(
             text="A first order temperature process settles after a small heater change.",
@@ -250,11 +294,12 @@ def test_pipeline_automatically_covers_all_required_features():
             actuators=["heater"],
         ),
     )
-    assert result["go_no_go"]["decision"] == "go"
-    assert {feature["feature_id"] for feature in result["features"]} == {"static_gain", "time_constant"}
+    assert result["classification"]["required_core_features"] == ["static_gain", "time_constant"]
+    assert result["features"] == []
+    assert result["go_no_go"] is None
 
 
-def test_significant_delay_pipeline_automatically_measures_dead_time():
+def test_significant_delay_pipeline_requests_specs_before_measuring_dead_time():
     description = SystemDescription(
         text="A first order temperature process settles after a heater change with noticeable dead time.",
         observed_outputs=["temperature"],
@@ -265,7 +310,10 @@ def test_significant_delay_pipeline_automatically_measures_dead_time():
         description,
     )
     assert result["semantic_selection"]["simulation_profile_id"] == "first_order_lag_with_delay"
-    assert {feature["feature_id"] for feature in result["features"]} == {"static_gain", "time_constant", "dead_time"}
+    assert set(result["classification"]["required_core_features"]) == {
+        "static_gain", "time_constant", "dead_time"
+    }
+    assert result["features"] == []
 
 
 def test_pipeline_does_not_accept_user_supplied_feature_packets():

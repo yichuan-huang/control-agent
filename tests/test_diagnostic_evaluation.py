@@ -287,18 +287,18 @@ def test_release_gate_rejects_significant_delay_without_dead_time_requirement():
         ),
     ],
 )
-def test_pipeline_runs_registered_complex_simulation_profiles(
+def test_pipeline_classifies_complex_profiles_but_waits_for_object_specs(
     description,
     expected_class,
     expected_features,
 ):
     result = run_cfdc_pipeline(description)
 
-    assert result["status"] in {"completed", "frozen"}
+    assert result["status"] == "awaiting_specifications"
     assert result["classification"]["primary_class"] == expected_class
     assert result["classification"]["required_core_features"] == expected_features
-    assert result["go_no_go"]["decision"] == "go"
-    assert result["controller"] is not None
+    assert result["features"] == []
+    assert result["controller"] is None
 
 
 def test_live_llm_snapshot_is_saved_and_compared_on_frozen_spec(tmp_path):

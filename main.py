@@ -9,6 +9,7 @@ from uuid import uuid4
 from cfdc.diagnosis import (
     OpenAICompatibleDiagnosticAdapter,
     start_diagnostic_session,
+    migrate_diagnostic_session_payload,
 )
 from cfdc.diagnosis import (
     run_diagnostic_evaluation,
@@ -16,9 +17,13 @@ from cfdc.diagnosis import (
     run_saved_llm_diagnostic_comparison,
 )
 from cfdc.demo import run_demo_validation
+from cfdc.evidence import plant_id_for_description
 from cfdc.models import (
+    ClosedLoopValidationSpec,
     CFDCRunReport,
     DiagnosticSessionState,
+    MeasuredTraceManifest,
+    PlantEvidencePackage,
     SystemDescription,
 )
 from cfdc.runtime import run_cfdc_route
@@ -98,9 +103,8 @@ def parse_safety_bounds(values: list[str]) -> dict[str, float]:
 
 def load_diagnostic_session(path: Path) -> DiagnosticSessionState:
     try:
-        return DiagnosticSessionState.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return migrate_diagnostic_session_payload(payload)
     except (OSError, ValueError) as exc:
         raise SystemExit(f"invalid --diagnostic-session-input {path}: {exc}") from None
 
@@ -185,6 +189,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--include-trajectory", action="store_true", help="Include route simulation trajectories in JSON output.")
     parser.add_argument("--full-report", action="store_true", help="Include raw experiment traces and trial samples in route JSON output.")
+    parser.add_argument("--model-spec", type=Path, default=None, help="JSON file containing a structured transfer-function, state-space, or registered nonlinear model.")
+    parser.add_argument("--specification-text", type=str, default=None, help="Plain-language equipment specifications or a pasted manual excerpt.")
+    parser.add_argument("--specification-answer", action="append", default=[], help="Additional plain-language specification answer; can be repeated.")
+    parser.add_argument("--trace-manifest", type=Path, default=None, help="JSON file containing one or more measured CSV trace manifests.")
+    parser.add_argument("--validation-spec", type=Path, default=None, help="JSON file containing explicit closed-loop validation references, limits, and performance targets.")
+    parser.add_argument("--demo-fixture", action="store_true", help="Explicitly run the selected standard profile as a demo fixture; results do not represent the user object.")
     parser.add_argument("--use-llm", action="store_true", help="Use the configured OpenAI-compatible provider for diagnosis and closed-catalog profile selection.")
     parser.add_argument(
         "--use-mechanism-cards",
@@ -274,6 +284,75 @@ def main() -> None:
                 time_scale_hint_s=args.time_scale_hint_s,
             )
         route_id = args.run_route or (session_state.route_id if session_state is not None else "generic")
+        specification_parts = [
+            item.strip()
+            for item in [args.specification_text, *args.specification_answer]
+            if item and item.strip()
+        ]
+        specification_text = "\n".join(specification_parts) or None
+        if args.validation_spec is not None and args.model_spec is None:
+            raise SystemExit("--validation-spec requires --model-spec")
+        if specification_text is not None and (
+            args.model_spec is not None or args.trace_manifest is not None
+        ):
+            raise SystemExit(
+                "plain-language specifications cannot be combined with structured model or trace evidence"
+            )
+        if args.demo_fixture and (
+            args.model_spec is not None
+            or args.trace_manifest is not None
+            or specification_text is not None
+        ):
+            raise SystemExit("--demo-fixture cannot be combined with user-object model or trace evidence")
+        evidence_package = None
+        if args.model_spec is not None or args.trace_manifest is not None:
+            evidence_description = (
+                description
+                if description is not None
+                else session_state.accumulated_description
+                if session_state is not None
+                else None
+            )
+            if evidence_description is None:
+                raise SystemExit("object evidence requires --description or --diagnostic-session-input")
+            try:
+                model_payload = (
+                    json.loads(args.model_spec.read_text(encoding="utf-8"))
+                    if args.model_spec is not None
+                    else None
+                )
+                trace_payload = (
+                    json.loads(args.trace_manifest.read_text(encoding="utf-8"))
+                    if args.trace_manifest is not None
+                    else []
+                )
+                if isinstance(trace_payload, dict):
+                    trace_payload = trace_payload.get("measured_traces", [])
+                manifests = []
+                for item in trace_payload:
+                    resolved = dict(item)
+                    csv_path = Path(resolved["csv_path"])
+                    if not csv_path.is_absolute() and args.trace_manifest is not None:
+                        resolved["csv_path"] = str(args.trace_manifest.parent / csv_path)
+                    manifests.append(MeasuredTraceManifest.model_validate(resolved))
+                validation = (
+                    ClosedLoopValidationSpec.model_validate_json(
+                        args.validation_spec.read_text(encoding="utf-8")
+                    )
+                    if args.validation_spec is not None
+                    else None
+                )
+                evidence_package = PlantEvidencePackage.model_validate(
+                    {
+                        "plant_id": plant_id_for_description(evidence_description),
+                        "model": model_payload,
+                        "measured_traces": manifests,
+                        "validation_spec": validation,
+                        "provenance": ["CLI structured object evidence"],
+                    }
+                )
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise SystemExit(f"invalid object evidence: {exc}") from None
         if session_state is not None and route_id != session_state.route_id:
             raise SystemExit("--run-route must match the diagnostic session route_id")
         if session_state is None and args.diagnostic_session_output is not None:
@@ -300,6 +379,9 @@ def main() -> None:
             diagnostic_session_state=session_state,
             diagnostic_answers=(diagnostic_answers or None),
             supplemental_description=args.diagnostic_description,
+            evidence_package=evidence_package,
+            specification_text=specification_text,
+            execution_mode="demo_fixture" if args.demo_fixture else "user_object",
         )
         if args.diagnostic_session_output is not None:
             if report.diagnostic_session is None:

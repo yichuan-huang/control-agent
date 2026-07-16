@@ -16,14 +16,16 @@ from cfdc.sim import run_profile_experiments
         (SystemDescription(text="A strongly coupled MIMO process has multiple inputs and multiple outputs.", observed_outputs=["y1", "y2"], actuators=["u1", "u2"]), "mimo_2x2_coupled", "class_v_multivariable_significant_coupling"),
     ],
 )
-def test_class_i_to_v_natural_language_routes_run_automatically(description, profile_id, expected_class):
+def test_class_i_to_v_natural_language_routes_stop_before_numeric_work(description, profile_id, expected_class):
     report = run_cfdc_route("generic", description=description)
     assert report.diagnosis.complete
     assert report.classification.primary_class == expected_class
     assert report.semantic_selection.simulation_profile_id == profile_id
-    assert report.experiment_results and report.features and report.controller
-    assert report.algorithm1_state is not None
-    assert report.status in {"completed", "frozen"}
+    assert report.status == "awaiting_specifications"
+    assert report.experiment_results == []
+    assert report.features == []
+    assert report.controller is None
+    assert report.algorithm1_state is None
 
 
 @pytest.mark.parametrize(
@@ -35,7 +37,7 @@ def test_class_iv_specialized_profiles_share_the_automatic_front_half(route_id, 
     assert report.semantic_selection.simulation_profile_id == profile_id
     assert {record.repeat_index for record in report.experiment_results} == {1, 2, 3}
     assert report.feature_quality_decision.decision == "accept"
-    assert report.status == "completed"
+    assert report.status == "demo_completed"
 
 
 def test_classification_ignores_explanatory_value_text():
@@ -49,8 +51,8 @@ def test_classification_ignores_explanatory_value_text():
     assert classify_archetype(poisoned) == baseline
 
 
-def test_changed_scalar_profile_reports_stale_and_adapted_performance():
-    report = run_cfdc_route("generic", description=SystemDescription(text="A measured first order heater settles after a small power change.", observed_outputs=["temperature"], actuators=["heater"]))
+def test_changed_scalar_demo_profile_reports_stale_and_adapted_performance():
+    report = run_cfdc_route("generic", description=SystemDescription(text="A measured first order heater settles after a small power change.", observed_outputs=["temperature"], actuators=["heater"]), execution_mode="demo_fixture")
     assert report.stale_controller_performance is not None
     assert report.adapted_controller_performance is not None
     assert report.adapted_controller_performance.success
@@ -58,8 +60,8 @@ def test_changed_scalar_profile_reports_stale_and_adapted_performance():
     assert any(update.relative_change > 0.05 for update in report.feature_tracking_updates)
 
 
-def test_class_v_uses_matrix_feature_and_adapts_after_coupling_drift():
-    report = run_cfdc_route("generic", description=SystemDescription(text="A strongly coupled MIMO process has multiple inputs and multiple outputs.", observed_outputs=["y1", "y2"], actuators=["u1", "u2"]))
+def test_class_v_demo_uses_matrix_feature_and_adapts_after_coupling_drift():
+    report = run_cfdc_route("generic", description=SystemDescription(text="A strongly coupled MIMO process has multiple inputs and multiple outputs.", observed_outputs=["y1", "y2"], actuators=["u1", "u2"]), execution_mode="demo_fixture")
     matrix = next(feature for feature in report.features if feature.feature_id == "local_gain_matrix")
     assert isinstance(matrix.value, list)
     assert report.stale_controller_performance is not None
@@ -96,7 +98,7 @@ def test_low_quality_after_three_repeats_triggers_fourth_experiment(monkeypatch)
         )
 
     monkeypatch.setattr(orchestrator, "evaluate_feature_quality", quality_gate)
-    report = run_cfdc_route("generic", description=SystemDescription(text="A measured first order heater settles after a small power change.", observed_outputs=["temperature"], actuators=["heater"]))
+    report = run_cfdc_route("generic", description=SystemDescription(text="A measured first order heater settles after a small power change.", observed_outputs=["temperature"], actuators=["heater"]), execution_mode="demo_fixture")
     assert {record.repeat_index for record in report.experiment_results} == {1, 2, 3, 4}
     assert report.feature_quality_decision.decision == "accept"
     assert report.controller is not None
@@ -113,7 +115,7 @@ def test_five_low_quality_repeats_fail_without_controller(monkeypatch):
         )
 
     monkeypatch.setattr(orchestrator, "evaluate_feature_quality", quality_gate)
-    report = run_cfdc_route("generic", description=SystemDescription(text="A measured first order heater settles after a small power change.", observed_outputs=["temperature"], actuators=["heater"]), experiment_runner=run_profile_experiments)
+    report = run_cfdc_route("generic", description=SystemDescription(text="A measured first order heater settles after a small power change.", observed_outputs=["temperature"], actuators=["heater"]), experiment_runner=run_profile_experiments, execution_mode="demo_fixture")
     assert report.status == "feature_extraction_failed"
     assert {record.repeat_index for record in report.experiment_results} == {1, 2, 3, 4, 5}
     assert report.controller is None
@@ -141,6 +143,7 @@ def test_numeric_experiment_conflict_blocks_controller_and_requests_route_recomp
         "generic",
         description=SystemDescription(text="A stable process settles but first moves in the opposite direction after a valve change.", observed_outputs=["output"], actuators=["valve"]),
         experiment_runner=lambda profile, repeat_index: list(conflicting_nmp_experiment(profile, repeat_index)),
+        execution_mode="demo_fixture",
     )
     assert report.status == "rejected"
     assert report.controller is None

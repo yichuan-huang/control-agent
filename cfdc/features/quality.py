@@ -263,6 +263,15 @@ def evaluate_feature_quality(
                     "Simulation-derived features require a valid trace SHA-256 digest.",
                 )
             )
+        if feature.model_sha256 is not None and _SHA256.fullmatch(feature.model_sha256) is None:
+            issues.append(
+                _issue(
+                    "invalid_model_sha256",
+                    feature_id,
+                    "refuse",
+                    "Model-derived features require a valid model SHA-256 digest.",
+                )
+            )
 
     if any(issue.severity == "refuse" for issue in issues):
         decision = "refuse"

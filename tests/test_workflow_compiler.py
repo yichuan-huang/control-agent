@@ -23,7 +23,7 @@ def test_semantic_selection_rejects_unknown_extra_and_wrong_class():
 
 def test_class_v_matrix_route_is_executable():
     description=SystemDescription(text="A strongly coupled MIMO process with multiple inputs and outputs.",observed_outputs=["y1","y2"],actuators=["u1","u2"])
-    report=run_cfdc_route("generic",description=description)
+    report=run_cfdc_route("generic",description=description,execution_mode="demo_fixture")
     assert report.semantic_selection.simulation_profile_id=="mimo_2x2_coupled"
     assert report.compiled_route.executable
     matrix=next(feature for feature in report.features if feature.feature_id=="local_gain_matrix")

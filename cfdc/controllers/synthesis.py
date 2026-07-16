@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import Literal
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -27,10 +28,38 @@ def _limit(name: str, safety_limits: dict[str, float], default: float) -> float:
     return float(safety_limits.get(name, default))
 
 
+def _output_saturation(
+    safety_limits: dict[str, float],
+    release_context: Literal["legacy", "user_object", "demo_fixture"],
+    *,
+    demo_min: float = -1.0,
+    demo_max: float = 1.0,
+) -> dict[str, float]:
+    if release_context == "user_object":
+        if "input_min" not in safety_limits or "input_max" not in safety_limits:
+            raise ValueError(
+                "user-object synthesis requires explicit input_min and input_max"
+            )
+        return {
+            "input_min": float(safety_limits["input_min"]),
+            "input_max": float(safety_limits["input_max"]),
+        }
+    if "output_min" in safety_limits and "output_max" in safety_limits:
+        return {
+            "output_min": float(safety_limits["output_min"]),
+            "output_max": float(safety_limits["output_max"]),
+        }
+    output_max = float(safety_limits.get("output_max", demo_max))
+    output_min = float(safety_limits.get("output_min", -abs(output_max) if "output_max" in safety_limits else demo_min))
+    return {"output_min": output_min, "output_max": output_max}
+
+
 def synthesize_controller(
     classification: ArchetypeClassification,
     features: list[CoreFeatureArtifact],
     safety_limits: dict[str, float] | None = None,
+    *,
+    release_context: Literal["legacy", "user_object", "demo_fixture"] = "legacy",
 ) -> ControllerCandidate:
     safety = safety_limits or {}
     missing = missing_required_features(classification, features)
@@ -39,6 +68,65 @@ def synthesize_controller(
         raise ValueError(f"missing required core features for {classification.primary_class}: {joined}")
     fmap = _feature_map(features)
     archetype = str(classification.primary_class)
+    if release_context == "user_object":
+        if archetype == ArchetypeClass.CLASS_V_MULTIVARIABLE_SIGNIFICANT_COUPLING.value:
+            required_limits = {
+                "input_min",
+                "input_max",
+                "output_min",
+                "output_max",
+            }
+        elif "hover_thrust" in fmap:
+            required_limits = {
+                "gravity",
+                "vertical_bandwidth_rad_s",
+                "max_tilt_rad",
+                "max_torque",
+                "min_thrust",
+                "max_thrust",
+                "max_altitude_error",
+            }
+        else:
+            required_limits = {
+                "input_min",
+                "input_max",
+                "output_min",
+                "output_max",
+            }
+            if archetype == ArchetypeClass.CLASS_III_DOUBLE_OR_PURE_INTEGRATOR.value:
+                required_limits.update(
+                    {"initial_bandwidth_rad_s", "initial_damping_ratio"}
+                )
+        missing_limits = sorted(required_limits - set(safety))
+        if missing_limits:
+            joined = ", ".join(missing_limits)
+            return ControllerCandidate(
+                architecture=classification.control_architecture,
+                gains={},
+                saturation={},
+                constraints=["object-specific controller limits are mandatory"],
+                source_features=list(fmap),
+                status="refuse",
+                release_level="refuse",
+                notes=[
+                    f"Controller synthesis requires explicit user-object limits: {joined}."
+                ],
+            )
+        if classification.control_architecture == "cartpole_cascaded":
+            return ControllerCandidate(
+                architecture="cartpole_user_object_controller_not_implemented",
+                gains={},
+                saturation={},
+                constraints=[
+                    "do not substitute a generic unstable-mode gain search for a cart-pole capture controller"
+                ],
+                source_features=list(fmap),
+                status="refuse",
+                release_level="refuse",
+                notes=[
+                    "The user-object CartPole model can release structural features, but its capture and balance controller synthesis is not implemented."
+                ],
+            )
 
     if archetype == ArchetypeClass.CLASS_I_FIRST_ORDER_LAG.value:
         gain = fmap["static_gain"]
@@ -82,10 +170,7 @@ def synthesize_controller(
                     gains={},
                     design_parameters=design_parameters,
                     tunable_gain_names=[],
-                    saturation={
-                        "output_min": _limit("output_min", safety, -1e12),
-                        "output_max": _limit("output_max", safety, 1e12),
-                    },
+                    saturation=_output_saturation(safety, release_context),
                     constraints=[
                         *constraints,
                         "do not release ordinary or delay-detuned PI when rho_high is at least 1",
@@ -109,7 +194,7 @@ def synthesize_controller(
             gains={"kp": kc, "ki": kc / ti, "integral_time": ti},
             design_parameters=design_parameters,
             tunable_gain_names=["kp", "ki"],
-            saturation={"output_min": _limit("output_min", safety, -1e12), "output_max": _limit("output_max", safety, 1e12)},
+            saturation=_output_saturation(safety, release_context),
             constraints=constraints,
             source_features=source_features,
             status="ready_for_conservative_trial",
@@ -135,15 +220,14 @@ def synthesize_controller(
             architecture="detuned_PD",
             gains={"kp": kp, "kd": kd},
             tunable_gain_names=["kp", "kd"],
-            saturation={"output_min": _limit("output_min", safety, -1e12), "output_max": _limit("output_max", safety, 1e12)},
+            saturation=_output_saturation(safety, release_context),
             constraints=["stable oscillatory gains reduced by a factor of 10"],
             source_features=["natural_frequency", "damping_ratio", "input_gain"],
             status="ready_for_conservative_trial",
         )
 
     if archetype == ArchetypeClass.CLASS_III_DOUBLE_OR_PURE_INTEGRATOR.value:
-        output_max = _limit("output_max", safety, 1.0)
-        output_min = _limit("output_min", safety, -output_max)
+        output_saturation = _output_saturation(safety, release_context)
         input_gain = fmap["input_gain"]
         conservative_gain = max(
             abs(input_gain.lower_bound),
@@ -160,7 +244,7 @@ def synthesize_controller(
                 "kd": 2.0 * damping * bandwidth / gain_scale,
             },
             tunable_gain_names=["kp", "kd"],
-            saturation={"output_min": output_min, "output_max": output_max},
+            saturation=output_saturation,
             constraints=[
                 "PD gains are scaled by the measured input-to-acceleration gain",
                 "initial closed-loop bandwidth is bounded conservatively",
@@ -186,7 +270,11 @@ def synthesize_controller(
                 design_parameters={"pairing_indicator": float(fmap["pairing_indicator"].value)},
                 tunable_gain_names=list(gains),
                 feedforward={f"decoupler_{r}_{c}": value for r, row in enumerate(pairing["half_strength_decoupler"]) for c, value in enumerate(row)},
-                saturation={"per_input_limit": _limit("per_input_limit", safety, 1.0)},
+                saturation=(
+                    _output_saturation(safety, release_context)
+                    if release_context == "user_object"
+                    else {"per_input_limit": _limit("per_input_limit", safety, 1.0)}
+                ),
                 constraints=[
                     "use matrix-valued evidence without scalar collapse",
                     "apply half-strength static decoupling",
@@ -199,7 +287,11 @@ def synthesize_controller(
             architecture="conservative_mimo_pairing",
             gains={"loop_gain_scale": 0.1, "decoupler_scale": 0.5},
             tunable_gain_names=["loop_gain_scale", "decoupler_scale"],
-            saturation={"per_input_limit": _limit("per_input_limit", safety, 1.0)},
+            saturation=(
+                _output_saturation(safety, release_context)
+                if release_context == "user_object"
+                else {"per_input_limit": _limit("per_input_limit", safety, 1.0)}
+            ),
             constraints=["pair loops conservatively", "multiply static decoupling by 0.5"],
             source_features=["coupling_gain"],
             status="ready_for_conservative_trial",
@@ -250,7 +342,7 @@ def synthesize_controller(
             architecture="detuned_PI_with_NMP_undershoot_guard",
             gains={"kp": kp, "ki": kp / ti, "integral_time": ti},
             tunable_gain_names=["kp", "ki"],
-            saturation={"output_min": _limit("output_min", safety, -1e12), "output_max": _limit("output_max", safety, 1e12)},
+            saturation=_output_saturation(safety, release_context),
             constraints=["outer-loop gain starts below stable PI rule", "freeze if inverse-response undershoot grows"],
             source_features=["static_gain", "time_constant", "inverse_response_severity"],
             status="ready_for_conservative_trial",
@@ -276,6 +368,8 @@ def synthesize_controller(
         wy = 0.1 * wtheta
         max_tilt = _limit("max_tilt_rad", safety, 0.26)
         max_torque = _limit("max_torque", safety, 1.0)
+        min_thrust = _limit("min_thrust", safety, 0.0)
+        max_thrust = _limit("max_thrust", safety, 2.0 * hover)
         max_altitude_error = _limit("max_altitude_error", safety, 0.5)
 
         kpz = beta_v * mass_est * wz * wz
@@ -298,7 +392,12 @@ def synthesize_controller(
             },
             tunable_gain_names=["kp_z", "kd_z", "kp_theta", "kd_theta", "kp_y", "kd_y"],
             feedforward={"hover_thrust": hover},
-            saturation={"max_tilt_rad": max_tilt, "max_torque": max_torque},
+            saturation={
+                "min_thrust": min_thrust,
+                "max_thrust": max_thrust,
+                "max_tilt_rad": max_tilt,
+                "max_torque": max_torque,
+            },
             constraints=["NMP outer-loop bandwidth starts far below inner-loop bandwidth", "online undershoot monitor must freeze lateral gains"],
             source_features=["hover_thrust", "angular_acceleration_gain", "lateral_coupling_gain"],
             status="ready_for_conservative_trial",
@@ -318,7 +417,9 @@ def synthesize_controller(
             architecture="unstable_mode_conservative_PD",
             gains={"kp": 1.25 * wn**2 / gain_scale, "kd": 2.2 * wn / gain_scale},
             tunable_gain_names=["kp", "kd"],
-            saturation={"output_min": _limit("output_min", safety, -8.0), "output_max": _limit("output_max", safety, 8.0)},
+            saturation=_output_saturation(
+                safety, release_context, demo_min=-8.0, demo_max=8.0
+            ),
             constraints=["stabilizing proportional gain starts above the extracted unstable pole threshold", "bounded Algorithm 1 trial is mandatory"],
             source_features=["natural_frequency", "input_gain"],
             status="requires_online_search",
@@ -329,7 +430,7 @@ def synthesize_controller(
         architecture="safe_online_gain_search",
         gains={"kp": 0.0, "kd": 0.01 * wn},
         tunable_gain_names=["kp", "kd"],
-        saturation={"output_min": _limit("output_min", safety, -1.0), "output_max": _limit("output_max", safety, 1.0)},
+        saturation=_output_saturation(safety, release_context),
         constraints=["do not de-tune unstable plants by nominal percentage", "increase stabilizing gains only under online safety monitoring"],
         source_features=list(fmap),
         status="requires_online_search",

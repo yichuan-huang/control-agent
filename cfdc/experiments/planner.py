@@ -89,10 +89,30 @@ def _bound_for_instruction(
         bounds,
         ("input_range", "actuator_range", "control_range", "command_range"),
     )
+    if (
+        input_range is None
+        and "input_min" in bounds
+        and "input_max" in bounds
+        and bounds["input_max"] > bounds["input_min"]
+    ):
+        input_range = (
+            "input_max-input_min",
+            float(bounds["input_max"] - bounds["input_min"]),
+        )
     state_range = _first_positive(
         bounds,
         ("state_range", "travel_range", "position_range", "angle_range"),
     )
+    if (
+        state_range is None
+        and "output_min" in bounds
+        and "output_max" in bounds
+        and bounds["output_max"] > bounds["output_min"]
+    ):
+        state_range = (
+            "output_max-output_min",
+            float(bounds["output_max"] - bounds["output_min"]),
+        )
     state_abs = _first_positive(
         bounds,
         (
@@ -141,8 +161,10 @@ def _parameterize_plan(
     plan: ExperimentPlan,
     description: SystemDescription,
 ) -> ExperimentPlan:
-    time_scale_s = description.time_scale_hint_s or 1.0
-    sample_rate_hz = max(50.0 / time_scale_s, 20.0)
+    time_scale_s = description.time_scale_hint_s
+    sample_rate_hz = (
+        max(50.0 / time_scale_s, 20.0) if time_scale_s is not None else None
+    )
     instructions: list[ExperimentInstruction] = []
     gaps: list[CapabilityGap] = []
 
@@ -171,26 +193,7 @@ def _parameterize_plan(
             primitive,
             description,
         )
-        using_normalized_fixture = amplitude is None
-        if using_normalized_fixture:
-            normalized_description = description.model_copy(
-                update={
-                    "safety_bounds": {
-                        "max_abs_control": 1.0,
-                        "max_abs_position": 1.0,
-                        "max_thrust": 1.0,
-                        "input_range": 2.0,
-                        "state_range": 2.0,
-                    }
-                }
-            )
-            amplitude, units, _, _ = _bound_for_instruction(
-                primitive,
-                normalized_description,
-            )
-            bound_label = "normalized_fixture:max_abs_control_or_state=1.0"
-            operating_region = "normalized_simulation_fixture_region"
-        elif amplitude is None:
+        if amplitude is None:
             bound_label = f"missing:{bound_name}"
             operating_region = "declared_safe_operating_region_pending_bound"
             gaps.append(
@@ -212,11 +215,31 @@ def _parameterize_plan(
             bound_label = f"declared:{bound_name}={bound_value:g}"
             operating_region = "declared_safe_operating_region"
 
-        duration_s = _duration_for(primitive, time_scale_s)
-        if amplitude is None:
+        duration_s = (
+            _duration_for(primitive, time_scale_s)
+            if time_scale_s is not None
+            else None
+        )
+        if time_scale_s is None:
+            gaps.append(
+                CapabilityGap(
+                    code="missing_numeric_time_scale",
+                    stage="experiment_design",
+                    capability_id=primitive,
+                    explanation=(
+                        f"Experiment primitive '{primitive}' requires an object-specific "
+                        "dominant time scale."
+                    ),
+                    resolvable_by_measurement=True,
+                    required_next_action=(
+                        "declare time_scale_hint_s or provide measured timestamps"
+                    ),
+                )
+            )
+        if amplitude is None or duration_s is None or sample_rate_hz is None:
             numeric_step = (
-                f"Do not execute until {bound_name} is declared; then use duration "
-                f"{duration_s:g} s and sample at {sample_rate_hz:g} Hz."
+                "Do not execute until the missing numeric safety bound and time scale "
+                "are declared or supplied by measured timestamps."
             )
         else:
             numeric_step = (

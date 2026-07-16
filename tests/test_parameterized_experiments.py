@@ -21,12 +21,13 @@ def test_step_parameters_scale_with_declared_bounds_and_time_scale():
     assert math.isclose(instruction.sample_rate_hz, 25.0)
 
 
-def test_missing_bounds_use_explicit_normalized_simulation_bounds():
+def test_missing_bounds_block_user_object_experiment_parameterization():
     description = SystemDescription(text="A first order temperature process settles after a heater change.", observed_outputs=["temperature"], actuators=["heater"])
     diagnosis, classification = _diagnosis_and_classification(description)
     plan = plan_safe_experiments(diagnosis, classification, description)
-    assert plan.parameterization_status == "parameterized"
-    assert "normalized_fixture" in plan.instructions[0].required_safety_bounds[0]
+    assert plan.parameterization_status == "blocked"
+    assert plan.instructions[0].input_amplitude is None
+    assert plan.planning_gaps[0].code == "missing_numeric_safety_bound"
 
 
 def test_forbidden_actions_block_automatic_experiment_plan():

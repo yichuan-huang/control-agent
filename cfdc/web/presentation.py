@@ -9,6 +9,16 @@ from cfdc.models import CFDCRunReport
 
 STATUS_LABELS = {
     "need_more_information": "需要补充信息",
+    "awaiting_specifications": "等待设备规格",
+    "need_more_specifications": "仍需补充设备规格",
+    "specification_conflict": "设备规格存在冲突",
+    "specification_model_ready": "规格模型已就绪",
+    "awaiting_evidence": "等待对象证据",
+    "evidence_rejected": "对象证据未通过",
+    "candidate_unvalidated": "参数候选尚未验证",
+    "validation_pending": "等待验证条件",
+    "validated_in_simulation": "已在用户对象模型中验证",
+    "demo_completed": "标准对象演示完成",
     "feature_extraction_failed": "特征提取未通过",
     "controller_candidate_ready": "已完成诊断",
     "accepted": "已接受",
@@ -29,19 +39,21 @@ DIAGNOSIS_LABELS = {
 }
 
 STAGES = [
-    ("问题理解", lambda report: report.diagnosis is not None),
-    ("八字段诊断", lambda report: bool(report.diagnosis and report.diagnosis.complete)),
-    ("动力学归类", lambda report: report.classification is not None),
-    ("安全实验", lambda report: bool(report.experiment_results)),
-    ("核心特征", lambda report: bool(report.features)),
-    ("初始控制器", lambda report: report.controller is not None),
-    ("闭环调优", lambda report: report.algorithm1_state is not None),
+    ("结构诊断", lambda report: bool(report.diagnosis and report.diagnosis.complete and report.classification)),
     (
-        "在线适应",
+        "规格模型",
         lambda report: bool(
-            report.feature_tracking_updates
-            or report.adapted_controller_performance is not None
+            report.compiled_specification_model
+            or
+            (report.evidence_readiness and report.evidence_readiness.decision == "ready")
+            or report.status == "demo_completed"
         ),
+    ),
+    ("核心特征", lambda report: bool(report.features)),
+    ("参数候选", lambda report: report.controller is not None),
+    (
+        "效果验证",
+        lambda report: report.status in {"validated_in_simulation", "demo_completed"},
     ),
 ]
 
@@ -101,7 +113,7 @@ def route_rows(report: CFDCRunReport) -> list[list[str]]:
         ])
     if report.semantic_selection:
         rows.extend([
-            ["仿真 Profile", report.semantic_selection.simulation_profile_id],
+            ["方法 Profile", report.semantic_selection.simulation_profile_id],
             ["特征 Bundle", report.semantic_selection.feature_bundle_id],
             ["核心特征", ", ".join(report.semantic_selection.selected_feature_ids)],
         ])
@@ -151,7 +163,10 @@ def controller_rows(report: CFDCRunReport) -> list[list[str]]:
     rows = [["架构", report.controller.architecture]]
     rows.extend([f"增益 · {name}", f"{value:.6g}"] for name, value in report.final_gains.items())
     rows.extend([f"前馈 · {name}", f"{value:.6g}"] for name, value in report.final_feedforward.items())
-    rows.append(["发布状态", report.controller.status])
+    rows.append(["候选状态", report.controller.status])
+    rows.append(["发布等级", report.controller.release_level])
+    if report.controller.plant_id:
+        rows.append(["对象 ID", report.controller.plant_id])
     return rows
 
 
@@ -194,8 +209,21 @@ def performance_rows(report: CFDCRunReport) -> list[list[Any]]:
 
 
 def stage_progress_html(report: CFDCRunReport) -> str:
-    blocked = report.status in {"feature_extraction_failed", "rejected", "frozen"}
-    waiting = report.status == "need_more_information"
+    blocked = report.status in {
+        "feature_extraction_failed",
+        "evidence_rejected",
+        "rejected",
+        "frozen",
+    }
+    waiting = report.status in {
+        "need_more_information",
+        "awaiting_specifications",
+        "need_more_specifications",
+        "specification_conflict",
+        "awaiting_evidence",
+        "validation_pending",
+        "candidate_unvalidated",
+    }
     items = []
     first_pending_seen = False
     for index, (label, predicate) in enumerate(STAGES, start=1):
@@ -236,15 +264,52 @@ def summary_html(report: CFDCRunReport) -> str:
     )
     cards = [
         ("动力学原型", archetype),
-        ("仿真 Profile", profile),
+        ("方法 Profile", profile),
         ("核心特征", str(len(report.features))),
-        ("实验重复", str(repeats) if repeats else "-"),
+        ("模型/数据运行", str(repeats) if repeats else "-"),
         ("质量门", quality),
     ]
     return '<div class="metric-grid">' + "".join(
         f'<div class="metric"><small>{label}</small><strong>{value}</strong></div>'
         for label, value in cards
     ) + "</div>"
+
+
+def specification_guidance_markdown(report: CFDCRunReport) -> str:
+    assessment = report.specification_assessment
+    if assessment is None:
+        return ""
+    templates = {item.template_id: item for item in report.specification_templates}
+    template = templates.get(assessment.template_id)
+    summary = template.user_summary if template is not None else assessment.rationale
+    facts = (
+        f"\n\n已确认 {len(assessment.facts)} 项明确规格。"
+        if assessment.facts
+        else ""
+    )
+    conflicts = "".join(f"\n- ⚠️ {item}" for item in assessment.conflicts)
+    questions = []
+    for index, question in enumerate(assessment.questions, start=1):
+        options = " / ".join(question.answer_options)
+        questions.append(
+            f"\n\n**{index}. {question.prompt}**\n\n"
+            f"为什么需要：{question.why_needed}\n\n"
+            f"可以从哪里找：{question.where_to_find}\n\n"
+            f"单位提示：{question.unit_hint}\n\n"
+            f"回答示例：{question.example}\n\n"
+            f"可选方式：{options}"
+        )
+    if assessment.status == "ready":
+        ready_note = "\n\n规格已经能够编译近似模型；该模型仍不代表真实对象验证。"
+    else:
+        ready_note = (
+            "\n\n在这些明确数值齐全前，系统不会编译规格模型、不会提取核心特征，"
+            "也不会生成控制器参数。回答“暂时不知道”会保留当前缺口，不会补造数值。"
+        )
+    return (
+        "### 补充当前设备的已知规格\n\n"
+        f"{summary}{facts}{conflicts}{''.join(questions)}{ready_note}"
+    )
 
 
 def performance_html(report: CFDCRunReport) -> str:
@@ -320,4 +385,5 @@ def render_report(report: CFDCRunReport) -> dict[str, Any]:
         "performance": performance_rows(report),
         "raw": _compact_report(report),
         "clarifications": clarification_items(report),
+        "specification_guidance": specification_guidance_markdown(report),
     }

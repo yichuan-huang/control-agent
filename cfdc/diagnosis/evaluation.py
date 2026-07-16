@@ -31,7 +31,7 @@ from cfdc.models import (
 )
 from cfdc.workflow import (
     apply_profile_to_classification,
-    default_simulation_profile_catalog,
+    default_control_method_profile_catalog,
     deterministic_profile_selection,
     validate_semantic_selection,
 )
@@ -546,7 +546,7 @@ def _collect_diagnostic_responses(
             else None
         )
         if classification is not None:
-            catalog = default_simulation_profile_catalog()
+            catalog = default_control_method_profile_catalog()
             selection = deterministic_profile_selection(case.description, diagnosis, classification, catalog)
             profile = validate_semantic_selection(selection, classification, catalog)
             classification = apply_profile_to_classification(classification, profile)

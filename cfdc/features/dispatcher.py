@@ -148,6 +148,43 @@ def _lookup_signal(trace: ExperimentTrace, aliases: tuple[str, ...]) -> list[flo
     return None
 
 
+def _signal_unit(trace: ExperimentTrace, canonical_name: str) -> str | None:
+    declared = trace.metadata.get("signal_units", {})
+    if not isinstance(declared, dict):
+        return None
+    aliases = {_normalized(item) for item in _SIGNAL_ALIASES[canonical_name]}
+    for signal_name in trace.signals:
+        if _normalized(signal_name) in aliases:
+            unit = declared.get(signal_name)
+            if isinstance(unit, str) and unit:
+                return unit
+    direct = declared.get(canonical_name)
+    return direct if isinstance(direct, str) and direct else None
+
+
+def _input_gain_units(
+    trace: ExperimentTrace,
+    acceleration_name: str,
+    rate_name: str,
+    position_name: str,
+    fallback: str = "acceleration/input",
+) -> str:
+    acceleration_unit = _signal_unit(trace, acceleration_name)
+    if acceleration_unit is None and _signal(trace, rate_name, required=False) is not None:
+        rate_unit = _signal_unit(trace, rate_name)
+        acceleration_unit = f"{rate_unit}/s" if rate_unit else None
+    if (
+        acceleration_unit is None
+        and _signal(trace, position_name, required=False) is not None
+    ):
+        position_unit = _signal_unit(trace, position_name)
+        acceleration_unit = f"{position_unit}/s^2" if position_unit else None
+    input_unit = _signal_unit(trace, "input")
+    if acceleration_unit and input_unit:
+        return f"{acceleration_unit}/{input_unit}"
+    return fallback
+
+
 def _differentiate(trace: ExperimentTrace, values: list[float]) -> list[float]:
     time = np.asarray(trace.time_s, dtype=float)
     signal = np.asarray(values, dtype=float)
@@ -179,6 +216,124 @@ def _filter_requested(
     return [artifact for artifact in artifacts if artifact.feature_id in requested]
 
 
+def _estimate_mimo_local_time_constant(
+    time_s: np.ndarray,
+    inputs: list[np.ndarray],
+    outputs: list[np.ndarray],
+) -> CoreFeatureArtifact:
+    transitions = sorted(
+        {
+            int(index + 1)
+            for input_signal in inputs
+            for index in np.where(
+                np.diff(input_signal)
+                > max(1e-12, 0.10 * float(np.ptp(input_signal)))
+            )[0]
+        }
+    )
+    all_changes = sorted(
+        {
+            int(index + 1)
+            for input_signal in inputs
+            for index in np.where(
+                np.abs(np.diff(input_signal))
+                > max(1e-12, 0.10 * float(np.ptp(input_signal)))
+            )[0]
+        }
+    )
+    estimates: list[float] = []
+    sample_dt = float(np.median(np.diff(time_s)))
+    for start in transitions:
+        later = [index for index in all_changes if index > start]
+        stop = later[0] if later else len(time_s)
+        if stop - start < 10:
+            continue
+        baseline_start = max(0, start - max(5, (stop - start) // 10))
+        tail_count = max(5, (stop - start) // 10)
+        for output in outputs:
+            baseline = float(np.median(output[baseline_start:start]))
+            settled = float(np.median(output[stop - tail_count : stop]))
+            change = settled - baseline
+            if abs(change) < max(1e-12, 0.02 * float(np.ptp(output))):
+                continue
+            target = baseline + 0.6321205588 * change
+            segment = output[start:stop]
+            crossed = (
+                np.where(segment >= target)[0]
+                if change > 0.0
+                else np.where(segment <= target)[0]
+            )
+            if crossed.size:
+                estimate = float(time_s[start + int(crossed[0])] - time_s[start])
+                if estimate >= sample_dt:
+                    estimates.append(estimate)
+    if not estimates:
+        raise ValueError("MIMO scan does not contain a resolvable 63-percent transition")
+    value = float(np.median(estimates))
+    spread = float(np.std(estimates, ddof=1)) if len(estimates) > 1 else 0.0
+    half_width = max(2.0 * sample_dt, 0.10 * value, spread)
+    return CoreFeatureArtifact(
+        feature_id="local_time_constant",
+        value=value,
+        lower_bound=max(sample_dt, value - half_width),
+        upper_bound=value + half_width,
+        confidence=0.90 if len(estimates) >= 2 else 0.78,
+        units="s",
+        method="mimo_step_63_percent_transition",
+        source_experiment=ExperimentPrimitive.BOUNDED_SCAN,
+    )
+
+
+def _estimate_mimo_gain_matrix(
+    time_s: np.ndarray,
+    inputs: list[np.ndarray],
+    outputs: list[np.ndarray],
+    time_constant_s: float,
+) -> np.ndarray:
+    """Estimate one-at-a-time steady gains without treating transients as static data."""
+
+    if time_constant_s <= 0.0:
+        raise ValueError("MIMO steady-gain estimation requires a positive time constant")
+    input_stack = np.column_stack(inputs)
+    inactive = np.all(
+        np.abs(input_stack) <= max(1e-9, 0.01 * float(np.max(np.abs(input_stack)))),
+        axis=1,
+    )
+    first_active = int(np.flatnonzero(~inactive)[0])
+    baseline_slice = slice(0, max(first_active, 1))
+    baseline_outputs = np.asarray(
+        [float(np.median(output[baseline_slice])) for output in outputs]
+    )
+    columns: list[np.ndarray] = []
+    for input_signal in inputs:
+        threshold = max(1e-9, 0.05 * float(np.max(np.abs(input_signal))))
+        active_indices = np.flatnonzero(np.abs(input_signal) > threshold)
+        if active_indices.size < 3:
+            raise ValueError("each MIMO scan input requires a bounded non-zero interval")
+        splits = np.split(active_indices, np.where(np.diff(active_indices) > 1)[0] + 1)
+        segment = max(splits, key=len)
+        start = int(segment[0])
+        stop = int(segment[-1])
+        amplitude = float(np.median(input_signal[segment]))
+        if abs(amplitude) <= 1e-12:
+            raise ValueError("MIMO scan input amplitude must be non-zero")
+        tail_count = max(3, len(segment) // 20)
+        tail = segment[-tail_count:]
+        elapsed = max(float(np.mean(time_s[tail]) - time_s[start]), 1e-9)
+        decay = float(np.exp(-elapsed / time_constant_s))
+        if 1.0 - decay <= 1e-6:
+            raise ValueError("MIMO scan interval is too short to estimate steady gain")
+        start_outputs = np.asarray(
+            [float(output[max(0, start - 1)]) for output in outputs]
+        )
+        tail_outputs = np.asarray(
+            [float(np.median(output[tail])) for output in outputs]
+        )
+        steady_target = (tail_outputs - decay * start_outputs) / (1.0 - decay)
+        columns.append((steady_target - baseline_outputs) / amplitude)
+    return np.column_stack(columns)
+
+
 def extract_features_from_result(result: SimulationExperimentRecord) -> list[CoreFeatureArtifact]:
     """Dispatch one structured experiment result to deterministic CFDC extractors."""
 
@@ -208,7 +363,19 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
         input_signal = _signal(trace, "input")
         if "input_gain" in requested:
             acceleration = _acceleration_response(trace, "acceleration", "motion_rate", "motion_position")
-            features.append(estimate_pulse_input_gain(trace.time_s, input_signal, acceleration))
+            features.append(
+                estimate_pulse_input_gain(
+                    trace.time_s,
+                    input_signal,
+                    acceleration,
+                    units=_input_gain_units(
+                        trace,
+                        "acceleration",
+                        "motion_rate",
+                        "motion_position",
+                    ),
+                )
+            )
         if "angular_acceleration_gain" in requested:
             angular_acceleration = _acceleration_response(trace, "angular_acceleration", "angle_rate", "tilt")
             features.append(
@@ -217,7 +384,13 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
                     input_signal,
                     angular_acceleration,
                     feature_id="angular_acceleration_gain",
-                    units="rad/s^2/input",
+                    units=_input_gain_units(
+                        trace,
+                        "angular_acceleration",
+                        "angle_rate",
+                        "tilt",
+                        fallback="rad/s^2/input",
+                    ),
                 )
             )
         if "lateral_coupling_gain" in requested:
@@ -250,14 +423,22 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
             u2 = np.asarray(lookup["input 2"], dtype=float)
             y1 = np.asarray(lookup["output 1"], dtype=float)
             y2 = np.asarray(lookup["output 2"], dtype=float)
-            design = np.column_stack((u1, u2))
-            matrix = np.linalg.lstsq(design, np.column_stack((y1, y2)), rcond=None)[0].T
+            time_s = np.asarray(trace.time_s, dtype=float)
+            time_constant = _estimate_mimo_local_time_constant(
+                time_s, [u1, u2], [y1, y2]
+            )
+            matrix = _estimate_mimo_gain_matrix(
+                time_s,
+                [u1, u2],
+                [y1, y2],
+                float(time_constant.value),
+            )
             diagonal = min(abs(matrix[0, 0]), abs(matrix[1, 1]))
             off_diagonal = max(abs(matrix[0, 1]), abs(matrix[1, 0]))
             pairing = diagonal / max(diagonal + off_diagonal, 1e-9)
             features.extend([
-                CoreFeatureArtifact(feature_id="local_gain_matrix", value=matrix.tolist(), confidence=0.92, units="output/input", method="2x2_one_at_a_time_least_squares", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
-                CoreFeatureArtifact(feature_id="local_time_constant", value=1.0, lower_bound=0.95, upper_bound=1.05, confidence=0.9, units="s", method="normalized_scan_transition", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
+                CoreFeatureArtifact(feature_id="local_gain_matrix", value=matrix.tolist(), confidence=0.92, units="output/input", method="2x2_one_at_a_time_steady_state_extrapolation", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
+                time_constant,
                 CoreFeatureArtifact(feature_id="pairing_indicator", value=float(pairing), lower_bound=max(0.0, float(pairing)-0.03), upper_bound=min(1.0, float(pairing)+0.03), confidence=0.9, units="ratio", method="matrix_diagonal_dominance", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
             ])
         if "coupling_gain" in requested:
@@ -281,6 +462,16 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
         payload.update(
             {
                 "object_id": None,
+                "plant_id": result.plant_id,
+                "evidence_package_id": result.evidence_package_id,
+                "model_sha256": result.model_sha256,
+                "evidence_source": (
+                    "demo_fixture"
+                    if result.evidence_source == "demo_fixture"
+                    else result.evidence_source
+                    if result.evidence_source in {"model_simulation", "measured_trace"}
+                    else "legacy"
+                ),
                 "trace_sha256": trace_sha256,
                 "experiment_protocol_version": result.experiment_protocol_version,
                 "operating_region": result.operating_region,
@@ -311,6 +502,34 @@ def extract_features_from_repeated_results(
 ) -> list[CoreFeatureArtifact]:
     """Aggregate repeated simulation experiments without treating repeats as conflicts."""
 
+    regions_by_feature: dict[str, set[str]] = {}
+    plants_by_feature: dict[str, set[str]] = {}
+    packages_by_feature: dict[str, set[str]] = {}
+    for result in results:
+        for feature_id in result.estimates:
+            regions_by_feature.setdefault(feature_id, set()).add(
+                result.operating_region
+            )
+            if result.plant_id is not None:
+                plants_by_feature.setdefault(feature_id, set()).add(result.plant_id)
+            if result.evidence_package_id is not None:
+                packages_by_feature.setdefault(feature_id, set()).add(
+                    result.evidence_package_id
+                )
+    for feature_id, regions in regions_by_feature.items():
+        if len(regions) > 1:
+            raise ValueError(
+                f"repeated feature '{feature_id}' spans more than one operating region"
+            )
+        if len(plants_by_feature.get(feature_id, set())) > 1:
+            raise ValueError(
+                f"repeated feature '{feature_id}' belongs to more than one plant"
+            )
+        if len(packages_by_feature.get(feature_id, set())) > 1:
+            raise ValueError(
+                f"repeated feature '{feature_id}' belongs to more than one evidence package"
+            )
+
     grouped: dict[str, list[CoreFeatureArtifact]] = {}
     for result in results:
         for feature in extract_features_from_result(result):
@@ -320,6 +539,20 @@ def extract_features_from_repeated_results(
         if feature_id == "local_gain_matrix":
             matrices = np.asarray([sample.value for sample in samples], dtype=float)
             mean_matrix = np.mean(matrices, axis=0)
+            reference_norm = max(
+                float(np.linalg.norm(mean_matrix)),
+                float(np.median([np.linalg.norm(matrix) for matrix in matrices])),
+                1e-12,
+            )
+            maximum_relative_deviation = max(
+                float(np.linalg.norm(matrix - mean_matrix)) / reference_norm
+                for matrix in matrices
+            )
+            if maximum_relative_deviation > 0.35:
+                raise ValueError(
+                    "inconsistent local gain matrices across measured repeats; "
+                    "review trial identity, operating region, and excitation quality"
+                )
             exemplar = samples[0]
             digest = hashlib.sha256("".join(sample.trace_sha256 or "" for sample in samples).encode()).hexdigest()
             payload = exemplar.model_dump()

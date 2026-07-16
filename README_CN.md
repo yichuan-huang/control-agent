@@ -11,15 +11,17 @@
 -> 严格八字段结构诊断
 -> 信息不足时澄清
 -> 确定性归入五类 canonical archetype
--> 从版本化仿真 profile catalog 中进行受约束语义选择
--> 自动执行安全仿真实验（默认 3 次，质量不足时最多 5 次）
--> 确定性提取最小核心特征
--> 生成保守初始控制器
--> 使用 Algorithm 1 进行受约束闭环调优
--> 模拟系统变化后的特征跟踪与控制器适应
+-> 从版本化方法 Profile catalog 中进行受约束语义选择
+-> 针对当前对象追问设备规格
+-> 将明确数值和单位确定性编译为对象专属近似模型
+-> 从该模型响应中提取最小核心特征
+-> 生成对象专属、尚未验证的参数候选
+-> 后续真实对象调试（本轮不实现）
 ```
 
-LLM 只负责自然语言理解和闭 catalog 的语义选择，不能创造 feature ID、实验、控制器、动力学方程或增益。所有数值计算均由确定性 Python 实现。
+LLM 只负责自然语言理解、闭 catalog 语义选择，以及把用户明确给出的规格整理为严格事实。它不能估算缺失数值、使用标准对象参数补空、创造 feature ID、动力学方程或控制器增益。单位校验、派生公式、模型编译、特征提取和参数计算均由确定性 Python 实现。
+
+八字段完整只代表结构诊断完成。自然语言主流程此时停在 `awaiting_specifications`，不会调用标准 Profile simulator、特征提取、控制器合成、Algorithm 1 或在线适应。普通用户可以回答针对其设备生成的 1–4 个规格问题或粘贴手册；高级用户可以提供完整数值模型；标准对象必须由用户显式选择演示。
 
 八个诊断字段分别采用严格枚举：稳定性、相位、时延、相对阶次、能控能观性、非线性、耦合和不确定性。五类分类器只读取这些 assessment，不读取解释文字做路由。
 
@@ -33,7 +35,9 @@ LLM 只负责自然语言理解和闭 catalog 的语义选择，不能创造 fea
 | `cfdc/web/ui.py` | 定义 Gradio 页面、CSS、UI 回调和事件绑定。 |
 | `cfdc/models/` | 定义各阶段共享的严格 Pydantic 数据契约，包括八字段诊断、profile catalog、仿真实验记录、核心特征、控制器、调优状态、tracking 状态和最终报告。 |
 | `cfdc/diagnosis/` | 实现 Stage 0 自然语言诊断、OpenAI-compatible LLM adapter、严格响应校验、五类归类、澄清 session、安全检查及离线诊断评测。 |
-| `cfdc/workflow/` | 实现版本化仿真 profile catalog、candidate route 构造、能力声明、确定性 route 编译以及闭集语义选择校验。 |
+| `cfdc/specifications/` | 定义 Class I–V、CartPole 和 VTOL 的允许规格路径，生成对象化问题，校验显式事实并确定性编译近似模型。 |
+| `cfdc/evidence/` | 校验完整数值模型、执行用户模型响应、绑定对象/证据哈希，并在用户指标完整时执行闭环模型验证。实测 CSV 后端保留给后续调试，本轮不作为前置入口。 |
+| `cfdc/workflow/` | 分离版本化方法 Profile 与 Demo Plant Fixture，并实现 candidate route、能力声明、确定性 route 编译及闭集语义选择校验。 |
 | `cfdc/experiments/` | 根据 profile 将安全实验模板参数化并生成实验计划；实际实验记录由仿真器内部自动产生。 |
 | `cfdc/sim/` | 实现确定性软件对象和实验后端，包括标量原型、CartPole、VTOL、2x2 MIMO trace、benchmark、参数变化场景及 stale/adapted 对照。 |
 | `cfdc/features/` | 将实验 trace 分派给数值 extractor、聚合重复实验、保留 trace hash 并执行 feature quality gate。该模块不会读取自然语言 description 做特征匹配。 |
@@ -44,6 +48,7 @@ LLM 只负责自然语言理解和闭 catalog 的语义选择，不能创造 fea
 | `cfdc/performance.py` | 各仿真后端共用的通道性能和闭环性能指标计算。 |
 | `cfdc/validation.py` | route 兼容性、核心特征完整性和 go/no-go 等跨阶段校验。 |
 | `tests/` | 单元、集成、CLI、Class I-V 端到端、实验重试/失败、Algorithm 1、tracking、CartPole、VTOL 和 Class V 回归测试。 |
+| `dataset/` | 200 条控制问题的知识文档和提示语料。文档中的符号“数学模型”不等于参数完整、可执行的用户对象模型，本轮不会把这些 Markdown 方程接入运行时。 |
 | `docs/` | 当前 simulation-first 架构的设计说明和迁移记录。 |
 | `archive/` | 仅供历史参考的旧实现，当前运行时代码不得导入。 |
 | `outputs/` | 本地生成的报告和仿真输出，不属于源代码并被 Git 忽略。 |
@@ -61,7 +66,7 @@ LLM 只负责自然语言理解和闭 catalog 的语义选择，不能创造 fea
 - Class IV：逆响应、通用不稳定/高阶、欠驱动 CartPole、级联 VTOL。
 - Class V：通用 2x2 强耦合对象，使用矩阵特征、全局 pairing 和半强度静态解耦。
 
-当用户描述的具体对象没有专用 simulator 时，系统映射到标准化 profile。结果只验证该 archetype/profile 的软件流程，不代表用户具体设备的物理性能。
+方法 Profile 只声明所需特征、信号和控制器模板，不再携带用户对象数值。能够由白名单规格模板表达的对象，可由用户明确规格编译近似模型；无法覆盖的高阶或不稳定对象必须停下并要求完整数值模型。CartPole、VTOL 和标准标量对象只保留为显式 Demo Fixture，结果固定标记 `demo_fixture_only`。
 
 ## 运行
 
@@ -79,11 +84,11 @@ python main.py --validate-demo
 python app.py
 ```
 
-浏览器访问 `http://127.0.0.1:7860`。应用与 CLI 使用同一条确定性流程，但会按阶段展示诊断、路由、实验、特征、控制器、调优和适应结果；信息不足时可以直接在页面回答澄清问题，审计 JSON 位于独立标签页。需要监听其他网卡或端口时使用 `python app.py --host 0.0.0.0 --port 7860`。
+浏览器访问 `http://127.0.0.1:7860`。应用与 CLI 使用同一条确定性流程，按“结构诊断 → 规格模型 → 核心特征 → 参数候选 → 效果验证”展示状态。八字段完成后，页面默认显示自然语言规格对话，并同时提供完整数值模型和标准对象演示两个可选入口；初始阶段不展示 CSV 上传。审计 JSON 位于独立标签页。需要监听其他网卡或端口时使用 `python app.py --host 0.0.0.0 --port 7860`。
 
 默认运行方式是自然语言主流程，可以使用配置好的 LLM 诊断用户输入。CartPole 和 VTOL 属于开发验证场景，始终使用预注册 description、诊断和 profile，绝不会调用 LLM，也会在后端忽略自然语言表单。切换到开发验证时表单只会暂时禁用而不会清空，切回主流程后用户草稿仍然保留。
 
-直接从自然语言运行完整自动仿真：
+先从自然语言完成结构诊断并获得对象化规格问题：
 
 ```bash
 python main.py \
@@ -91,6 +96,22 @@ python main.py \
   --observed-output temperature \
   --actuator heater
 ```
+
+继续提交已知规格（可重复使用 `--specification-answer`）：
+
+```bash
+python main.py \
+  --description "一个一阶温度过程在加热功率改变后会逐渐稳定。" \
+  --observed-output temperature \
+  --actuator heater \
+  --specification-text "手册：input_change=1 kW; steady_output_change=10 degC; response_time_s=30 s; input_min=0 kW; input_max=2 kW; output_min=-20 degC; output_max=80 degC"
+```
+
+无 LLM 时也可以在 Web 中按当前问题顺序逐行填写“数值 + 单位”；CLI 的内部字段写法主要用于脚本化和审计。由自然语言规格编译的结果始终标记 `declared_specification_model_only`，控制器始终为 `candidate_unvalidated`，即使规格近似模型的响应正常，也不表示真实对象已经验证。
+
+所有数值规格都必须带单位，但界面列出的单位只是示例而不是有限白名单。常见写法会归一化并换算到规范单位（例如 `rad/s²` → `rad/s^2`、`1000 mV` → `1 V`、`100 ms` → `0.1 s`）；设备自己的命令或传感器单位（例如 `DAC_count`）也可以使用，只要同一组输入或输出规格保持一致。缺少单位时流程会继续追问；自定义单位混用时会要求换算关系；质量、时间、加速度等物理参数仍执行量纲检查。
+
+高级用户可以使用 `--model-spec model.json` 提供完整数值传递函数、状态空间模型或白名单非线性模板。只有同时提供 `--validation-spec validation.json`，才会在该用户模型及其安全边界、场景和性能指标下产生 `validated_in_simulation`。使用 `--demo-fixture` 会显式运行标准对象，且不能与用户规格或模型同时使用。
 
 使用 OpenAI-compatible LLM 完成结构化诊断和受约束 profile 选择：
 
@@ -142,7 +163,7 @@ python main.py --benchmark
 python main.py --diagnostic-eval
 ```
 
-`SimulationExperimentRecord` 是 simulator 自动产生的内部数据载体。CLI 和 route API 均不接受用户上传实验结果或 feature packet。
+`SimulationExperimentRecord` 是受审计模型或数据适配器产生的内部载体。用户不能直接上传核心特征。`--trace-manifest` 后端暂时保留给后续真实调试集成，但 Gradio 前置规格阶段不会要求普通用户上传 CSV 或重复做实验。
 
 ## 澄清 Session
 
@@ -165,8 +186,19 @@ python main.py --diagnostic-session-input session.json \
   --diagnostic-session-output session.json
 ```
 
+结构诊断完成后，同一个 schema v3 session 保存规格模板、历次自然语言回答、已确认事实、缺口/冲突和编译模型哈希。可继续使用：
+
+```bash
+python main.py --diagnostic-session-input session.json \
+  --specification-answer "input_change=1 kW" \
+  --specification-answer "steady_output_change=10 degC" \
+  --diagnostic-session-output session.json
+```
+
+旧 schema v1/v2 的完整会话会迁移到 `awaiting_specifications`，不会恢复旧控制器放行状态。
+
 ## 证据边界
 
-所有顶层报告统一声明 `software_simulation_only`。当前软件能够验证流程完整性、确定性控制计算、rollback/freeze 行为和仿真中的在线适应，但不声明实体机器安全或物理验证。
+报告会明确区分：`structural_diagnosis_only`、`declared_specification_model_only`、`user_object_model_validated_in_simulation` 和 `demo_fixture_only`。自然语言规格只能产生未验证候选；完整用户数值模型也只有在用户验证条件齐全且仿真通过时，才能声明“在用户模型中验证”。任何状态都不声明实体机器安全或物理验证，软件也不会向硬件下发控制命令。
 
 后续研究仍包括：精确复现论文中的 CartPole/VTOL 数值指标、更长期的 tracking、更多噪声与扰动扫描，以及更多经过验证的 Class IV/V profile backend。

@@ -23,8 +23,9 @@ def test_session_round_trip_and_stable_question_ids():
     assert all(key.startswith("q_") for key in ids)
     assert DiagnosticSessionState.model_validate_json(state.model_dump_json()) == state
     completed = continue_diagnostic_session(state, {next(iter(ids)): "It settles and I can record it."}, supplemental_description="A heater changes measured temperature.", diagnostic_adapter=adapter)
-    assert completed.status == "ready_for_experiments"
+    assert completed.status == "awaiting_specifications"
     assert completed.semantic_selection is not None
+    assert completed.evidence_requirement_plan is not None
     assert completed.compiled_route.executable
 
 

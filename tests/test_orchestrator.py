@@ -20,7 +20,7 @@ def feature(fid, value):
 def test_cartpole_route_runs_complete_cfdc_report():
     report = run_cfdc_route("cartpole", include_trajectory=False, run_id="cartpole-test")
 
-    assert report.status == "completed"
+    assert report.status == "demo_completed"
     assert report.route_id == "cartpole"
     assert report.diagnosis is not None
     assert report.classification is not None
@@ -80,7 +80,7 @@ def test_cartpole_final_simulation_uses_cfdc_online_gains():
 def test_vtol_position_route_runs_validated_gain_update_and_simulation():
     report = run_cfdc_route("vtol-position", include_trajectory=False, run_id="vtol-position-test")
 
-    assert report.status == "completed"
+    assert report.status == "demo_completed"
     assert report.route_id == "vtol-position"
     assert report.diagnosis is not None
     assert report.classification is not None
@@ -125,7 +125,7 @@ def test_vtol_position_route_runs_validated_gain_update_and_simulation():
 def test_vtol_boundary_route_records_boundary_result():
     report = run_cfdc_route("vtol-boundary", include_trajectory=False, run_id="vtol-boundary-test")
 
-    assert report.status == "completed"
+    assert report.status == "demo_completed"
     assert report.vtol_simulation is not None
     assert report.vtol_simulation.stop_reason == "boundary_triggered"
     assert report.vtol_simulation.metrics["boundary_triggered"] is True
@@ -152,7 +152,7 @@ def test_vtol_boundary_route_records_boundary_result():
 def test_vtol_variation_route_records_six_stale_updated_scenarios():
     report = run_cfdc_route("vtol-variation", include_trajectory=False, run_id="vtol-variation-test")
 
-    assert report.status == "completed"
+    assert report.status == "demo_completed"
     assert report.vtol_variation is not None
     assert report.vtol_variation.success
     assert len(report.vtol_variation.scenarios) == 6
@@ -228,7 +228,7 @@ def test_route_class_mismatch_returns_structured_no_go():
     assert report.cartpole_simulation is None
 
 
-def test_generic_route_automatically_extracts_required_features():
+def test_generic_route_waits_for_specifications_before_numeric_features():
     report = run_cfdc_route(
         "generic",
         description=SystemDescription(
@@ -239,11 +239,10 @@ def test_generic_route_automatically_extracts_required_features():
         run_id="missing-feature-test",
     )
 
-    assert report.status == "completed"
-    assert report.go_no_go is not None
-    assert report.go_no_go.decision == "go"
-    assert {feature.feature_id for feature in report.features} == {"static_gain", "time_constant"}
-    assert report.controller is not None
+    assert report.status == "awaiting_specifications"
+    assert report.go_no_go is None
+    assert report.features == []
+    assert report.controller is None
 
 
 def test_route_api_does_not_accept_user_feature_packets():

@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
+from uuid import uuid4
 
 from cfdc.diagnosis import (
     OpenAICompatibleDiagnosticAdapter,
     clarification_question_map,
     continue_diagnostic_session,
     start_diagnostic_session,
+    submit_evidence_to_session,
+    submit_specifications_to_session,
 )
-from cfdc.models import CFDCRunReport, DiagnosticSessionState, SystemDescription
+from cfdc.models import (
+    CFDCRunReport,
+    ClosedLoopValidationSpec,
+    DiagnosticSessionState,
+    MeasuredTraceManifest,
+    PlantEvidencePackage,
+    SystemDescription,
+)
 from cfdc.runtime import run_cfdc_route
 
 
@@ -108,18 +119,18 @@ def _run_ready_session(
     adapter,
     include_trajectory: bool,
 ) -> CFDCRunReport:
+    class SessionReplayAdapter:
+        def diagnose(self, description):
+            del description
+            return session.current_diagnosis.model_dump(mode="json")
+
+        def select_profile(self, description, diagnosis, classification, catalog):
+            del description, diagnosis, classification, catalog
+            return session.semantic_selection.model_dump(mode="json")
+
     if session.status == "ready_for_experiments":
         if session.current_diagnosis is None or session.semantic_selection is None:
             raise RuntimeError("ready diagnostic session is missing cached routing evidence")
-
-        class SessionReplayAdapter:
-            def diagnose(self, description):
-                del description
-                return session.current_diagnosis.model_dump(mode="json")
-
-            def select_profile(self, description, diagnosis, classification, catalog):
-                del description, diagnosis, classification, catalog
-                return session.semantic_selection.model_dump(mode="json")
 
         return run_cfdc_route(
             session.route_id,
@@ -195,23 +206,51 @@ def start_app_run(
         include_trajectory=include_trajectory,
     )
     session = None
-    if report.status == "need_more_information":
+    if report.status in {"need_more_information", "awaiting_specifications"}:
         if report.diagnosis is None:
             raise RuntimeError("incomplete route report is missing its diagnosis")
-        session = start_diagnostic_session(
-            system,
-            route_id=route_id,
-            diagnostic_adapter=adapter,
-            diagnosis=report.diagnosis,
-        )
+        if report.status == "awaiting_specifications":
+            session = DiagnosticSessionState(
+                session_id=f"diagnostic-{uuid4().hex[:16]}",
+                route_id=route_id,
+                initial_description=system,
+                accumulated_description=system,
+                current_diagnosis=report.diagnosis,
+                classification=report.classification,
+                semantic_selection=report.semantic_selection,
+                experiment_plan=report.experiment_plan,
+                evidence_requirement_plan=report.evidence_requirement_plan,
+                specification_templates=report.specification_templates,
+                specification_assessment=report.specification_assessment,
+                candidate_route=report.candidate_route,
+                compiled_route=report.compiled_route,
+                pending_clarification_questions=[],
+                status="awaiting_specifications",
+            )
+        else:
+            session = start_diagnostic_session(
+                system,
+                route_id=route_id,
+                diagnostic_adapter=adapter,
+                diagnosis=report.diagnosis,
+            )
         report = report.model_copy(update={"diagnostic_session": session})
-    awaiting_clarification = session is not None
+    awaiting_llm_dialogue = bool(
+        session is not None
+        and session.status
+        in {
+            "collecting_information",
+            "awaiting_specifications",
+            "need_more_specifications",
+            "specification_conflict",
+        }
+    )
     return report, {
         "session": session.model_dump(mode="json") if session is not None else None,
-        "use_llm": use_llm if awaiting_clarification else False,
-        "base_url": base_url_text if awaiting_clarification else "",
-        "model": model_text if awaiting_clarification else "",
-        "api_key": api_key_text if awaiting_clarification else "",
+        "use_llm": use_llm if awaiting_llm_dialogue else False,
+        "base_url": base_url_text if awaiting_llm_dialogue else "",
+        "model": model_text if awaiting_llm_dialogue else "",
+        "api_key": api_key_text if awaiting_llm_dialogue else "",
         "include_trajectory": include_trajectory,
         "input_source": "natural_language",
     }
@@ -273,7 +312,13 @@ def continue_app_run(
     next_state = dict(app_state)
     next_state["session"] = (
         updated.model_dump(mode="json")
-        if updated.status == "collecting_information"
+        if updated.status in {
+            "collecting_information",
+            "awaiting_specifications",
+            "need_more_specifications",
+            "specification_conflict",
+            "evidence_rejected",
+        }
         else None
     )
     if next_state["session"] is None:
@@ -285,4 +330,163 @@ def continue_app_run(
                 "api_key": "",
             }
         )
+    return report, next_state
+
+
+def _session_replay_adapter(session: DiagnosticSessionState):
+    class SessionReplayAdapter:
+        def diagnose(self, description):
+            del description
+            return session.current_diagnosis.model_dump(mode="json")
+
+        def select_profile(self, description, diagnosis, classification, catalog):
+            del description, diagnosis, classification, catalog
+            return session.semantic_selection.model_dump(mode="json")
+
+    return SessionReplayAdapter()
+
+
+def submit_app_specifications(
+    app_state: dict[str, Any],
+    specification_text: str | None,
+) -> tuple[CFDCRunReport, dict[str, Any]]:
+    """Advance the ordinary-user natural-language specification dialogue."""
+
+    if not app_state or not app_state.get("session"):
+        raise ValueError("当前没有等待设备规格的诊断会话。")
+    session = DiagnosticSessionState.model_validate(app_state["session"])
+    if session.status not in {
+        "awaiting_specifications",
+        "need_more_specifications",
+        "specification_conflict",
+    }:
+        raise ValueError("当前诊断会话不处于设备规格补充阶段。")
+    text = _textbox_text(specification_text).strip()
+    if not text:
+        raise ValueError("请填写已知设备规格、手册原文或明确选择暂时不知道。")
+    adapter = build_adapter(
+        bool(app_state.get("use_llm")),
+        _textbox_text(app_state.get("base_url")),
+        _textbox_text(app_state.get("model")),
+        _textbox_text(app_state.get("api_key")),
+    )
+    report = run_cfdc_route(
+        session.route_id,
+        diagnostic_session_state=session,
+        diagnostic_adapter=adapter,
+        specification_text=text,
+        include_trajectory=bool(app_state.get("include_trajectory")),
+    )
+    waiting = report.status in {
+        "awaiting_specifications",
+        "need_more_specifications",
+        "specification_conflict",
+    }
+    next_state = dict(app_state)
+    next_state["session"] = (
+        report.diagnostic_session.model_dump(mode="json")
+        if waiting and report.diagnostic_session is not None
+        else None
+    )
+    if not waiting:
+        next_state.update({"use_llm": False, "base_url": "", "model": "", "api_key": ""})
+    return report, next_state
+
+
+def submit_app_evidence(
+    app_state: dict[str, Any],
+    *,
+    model_json: str | None,
+    trace_files,
+    trace_manifest_json: str | None,
+    validation_json: str | None,
+    demo_confirmed: bool,
+) -> tuple[CFDCRunReport, dict[str, Any]]:
+    """Parse structured UI evidence and resume the cached diagnostic route."""
+
+    if not app_state or not app_state.get("session"):
+        raise ValueError("当前没有等待对象证据的诊断会话。")
+    session = DiagnosticSessionState.model_validate(app_state["session"])
+    if session.status not in {
+        "awaiting_specifications",
+        "need_more_specifications",
+        "specification_conflict",
+        "awaiting_evidence",
+        "evidence_rejected",
+    }:
+        raise ValueError("当前诊断会话不处于对象证据收集阶段。")
+    adapter = _session_replay_adapter(session)
+    if demo_confirmed:
+        if (
+            (model_json or "").strip()
+            or trace_files
+            or (trace_manifest_json or "").strip()
+            or (validation_json or "").strip()
+        ):
+            raise ValueError("标准对象演示不能与用户模型或实测数据同时提交。")
+        report = run_cfdc_route(
+            session.route_id,
+            description=session.accumulated_description,
+            diagnostic_adapter=adapter,
+            include_trajectory=bool(app_state.get("include_trajectory")),
+            execution_mode="demo_fixture",
+        )
+        next_state = dict(app_state)
+        next_state["session"] = None
+        return report, next_state
+
+    try:
+        model_payload = json.loads(model_json) if (model_json or "").strip() else None
+        manifest_payload = (
+            json.loads(trace_manifest_json)
+            if (trace_manifest_json or "").strip()
+            else []
+        )
+        if isinstance(manifest_payload, dict):
+            manifest_payload = manifest_payload.get("measured_traces", [])
+        file_paths = []
+        for item in trace_files or []:
+            file_paths.append(str(getattr(item, "name", item)))
+        if len(file_paths) != len(manifest_payload):
+            raise ValueError(
+                "每个实测 manifest 都必须一一对应界面中上传的 CSV。"
+            )
+        manifests = []
+        for index, item in enumerate(manifest_payload):
+            payload = dict(item)
+            # Never trust a browser-provided server path.  The path is always
+            # replaced by the file object created by Gradio's upload handler.
+            payload["csv_path"] = file_paths[index]
+            manifests.append(MeasuredTraceManifest.model_validate(payload))
+        validation = (
+            ClosedLoopValidationSpec.model_validate_json(validation_json)
+            if (validation_json or "").strip()
+            else None
+        )
+        package = PlantEvidencePackage.model_validate(
+            {
+                "plant_id": session.evidence_requirement_plan.plant_id,
+                "model": model_payload,
+                "measured_traces": manifests,
+                "validation_spec": validation,
+                "provenance": ["Gradio structured object evidence"],
+            }
+        )
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        raise ValueError(f"对象证据格式无效：{exc}") from None
+
+    reviewed = submit_evidence_to_session(session, package)
+    report = run_cfdc_route(
+        session.route_id,
+        description=session.accumulated_description,
+        diagnostic_adapter=adapter,
+        include_trajectory=bool(app_state.get("include_trajectory")),
+        evidence_package=package,
+    )
+    next_state = dict(app_state)
+    next_state["session"] = (
+        reviewed.model_dump(mode="json")
+        if report.status in {"awaiting_evidence", "evidence_rejected"}
+        else None
+    )
     return report, next_state

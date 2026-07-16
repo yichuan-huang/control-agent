@@ -6,27 +6,22 @@ from cfdc.models import ExperimentPrimitive, ExperimentTrace, SimulationExperime
 from cfdc.sim.cartpole import CartpoleParams
 from cfdc.sim.traces import bounded_scan_trace, hover_trace, modal_trace, pulse_trace, step_trace, vtol_pulse_trace
 from cfdc.sim.vtol import VtolParams
-
-
-_PROFILE_PARAMS: dict[str, dict[str, float]] = {
-    "first_order_lag": {"static_gain": 2.0, "time_constant": 5.0},
-    "first_order_lag_with_delay": {"static_gain": 1.5, "time_constant": 8.0, "dead_time": 2.0},
-    "second_order_oscillator": {"natural_frequency": 3.0, "damping_ratio": 0.18, "input_gain": 1.0},
-    "double_integrator": {"input_gain": 0.8},
-    "nmp_inverse_response": {"static_gain": 1.0, "time_constant": 6.0, "inverse_response_severity": 0.25},
-    "generic_unstable_higher_order": {"natural_frequency": 2.4, "input_gain": 0.7},
-    "mimo_2x2_coupled": {"coupling_gain": 0.45},
-}
+from cfdc.workflow.fixtures import demo_fixture_by_method_profile_id
 
 
 def profile_nominal_parameters(profile: SimulationProfile) -> dict[str, float]:
+    fixture = demo_fixture_by_method_profile_id(profile.profile_id)
     if profile.profile_id == "underactuated_cartpole":
-        params = CartpoleParams()
+        params = CartpoleParams(**fixture.nominal_parameters)
         return {"natural_frequency": params.free_cart_natural_frequency_down_rad_s}
     if profile.profile_id == "vtol_cascaded":
-        params = VtolParams()
+        params = VtolParams(**fixture.nominal_parameters)
         return {"hover_thrust": params.hover_thrust_n, "angular_acceleration_gain": 1.0 / params.pitch_inertia_kg_m2, "lateral_coupling_gain": 9.81}
-    return dict(_PROFILE_PARAMS[profile.profile_id])
+    return {
+        name: float(value)
+        for name, value in fixture.nominal_parameters.items()
+        if isinstance(value, (int, float))
+    }
 
 
 def _noise(signal: np.ndarray, repeat_index: int, scale: float) -> np.ndarray:
@@ -57,12 +52,20 @@ def run_profile_experiments(profile: SimulationProfile, repeat_index: int) -> li
         t, u, angular, tilt, lateral = vtol_pulse_trace(params["angular_acceleration_gain"], params["lateral_coupling_gain"])
         records.append(SimulationExperimentRecord(primitive=ExperimentPrimitive.PULSE, estimates=[feature for feature in ["angular_acceleration_gain", "lateral_coupling_gain"] if feature in features], repeat_index=repeat_index, trace=ExperimentTrace(time_s=t.tolist(), signals={"input": u.tolist(), "angular_acceleration": angular.tolist(), "tilt": tilt.tolist(), "coupled_output": lateral.tolist()}), instruction_title="Automatic grounded VTOL pulse simulation"))
     if "local_gain_matrix" in features:
-        gain_matrix = [[2.0, 0.7], [0.5, 1.6]]
+        fixture = demo_fixture_by_method_profile_id(profile.profile_id)
+        gain_matrix = fixture.nominal_parameters["local_gain_matrix"]
         time_s = np.linspace(0.0, 12.0, 1200)
         u1 = np.zeros_like(time_s); u2 = np.zeros_like(time_s)
         u1[(time_s >= 1.0) & (time_s < 4.0)] = 0.4
         u2[(time_s >= 6.0) & (time_s < 9.0)] = 0.4
-        y1 = gain_matrix[0][0] * u1 + gain_matrix[0][1] * u2
-        y2 = gain_matrix[1][0] * u1 + gain_matrix[1][1] * u2
+        target_1 = gain_matrix[0][0] * u1 + gain_matrix[0][1] * u2
+        target_2 = gain_matrix[1][0] * u1 + gain_matrix[1][1] * u2
+        y1 = np.zeros_like(time_s)
+        y2 = np.zeros_like(time_s)
+        tau = float(fixture.nominal_parameters["local_time_constant"])
+        dt = float(time_s[1] - time_s[0])
+        for index in range(1, len(time_s)):
+            y1[index] = y1[index - 1] + dt * (target_1[index - 1] - y1[index - 1]) / tau
+            y2[index] = y2[index - 1] + dt * (target_2[index - 1] - y2[index - 1]) / tau
         records.append(SimulationExperimentRecord(primitive=ExperimentPrimitive.BOUNDED_SCAN, estimates=["local_gain_matrix", "local_time_constant", "pairing_indicator"], repeat_index=repeat_index, trace=ExperimentTrace(time_s=time_s.tolist(), signals={"input_1": u1.tolist(), "input_2": u2.tolist(), "output_1": y1.tolist(), "output_2": y2.tolist()}), instruction_title="Automatic 2x2 one-at-a-time scan"))
     return records
