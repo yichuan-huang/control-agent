@@ -10,6 +10,7 @@ from cfdc.web.service import (
     continue_app_run,
     start_app_run,
     submit_app_evidence,
+    submit_app_json,
     submit_app_specifications,
 )
 
@@ -186,6 +187,7 @@ def submit_evidence_from_ui(
     state,
     model_json,
     validation_json,
+    simulation_bounds_confirmed,
     demo_confirmed,
 ):
     try:
@@ -196,15 +198,37 @@ def submit_evidence_from_ui(
             trace_manifest_json="",
             validation_json=validation_json,
             demo_confirmed=demo_confirmed,
+            simulation_bounds_confirmed=simulation_bounds_confirmed,
         )
         return _outputs(report, state)
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
 
 
-def submit_specifications_from_ui(state, specification_text):
+def submit_specifications_from_ui(
+    state,
+    specification_text,
+    simulation_bounds_confirmed,
+):
     try:
-        report, state = submit_app_specifications(state, specification_text)
+        report, state = submit_app_specifications(
+            state,
+            specification_text,
+            simulation_bounds_confirmed=simulation_bounds_confirmed,
+        )
+        return _outputs(report, state)
+    except Exception as exc:
+        raise gr.Error(str(exc)) from exc
+
+
+def submit_json_from_ui(state, uploaded_json, pasted_json, simulation_bounds_confirmed):
+    try:
+        report, state = submit_app_json(
+            state,
+            uploaded_json=uploaded_json,
+            pasted_json=pasted_json,
+            simulation_bounds_confirmed=simulation_bounds_confirmed,
+        )
         return _outputs(report, state)
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
@@ -239,22 +263,25 @@ def reset_ui():
     return (
         NATURAL_LANGUAGE_MODE,
         "**自然语言自动分析：** 使用下方六项控制问题输入；可选择启用 LLM。",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        False,
-        False,
+        "",  # description
+        "",  # observed outputs
+        "",  # actuators
+        "",  # safety bounds
+        "",  # forbidden actions
+        "",  # dominant time scale
+        False,  # include trajectory
+        False,  # use LLM
         os.getenv("CFDC_LLM_BASE_URL", ""),
         os.getenv("CFDC_LLM_MODEL", ""),
-        "",
-        "",
-        "",
-        "",
-        "",
-        False,
+        "",  # API key
+        "",  # supplemental description
+        "",  # natural-language specifications
+        None,  # uploaded JSON
+        "",  # pasted JSON
+        "",  # advanced model JSON
+        "",  # validation JSON
+        False,  # software-simulation boundary confirmation
+        False,  # demo confirmation
         {},
         "### 等待控制问题",
         "",
@@ -363,6 +390,13 @@ def build_app() -> gr.Blocks:
 
                 with gr.Group(visible=False) as evidence_group:
                     evidence_requirements = gr.Markdown()
+                    simulation_bounds_confirmed = gr.Checkbox(
+                        label="我确认所提交的输入/输出范围仅作为本次软件仿真的停止边界",
+                        value=False,
+                        info=(
+                            "这不代表真实硬件安全认证，也不授权向真实物理硬件下发命令。"
+                        ),
+                    )
                     gr.Markdown("**方式 1（推荐）· 回答当前设备规格问题**")
                     specification_text = gr.Textbox(
                         label="用自然语言补充设备规格",
@@ -371,7 +405,23 @@ def build_app() -> gr.Blocks:
                         placeholder="可以描述已知参数、粘贴手册原文，或说明暂时不知道。未启用 LLM 时，请按上方问题顺序每行填写一个“数值 + 单位”。",
                     )
                     specification_button = gr.Button("提交规格信息", variant="primary")
-                    with gr.Accordion("方式 2（高级）· 提供完整数值模型", open=False):
+                    with gr.Accordion("方式 2 · 上传或粘贴 JSON 数据", open=False):
+                        uploaded_json = gr.File(
+                            label="JSON 数据文件（.json）",
+                            file_types=[".json"],
+                            type="filepath",
+                        )
+                        pasted_json = gr.Textbox(
+                            label="粘贴 JSON 数据（可选）",
+                            value="",
+                            lines=8,
+                            placeholder=(
+                                "可粘贴 dataset 中包含 specification_facts、model、"
+                                "experiment 与 eight_segment_evidence 的完整 JSON。"
+                            ),
+                        )
+                        json_button = gr.Button("提交 JSON 数据", variant="primary")
+                    with gr.Accordion("方式 3（高级）· 提供完整数值模型", open=False):
                         model_json = gr.Textbox(
                             label="数学模型 JSON",
                             value="",
@@ -389,7 +439,7 @@ def build_app() -> gr.Blocks:
                             lines=6,
                             placeholder="参考输入、时长、初始状态、执行器/状态边界和性能指标。",
                         )
-                    with gr.Accordion("方式 3 · 运行标准对象演示", open=False):
+                    with gr.Accordion("方式 4 · 运行标准对象演示", open=False):
                         demo_confirmed = gr.Checkbox(
                             label="确认仅运行标准对象演示",
                             value=False,
@@ -513,7 +563,12 @@ def build_app() -> gr.Blocks:
         )
         specification_button.click(
             submit_specifications_from_ui,
-            inputs=[app_state, specification_text],
+            inputs=[app_state, specification_text, simulation_bounds_confirmed],
+            outputs=output_components,
+        )
+        json_button.click(
+            submit_json_from_ui,
+            inputs=[app_state, uploaded_json, pasted_json, simulation_bounds_confirmed],
             outputs=output_components,
         )
         evidence_button.click(
@@ -522,6 +577,7 @@ def build_app() -> gr.Blocks:
                 app_state,
                 model_json,
                 validation_json,
+                simulation_bounds_confirmed,
                 demo_confirmed,
             ],
             outputs=output_components,
@@ -544,8 +600,11 @@ def build_app() -> gr.Blocks:
                 api_key,
                 supplemental,
                 specification_text,
+                uploaded_json,
+                pasted_json,
                 model_json,
                 validation_json,
+                simulation_bounds_confirmed,
                 demo_confirmed,
                 *output_components,
             ],

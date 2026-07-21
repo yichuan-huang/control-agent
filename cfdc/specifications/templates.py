@@ -67,34 +67,34 @@ _RESPONSE_TIME = _field(
     accepted_units=["s", "ms", "min"],
 )
 _INPUT_MIN = _field(
-    "input_min", "输入下限", "input_unit",
-    "{input} 允许的最小值是多少？请注明单位。",
-    "控制器候选必须遵守真实执行器下限。",
-    "例如：最小加热功率 0 kW。",
+    "input_min", "输入仿真下限", "input_unit",
+    "本次软件仿真中，{input} 采用的运行下限是多少？请注明单位。",
+    "仿真候选必须遵守用户声明的输入停止边界；这不等同于硬件额定下限。",
+    "例如：仿真中的最小加热功率为 0 kW。",
     accepted_units=["input_unit", "normalized_input", "W", "kW", "%", "N", "Nm"],
     unit_policy="open",
 )
 _INPUT_MAX = _field(
-    "input_max", "输入上限", "input_unit",
-    "{input} 允许的最大值是多少？请注明单位。",
-    "控制器候选必须遵守真实执行器上限。",
-    "例如：最大加热功率 2 kW。",
+    "input_max", "输入仿真上限", "input_unit",
+    "本次软件仿真中，{input} 采用的运行上限是多少？请注明单位。",
+    "仿真候选必须遵守用户声明的输入停止边界；这不等同于硬件额定上限。",
+    "例如：仿真中的最大加热功率为 2 kW。",
     accepted_units=["input_unit", "normalized_input", "W", "kW", "%", "N", "Nm"],
     unit_policy="open",
 )
 _OUTPUT_MIN = _field(
-    "output_min", "输出安全下限", "output_unit",
-    "{output} 的安全下限是多少？请注明单位。",
-    "缺少状态安全边界时不能发布数值控制器候选。",
-    "例如：最低允许温度 -20 degC。",
+    "output_min", "输出仿真下限", "output_unit",
+    "本次软件仿真中，{output} 采用的停止下限是多少？请注明单位。",
+    "缺少输出停止边界时不能运行数值候选；该边界不代表硬件安全认证。",
+    "例如：仿真在温度低于 -20 degC 时停止。",
     accepted_units=["output_unit", "degC", "K", "m", "Pa", "%", "rad"],
     unit_policy="open",
 )
 _OUTPUT_MAX = _field(
-    "output_max", "输出安全上限", "output_unit",
-    "{output} 的安全上限是多少？请注明单位。",
-    "缺少状态安全边界时不能发布数值控制器候选。",
-    "例如：最高允许温度 80 degC。",
+    "output_max", "输出仿真上限", "output_unit",
+    "本次软件仿真中，{output} 采用的停止上限是多少？请注明单位。",
+    "缺少输出停止边界时不能运行数值候选；该边界不代表硬件安全认证。",
+    "例如：仿真在温度高于 80 degC 时停止。",
     accepted_units=["output_unit", "degC", "K", "m", "Pa", "%", "rad"],
     unit_policy="open",
 )
@@ -124,7 +124,7 @@ def _first_order_template(profile_id: str, *, delay: bool) -> SpecificationTempl
     return SpecificationTemplate(
         template_id=f"spec_{profile_id}",
         method_profile_id=profile_id,
-        user_summary="需要确认当前对象的输入输出比例、响应速度和真实安全范围。",
+        user_summary="需要确认当前对象的输入输出比例、响应速度和本次软件仿真运行边界。",
         fields=fields,
         completion_paths=[
             SpecificationCompletionPath(path_id="known_behavior", required_fact_ids=required)

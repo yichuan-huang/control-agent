@@ -154,6 +154,116 @@ def test_first_order_without_reported_delay_does_not_request_dead_time():
     assert classification.required_core_features == ["static_gain", "time_constant"]
 
 
+def test_thermostat_negations_are_not_misread_as_inverse_response_or_dead_time():
+    description = SystemDescription(
+        text=(
+            "以二值加热命令作为控制并连续记录室温和加热器状态；室温会收敛或保持有界。"
+            "输出的首次有效变化与最终方向一致，不会先向相反方向运动。"
+            "动态过程中存在滞后，但在有效输出运动前没有独立的输运、测量或计算停顿，"
+            "首次记录变化会及时开始，不会出现独立静默区间。"
+            "执行作用至多经过两个主导储能或积分环节即可到达测量输出。"
+            "每个相关运动模态至少出现在一项记录中，并随某个可用输入变化。"
+            "恒温器通过固定滞环带切换加热状态，偏离比例关系只存在于固定输入输出规律中。"
+            "试验由一条主要动作到记录量的通道承担。"
+            "合理参数变化只会适度改变响应速度和最终水平。"
+        ),
+        observed_outputs=["室温", "加热器状态"],
+        actuators=["二值加热命令"],
+    )
+
+    diagnosis, classification = DiagnosticEngine().run(description)
+
+    assert diagnosis.complete
+    assert diagnosis.minimum_phase.assessment == "minimum_phase"
+    assert diagnosis.significant_delay.assessment == "not_significant"
+    assert diagnosis.relative_degree.estimated_order == 1
+    assert classification.primary_class == ArchetypeClass.CLASS_I_FIRST_ORDER_LAG.value
+
+
+def test_order_upper_bound_alone_does_not_turn_a_thermal_process_into_an_oscillator():
+    description = SystemDescription(
+        text=(
+            "A thermal process settles after a binary heater change, starts promptly, "
+            "and never rings or produces repeated peaks. At most two storage stages may "
+            "contribute to the measured temperature."
+        ),
+        observed_outputs=["temperature"],
+        actuators=["binary heater command"],
+    )
+    diagnosis = DiagnosticEngine().diagnose(description)
+    order_two_upper_bound = diagnosis.model_copy(
+        update={
+            "relative_degree": diagnosis.relative_degree.model_copy(
+                update={"estimated_order": 2}
+            )
+        }
+    )
+
+    classification = DiagnosticEngine().classify(order_two_upper_bound, description)
+
+    assert classification.primary_class == ArchetypeClass.CLASS_I_FIRST_ORDER_LAG.value
+    assert classification.required_core_features == ["static_gain", "time_constant"]
+
+
+def test_diagnostic_prompt_distinguishes_order_bounds_static_hysteresis_and_oscillation():
+    prompt = build_diagnostic_prompt(
+        SystemDescription(
+            text="A thermostat has a fixed hysteresis band.",
+            observed_outputs=["temperature"],
+            actuators=["heater"],
+        )
+    )
+
+    assert "at most two" in prompt
+    assert "not an exact second-order" in prompt
+    assert "fixed thermostat hysteresis" in prompt
+    assert "repeated peaks" in prompt
+
+
+def test_engine_reconciles_llm_misreadings_against_explicit_thermostat_negations():
+    description = SystemDescription(
+        text=(
+            "A room-temperature process settles after a binary heater command. "
+            "Its first effective change follows the final direction and never moves "
+            "opposite first. There is dynamic lag, but no independent transport delay, "
+            "pause, or silent interval. At most two storage stages contribute. The "
+            "thermostat uses a fixed hysteresis band rather than a dynamic nonlinear state."
+        ),
+        observed_outputs=["room temperature", "heater state"],
+        actuators=["binary heater command"],
+    )
+    baseline = infer_structural_diagnosis(description)
+    poisoned = baseline.model_copy(
+        update={
+            "minimum_phase": baseline.minimum_phase.model_copy(
+                update={"assessment": "nonminimum_phase"}
+            ),
+            "significant_delay": baseline.significant_delay.model_copy(
+                update={"assessment": "significant"}
+            ),
+            "relative_degree": baseline.relative_degree.model_copy(
+                update={"estimated_order": 2}
+            ),
+            "nonlinearity_strength": baseline.nonlinearity_strength.model_copy(
+                update={"assessment": "strong_dynamic"}
+            ),
+        }
+    )
+
+    class MisreadingAdapter:
+        def diagnose(self, supplied_description):
+            assert supplied_description == description
+            return poisoned.model_dump(mode="json")
+
+    diagnosis, classification = DiagnosticEngine(adapter=MisreadingAdapter()).run(description)
+
+    assert diagnosis.minimum_phase.assessment == "minimum_phase"
+    assert diagnosis.significant_delay.assessment == "not_significant"
+    assert diagnosis.relative_degree.estimated_order == 1
+    assert diagnosis.nonlinearity_strength.assessment == "static_compensable"
+    assert classification.primary_class == ArchetypeClass.CLASS_I_FIRST_ORDER_LAG.value
+
+
 def test_parse_json_content():
     assert parse_json_content("{\"complete\": true}") == {"complete": True}
 

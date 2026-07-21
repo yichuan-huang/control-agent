@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import math
+from pathlib import Path
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -19,6 +21,7 @@ from cfdc.models import (
     DiagnosticSessionState,
     MeasuredTraceManifest,
     PlantEvidencePackage,
+    SimulationBoundaryConfirmation,
     SystemDescription,
 )
 from cfdc.runtime import run_cfdc_route
@@ -54,7 +57,12 @@ def _textbox_text(value: str | None) -> str:
 
 def parse_names(value: str | None) -> list[str]:
     text = _textbox_text(value)
-    return [item.strip() for item in text.replace("\n", ",").split(",") if item.strip()]
+    names = []
+    for item in text.replace("、", ",").replace("\n", ",").split(","):
+        name = re.sub(r"^(?:and|与|和)\s+", "", item.strip(), flags=re.IGNORECASE)
+        if name:
+            names.append(name)
+    return names
 
 
 def parse_forbidden_actions(value: str | None) -> list[str]:
@@ -81,6 +89,16 @@ def parse_safety_bounds(value: str | None) -> dict[str, float]:
         if not math.isfinite(parsed):
             raise ValueError(f"安全边界 {clean_key!r} 必须是有限数字")
         bounds[clean_key] = parsed
+    if "max_abs_output_normalized" in bounds:
+        value = bounds["max_abs_output_normalized"]
+        bounds.setdefault("max_abs_output", value)
+        bounds.setdefault("output_min", -value)
+        bounds.setdefault("output_max", value)
+    if "max_abs_actuator_normalized" in bounds:
+        value = bounds["max_abs_actuator_normalized"]
+        bounds.setdefault("max_abs_control", value)
+        bounds.setdefault("input_min", -value)
+        bounds.setdefault("input_max", value)
     return bounds
 
 
@@ -346,9 +364,30 @@ def _session_replay_adapter(session: DiagnosticSessionState):
     return SessionReplayAdapter()
 
 
+def _record_simulation_boundary_confirmation(
+    session: DiagnosticSessionState,
+    confirmed: bool,
+) -> DiagnosticSessionState:
+    description = session.accumulated_description
+    if description.simulation_boundary_confirmation is not None:
+        return session
+    if not confirmed:
+        raise ValueError(
+            "提交用户规格或模型前，请确认所填范围仅作为本次软件仿真的运行/停止边界；"
+            "该确认不代表真实硬件安全认证，也不授权下发硬件命令。"
+        )
+    updated_description = description.model_copy(
+        update={
+            "simulation_boundary_confirmation": SimulationBoundaryConfirmation()
+        }
+    )
+    return session.model_copy(update={"accumulated_description": updated_description})
+
+
 def submit_app_specifications(
     app_state: dict[str, Any],
     specification_text: str | None,
+    simulation_bounds_confirmed: bool = False,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     """Advance the ordinary-user natural-language specification dialogue."""
 
@@ -361,6 +400,10 @@ def submit_app_specifications(
         "specification_conflict",
     }:
         raise ValueError("当前诊断会话不处于设备规格补充阶段。")
+    session = _record_simulation_boundary_confirmation(
+        session,
+        simulation_bounds_confirmed,
+    )
     text = _textbox_text(specification_text).strip()
     if not text:
         raise ValueError("请填写已知设备规格、手册原文或明确选择暂时不知道。")
@@ -393,6 +436,127 @@ def submit_app_specifications(
     return report, next_state
 
 
+def _read_json_submission_source(uploaded_json, pasted_json: str | None) -> dict[str, Any]:
+    uploaded = uploaded_json is not None and str(getattr(uploaded_json, "name", uploaded_json)).strip() != ""
+    pasted = bool(_textbox_text(pasted_json).strip())
+    if not uploaded and not pasted:
+        raise ValueError("请选择一种 JSON 提交方式：上传 .json 文件或粘贴 JSON 数据。")
+    if uploaded and pasted:
+        raise ValueError("上传文件和粘贴内容只能选择一种，以免提交来源不明确。")
+    if uploaded:
+        path = Path(str(getattr(uploaded_json, "name", uploaded_json)))
+        if path.suffix.lower() != ".json":
+            raise ValueError("上传文件必须使用 .json 扩展名。")
+        try:
+            if path.stat().st_size > 5_000_000:
+                raise ValueError("JSON 文件不能超过 5 MB。")
+            source = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"无法读取上传的 JSON 文件：{exc}") from None
+    else:
+        source = _textbox_text(pasted_json).strip()
+    try:
+        payload = json.loads(source)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"JSON 格式无效：第 {exc.lineno} 行第 {exc.colno} 列。") from None
+    if not isinstance(payload, dict):
+        raise ValueError("JSON 顶层必须是对象。")
+    return payload
+
+
+def _specification_facts_to_text(
+    session: DiagnosticSessionState,
+    facts_payload: Any,
+) -> str:
+    if not isinstance(facts_payload, list) or not facts_payload:
+        raise ValueError("specification_facts 必须是非空数组。")
+    allowed_ids = {
+        field.fact_id
+        for template in session.specification_templates
+        for field in template.fields
+    }
+    rendered: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(facts_payload, 1):
+        if not isinstance(item, dict):
+            raise ValueError(f"specification_facts[{index}] 必须是对象。")
+        fact_id = item.get("fact_id")
+        value = item.get("value")
+        unit = item.get("unit")
+        if not isinstance(fact_id, str) or fact_id not in allowed_ids:
+            raise ValueError(f"specification_facts[{index}] 的 fact_id 不属于当前规格模板。")
+        if fact_id in seen:
+            raise ValueError(f"specification_facts 中重复定义了 {fact_id!r}。")
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+            raise ValueError(f"specification_facts[{index}] 的 value 必须是有限数值。")
+        if (
+            not isinstance(unit, str)
+            or not unit.strip()
+            or ";" in unit
+            or any(character.isspace() for character in unit.strip())
+            or re.search(r"[\x00-\x1f]", unit)
+        ):
+            raise ValueError(f"specification_facts[{index}] 的 unit 必须是无空白的单一单位标记。")
+        seen.add(fact_id)
+        rendered.append(f"{fact_id}={float(value):.17g} {unit.strip()};")
+    return " ".join(rendered)
+
+
+def submit_app_json(
+    app_state: dict[str, Any],
+    *,
+    uploaded_json,
+    pasted_json: str | None,
+    simulation_bounds_confirmed: bool = False,
+) -> tuple[CFDCRunReport, dict[str, Any]]:
+    """Submit a dataset wrapper, a bare executable model, or specification facts."""
+
+    payload = _read_json_submission_source(uploaded_json, pasted_json)
+    if not app_state or not app_state.get("session"):
+        raise ValueError("当前没有等待 JSON 数据的诊断会话。")
+    session = DiagnosticSessionState.model_validate(app_state["session"])
+    session = _record_simulation_boundary_confirmation(
+        session,
+        simulation_bounds_confirmed,
+    )
+    confirmed_state = dict(app_state)
+    confirmed_state["session"] = session.model_dump(mode="json")
+
+    # Dataset wrappers intentionally carry both a model and specification facts.
+    # At the specification stage, use the facts first so the ordinary compiler
+    # preserves its safety bounds and provenance. Bare/full-model JSON remains a
+    # supported advanced path below.
+    if payload.get("specification_facts"):
+        return submit_app_specifications(
+            confirmed_state,
+            _specification_facts_to_text(session, payload["specification_facts"]),
+            simulation_bounds_confirmed=True,
+        )
+
+    model_payload = payload if "kind" in payload else payload.get("model")
+    if model_payload is not None:
+        validation_payload = payload.get("validation_spec")
+        if validation_payload is None:
+            validation_payload = payload.get("validation")
+        return submit_app_evidence(
+            confirmed_state,
+            model_json=json.dumps(model_payload, ensure_ascii=False),
+            trace_files=None,
+            trace_manifest_json="",
+            validation_json=(
+                json.dumps(validation_payload, ensure_ascii=False)
+                if validation_payload is not None
+                else ""
+            ),
+            demo_confirmed=False,
+            simulation_bounds_confirmed=True,
+        )
+
+    raise ValueError(
+        "JSON 必须包含 model、specification_facts，或本身就是带 kind 的完整数值模型。"
+    )
+
+
 def submit_app_evidence(
     app_state: dict[str, Any],
     *,
@@ -401,6 +565,7 @@ def submit_app_evidence(
     trace_manifest_json: str | None,
     validation_json: str | None,
     demo_confirmed: bool,
+    simulation_bounds_confirmed: bool = False,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     """Parse structured UI evidence and resume the cached diagnostic route."""
 
@@ -434,6 +599,11 @@ def submit_app_evidence(
         next_state = dict(app_state)
         next_state["session"] = None
         return report, next_state
+
+    session = _record_simulation_boundary_confirmation(
+        session,
+        simulation_bounds_confirmed,
+    )
 
     try:
         model_payload = json.loads(model_json) if (model_json or "").strip() else None

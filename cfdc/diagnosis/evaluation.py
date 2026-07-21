@@ -396,6 +396,13 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
 
 
 def _case_catalog_payload() -> dict[str, object]:
+    def frozen_description(description: SystemDescription) -> dict[str, object]:
+        payload = description.model_dump(mode="json")
+        # Runtime UI consent is not part of the frozen Stage 0 diagnostic case
+        # semantics and must not invalidate archived evaluation responses.
+        payload.pop("simulation_boundary_confirmation", None)
+        return payload
+
     return {
         "evaluation_spec_version": EVALUATION_SPEC_VERSION,
         "scoring_policy": SCORING_POLICY,
@@ -403,7 +410,7 @@ def _case_catalog_payload() -> dict[str, object]:
             {
                 "case_id": case.case_id,
                 "suite": case.suite,
-                "description": case.description.model_dump(mode="json"),
+                "description": frozen_description(case.description),
                 "expected_fields": {
                     name: list(tokens)
                     for name, tokens in case.expected_fields.items()

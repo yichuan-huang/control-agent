@@ -81,6 +81,47 @@ def test_each_method_profile_has_plain_language_specification_guidance(
     assert len(assessment.questions) <= 4
 
 
+def test_continuous_dynamic_questions_exclude_discrete_status_outputs():
+    template = next(
+        item for item in default_specification_template_catalog().templates
+        if item.method_profile_id == "first_order_lag"
+    )
+    description = SystemDescription(
+        text="A binary heater controls room temperature through thermostat hysteresis.",
+        observed_outputs=["室温", "加热器状态"],
+        actuators=["二值加热命令"],
+    )
+
+    assessment = build_initial_specification_assessment(description, template)
+    dynamic_questions = [
+        item for item in assessment.questions
+        if item.requested_fact_ids[0] in {"steady_output_change", "response_time_s"}
+    ]
+
+    assert dynamic_questions
+    assert all("室温" in item.prompt for item in dynamic_questions)
+    assert all("加热器状态" not in item.prompt for item in dynamic_questions)
+
+
+def test_first_order_template_calls_user_ranges_simulation_boundaries():
+    template = next(
+        item for item in default_specification_template_catalog().templates
+        if item.method_profile_id == "first_order_lag"
+    )
+    rendered = " ".join(
+        [
+            template.user_summary,
+            *(field.label for field in template.fields),
+            *(field.prompt_template for field in template.fields),
+            *(field.why_needed for field in template.fields),
+        ]
+    )
+
+    assert "仿真运行" in rendered
+    assert "真实安全范围" not in rendered
+    assert "真实执行器" not in rendered
+
+
 def test_specification_prompt_contains_object_profile_templates_and_history():
     report = run_cfdc_route("generic", description=_heater_description())
     prompt = build_specification_prompt(
@@ -97,7 +138,115 @@ def test_specification_prompt_contains_object_profile_templates_and_history():
     assert "first_order_lag" in prompt
     assert "1 kW change produces 10 degC" in prompt
     assert "Do not infer or invent" in prompt
+    assert "derived_from_declared_physics" in prompt
+    assert "thermal_time_constant_c_over_h" in prompt
+    assert "backend will recompute" in prompt
     assert "Do not produce controller gains" in prompt
+
+
+def test_explicit_thermostat_physics_complete_first_order_specifications_without_llm():
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=(
+                "A binary heater command controls room temperature through fixed "
+                "thermostat hysteresis. The temperature settles, starts promptly in "
+                "the final direction, and has no repeated peaks."
+            ),
+            observed_outputs=["room temperature", "heater state"],
+            actuators=["binary heater command"],
+        ),
+    )
+    assert report.status == "awaiting_specifications"
+    assert report.semantic_selection.simulation_profile_id == "first_order_lag"
+
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        (
+            "室外温度 50 degF、白天设定值 65 degF；等效热容 C = 20000 Btu/degF、"
+            "传热系数 H = 500 Btu/(h degF)、炉子供热率 25000 Btu/h、"
+            "滞环半宽 0.5 degF。令初温为下阈值 64.5 degF 且炉子开启，"
+            "以 60 s 采样仿真 6 h。"
+        ),
+        previous=report.specification_assessment,
+    )
+
+    facts = {item.fact_id: item for item in assessment.facts}
+    assert assessment.status == "ready"
+    assert facts["input_change"].value == pytest.approx(1.0)
+    assert facts["input_change"].unit == "binary_command"
+    assert facts["steady_output_change"].value == pytest.approx(50.0)
+    assert facts["steady_output_change"].unit == "degF"
+    assert facts["steady_output_change"].source_type == "derived_from_declared_physics"
+    assert facts["steady_output_change"].derivation.rule_id == "thermal_steady_rise_q_over_h"
+    assert facts["response_time_s"].value == pytest.approx(144000.0)
+    assert facts["response_time_s"].derivation.rule_id == "thermal_time_constant_c_over_h"
+    assert facts["output_min"].value == pytest.approx(64.5)
+    assert facts["output_max"].value == pytest.approx(65.5)
+    assert facts["output_min"].derivation.rule_id == "thermostat_band_setpoint_plus_minus_half_width"
+    assert facts["input_min"].derivation.rule_id == "binary_command_domain"
+    compiled = compile_specification_model(
+        plant_id="thermostat-room",
+        description=report.system_description,
+        template=report.specification_templates[0],
+        assessment=assessment,
+    )
+    assert compiled.derived_features["static_gain"] == pytest.approx(50.0)
+    assert compiled.derived_features["time_constant"] == pytest.approx(144000.0)
+
+
+def test_explicit_thermostat_physics_complete_specifications_with_llm_enabled():
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=(
+                "A binary heater command controls room temperature through fixed "
+                "thermostat hysteresis. The temperature settles promptly."
+            ),
+            observed_outputs=["room temperature", "heater state"],
+            actuators=["binary heater command"],
+        ),
+    )
+    paragraph = (
+        "室外温度 50 degF、白天设定值 65 degF；等效热容 C = 20000 Btu/degF、"
+        "传热系数 H = 500 Btu/(h degF)、炉子供热率 25000 Btu/h、"
+        "滞环半宽 0.5 degF。"
+    )
+
+    class ConservativeAdapter:
+        def assess_specifications(self, *args):
+            del args
+            return {
+                "status": "need_more",
+                "template_id": report.specification_templates[0].template_id,
+                "facts": [],
+                "missing_fact_ids": [
+                    "input_change", "steady_output_change", "response_time_s",
+                    "input_min", "input_max", "output_min", "output_max",
+                ],
+                "conflicts": [],
+                "questions": [],
+                "rationale": "No direct numeric fact was extracted.",
+            }
+
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        paragraph,
+        previous=report.specification_assessment,
+        adapter=ConservativeAdapter(),
+        diagnosis=report.diagnosis,
+        classification=report.classification,
+        method_profile_id=report.semantic_selection.simulation_profile_id,
+    )
+
+    facts = {item.fact_id: item for item in assessment.facts}
+    assert assessment.status == "ready"
+    assert facts["steady_output_change"].value == pytest.approx(50.0)
+    assert facts["response_time_s"].value == pytest.approx(144000.0)
+    assert facts["output_min"].value == pytest.approx(64.5)
+    assert facts["output_max"].value == pytest.approx(65.5)
 
 
 def test_validated_llm_questions_are_used_for_the_current_object_and_gap():
@@ -150,6 +299,45 @@ def test_validated_llm_questions_are_used_for_the_current_object_and_gap():
     assert assessment.facts[0].fact_id == "input_change"
     assert assessment.questions[0].question_id == "heater_final_temperature_change"
     assert "恒温箱" in assessment.questions[0].prompt
+
+
+def test_llm_fact_with_fabricated_source_is_reported_as_rejected_no_progress():
+    report = run_cfdc_route("generic", description=_heater_description())
+    template = report.specification_templates[0]
+
+    class FabricatedSourceAdapter:
+        def assess_specifications(self, *args):
+            del args
+            return {
+                "status": "need_more",
+                "template_id": template.template_id,
+                "facts": [{
+                    "fact_id": "input_change",
+                    "value": 1.0,
+                    "unit": "kW",
+                    "source_type": "user_known_behavior",
+                    "source_text": "the manual explicitly says 1 kW",
+                }],
+                "missing_fact_ids": ["input_change"],
+                "conflicts": [],
+                "questions": [],
+                "rationale": "A candidate fact was found.",
+            }
+
+    assessment = assess_specification_text(
+        report.system_description,
+        template,
+        "I do not know the heater power change.",
+        previous=report.specification_assessment,
+        adapter=FabricatedSourceAdapter(),
+        diagnosis=report.diagnosis,
+        classification=report.classification,
+        method_profile_id=report.semantic_selection.simulation_profile_id,
+    )
+
+    assert assessment.facts == []
+    assert assessment.no_progress is True
+    assert any("verbatim" in item for item in assessment.rejected_facts)
 
 
 def test_specification_fact_requires_numeric_value_unit_and_source_text():
@@ -383,6 +571,227 @@ def test_llm_specification_payload_rejects_unknown_facts_and_extra_keys_but_reco
         validate_specification_assessment_payload(
             leaked_protocol, template=template, source_texts=[]
         )
+
+
+def test_llm_registered_derivation_is_recomputed_from_verbatim_inputs():
+    template = next(
+        item for item in default_specification_template_catalog().templates
+        if item.method_profile_id == "first_order_lag"
+    )
+    heat_capacity_source = "thermal capacitance is 20000 Btu/degF"
+    heat_transfer_source = "envelope conductance is 500 Btu/(h degF)"
+    payload = {
+        "status": "need_more",
+        "template_id": template.template_id,
+        "facts": [{
+            "fact_id": "response_time_s",
+            "value": 144000.0,
+            "unit": "s",
+            "source_type": "derived_from_declared_physics",
+            "source_text": "C/H = 40 h = 144000 s",
+            "derivation": {
+                "rule_id": "thermal_time_constant_c_over_h",
+                "expression": "3600 * heat_capacity / heat_transfer_coefficient",
+                "inputs": [
+                    {
+                        "name": "heat_capacity",
+                        "value": 20000.0,
+                        "unit": "Btu/degF",
+                        "source_text": heat_capacity_source,
+                    },
+                    {
+                        "name": "heat_transfer_coefficient",
+                        "value": 500.0,
+                        "unit": "Btu/(h degF)",
+                        "source_text": heat_transfer_source,
+                    },
+                ],
+                "source_excerpts": [heat_capacity_source, heat_transfer_source],
+            },
+        }],
+        "missing_fact_ids": [
+            "input_change", "steady_output_change", "input_min", "input_max",
+            "output_min", "output_max",
+        ],
+        "conflicts": [],
+        "questions": [],
+        "rationale": "The time constant was derived from declared physics.",
+    }
+
+    assessment = validate_specification_assessment_payload(
+        payload,
+        template=template,
+        source_texts=[f"{heat_capacity_source}; {heat_transfer_source}."],
+    )
+
+    fact = assessment.facts[0]
+    assert fact.value == pytest.approx(144000.0)
+    assert fact.source_type == "derived_from_declared_physics"
+    assert fact.derivation.rule_id == "thermal_time_constant_c_over_h"
+
+
+def test_all_registered_thermostat_derivation_rules_are_backend_verified():
+    template = next(
+        item for item in default_specification_template_catalog().templates
+        if item.method_profile_id == "first_order_lag"
+    )
+    binary_source = "binary heater command"
+    rate_source = "furnace rate is 25000 Btu/h"
+    transfer_source = "heat transfer coefficient is 500 Btu/(h degF)"
+    setpoint_source = "setpoint is 65 degF"
+    band_source = "hysteresis half-width is 0.5 degF"
+
+    def derived_fact(fact_id, value, unit, rule_id, expression, inputs, excerpts):
+        return {
+            "fact_id": fact_id,
+            "value": value,
+            "unit": unit,
+            "source_type": "derived_from_declared_physics",
+            "source_text": expression,
+            "derivation": {
+                "rule_id": rule_id,
+                "expression": expression,
+                "inputs": inputs,
+                "source_excerpts": excerpts,
+            },
+        }
+
+    binary_facts = [
+        derived_fact(
+            fact_id, value, "binary_command", "binary_command_domain",
+            "binary command domain {0, 1}", [], [binary_source],
+        )
+        for fact_id, value in (("input_change", 1.0), ("input_min", 0.0), ("input_max", 1.0))
+    ]
+    transfer_input = {
+        "name": "heat_transfer_coefficient", "value": 500.0,
+        "unit": "Btu/(h degF)", "source_text": transfer_source,
+    }
+    steady_fact = derived_fact(
+        "steady_output_change", 50.0, "degF", "thermal_steady_rise_q_over_h",
+        "furnace_rate / heat_transfer_coefficient",
+        [
+            {"name": "furnace_rate", "value": 25000.0, "unit": "Btu/h", "source_text": rate_source},
+            transfer_input,
+        ],
+        [rate_source, transfer_source],
+    )
+    band_inputs = [
+        {"name": "setpoint", "value": 65.0, "unit": "degF", "source_text": setpoint_source},
+        {
+            "name": "hysteresis_half_width", "value": 0.5,
+            "unit": "degF", "source_text": band_source,
+        },
+    ]
+    band_facts = [
+        derived_fact(
+            fact_id, value, "degF", "thermostat_band_setpoint_plus_minus_half_width",
+            expression, band_inputs, [setpoint_source, band_source],
+        )
+        for fact_id, value, expression in (
+            ("output_min", 64.5, "setpoint - hysteresis_half_width"),
+            ("output_max", 65.5, "setpoint + hysteresis_half_width"),
+        )
+    ]
+    payload = {
+        "status": "need_more",
+        "template_id": template.template_id,
+        "facts": [*binary_facts, steady_fact, *band_facts],
+        "missing_fact_ids": ["response_time_s"],
+        "conflicts": [],
+        "questions": [],
+        "rationale": "Registered thermostat rules were proposed.",
+    }
+
+    assessment = validate_specification_assessment_payload(
+        payload,
+        template=template,
+        source_texts=[
+            f"{binary_source}; {rate_source}; {transfer_source}; "
+            f"{setpoint_source}; {band_source}."
+        ],
+    )
+
+    facts = {item.fact_id: item.value for item in assessment.facts}
+    assert facts == {
+        "input_change": 1.0,
+        "input_min": 0.0,
+        "input_max": 1.0,
+        "steady_output_change": 50.0,
+        "output_min": 64.5,
+        "output_max": 65.5,
+    }
+    assert assessment.rejected_facts == []
+
+
+@pytest.mark.parametrize(
+    ("rule_id", "declared_value", "source_override", "expected_reason"),
+    [
+        ("thermal_time_constant_c_over_h", 1.0, None, "backend recomputation"),
+        ("unregistered_formula", 144000.0, None, "unregistered"),
+        (
+            "thermal_time_constant_c_over_h",
+            144000.0,
+            "a fabricated heat capacity excerpt",
+            "verbatim",
+        ),
+    ],
+)
+def test_unverified_llm_derivations_are_rejected_as_remaining_gaps(
+    rule_id, declared_value, source_override, expected_reason
+):
+    template = next(
+        item for item in default_specification_template_catalog().templates
+        if item.method_profile_id == "first_order_lag"
+    )
+    heat_capacity_source = "thermal capacitance is 20000 Btu/degF"
+    heat_transfer_source = "envelope conductance is 500 Btu/(h degF)"
+    payload = {
+        "status": "need_more",
+        "template_id": template.template_id,
+        "facts": [{
+            "fact_id": "response_time_s",
+            "value": declared_value,
+            "unit": "s",
+            "source_type": "derived_from_declared_physics",
+            "source_text": "candidate thermal time constant",
+            "derivation": {
+                "rule_id": rule_id,
+                "expression": "3600 * C / H",
+                "inputs": [
+                    {
+                        "name": "heat_capacity", "value": 20000.0,
+                        "unit": "Btu/degF",
+                        "source_text": source_override or heat_capacity_source,
+                    },
+                    {
+                        "name": "heat_transfer_coefficient", "value": 500.0,
+                        "unit": "Btu/(h degF)",
+                        "source_text": heat_transfer_source,
+                    },
+                ],
+                "source_excerpts": [
+                    source_override or heat_capacity_source,
+                    heat_transfer_source,
+                ],
+            },
+        }],
+        "missing_fact_ids": ["response_time_s"],
+        "conflicts": [],
+        "questions": [],
+        "rationale": "Candidate derivation requires verification.",
+    }
+
+    assessment = validate_specification_assessment_payload(
+        payload,
+        template=template,
+        source_texts=[f"{heat_capacity_source}; {heat_transfer_source}."],
+    )
+
+    assert assessment.status == "need_more"
+    assert assessment.facts == []
+    assert assessment.missing_fact_ids == ["response_time_s"]
+    assert any(expected_reason in item for item in assessment.rejected_facts)
 
 
 def test_motor_voltage_paragraph_compiles_with_unicode_units_and_no_unit_whitelist_error():

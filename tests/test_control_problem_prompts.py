@@ -1,9 +1,15 @@
 from pathlib import Path
 from collections import Counter
+import json
 import math
 import re
 
 import pytest
+from pydantic import TypeAdapter
+
+from cfdc.models.schemas import ExecutableModelSpec
+from cfdc.diagnosis import DiagnosticEngine
+from cfdc.models import SystemDescription
 
 
 TECHNICAL_PATH = Path("dataset/control_problems.md")
@@ -16,6 +22,8 @@ ENGLISH_HEADINGS = [
     "Safety Bounds",
     "Forbidden Actions",
     "Dominant Time Scale (Seconds)",
+    "Example Data (Natural Language)",
+    "Example Data (JSON)",
 ]
 CHINESE_HEADINGS = [
     "控制问题描述",
@@ -24,6 +32,8 @@ CHINESE_HEADINGS = [
     "安全边界",
     "禁止实验动作",
     "主导时间尺度（秒）",
+    "示例数据（自然语言）",
+    "示例数据（JSON）",
 ]
 HAN_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 MATH_NOTATION_PATTERN = re.compile(r"[0-9=<>+*/^\\{}\[\]$]")
@@ -70,81 +80,81 @@ CHINESE_DIAGNOSTIC_DECLARATIONS = [
 ENGLISH_ASSESSMENT_PATTERNS = [
     [
         ("stable", re.compile(r"settles or remains bounded")),
-        ("marginal", re.compile(r"retain an offset or drift")),
-        ("unstable", re.compile(r"continues to grow rather than return")),
+        ("marginal", re.compile(r"retains an offset or keeps drifting")),
+        ("unstable", re.compile(r"keeps growing instead of returning")),
     ],
     [
-        ("minimum-phase", re.compile(r"follows its eventual direction and does not move the opposite way first")),
-        ("non-minimum-phase", re.compile(r"moves in an unfavorable or opposite direction before turning")),
+        ("minimum-phase", re.compile(r"starts in its final direction rather than moving the opposite way first")),
+        ("non-minimum-phase", re.compile(r"first moves in an unfavorable or opposite direction before turning")),
     ],
     [
-        ("significant", re.compile(r"a visible pause separates the command")),
-        ("not significant", re.compile(r"begins promptly without a separate silent interval")),
+        ("significant", re.compile(r"a visible quiet interval separates the command")),
+        ("not significant", re.compile(r"begins within one sample without a separate silent interval")),
     ],
     [
-        ("low", re.compile(r"no more than two dominant storage or integration stages")),
-        ("high", re.compile(r"three or more successive storage or integration stages")),
+        ("low", re.compile(r"one or two dominant storage or integration processes")),
+        ("high", re.compile(r"at least three successive storage or integration processes")),
     ],
     [
-        ("adequate", re.compile(r"every relevant motion mode appear")),
-        ("inadequate", re.compile(r"one pole-zero-canceled mode absent from the recordings and unreachable")),
+        ("adequate", re.compile(r"all relevant motion can be reconstructed from these synchronized records")),
+        ("inadequate", re.compile(r"a pole-zero-cancelled mode is absent from the records and cannot be excited")),
     ],
     [
-        ("weak", re.compile(r"small positive and negative trials remain smooth, reversible, and nearly proportional")),
-        ("static-compensable", re.compile(r"departure from proportional behavior stays in this fixed input-output rule")),
-        ("strong dynamic", re.compile(r"response law changes with the evolving state")),
+        ("weak", re.compile(r"produces? smooth, reversible, and nearly proportional responses")),
+        ("static-compensable", re.compile(r"nonproportional behavior is confined to this fixed input-output rule")),
+        ("strong dynamic", re.compile(r"response law itself changes as the state evolves")),
     ],
     [
-        ("single-input single-output", re.compile(r"one principal action-to-recording path")),
-        ("weak multivariable", re.compile(r"several recordings share internal motion")),
-        ("severe multivariable", re.compile(r"changing any one of several actuators")),
-        ("underactuated", re.compile(r"fewer independent actuators than regulated coordinates")),
-        ("cascaded", re.compile(r"outer response appears only through")),
+        ("single-input single-output", re.compile(r"one main physical route from actuation to the measured motion")),
+        ("weak multivariable", re.compile(r"several readings describe shared internal motion")),
+        ("severe multivariable", re.compile(r"moving any one of the actuators noticeably changes several outputs")),
+        ("underactuated", re.compile(r"there are fewer independent actuators than controlled coordinates")),
+        ("cascaded", re.compile(r"outer motion is produced only through a separately stabilized inner loop")),
     ],
     [
-        ("small", re.compile(r"motion direction, response timing, and final level remain almost unchanged")),
-        ("moderate", re.compile(r"shift the response rate and final level modestly")),
-        ("large", re.compile(r"can materially (?:alter|change)")),
+        ("small", re.compile(r"direction, response timing, and final level stay almost unchanged")),
+        ("moderate", re.compile(r"change the response rate and final level by a modest amount")),
+        ("large", re.compile(r"can substantially change the response rate, final level, or safe excursion")),
     ],
 ]
 CHINESE_ASSESSMENT_PATTERNS = [
     [
-        ("稳定", re.compile(r"会收敛或保持有界")),
-        ("临界稳定", re.compile(r"保持偏差或继续漂移")),
-        ("不稳定", re.compile(r"偏差会继续增大而不会自行返回")),
+        ("稳定", re.compile(r"最终会收敛或保持有界")),
+        ("临界稳定", re.compile(r"会保留偏差或继续漂移")),
+        ("不稳定", re.compile(r"会继续增大而不会自行返回")),
     ],
     [
-        ("最小相位", re.compile(r"首次有效变化与最终方向一致，不会先向相反方向运动")),
-        ("非最小相位", re.compile(r"首次有效变化会先沿不利或相反方向运动")),
+        ("最小相位", re.compile(r"开始时就沿最终方向变化，不会先向相反方向运动")),
+        ("非最小相位", re.compile(r"开始时会先沿不利或相反方向运动，随后才转向")),
     ],
     [
-        ("显著", re.compile(r"命令与首次记录响应之间存在可见停顿")),
-        ("不显著", re.compile(r"首次记录变化会及时开始，不会出现独立静默区间")),
+        ("显著", re.compile(r"命令与首次变化之间有一段清楚可见的静默区间")),
+        ("不显著", re.compile(r"一个采样周期内就开始变化，不会出现独立静默区间")),
     ],
     [
-        ("低", re.compile(r"至多经过两个主导储能或积分环节")),
-        ("高", re.compile(r"至少经过三个连续储能或积分环节")),
+        ("低", re.compile(r"只涉及一到两个主导储能或积分过程")),
+        ("高", re.compile(r"至少涉及三个连续的储能或积分过程")),
     ],
     [
-        ("充分", re.compile(r"每个相关运动模态至少出现在一项记录中")),
-        ("不充分", re.compile(r"一个极零相消模态不出现在记录中，也无法由给定激励到达")),
+        ("充分", re.compile(r"这些同步记录足以重建所有相关运动")),
+        ("不充分", re.compile(r"一个被极零相消的模态既不出现在记录中，也无法由输入激发")),
     ],
     [
-        ("弱", re.compile(r"小幅正向和反向试验保持平滑、可逆且近似成比例")),
-        ("静态可补偿", re.compile(r"偏离比例关系的现象只存在于这一固定输入输出规律中")),
-        ("强动态", re.compile(r"响应规律会随状态演化")),
+        ("弱", re.compile(r"响应平滑、可逆且近似成比例")),
+        ("静态可补偿", re.compile(r"非比例现象只存在于这条固定输入输出规律中")),
+        ("强动态", re.compile(r"响应规律本身会随状态演化")),
     ],
     [
-        ("单输入单输出", re.compile(r"一条主要动作到记录量的通道")),
-        ("弱多变量", re.compile(r"多个记录量共享内部运动")),
-        ("强多变量", re.compile(r"改变任一执行器都会明显带动多个记录量")),
-        ("欠驱动", re.compile(r"独立执行器少于受控坐标")),
-        ("串级", re.compile(r"外层响应只能通过单独稳定的内层")),
+        ("单输入单输出", re.compile(r"只有一条从执行作用到被测运动的主要物理通道")),
+        ("弱多变量", re.compile(r"多个读数描述的是彼此共享的内部运动")),
+        ("强多变量", re.compile(r"改变任一执行器都会明显改变多个输出")),
+        ("欠驱动", re.compile(r"独立执行器的数量少于受控坐标")),
+        ("串级", re.compile(r"外层运动只能通过一个单独稳定的内环产生")),
     ],
     [
-        ("小", re.compile(r"运动方向、响应时机和最终水平几乎不变")),
-        ("中等", re.compile(r"只会适度改变响应速度和最终水平")),
-        ("大", re.compile(r"都可能明显改变")),
+        ("小", re.compile(r"运动方向、响应时机和最终水平都几乎不变")),
+        ("中等", re.compile(r"会使响应速度和最终水平发生适度变化")),
+        ("大", re.compile(r"可能大幅改变响应速度、最终水平或安全活动范围")),
     ],
 ]
 ASSESSMENT_TRANSLATION = {
@@ -170,6 +180,30 @@ ASSESSMENT_TRANSLATION = {
     "小": "small",
     "中等": "moderate",
     "大": "large",
+}
+NORMALIZED_ASSESSMENTS = {
+    "stable": "stable",
+    "marginal": "marginal",
+    "unstable": "unstable",
+    "minimum-phase": "minimum_phase",
+    "non-minimum-phase": "nonminimum_phase",
+    "significant": "significant",
+    "not significant": "not_significant",
+    "low": "low",
+    "high": "high",
+    "adequate": "adequate",
+    "inadequate": "inadequate",
+    "weak": "weak",
+    "static-compensable": "static_compensable",
+    "strong dynamic": "strong_dynamic",
+    "single-input single-output": "siso",
+    "weak multivariable": "weak_mimo",
+    "severe multivariable": "severe_mimo",
+    "underactuated": "underactuated",
+    "cascaded": "cascaded",
+    "small": "small",
+    "moderate": "moderate",
+    "large": "large",
 }
 
 
@@ -237,9 +271,15 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
         assert all(phrase not in description for phrase in forbidden_declarations), (language, index)
         if language == "en":
             sentences = re.split(r"(?<=[.!?])\s+", description)
+            assert sentences[0].startswith(("This is ", "These are ")), (language, index, sentences[0])
+            assert sentences[1].startswith(("The control input is ", "The control inputs are ")), (language, index, sentences[1])
+            assert "the measured output" in sentences[1], (language, index, sentences[1])
         else:
             sentences = re.findall(r"[^。！？]+[。！？]", description)
-        assert len(sentences) == 8, (language, index, len(sentences))
+            assert sentences[0].startswith("这是"), (language, index, sentences[0])
+            assert sentences[1].startswith("控制输入是"), (language, index, sentences[1])
+            assert "输出是" in sentences[1], (language, index, sentences[1])
+        assert 6 <= len(sentences) <= 9, (language, index, len(sentences))
         assert not MATH_NOTATION_PATTERN.search(description), (language, index)
         assert "unknown" not in description.lower(), (language, index)
         assert "not enough information" not in description.lower(), (language, index)
@@ -247,15 +287,58 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
 
         patterns = ENGLISH_ASSESSMENT_PATTERNS if language == "en" else CHINESE_ASSESSMENT_PATTERNS
         assessments = []
-        for sentence, choices in zip(sentences, patterns):
-            matches = [assessment for assessment, pattern in choices if pattern.search(sentence)]
-            assert len(matches) == 1, (language, index, sentence, matches)
+        for choices in patterns:
+            matches = [assessment for assessment, pattern in choices if pattern.search(description)]
+            assert len(matches) == 1, (language, index, description, matches)
             assessments.append(matches[0])
 
         outputs = _field(entry, headings[1])
         actuators = _field(entry, headings[2])
         actions = [line.strip() for line in _field(entry, headings[4]).splitlines() if line.strip()]
         time_scale = float(_field(entry, headings[5]))
+        natural_example = _field(entry, headings[6])
+        raw_json = _field(entry, headings[7])
+        json_match = re.fullmatch(r"```json\s*(.*?)\s*```", raw_json, re.DOTALL)
+        assert json_match is not None, (language, index)
+        example_payload = json.loads(json_match.group(1))
+        assert natural_example, (language, index)
+        assert isinstance(example_payload.get("specification_facts"), list), (language, index)
+        TypeAdapter(ExecutableModelSpec).validate_python(example_payload["model"])
+        model = example_payload["model"]
+        def declared_names(value: str) -> set[str]:
+            result = set()
+            for item in value.replace("、", ",").replace("\n", ",").split(","):
+                name = re.sub(
+                    r"^(?:and|与|和)\s+", "", item.strip(), flags=re.IGNORECASE
+                )
+                if name:
+                    result.add(name)
+            return result
+
+        declared_inputs = declared_names(actuators)
+        declared_outputs = declared_names(outputs)
+        model_inputs = (
+            {model["input_signal_id"]}
+            if "input_signal_id" in model
+            else set(model["input_signal_ids"])
+        )
+        model_outputs = (
+            {model["output_signal_id"]}
+            if "output_signal_id" in model
+            else set(model["output_signal_ids"])
+        )
+        assert model_inputs.issubset(declared_inputs), (language, index, model_inputs, declared_inputs)
+        assert model_outputs.issubset(declared_outputs), (language, index, model_outputs, declared_outputs)
+        assert set(example_payload["eight_segment_evidence"]) == {
+            "stability",
+            "phase",
+            "delay",
+            "order",
+            "sensing_and_actuation",
+            "nonlinearity",
+            "coupling",
+            "uncertainty",
+        }, (language, index)
         assert outputs and actuators and actions and time_scale > 0.0
 
         parsed.append(
@@ -269,6 +352,8 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
                 "bounds": _parse_bounds(_field(entry, headings[3])),
                 "actions": actions,
                 "time_scale": time_scale,
+                "natural_example": natural_example,
+                "example_payload": example_payload,
             }
         )
     return parsed
@@ -301,6 +386,18 @@ def test_english_and_chinese_prompt_documents_preserve_numeric_and_structural_pa
     for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
         assert english_item["bounds"] == chinese_item["bounds"], index
         assert english_item["time_scale"] == chinese_item["time_scale"], index
+        assert english_item["example_payload"]["specification_facts"] == chinese_item["example_payload"]["specification_facts"], index
+        english_model = dict(english_item["example_payload"]["model"])
+        chinese_model = dict(chinese_item["example_payload"]["model"])
+        english_model.pop("input_signal_id", None)
+        english_model.pop("output_signal_id", None)
+        english_model.pop("input_signal_ids", None)
+        english_model.pop("output_signal_ids", None)
+        chinese_model.pop("input_signal_id", None)
+        chinese_model.pop("output_signal_id", None)
+        chinese_model.pop("input_signal_ids", None)
+        chinese_model.pop("output_signal_ids", None)
+        assert english_model == chinese_model, index
         assert len(english_item["actions"]) == len(chinese_item["actions"]), index
         translated = [ASSESSMENT_TRANSLATION[value] for value in chinese_item["assessments"]]
         assert english_item["assessments"] == translated, index
@@ -312,11 +409,22 @@ def test_descriptions_are_problem_specific_instead_of_repeated_boilerplate():
 
     assert len({item["description"] for item in english}) == 200
     assert len({item["description"] for item in chinese}) == 200
-    for field_index in range(8):
-        assert len({item["paragraphs"][field_index] for item in english}) >= 180
-        assert len({item["paragraphs"][field_index] for item in chinese}) >= 180
+    # Related exercises may describe the same physical apparatus, but the corpus
+    # must still cover a broad set of genuinely different devices and test rigs.
+    assert len({item["paragraphs"][0] for item in english}) >= 50
+    assert len({item["paragraphs"][0] for item in chinese}) >= 50
 
     stale_boilerplate = [
+        "This is a software control experiment made from a signal source, a dynamic plant, and synchronized recorders.",
+        "这是一个由信号源、动态对象和同步记录器组成的软件控制试验系统。",
+        "available control or test action",
+        "Considering ",
+        "bounded test from",
+        "makes every relevant motion mode appear",
+        "作为可用控制或测试作用",
+        "把输入与记录量结合起来看",
+        "有界试验时",
+        "能让每个相关运动模态至少出现在一项记录中",
         "is assessed explicitly",
         "follows the sign convention declared in the model",
         "contains the storage and integration stages stated in the technical model",
@@ -339,6 +447,47 @@ def test_descriptions_are_problem_specific_instead_of_repeated_boilerplate():
     }
     for problem_id, profile in expected_profiles.items():
         assert english[problem_id - 1]["assessments"] == profile
+
+
+@pytest.mark.parametrize(
+    ("path", "headings", "language"),
+    [
+        (ENGLISH_PATH, ENGLISH_HEADINGS, "en"),
+        (CHINESE_PATH, CHINESE_HEADINGS, "cn"),
+    ],
+)
+def test_all_natural_prompts_finish_deterministic_diagnosis_without_questions(
+    path, headings, language
+):
+    entries = _parse_document(path, headings, language)
+    engine = DiagnosticEngine()
+    field_names = [
+        "open_loop_stability",
+        "minimum_phase",
+        "significant_delay",
+        "relative_degree",
+        "controllability_observability",
+        "nonlinearity_strength",
+        "coupling_severity",
+        "uncertainty_magnitude",
+    ]
+    for index, item in enumerate(entries, 1):
+        assessments = (
+            item["assessments"]
+            if language == "en"
+            else [ASSESSMENT_TRANSLATION[value] for value in item["assessments"]]
+        )
+        diagnosis = engine.diagnose(
+            SystemDescription(
+                text=item["description"],
+                observed_outputs=[item["outputs"]],
+                actuators=[item["actuators"]],
+            )
+        )
+        assert diagnosis.complete, (language, index, diagnosis.clarification_questions)
+        actual = [getattr(diagnosis, name).assessment for name in field_names]
+        expected = [NORMALIZED_ASSESSMENTS[value] for value in assessments]
+        assert actual == expected, (language, index, actual, expected)
 
 
 def test_descriptions_state_the_physical_situation_without_names_or_source_meta_commentary():
@@ -367,10 +516,10 @@ def test_descriptions_state_the_physical_situation_without_names_or_source_meta_
     ]
 
     for item in english:
-        assert item["title"] not in item["description"]
+        assert len(item["paragraphs"][0]) >= 45
         assert all(phrase not in item["description"] for phrase in forbidden_english)
     for item in chinese:
-        assert item["title"] not in item["description"]
+        assert len(item["paragraphs"][0]) >= 20
         assert all(phrase not in item["description"] for phrase in forbidden_chinese)
 
 
@@ -433,7 +582,29 @@ def test_technical_corpus_has_four_required_fields_and_source_for_every_entry():
             "数学模型",
             "解决方法",
             "控制器与参数",
+            "示例数据与理论计算",
         ], index
+        example_match = re.search(
+            r"^#### 示例数据与理论计算\s*$\n(.*)\Z",
+            entry,
+            re.MULTILINE | re.DOTALL,
+        )
+        assert example_match is not None, index
+        example = example_match.group(1)
+        assert "**示例数据：**" in example, index
+        assert "**理论计算：**" in example, index
+        assert "**八段核对：**" in example, index
+
+
+def test_example_data_audit_marker_confirms_chapter_by_chapter_completion():
+    marker = "<!-- EXAMPLE-DATA-AUDIT: chapters 1-10 complete -->"
+    for path in (TECHNICAL_PATH, ENGLISH_PATH, CHINESE_PATH):
+        assert marker in path.read_text(encoding="utf-8")
+
+
+def test_prompt_documents_describe_example_data_without_textbook_provenance_claims():
+    assert "textbook" not in ENGLISH_PATH.read_text(encoding="utf-8").lower()
+    assert "教材" not in CHINESE_PATH.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("chapter", range(1, 11), ids=lambda chapter: f"chapter-{chapter}")

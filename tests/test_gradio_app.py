@@ -12,12 +12,13 @@ from cfdc.web.service import (
     parse_safety_bounds,
     start_app_run,
     submit_app_evidence,
+    submit_app_json,
     submit_app_specifications,
 )
 from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, build_app, reset_ui, update_run_mode
-from cfdc.diagnosis import DeterministicDiagnosticAdapter
+from cfdc.diagnosis import DeterministicDiagnosticAdapter, submit_specifications_to_session
 from cfdc.diagnosis.engine import infer_structural_diagnosis
-from cfdc.models import SystemDescription
+from cfdc.models import DiagnosticSessionState, SystemDescription
 from cfdc.runtime import run_cfdc_route
 
 
@@ -107,9 +108,27 @@ def test_app_renders_matrix_core_feature_without_scalar_collapse():
 
 def test_app_input_parsers_accept_common_multiline_forms():
     assert parse_names("temperature, pressure\nflow") == ["temperature", "pressure", "flow"]
+    assert parse_names("室温、加热器状态") == ["室温", "加热器状态"]
+    assert parse_names("body displacement, wheel displacement, and suspension travel") == [
+        "body displacement",
+        "wheel displacement",
+        "suspension travel",
+    ]
     assert parse_safety_bounds("max_abs_output=2\nmax_abs_control=1") == {
         "max_abs_output": 2.0,
         "max_abs_control": 1.0,
+    }
+    assert parse_safety_bounds(
+        "max_abs_output_normalized=1.5\nmax_abs_actuator_normalized=1.0"
+    ) == {
+        "max_abs_output_normalized": 1.5,
+        "max_abs_output": 1.5,
+        "output_min": -1.5,
+        "output_max": 1.5,
+        "max_abs_actuator_normalized": 1.0,
+        "max_abs_control": 1.0,
+        "input_min": -1.0,
+        "input_max": 1.0,
     }
     assert {
         "cartpole",
@@ -137,6 +156,17 @@ def test_app_can_submit_structured_model_evidence_after_diagnosis():
     )
     assert report.status == "awaiting_specifications"
 
+    with pytest.raises(ValueError, match="软件仿真"):
+        submit_app_evidence(
+            state,
+            model_json='{"kind":"transfer_function"}',
+            trace_files=None,
+            trace_manifest_json="",
+            validation_json="",
+            demo_confirmed=False,
+            simulation_bounds_confirmed=False,
+        )
+
     resolved, next_state = submit_app_evidence(
         state,
         model_json='{"kind":"transfer_function","numerator":[1.0],"denominator":[2.0,1.0],"input_signal_id":"heater","output_signal_id":"temperature","input_units":"V","output_units":"degC"}',
@@ -144,11 +174,237 @@ def test_app_can_submit_structured_model_evidence_after_diagnosis():
         trace_manifest_json="",
         validation_json="",
         demo_confirmed=False,
+        simulation_bounds_confirmed=True,
     )
 
     assert resolved.status == "validation_pending"
     assert resolved.controller.release_level == "candidate_unvalidated"
     assert next_state["session"] is None
+
+
+def test_standard_demo_is_exempt_from_user_simulation_boundary_confirmation():
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature", "heater", "", NATURAL_LANGUAGE_MODE,
+        False, "", "", "",
+    )
+    assert report.status == "awaiting_specifications"
+
+    resolved, next_state = submit_app_evidence(
+        state,
+        model_json="",
+        trace_files=None,
+        trace_manifest_json="",
+        validation_json="",
+        demo_confirmed=True,
+        simulation_bounds_confirmed=False,
+    )
+
+    assert resolved.status == "demo_completed"
+    assert resolved.evidence_boundary == "demo_fixture_only"
+    assert next_state["session"] is None
+
+
+def test_app_can_submit_dataset_json_wrapper_from_pasted_text():
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature",
+        "heater",
+        "input_min=0\ninput_max=1\noutput_min=64.5\noutput_max=65.5",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+    )
+    assert report.status == "awaiting_specifications"
+    payload = {
+        "specification_facts": [
+            {"fact_id": "input_change", "value": 1, "unit": "binary_command"},
+            {"fact_id": "steady_output_change", "value": 50, "unit": "degF"},
+            {"fact_id": "response_time_s", "value": 20, "unit": "s"},
+            {"fact_id": "input_min", "value": 0, "unit": "binary_command"},
+            {"fact_id": "input_max", "value": 1, "unit": "binary_command"},
+            {"fact_id": "output_min", "value": 64.5, "unit": "degF"},
+            {"fact_id": "output_max", "value": 65.5, "unit": "degF"},
+        ],
+        "model": {
+            "kind": "transfer_function",
+            "numerator": [50.0],
+            "denominator": [144000.0, 1.0],
+            "input_signal_id": "heater",
+            "output_signal_id": "temperature",
+            "input_units": "binary_command",
+            "output_units": "degF",
+        },
+        "experiment": {"sample_time_s": 60, "duration_s": 21600},
+        "eight_segment_evidence": {"stability": "bounded"},
+    }
+
+    with pytest.raises(ValueError, match="软件仿真"):
+        submit_app_json(
+            state,
+            uploaded_json=None,
+            pasted_json=json.dumps(payload),
+            simulation_bounds_confirmed=False,
+        )
+
+    resolved, next_state = submit_app_json(
+        state,
+        uploaded_json=None,
+        pasted_json=json.dumps(payload),
+        simulation_bounds_confirmed=True,
+    )
+
+    assert resolved.status == "candidate_unvalidated"
+    assert resolved.compiled_specification_model.model.input_units == "binary_command"
+    assert resolved.system_description.simulation_boundary_confirmation.confirmed is True
+    assert next_state["session"] is None
+
+
+def test_app_can_submit_dataset_json_wrapper_from_uploaded_file(tmp_path):
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature", "heater",
+        "input_min=-1\ninput_max=1\noutput_min=-20\noutput_max=20",
+        NATURAL_LANGUAGE_MODE,
+        False, "", "", "",
+    )
+    payload_path = tmp_path / "thermostat.json"
+    payload_path.write_text(
+        json.dumps({
+            "specification_facts": [
+                {"fact_id": "input_change", "value": 1, "unit": "binary_command"},
+                {"fact_id": "steady_output_change", "value": 50, "unit": "degF"},
+                {"fact_id": "response_time_s", "value": 20, "unit": "s"},
+                {"fact_id": "input_min", "value": 0, "unit": "binary_command"},
+                {"fact_id": "input_max", "value": 1, "unit": "binary_command"},
+                {"fact_id": "output_min", "value": 64.5, "unit": "degF"},
+                {"fact_id": "output_max", "value": 65.5, "unit": "degF"},
+            ]
+        }),
+        encoding="utf-8",
+    )
+
+    resolved, next_state = submit_app_json(
+        state,
+        uploaded_json=str(payload_path),
+        pasted_json="",
+        simulation_bounds_confirmed=True,
+    )
+
+    assert resolved.status == "candidate_unvalidated"
+    assert resolved.compiled_specification_model.derived_features["static_gain"] == pytest.approx(50.0)
+    assert next_state["session"] is None
+
+
+def test_thermostat_natural_language_and_json_compile_equivalent_models():
+    description = (
+        "A binary heater command controls room temperature through fixed thermostat "
+        "hysteresis. The temperature settles, starts promptly in the final direction, "
+        "and has no repeated peaks."
+    )
+    paragraph = (
+        "室外温度 50 degF、白天设定值 65 degF；等效热容 C = 20000 Btu/degF、"
+        "传热系数 H = 500 Btu/(h degF)、炉子供热率 25000 Btu/h、"
+        "滞环半宽 0.5 degF。"
+    )
+    natural_initial, natural_state = start_app_run(
+        description, "room temperature, heater state", "binary heater command", "",
+        NATURAL_LANGUAGE_MODE, False, "", "", "",
+    )
+    _, json_state = start_app_run(
+        description, "room temperature, heater state", "binary heater command", "",
+        NATURAL_LANGUAGE_MODE, False, "", "", "",
+    )
+
+    facts_payload = [
+        {"fact_id": "input_change", "value": 1, "unit": "binary_command"},
+        {"fact_id": "steady_output_change", "value": 50, "unit": "degF"},
+        {"fact_id": "response_time_s", "value": 144000, "unit": "s"},
+        {"fact_id": "input_min", "value": 0, "unit": "binary_command"},
+        {"fact_id": "input_max", "value": 1, "unit": "binary_command"},
+        {"fact_id": "output_min", "value": 64.5, "unit": "degF"},
+        {"fact_id": "output_max", "value": 65.5, "unit": "degF"},
+    ]
+    natural_session = DiagnosticSessionState.model_validate(natural_state["session"])
+    json_session = DiagnosticSessionState.model_validate(json_state["session"])
+    natural_reviewed = submit_specifications_to_session(natural_session, paragraph)
+    json_reviewed = submit_specifications_to_session(
+        json_session,
+        web_service._specification_facts_to_text(json_session, facts_payload),
+    )
+
+    natural_facts = {
+        item.fact_id: (item.value, item.unit)
+        for item in natural_reviewed.specification_assessment.facts
+    }
+    json_facts = {
+        item.fact_id: (item.value, item.unit)
+        for item in json_reviewed.specification_assessment.facts
+    }
+    assert natural_facts == json_facts
+    assert (
+        natural_reviewed.compiled_specification_model.model.model_dump(mode="json")
+        == json_reviewed.compiled_specification_model.model.model_dump(mode="json")
+    )
+    assert (
+        natural_reviewed.compiled_specification_model.safety_bounds
+        == json_reviewed.compiled_specification_model.safety_bounds
+    )
+    guidance = render_report(
+        natural_initial.model_copy(
+            update={"specification_assessment": natural_reviewed.specification_assessment}
+        )
+    )["specification_guidance"]
+    assert "经后端重算验证的推导规格" in guidance
+    assert "3600 * heat_capacity / heat_transfer_coefficient" in guidance
+
+
+def test_app_dataset_wrapper_with_empty_facts_uses_its_complete_model():
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature", "heater",
+        "max_abs_output_normalized=20\nmax_abs_actuator_normalized=1",
+        NATURAL_LANGUAGE_MODE,
+        False, "", "", "", time_scale_hint_s="4",
+    )
+    assert report.status == "awaiting_specifications"
+    payload = {
+        "specification_facts": [],
+        "model": {
+            "kind": "transfer_function",
+            "numerator": [10.0],
+            "denominator": [2.0, 1.0],
+            "input_signal_id": "heater",
+            "output_signal_id": "temperature",
+            "input_units": "normalized_input",
+            "output_units": "degC",
+        },
+        "experiment": {"sample_time_s": 0.2, "duration_s": 20},
+        "eight_segment_evidence": {"stability": "bounded"},
+    }
+
+    resolved, next_state = submit_app_json(
+        state,
+        uploaded_json=None,
+        pasted_json=json.dumps(payload),
+        simulation_bounds_confirmed=True,
+    )
+
+    assert resolved.status == "validation_pending"
+    assert resolved.controller.release_level == "candidate_unvalidated"
+    assert next_state["session"] is None
+
+
+def test_app_json_submission_requires_exactly_one_file_or_pasted_source(tmp_path):
+    with pytest.raises(ValueError, match="选择一种"):
+        submit_app_json({}, uploaded_json=None, pasted_json="")
+
+    path = tmp_path / "payload.json"
+    path.write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="只能选择一种"):
+        submit_app_json({}, uploaded_json=str(path), pasted_json="{}")
 
 
 def test_app_trace_manifest_cannot_read_an_unuploaded_server_path(tmp_path):
@@ -188,6 +444,7 @@ def test_app_trace_manifest_cannot_read_an_unuploaded_server_path(tmp_path):
             trace_manifest_json=json.dumps([manifest]),
             validation_json="",
             demo_confirmed=False,
+            simulation_bounds_confirmed=True,
         )
 
 
@@ -199,6 +456,13 @@ def test_app_can_submit_plain_language_specifications_as_default_path():
     )
     assert report.status == "awaiting_specifications"
 
+    with pytest.raises(ValueError, match="软件仿真"):
+        submit_app_specifications(
+            state,
+            "input_change=1 normalized_input;",
+            simulation_bounds_confirmed=False,
+        )
+
     resolved, next_state = submit_app_specifications(
         state,
         (
@@ -207,11 +471,17 @@ def test_app_can_submit_plain_language_specifications_as_default_path():
             "input_min=-2 normalized_input; input_max=2 normalized_input; "
             "output_min=-30 degC; output_max=80 degC."
         ),
+        simulation_bounds_confirmed=True,
     )
 
     assert resolved.status == "candidate_unvalidated"
     assert resolved.evidence_boundary == "declared_specification_model_only"
     assert resolved.controller.release_level == "candidate_unvalidated"
+    assert resolved.system_description.simulation_boundary_confirmation.confirmed is True
+    assert (
+        resolved.system_description.simulation_boundary_confirmation.scope
+        == "software_simulation_only"
+    )
     assert next_state["session"] is None
 
 
@@ -285,7 +555,11 @@ def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_accel
         lambda *args: MotorSpecificationAdapter(),
     )
 
-    resolved, next_state = submit_app_specifications(state, paragraph)
+    resolved, next_state = submit_app_specifications(
+        state,
+        paragraph,
+        simulation_bounds_confirmed=True,
+    )
 
     assert resolved.status == "candidate_unvalidated"
     assert resolved.compiled_specification_model.model.input_units == "V"
@@ -342,11 +616,38 @@ def test_gradio_missing_unit_returns_to_specification_questions_instead_of_error
     unresolved, next_state = submit_app_specifications(
         state,
         "The input change is 1, but I do not know the unit yet.",
+        simulation_bounds_confirmed=True,
     )
 
     assert unresolved.status == "need_more_specifications"
     assert "input_change" in unresolved.specification_assessment.missing_fact_ids
     assert next_state["session"] is not None
+
+
+def test_repeated_specification_gap_is_rendered_as_no_progress_not_full_question_loop():
+    report, state = start_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature",
+        "heater power",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+    )
+
+    unresolved, _ = submit_app_specifications(
+        state,
+        "The heater is fast and strong, but I do not know numeric values.",
+        simulation_bounds_confirmed=True,
+    )
+    guidance = render_report(unresolved)["specification_guidance"]
+
+    assert unresolved.specification_assessment.no_progress is True
+    assert "本次提交未增加可验证规格" in guidance
+    assert "仍缺少" in guidance
+    assert "为什么需要" not in guidance
 
 
 def test_no_llm_specification_form_accepts_answers_in_visible_question_order():
@@ -360,6 +661,7 @@ def test_no_llm_specification_form_accepts_answers_in_visible_question_order():
     partial, state = submit_app_specifications(
         state,
         "1 normalized_input\n10 degC\n20 s\n-2 normalized_input",
+        simulation_bounds_confirmed=True,
     )
 
     assert partial.status == "need_more_specifications"
@@ -371,6 +673,7 @@ def test_no_llm_specification_form_accepts_answers_in_visible_question_order():
     resolved, state = submit_app_specifications(
         state,
         "2 normalized_input\n-30 degC\n80 degC",
+        simulation_bounds_confirmed=True,
     )
 
     assert resolved.status == "candidate_unvalidated"
@@ -486,11 +789,19 @@ def test_gradio_exposes_object_evidence_inputs_and_five_stage_progress():
         "用自然语言补充设备规格",
         "数学模型 JSON",
         "闭环验证条件 JSON（可选）",
+        "JSON 数据文件（.json）",
+        "粘贴 JSON 数据（可选）",
+        "我确认所提交的输入/输出范围仅作为本次软件仿真的停止边界",
         "确认仅运行标准对象演示",
     }.issubset(labels)
     assert "实测 CSV（可多选）" not in labels
     assert "实测数据 Manifest JSON" not in labels
-    assert {"开始诊断", "提交规格信息", "提交高级模型 / 运行演示"}.issubset(buttons)
+    assert {
+        "开始诊断",
+        "提交规格信息",
+        "提交 JSON 数据",
+        "提交高级模型 / 运行演示",
+    }.issubset(buttons)
 
     report, _ = start_app_run(
         "A measured first order heater settles after a small power change.",
@@ -910,7 +1221,7 @@ def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     monkeypatch.setenv("CFDC_LLM_MODEL", "provider-model")
     reset = reset_ui()
 
-    assert len(reset) == 38
+    assert len(reset) == 41
     assert reset[0] == NATURAL_LANGUAGE_MODE
     assert "六项" in reset[1]
     assert reset[2:8] == ("", "", "", "", "", "")
@@ -919,5 +1230,5 @@ def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     assert reset[10] == "https://provider.example/v1"
     assert reset[11] == "provider-model"
     assert reset[12] == ""
-    assert reset[14:18] == ("", "", "", False)
-    assert reset[18] == {}
+    assert reset[14:21] == ("", None, "", "", "", False, False)
+    assert reset[21] == {}

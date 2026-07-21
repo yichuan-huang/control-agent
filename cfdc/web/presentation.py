@@ -282,14 +282,51 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
     templates = {item.template_id: item for item in report.specification_templates}
     template = templates.get(assessment.template_id)
     summary = template.user_summary if template is not None else assessment.rationale
-    facts = (
-        f"\n\n已确认 {len(assessment.facts)} 项明确规格。"
-        if assessment.facts
-        else ""
+    field_labels = {
+        item.fact_id: item.label
+        for item in (template.fields if template is not None else [])
+    }
+    direct_facts = [
+        item for item in assessment.facts
+        if item.source_type != "derived_from_declared_physics"
+    ]
+    derived_facts = [
+        item for item in assessment.facts
+        if item.source_type == "derived_from_declared_physics"
+    ]
+    fact_sections: list[str] = []
+    if direct_facts:
+        fact_sections.append("\n\n**直接识别的规格**")
+        fact_sections.extend(
+            f"\n- {field_labels.get(item.fact_id, item.fact_id)}：{item.value} {item.unit}"
+            for item in direct_facts
+        )
+    if derived_facts:
+        fact_sections.append("\n\n**经后端重算验证的推导规格**")
+        for item in derived_facts:
+            assert item.derivation is not None
+            fact_sections.append(
+                f"\n- {field_labels.get(item.fact_id, item.fact_id)}：{item.value} {item.unit}；"
+                f"公式：`{item.derivation.expression}`"
+            )
+    rejected = ""
+    if assessment.rejected_facts:
+        rejected = "\n\n**本次未采纳的内容**" + "".join(
+            f"\n- ⚠️ {item}" for item in assessment.rejected_facts
+        )
+    missing = ""
+    if assessment.missing_fact_ids:
+        missing_labels = [
+            field_labels.get(item, item) for item in assessment.missing_fact_ids
+        ]
+        missing = "\n\n**仍缺少：** " + "、".join(missing_labels)
+    progress_note = (
+        f"\n\n{assessment.rationale}" if assessment.no_progress else ""
     )
     conflicts = "".join(f"\n- ⚠️ {item}" for item in assessment.conflicts)
     questions = []
-    for index, question in enumerate(assessment.questions, start=1):
+    visible_questions = [] if assessment.no_progress else assessment.questions
+    for index, question in enumerate(visible_questions, start=1):
         options = " / ".join(question.answer_options)
         questions.append(
             f"\n\n**{index}. {question.prompt}**\n\n"
@@ -308,7 +345,8 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
         )
     return (
         "### 补充当前设备的已知规格\n\n"
-        f"{summary}{facts}{conflicts}{''.join(questions)}{ready_note}"
+        f"{summary}{''.join(fact_sections)}{rejected}{missing}{progress_note}"
+        f"{conflicts}{''.join(questions)}{ready_note}"
     )
 
 

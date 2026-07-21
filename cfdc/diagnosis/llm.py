@@ -18,7 +18,7 @@ from cfdc.models import (
 )
 
 
-PROMPT_VERSION = "cfdc-stage0-v4-eight-assessments"
+PROMPT_VERSION = "cfdc-stage0-v5-negation-and-order-bounds"
 
 
 class DiagnosticAdapter(Protocol):
@@ -84,6 +84,10 @@ def build_diagnostic_prompt(description: SystemDescription) -> str:
         "- An explicitly unobserved or unknown delay must remain unknown; absence of a delay statement is not evidence of zero delay.\n"
         "- If several inputs visibly affect several outputs, mark coupling as significant multivariable interaction.\n"
         "- Initial opposite or unfavorable motion is non-minimum-phase or inverse-response evidence.\n"
+        "- Read negation literally: 'does not move opposite first' is minimum-phase evidence, and 'no independent pause/transport delay' is not-significant-delay evidence.\n"
+        "- 'at most two' or 'no more than two' storage/integration stages is an upper bound on relative degree, not an exact second-order oscillator model.\n"
+        "- Select a second-order oscillator only when positive oscillation evidence exists, such as ringing, repeated peaks, free vibration, a restoring spring, or a natural frequency.\n"
+        "- fixed thermostat hysteresis is a static-compensable switching law; it does not create a mechanical oscillatory mode or justify peak-spacing and acceleration questions.\n"
         "- If gain or time scale changes materially with operating point, mark strong operating-point-dependent nonlinearity and large uncertainty.\n"
         "- Ask about observable behavior and available sensors/actuators, not about control-theory jargon.\n"
         "- Do not synthesize controller gains. Numeric control computation happens later in deterministic code.\n\n"
@@ -109,8 +113,12 @@ def build_specification_prompt(
         '  "status": "need_more|conflict|ready",\n'
         '  "template_id": "string",\n'
         '  "facts": [{"fact_id":"string","value":0.0,"unit":"string",'
-        '"source_type":"manufacturer_document|user_known_behavior|structured_answer",'
-        '"source_text":"verbatim excerpt","lower_bound":null,"upper_bound":null}],\n'
+        '"source_type":"manufacturer_document|user_known_behavior|structured_answer|derived_from_declared_physics",'
+        '"source_text":"verbatim excerpt or derivation summary",'
+        '"derivation":null|{"rule_id":"string","expression":"string",'
+        '"inputs":[{"name":"string","value":0.0,"unit":"string",'
+        '"source_text":"verbatim excerpt"}],"source_excerpts":["verbatim excerpt"]},'
+        '"lower_bound":null,"upper_bound":null}],\n'
         '  "missing_fact_ids": ["string"],\n'
         '  "conflicts": ["string"],\n'
         '  "questions": [{"question_id":"string","requested_fact_ids":["string"],'
@@ -123,7 +131,10 @@ def build_specification_prompt(
         "}\n\n"
         "Rules:\n"
         "- Select only one supplied template and only its declared fact IDs.\n"
-        "- Do not infer or invent any numeric value. A fact is allowed only when its source_text is a verbatim excerpt from the user description or answer history.\n"
+        "- Do not infer or invent any numeric value from general knowledge, defaults, or a demo fixture. Direct facts require a verbatim source_text.\n"
+        "- You may propose derived_from_declared_physics facts only with one registered rule below. Include every numeric input, its stated unit, and a verbatim source excerpt. The backend will recompute the result and reject any mismatch; the expression string is audit text, not executable code.\n"
+        "- Registered rules: thermal_time_constant_c_over_h produces response_time_s = 3600 * heat_capacity[Btu/degF] / heat_transfer_coefficient[Btu/(h degF)]; thermal_steady_rise_q_over_h produces steady_output_change[degF] = furnace_rate[Btu/h] / heat_transfer_coefficient[Btu/(h degF)]; thermostat_band_setpoint_plus_minus_half_width produces output_min/output_max[degF] from setpoint[degF] and hysteresis_half_width[degF]; binary_command_domain produces input_change/input_min/input_max in binary_command only when the user explicitly declares a binary or on/off command.\n"
+        "- For direct facts set derivation to null. For derived facts use source_type=derived_from_declared_physics and provide derivation. Never propose an unregistered rule.\n"
         "- Qualitative words such as fast, slow, weak, or strong are not numeric facts.\n"
         "- Every numeric fact must include the unit explicitly stated by the user. Preserve that raw unit in source_text.\n"
         "- accepted_units are examples, not a finite whitelist. Device-specific command or sensor units are allowed for fields whose unit_policy is open.\n"

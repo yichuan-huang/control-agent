@@ -13,6 +13,12 @@ class CFDCModel(BaseModel):
     model_config = ConfigDict(extra="forbid", use_enum_values=True, allow_inf_nan=False)
 
 
+class SimulationBoundaryConfirmation(CFDCModel):
+    confirmed: Literal[True] = True
+    scope: Literal["software_simulation_only"] = "software_simulation_only"
+    statement_version: Literal["v1"] = "v1"
+
+
 class SystemDescription(CFDCModel):
     text: str = Field(min_length=1)
     observed_outputs: list[str] = Field(default_factory=list)
@@ -20,6 +26,7 @@ class SystemDescription(CFDCModel):
     safety_bounds: dict[str, float] = Field(default_factory=dict)
     forbidden_actions: list[str] = Field(default_factory=list)
     time_scale_hint_s: float | None = Field(default=None, gt=0)
+    simulation_boundary_confirmation: SimulationBoundaryConfirmation | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -332,6 +339,20 @@ class SpecificationTemplateCatalog(CFDCModel):
 SpecificationValue = Union[float, list[float], list[list[float]]]
 
 
+class SpecificationDerivationInput(CFDCModel):
+    name: str = Field(min_length=1)
+    value: float
+    unit: str = Field(min_length=1)
+    source_text: str = Field(min_length=1)
+
+
+class SpecificationDerivation(CFDCModel):
+    rule_id: str = Field(min_length=1)
+    expression: str = Field(min_length=1)
+    inputs: list[SpecificationDerivationInput] = Field(default_factory=list)
+    source_excerpts: list[str] = Field(min_length=1)
+
+
 class SpecificationFact(CFDCModel):
     fact_id: str = Field(min_length=1)
     value: SpecificationValue
@@ -340,13 +361,20 @@ class SpecificationFact(CFDCModel):
         "manufacturer_document",
         "user_known_behavior",
         "structured_answer",
+        "derived_from_declared_physics",
     ]
     source_text: str = Field(min_length=1)
+    derivation: SpecificationDerivation | None = None
     lower_bound: float | None = None
     upper_bound: float | None = None
 
     @model_validator(mode="after")
     def validate_uncertainty_bounds(self) -> "SpecificationFact":
+        is_derived = self.source_type == "derived_from_declared_physics"
+        if is_derived != (self.derivation is not None):
+            raise ValueError(
+                "derived specification facts require derivation evidence, and direct facts must not include it"
+            )
         if isinstance(self.value, float):
             if self.lower_bound is not None and self.lower_bound > self.value:
                 raise ValueError("lower_bound cannot exceed the specification value")
@@ -384,8 +412,10 @@ class SpecificationAssessment(CFDCModel):
     facts: list[SpecificationFact] = Field(default_factory=list)
     missing_fact_ids: list[str] = Field(default_factory=list)
     conflicts: list[str] = Field(default_factory=list)
+    rejected_facts: list[str] = Field(default_factory=list)
     questions: list[SpecificationQuestion] = Field(default_factory=list, max_length=4)
     rationale: str = Field(min_length=1)
+    no_progress: bool = False
 
     @model_validator(mode="after")
     def validate_status_consistency(self) -> "SpecificationAssessment":
