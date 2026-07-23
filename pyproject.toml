@@ -1,11 +1,14 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cfdc-control"
 version = "0.1.0"
 description = "Independent Core-Feature-Driven Control framework"
+authors = [{ name = "Yichuan Huang" }]
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
   "gradio>=6.0,<7",
@@ -14,6 +17,9 @@ dependencies = [
   "pydantic>=2.0",
   "scipy>=1.14",
 ]
+
+[project.urls]
+Repository = "https://github.com/yichuan-huang/control-agent"
 
 [project.optional-dependencies]
 test = [
