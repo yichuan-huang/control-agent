@@ -80,9 +80,10 @@ archive/
 # Local PDFs and large research scratch files.
 # Keep canonical paper copies outside git unless intentionally added.
 *.pdf
-!docs/**/*.pdf
+
+# Local documentation and agent planning artifacts are not published.
+docs/
 
 # Codex / agent local metadata
 .agents/
 .codex/
-docs/superpowers/
