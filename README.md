@@ -193,3 +193,9 @@ After structural diagnosis, the same schema-v3 session stores specification temp
 Reports distinguish `structural_diagnosis_only`, `declared_specification_model_only`, `user_object_model_validated_in_simulation`, and `demo_fixture_only`. Declared specifications can produce only an unvalidated candidate. A complete user model is called simulation-validated only when user validation conditions are complete and pass. No state claims physical-machine safety, and the software never sends hardware commands.
 
 Remaining research work includes exact reproduction of the paper's CartPole and VTOL numerical targets, longer-horizon tracking studies, broader noise/disturbance sweeps, and additional validated Class IV/V profile backends.
+
+## License
+
+Copyright (C) 2026 Yichuan Huang.
+
+This project is free software licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). Commercial use is permitted subject to the license. If you distribute modified versions, or operate modified network-accessible versions for users, you must make their corresponding source available as required by GNU AGPLv3. The canonical source repository is [github.com/yichuan-huang/control-agent](https://github.com/yichuan-huang/control-agent). See [LICENSE](LICENSE) for the authoritative terms.

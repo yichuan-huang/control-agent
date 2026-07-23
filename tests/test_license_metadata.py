@@ -33,3 +33,19 @@ def test_pyproject_declares_agpl_v3_only_with_copyright_holder():
     assert metadata["project"]["urls"]["Repository"] == (
         "https://github.com/yichuan-huang/control-agent"
     )
+
+
+def test_readmes_publish_matching_agpl_v3_only_notices():
+    english = (ROOT / "README.md").read_text(encoding="utf-8")
+    chinese = (ROOT / "README_CN.md").read_text(encoding="utf-8")
+
+    for readme in (english, chinese):
+        assert "Copyright (C) 2026 Yichuan Huang" in readme
+        assert "[GNU Affero General Public License v3.0 only](LICENSE)" in readme
+        assert "`AGPL-3.0-only`" in readme
+        assert "https://github.com/yichuan-huang/control-agent" in readme
+
+    assert "Commercial use is permitted subject to the license." in english
+    assert "该许可证允许商业使用，但必须遵守许可证条款。" in chinese
+    assert "modified network-accessible versions" in english
+    assert "通过网络向用户提供修改版服务" in chinese

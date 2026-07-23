@@ -202,3 +202,9 @@ python main.py --diagnostic-session-input session.json \
 报告会明确区分：`structural_diagnosis_only`、`declared_specification_model_only`、`user_object_model_validated_in_simulation` 和 `demo_fixture_only`。自然语言规格只能产生未验证候选；完整用户数值模型也只有在用户验证条件齐全且仿真通过时，才能声明“在用户模型中验证”。任何状态都不声明实体机器安全或物理验证，软件也不会向硬件下发控制命令。
 
 后续研究仍包括：精确复现论文中的 CartPole/VTOL 数值指标、更长期的 tracking、更多噪声与扰动扫描，以及更多经过验证的 Class IV/V profile backend。
+
+## 许可证
+
+Copyright (C) 2026 Yichuan Huang.
+
+本项目是采用 [GNU Affero General Public License v3.0 only](LICENSE)（`AGPL-3.0-only`）发布的自由软件。该许可证允许商业使用，但必须遵守许可证条款。分发修改版，或通过网络向用户提供修改版服务时，必须按照 GNU AGPLv3 提供对应源码。规范源码仓库为 [github.com/yichuan-huang/control-agent](https://github.com/yichuan-huang/control-agent)。完整且具有约束力的条款以 [LICENSE](LICENSE) 英文原文为准。
