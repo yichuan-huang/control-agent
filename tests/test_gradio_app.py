@@ -29,6 +29,23 @@ def test_root_app_is_a_thin_launcher_and_legacy_package_app_is_removed():
     assert "def build_app" not in launcher
 
 
+def test_gradio_exposes_agpl_notice_and_source_link():
+    app = build_app()
+    notices = [
+        component["props"]
+        for component in app.config["components"]
+        if component["type"] == "markdown"
+        and component["props"].get("elem_id") == "license-notice"
+    ]
+
+    assert len(notices) == 1
+    assert notices[0]["value"] == (
+        "Copyright (C) 2026 Yichuan Huang · "
+        "[GNU AGPL v3.0 only](https://www.gnu.org/licenses/agpl-3.0.en.html) · "
+        "[Source code](https://github.com/yichuan-huang/control-agent)"
+    )
+
+
 def test_app_runs_clear_description_and_renders_stage_tables():
     report, state = start_app_run(
         "A measured first order heater settles after a small power change.",

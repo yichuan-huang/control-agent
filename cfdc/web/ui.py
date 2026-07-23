@@ -17,6 +17,12 @@ from cfdc.web.service import (
 
 NATURAL_LANGUAGE_MODE = "自然语言自动分析（主流程）"
 
+LICENSE_NOTICE = (
+    "Copyright (C) 2026 Yichuan Huang · "
+    "[GNU AGPL v3.0 only](https://www.gnu.org/licenses/agpl-3.0.en.html) · "
+    "[Source code](https://github.com/yichuan-huang/control-agent)"
+)
+
 
 EXAMPLES = [
     [
@@ -498,6 +504,8 @@ def build_app() -> gr.Blocks:
                         )
                     with gr.Tab("审计 JSON"):
                         raw_json = gr.JSON(label="完整阶段记录")
+
+        gr.Markdown(LICENSE_NOTICE, elem_id="license-notice")
 
         output_components = [
             app_state,
