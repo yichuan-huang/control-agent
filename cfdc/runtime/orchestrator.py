@@ -959,6 +959,13 @@ def run_cfdc_route(
                     "evidence_boundary": "declared_specification_model_only",
                 }
             )
+        if session.status == "ready_for_experiments" and (
+            session.evidence_readiness is None
+            or session.evidence_readiness.decision != "ready"
+        ):
+            raise ValueError(
+                "ready-for-experiments session is missing validated object evidence"
+            )
         status_map = {
             "collecting_information": "need_more_information",
             "awaiting_specifications": "awaiting_specifications",

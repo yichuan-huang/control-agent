@@ -760,3 +760,13 @@ def test_diagnostic_session_requires_evidence_after_eight_fields():
 
     assert updated.status == "ready_for_experiments"
     assert updated.evidence_readiness.decision == "ready"
+
+
+def test_ready_for_experiments_requires_a_positive_evidence_decision():
+    description = _parameterized_first_order_description()
+    state = start_diagnostic_session(description).model_copy(
+        update={"status": "ready_for_experiments", "evidence_readiness": None}
+    )
+
+    with pytest.raises(ValueError, match="missing validated object evidence"):
+        run_cfdc_route(diagnostic_session_state=state)
