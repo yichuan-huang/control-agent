@@ -330,7 +330,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--llm-base-url",
         type=str,
         default=None,
-        help="Provider API root, e.g. https://api.deepseek.com/v1 or http://localhost:11434/v1 (env: CFDC_LLM_BASE_URL).",
+        help="Provider API root, e.g. https://api.deepseek.com or http://localhost:11434/v1 (env: CFDC_LLM_BASE_URL).",
     )
     parser.add_argument(
         "--llm-model",

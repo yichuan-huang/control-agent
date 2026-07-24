@@ -81,7 +81,7 @@ python -m compileall -q cfdc tests
 Use any OpenAI-compatible provider:
 
 ```bash
-export CFDC_LLM_BASE_URL="https://your-provider.example/v1"
+export CFDC_LLM_BASE_URL="https://your-provider.example"
 export CFDC_LLM_MODEL="your-provider-model"
 export CFDC_LLM_API_KEY="..."
 
@@ -95,7 +95,7 @@ The same configuration may be supplied on the command line:
 
 ```bash
 python main.py --use-llm \
-  --llm-base-url "https://api.deepseek.com/v1" \
+  --llm-base-url "https://api.deepseek.com" \
   --llm-model "deepseek-v4-pro" \
   --llm-api-key "$DEEPSEEK_API_KEY" \
   --description "A heater changes a measured chamber temperature." \
