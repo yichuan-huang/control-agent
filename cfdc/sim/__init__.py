@@ -5,6 +5,10 @@ from cfdc.sim.benchmarks import (
     run_benchmark_suite,
     run_feature_ablation_suite,
 )
+from cfdc.sim.closed_loop_runtime import (
+    LinearSimulationResult,
+    run_linear_closed_loop,
+)
 from cfdc.sim.cartpole import (
     CartpoleNmpConfig,
     CartpoleParams,
@@ -17,6 +21,20 @@ from cfdc.sim.cartpole import (
 from cfdc.sim.generic import SCALAR_BENCHMARK_FAMILIES, run_scalar_closed_loop
 from cfdc.sim.profile_experiments import profile_nominal_parameters, run_profile_experiments
 from cfdc.sim.profile_runtime import run_mimo_profile_adaptation, run_scalar_profile_adaptation
+from cfdc.sim.registered_runtime import (
+    NONLINEAR_SOFTWARE_MODEL_BOUNDARY,
+    RegisteredEquilibriumValidation,
+    RegisteredNonlinearValidationResult,
+    RegisteredScenarioResult,
+    evaluate_tail_contraction,
+    linearize_registered_closed_loop,
+    list_registered_controllers,
+    list_registered_templates,
+    registered_run_envelope,
+    run_registered_scenario,
+    run_registered_validation,
+    validate_registered_equilibrium,
+)
 from cfdc.sim.vtol import (
     VtolConfig,
     VtolParams,
@@ -30,6 +48,11 @@ from cfdc.sim.vtol import (
 
 __all__ = [
     "BenchmarkCase",
+    "LinearSimulationResult",
+    "NONLINEAR_SOFTWARE_MODEL_BOUNDARY",
+    "RegisteredEquilibriumValidation",
+    "RegisteredNonlinearValidationResult",
+    "RegisteredScenarioResult",
     "CartpoleParams",
     "CartpoleNmpConfig",
     "CartpoleSwingupConfig",
@@ -38,10 +61,16 @@ __all__ = [
     "VtolParams",
     "cartpole_swingup_force",
     "run_cartpole_nmp_boundary_scan",
+    "run_linear_closed_loop",
     "run_scalar_closed_loop",
     "search_cartpole_pd_gains",
     "extract_vtol_core_features",
+    "evaluate_tail_contraction",
+    "linearize_registered_closed_loop",
     "list_benchmark_cases",
+    "list_registered_controllers",
+    "list_registered_templates",
+    "registered_run_envelope",
     "run_benchmark_case",
     "run_benchmark_suite",
     "run_feature_ablation_suite",
@@ -55,4 +84,7 @@ __all__ = [
     "run_profile_experiments",
     "run_scalar_profile_adaptation",
     "run_mimo_profile_adaptation",
+    "run_registered_scenario",
+    "run_registered_validation",
+    "validate_registered_equilibrium",
 ]

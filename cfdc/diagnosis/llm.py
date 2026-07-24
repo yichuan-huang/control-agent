@@ -49,6 +49,21 @@ class DiagnosticAdapter(Protocol):
         ...
 
 
+class SimulationProposalAdapter(Protocol):
+    """Separate Stage-6 proposal surface; legacy diagnostic fakes need not implement it."""
+
+    def propose_model(self, context: Any) -> dict[str, Any]:
+        ...
+
+    def propose_model_with_messages(
+        self, context: Any, messages: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        ...
+
+    def propose_gain_update(self, context: Any) -> dict[str, Any]:
+        ...
+
+
 def parse_json_content(content: str) -> dict[str, Any]:
     parsed = json.loads(content)
     if not isinstance(parsed, dict):
@@ -257,6 +272,75 @@ class OpenAICompatibleDiagnosticAdapter:
             api_key=self.api_key,
             base_url=client_base_url,
             timeout=self.timeout_s,
+        )
+
+    def _stage6_json_completion(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+    ) -> dict[str, Any]:
+        options: dict[str, Any] = dict(
+            model=self.model,
+            messages=messages,
+            temperature=self.temperature,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+        )
+        if self._disable_thinking:
+            options["extra_body"] = {"thinking": {"type": "disabled"}}
+        response = self.client.chat.completions.create(**options)
+        content = response.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("Stage-6 proposal returned empty content")
+        return parse_json_content(content)
+
+    def propose_model(self, context: Any) -> dict[str, Any]:
+        from cfdc.lab.model_discovery_llm import (
+            ModelDiscoveryContext,
+            build_model_discovery_messages,
+        )
+        from cfdc.lab.model_questions import load_model_question_examples
+        from cfdc.lab.llm import build_model_proposal_messages
+
+        messages = (
+            build_model_discovery_messages(
+                context, load_model_question_examples()
+            )
+            if isinstance(context, ModelDiscoveryContext)
+            else build_model_proposal_messages(context)
+        )
+
+        return self._stage6_json_completion(
+            messages=messages,
+            max_tokens=min(max(self.max_tokens, 1400), 2600),
+        )
+
+    def propose_model_with_messages(
+        self,
+        context: Any,
+        messages: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        """Send the exact prevalidated prompt recorded by the caller."""
+
+        from cfdc.lab.model_discovery_llm import ModelDiscoveryContext
+
+        if not isinstance(context, ModelDiscoveryContext):
+            raise TypeError(
+                "prebuilt model-discovery messages require a typed "
+                "ModelDiscoveryContext"
+            )
+        return self._stage6_json_completion(
+            messages=messages,
+            max_tokens=min(max(self.max_tokens, 1400), 2600),
+        )
+
+    def propose_gain_update(self, context: Any) -> dict[str, Any]:
+        from cfdc.lab.llm import build_gain_proposal_messages
+
+        return self._stage6_json_completion(
+            messages=build_gain_proposal_messages(context),
+            max_tokens=min(self.max_tokens, 900),
         )
 
     def diagnose(self, description: SystemDescription) -> dict[str, Any]:

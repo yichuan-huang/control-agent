@@ -2572,37 +2572,75 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-取 k=2 s^-1；采用 u1(t)=1、u2(t)=sin(t)、系数 1.5 与 -0.5、时移 1 s，以 0.01 s 采样 8 s，并比较叠加与时移响应。
+采用车辆质量 1000 kg、黏性阻力 50 N*s/m 和 500 N 力阶跃；力到车速的直流增益为 0.02 (m/s)/N，时间常数为 20 s，预测最终车速变化 10 m/s。
+
+未启用 LLM 时可在同一次提交末尾附上：`input_change=500 N; steady_output_change=10 m/s; response_time_s=20 s; input_min=-2000 N; input_max=4000 N; output_min=0 m/s; output_max=50 m/s;`
 
 ### 示例数据（JSON）
 
 ```json
 {
-  "specification_facts": [],
+  "specification_facts": [
+    {
+      "fact_id": "input_change",
+      "value": 500,
+      "unit": "N"
+    },
+    {
+      "fact_id": "steady_output_change",
+      "value": 10,
+      "unit": "m/s"
+    },
+    {
+      "fact_id": "response_time_s",
+      "value": 20,
+      "unit": "s"
+    },
+    {
+      "fact_id": "input_min",
+      "value": -2000,
+      "unit": "N"
+    },
+    {
+      "fact_id": "input_max",
+      "value": 4000,
+      "unit": "N"
+    },
+    {
+      "fact_id": "output_min",
+      "value": 0,
+      "unit": "m/s"
+    },
+    {
+      "fact_id": "output_max",
+      "value": 50,
+      "unit": "m/s"
+    }
+  ],
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      1
+      0.001
     ],
     "denominator": [
       1,
-      2
+      0.05
     ],
     "input_delay_s": 0,
     "input_signal_id": "纵向驱动力",
     "output_signal_id": "车速",
-    "input_units": "unit/s",
-    "output_units": "unit"
+    "input_units": "N",
+    "output_units": "m/s"
   },
   "experiment": {
-    "sample_time_s": 0.01,
-    "duration_s": 4,
-    "initial_output": 0,
+    "sample_time_s": 0.1,
+    "duration_s": 120,
+    "initial_output": 25,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -500,
+      -250,
+      250,
+      500
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -2611,11 +2649,11 @@ max_test_duration_s=20.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 给定测试信号 to baseline and verify that 系统输出响应 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 系统输出响应 direction with its final direction.",
-    "delay": "Measure from the logged 给定测试信号 edge to the first effective 系统输出响应 sample.",
+    "stability": "Return 纵向驱动力 to baseline and verify that 车速 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 车速 direction with its final direction.",
+    "delay": "Measure from the logged 纵向驱动力 edge to the first effective 车速 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 给定测试信号 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 纵向驱动力 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -2660,7 +2698,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-取 k=0.5 s^-1；以 0.01 s 分辨率仿真 16 s 的单位冲激和单位阶跃，并把直接积分与 exp(-0.5 t) 卷积结果比较。
+采用簧载质量 375 kg、车轮质量 20 kg、悬架刚度 130000 N/m、轮胎刚度 1000000 N/m 和阻尼 9800 N*s/m；施加 0.01、0.025、0.05 m 有界路面阶跃，以 1 ms 同步记录车身、车轮与悬架行程。
 
 ### 示例数据（JSON）
 
@@ -2670,27 +2708,31 @@ max_test_duration_s=20.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      1
+      1310000,
+      17423000
     ],
     "denominator": [
       1,
-      0.5
+      516.1,
+      56850,
+      1307000,
+      17330000
     ],
     "input_delay_s": 0,
     "input_signal_id": "给定路面位移测试输入",
     "output_signal_id": "车身位移",
-    "input_units": "impulse_unit",
-    "output_units": "unit"
+    "input_units": "m",
+    "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 0.04,
-    "duration_s": 16,
+    "sample_time_s": 0.001,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -0.05,
+      -0.025,
+      0.025,
+      0.05
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -2698,12 +2740,19 @@ max_test_duration_s=20.0
       1.1
     ]
   },
+  "physical_parameters": {
+    "sprung_mass_kg": 375,
+    "wheel_mass_kg": 20,
+    "suspension_stiffness_N_per_m": 130000,
+    "tire_stiffness_N_per_m": 1000000,
+    "damping_N_s_per_m": 9800
+  },
   "eight_segment_evidence": {
-    "stability": "Return 输入信号 to baseline and verify that 输出响应 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 输出响应 direction with its final direction.",
-    "delay": "Measure from the logged 输入信号 edge to the first effective 输出响应 sample.",
+    "stability": "Return 给定路面位移测试输入 to baseline and verify that 车身位移、车轮位移与悬架行程 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 车身位移、车轮位移与悬架行程 direction with its final direction.",
+    "delay": "Measure from the logged 给定路面位移测试输入 edge to the first effective 车身位移、车轮位移与悬架行程 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 输入信号 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 给定路面位移测试输入 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -2952,8 +3001,8 @@ max_test_duration_s=40.0
       "主惯量上的机体力矩"
     ],
     "output_signal_ids": [
-      "两刚体角度与角速度",
-      "两刚体角度与角速度"
+      "两刚体角度与角速度通道 1",
+      "两刚体角度与角速度通道 2"
     ],
     "initial_state": [
       0,
@@ -3011,11 +3060,11 @@ max_test_duration_s=40.0
 
 ### 可观察输出
 
-滚转、俯仰与偏航响应
+滚转、俯仰、偏航响应
 
 ### 执行器
 
-四个旋翼推力增量
+四个旋翼推力增量、旋翼 1 力矩增量、旋翼 2 力矩增量、旋翼 3 力矩增量、旋翼 4 力矩增量
 
 ### 安全边界
 
@@ -3037,7 +3086,7 @@ max_test_duration_s=16.0
 
 ### 示例数据（自然语言）
 
-采用 y_ddot+5 y_dot+4 y=2 u 且初值为零；施加 +/-0.5 与 +/-1 N 阶跃，以 0.01 s 采样 8 s，并核对 G(s)=2/(s^2+5s+4)。
+采用滚转和俯仰惯量 0.02 kg*m^2、偏航惯量 0.05 kg*m^2；四个旋翼力矩增量均限制为 +/-0.1 Nm，并分别激励滚转、俯仰和偏航混控列。
 
 ### 示例数据（JSON）
 
@@ -3045,30 +3094,191 @@ max_test_duration_s=16.0
 {
   "specification_facts": [],
   "model": {
-    "kind": "transfer_function",
-    "numerator": [
-      2
+    "kind": "state_space",
+    "a": [
+      [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
     ],
-    "denominator": [
-      1,
-      5,
-      4
+    "b": [
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        50,
+        -50,
+        -50,
+        50
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        50,
+        50,
+        -50,
+        -50
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        20,
+        -20,
+        20,
+        -20
+      ]
     ],
-    "input_delay_s": 0,
-    "input_signal_id": "四个旋翼推力增量",
-    "output_signal_id": "滚转",
-    "input_units": "N",
-    "output_units": "m"
+    "c": [
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    ],
+    "d": [
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "state_names": [
+      "roll",
+      "roll_rate",
+      "pitch",
+      "pitch_rate",
+      "yaw",
+      "yaw_rate"
+    ],
+    "input_signal_ids": [
+      "旋翼 1 力矩增量",
+      "旋翼 2 力矩增量",
+      "旋翼 3 力矩增量",
+      "旋翼 4 力矩增量"
+    ],
+    "output_signal_ids": [
+      "滚转",
+      "俯仰",
+      "偏航响应"
+    ],
+    "initial_state": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "signal_units": {
+      "rotor_1_torque": "Nm",
+      "rotor_2_torque": "Nm",
+      "rotor_3_torque": "Nm",
+      "rotor_4_torque": "Nm",
+      "roll angle": "rad",
+      "pitch angle": "rad",
+      "yaw angle": "rad"
+    },
+    "parameter_uncertainty": {
+      "inertias": 0.1,
+      "mixer_effectiveness": 0.1
+    }
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.002,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -0.02,
+      -0.01,
+      0.01,
+      0.02
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3077,11 +3287,11 @@ max_test_duration_s=16.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 给定外部激励 to baseline and verify that 系统输出响应 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 系统输出响应 direction with its final direction.",
-    "delay": "Measure from the logged 给定外部激励 edge to the first effective 系统输出响应 sample.",
+    "stability": "Return 四个旋翼推力增量 to baseline and verify that 滚转、俯仰与偏航响应 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 滚转、俯仰与偏航响应 direction with its final direction.",
+    "delay": "Measure from the logged 四个旋翼推力增量 edge to the first effective 滚转、俯仰与偏航响应 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 给定外部激励 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 四个旋翼推力增量 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3126,7 +3336,7 @@ max_test_duration_s=16.0
 
 ### 示例数据（自然语言）
 
-取 R=10 kohm、C=100 uF，得到 RC=1 s；以 0.01 s 采样 8 s，施加 0.25、0.5、0.75、1 V 阶跃。
+采用质量 1 kg、摆长 1 m、重力加速度 9.81 m/s^2；以 0.02 s 采样仿真 10 s，对正弦非线性模型和小角线性模型比较 1 Nm 与 4 Nm 力矩阶跃。
 
 ### 示例数据（JSON）
 
@@ -3140,23 +3350,24 @@ max_test_duration_s=16.0
     ],
     "denominator": [
       1,
-      1
+      0,
+      9.81
     ],
     "input_delay_s": 0,
     "input_signal_id": "枢轴力矩",
     "output_signal_id": "摆角与角速度",
-    "input_units": "V",
-    "output_units": "V"
+    "input_units": "Nm",
+    "output_units": "rad"
   },
   "experiment": {
     "sample_time_s": 0.02,
-    "duration_s": 8,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
+      -4,
       -1,
-      -0.5,
-      0.5,
-      1
+      1,
+      4
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3164,12 +3375,14 @@ max_test_duration_s=16.0
       1.1
     ]
   },
+  "nonlinear_equation": "theta_ddot=-9.81*sin(theta)+torque",
+  "linear_equation": "theta_ddot=-9.81*theta+torque",
   "eight_segment_evidence": {
-    "stability": "Return 输入电压 to baseline and verify that 电容电压 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 电容电压 direction with its final direction.",
-    "delay": "Measure from the logged 输入电压 edge to the first effective 电容电压 sample.",
+    "stability": "Return 枢轴力矩 to baseline and verify that 摆角与角速度 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 摆角与角速度 direction with its final direction.",
+    "delay": "Measure from the logged 枢轴力矩 edge to the first effective 摆角与角速度 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 输入电压 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 枢轴力矩 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3214,7 +3427,7 @@ max_test_duration_s=12.0
 
 ### 示例数据（自然语言）
 
-取 k=1 s^-1、正弦幅值 1 V、omega=10 rad/s；以 0.002 s 采样 12 s，并在指数暂态消失后估计稳态幅值和相位。
+采用小车质量 1 kg、摆质量 0.2 kg、质心距离 0.5 m、转动惯量 0.006 kg*m^2、摩擦 0.1 N*s/m、推力限制 20 N、行程限制 1.5 m 和初始摆角 0.05 rad。
 
 ### 示例数据（JSON）
 
@@ -3222,29 +3435,51 @@ max_test_duration_s=12.0
 {
   "specification_facts": [],
   "model": {
-    "kind": "transfer_function",
-    "numerator": [
-      1
+    "kind": "registered_nonlinear",
+    "template_id": "underactuated_cartpole",
+    "parameters": {
+      "cart_mass_kg": 1,
+      "pole_mass_kg": 0.2,
+      "com_length_m": 0.5,
+      "pole_inertia_kg_m2": 0.006,
+      "cart_friction_n_s_m": 0.1,
+      "gravity_m_s2": 9.81,
+      "force_limit_n": 20,
+      "cart_position_limit_m": 1.5
+    },
+    "initial_state": {
+      "position_m": 0,
+      "velocity_m_s": 0,
+      "angle_rad": 0.05,
+      "angular_rate_rad_s": 0
+    },
+    "input_signal_ids": [
+      "小车水平力"
     ],
-    "denominator": [
-      1,
-      1
+    "output_signal_ids": [
+      "小车位置",
+      "摆角"
     ],
-    "input_delay_s": 0,
-    "input_signal_id": "小车水平力",
-    "output_signal_id": "小车位置",
-    "input_units": "V",
-    "output_units": "V"
+    "signal_units": {
+      "trolley force": "N",
+      "trolley position": "m",
+      "pendulum angle": "rad"
+    },
+    "parameter_uncertainty": {
+      "cart_mass_kg": 0.1,
+      "pole_mass_kg": 0.1,
+      "com_length_m": 0.1
+    }
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.005,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -5,
+      -2.5,
+      2.5,
+      5
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3253,11 +3488,11 @@ max_test_duration_s=12.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 正弦输入 to baseline and verify that 正弦输出幅值与相位 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 正弦输出幅值与相位 direction with its final direction.",
-    "delay": "Measure from the logged 正弦输入 edge to the first effective 正弦输出幅值与相位 sample.",
+    "stability": "Return 小车水平力 to baseline and verify that 小车位置、摆角 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 小车位置、摆角 direction with its final direction.",
+    "delay": "Measure from the logged 小车水平力 edge to the first effective 小车位置、摆角 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 正弦输入 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 小车水平力 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3302,7 +3537,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用 G(s)=1/(s+1)、阶跃幅值 2、斜坡斜率 0.5、单位冲激面积 1、正弦频率 3 rad/s，以 0.005 s 采样 12 s。
+取 R1=R2=10 kohm、C1=C2=10 uF，得到 G(s)=(0.01 s^2+0.2 s+1)/(0.01 s^2+0.3 s+1)。用 +/-1 V 试验核对低频和高频的单位增益以及桥接支路的中频响应。
 
 ### 示例数据（JSON）
 
@@ -3312,21 +3547,24 @@ max_test_duration_s=20.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
+      0.01,
+      0.2,
       1
     ],
     "denominator": [
-      1,
+      0.01,
+      0.3,
       1
     ],
     "input_delay_s": 0,
     "input_signal_id": "输入电压",
     "output_signal_id": "输出与电容电压",
-    "input_units": "canonical_input",
-    "output_units": "unit"
+    "input_units": "V",
+    "output_units": "V"
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.0005,
+    "duration_s": 1,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3340,12 +3578,18 @@ max_test_duration_s=20.0
       1.1
     ]
   },
+  "physical_parameters": {
+    "R1_ohm": 10000,
+    "R2_ohm": 10000,
+    "C1_F": 1e-05,
+    "C2_F": 1e-05
+  },
   "eight_segment_evidence": {
-    "stability": "Return 典型测试信号 to baseline and verify that 变换后的系统响应 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 变换后的系统响应 direction with its final direction.",
-    "delay": "Measure from the logged 典型测试信号 edge to the first effective 变换后的系统响应 sample.",
+    "stability": "Return 输入电压 to baseline and verify that 输出与电容电压 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 输出与电容电压 direction with its final direction.",
+    "delay": "Measure from the logged 输入电压 edge to the first effective 输出与电容电压 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 典型测试信号 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 输入电压 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3364,7 +3608,7 @@ max_test_duration_s=20.0
 
 ### 可观察输出
 
-两个电容电压与电感电流
+电容电压 1、电容电压 2、电感电流
 
 ### 执行器
 
@@ -3390,7 +3634,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用 Y(s)=(s+2)(s+4)/[s(s+1)(s+3)]；以 0.005 s 采样 12 s 仿真单位冲激，并比较留数 8/3、-3/2、-1/6。
+采用 R1=R2=10 ohm、C1=C2=0.01 F、L=0.1 H，施加 0.1 A 有界电流阶跃，并记录全部电容电压和电感电流。
 
 ### 示例数据（JSON）
 
@@ -3398,33 +3642,97 @@ max_test_duration_s=20.0
 {
   "specification_facts": [],
   "model": {
-    "kind": "transfer_function",
-    "numerator": [
-      1,
-      6,
-      8
+    "kind": "state_space",
+    "a": [
+      [
+        -10,
+        0,
+        -100
+      ],
+      [
+        0,
+        -10,
+        100
+      ],
+      [
+        10,
+        -10,
+        0
+      ]
     ],
-    "denominator": [
-      1,
-      4,
-      3,
+    "b": [
+      [
+        100
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "c": [
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "d": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "state_names": [
+      "capacitor_voltage_1",
+      "capacitor_voltage_2",
+      "inductor_current"
+    ],
+    "input_signal_ids": [
+      "源电流"
+    ],
+    "output_signal_ids": [
+      "电容电压 1",
+      "电容电压 2",
+      "电感电流"
+    ],
+    "initial_state": [
+      0,
+      0,
       0
     ],
-    "input_delay_s": 0,
-    "input_signal_id": "源电流",
-    "output_signal_id": "两个电容电压与电感电流",
-    "input_units": "impulse_unit",
-    "output_units": "unit"
+    "signal_units": {
+      "capacitor_voltage_1": "V",
+      "capacitor_voltage_2": "V",
+      "inductor_current": "A",
+      "source_current": "A"
+    }
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.0002,
+    "duration_s": 2,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -0.1,
+      -0.05,
+      0.05,
+      0.1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3432,12 +3740,19 @@ max_test_duration_s=20.0
       1.1
     ]
   },
+  "physical_parameters": {
+    "R1_ohm": 10,
+    "R2_ohm": 10,
+    "C1_F": 0.01,
+    "C2_F": 0.01,
+    "L_H": 0.1
+  },
   "eight_segment_evidence": {
-    "stability": "Return 给定变换域输入 to baseline and verify that 时域输出响应 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 时域输出响应 direction with its final direction.",
-    "delay": "Measure from the logged 给定变换域输入 edge to the first effective 时域输出响应 sample.",
+    "stability": "Return 源电流 to baseline and verify that 两个电容电压与电感电流 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 两个电容电压与电感电流 direction with its final direction.",
+    "delay": "Measure from the logged 源电流 edge to the first effective 两个电容电压与电感电流 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 给定变换域输入 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 源电流 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3460,7 +3775,7 @@ max_test_duration_s=20.0
 
 ### 执行器
 
-输入电压
+输入电压、输入电压 1、输入电压 2
 
 ### 安全边界
 
@@ -3482,7 +3797,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-并行计算 Y1=3(s+2)/[s(s^2+2s+10)] 与 Y2=3/[s(s-2)]，以 0.002 s 采样 8 s，并在输出绝对值达到 100 时停止。
+取 Rf=20 kohm、R1=10 kohm、R2=20 kohm，得到 vout=-2 v1-v2；各输入限制为 +/-5 V，输出限制为 +/-12 V。
 
 ### 示例数据（JSON）
 
@@ -3490,26 +3805,54 @@ max_test_duration_s=20.0
 {
   "specification_facts": [],
   "model": {
-    "kind": "transfer_function",
-    "numerator": [
-      3,
-      6
+    "kind": "state_space",
+    "a": [
+      [
+        -1000
+      ]
     ],
-    "denominator": [
-      1,
-      2,
-      10,
+    "b": [
+      [
+        2000,
+        1000
+      ]
+    ],
+    "c": [
+      [
+        -1
+      ]
+    ],
+    "d": [
+      [
+        0,
+        0
+      ]
+    ],
+    "state_names": [
+      "amplifier_output_state"
+    ],
+    "input_signal_ids": [
+      "输入电压 1",
+      "输入电压 2"
+    ],
+    "output_signal_ids": [
+      "加权输出电压"
+    ],
+    "initial_state": [
       0
     ],
-    "input_delay_s": 0,
-    "input_signal_id": "输入电压",
-    "output_signal_id": "加权输出电压",
-    "input_units": "step_unit",
-    "output_units": "unit"
+    "signal_units": {
+      "input_v1": "V",
+      "input_v2": "V",
+      "summer output voltage": "V"
+    },
+    "parameter_uncertainty": {
+      "resistor_ratios": 0.1
+    }
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 1e-05,
+    "duration_s": 0.02,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3523,28 +3866,12 @@ max_test_duration_s=20.0
       1.1
     ]
   },
-  "comparison_model": {
-    "kind": "transfer_function",
-    "numerator": [
-      3
-    ],
-    "denominator": [
-      1,
-      -2,
-      0
-    ],
-    "input_delay_s": 0,
-    "input_signal_id": "unstable case input",
-    "output_signal_id": "unstable case output",
-    "input_units": "step_unit",
-    "output_units": "unit"
-  },
   "eight_segment_evidence": {
-    "stability": "Return 测试输入 to baseline and verify that 稳态输出 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 稳态输出 direction with its final direction.",
-    "delay": "Measure from the logged 测试输入 edge to the first effective 稳态输出 sample.",
+    "stability": "Return 输入电压 to baseline and verify that 加权输出电压 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 加权输出电压 direction with its final direction.",
+    "delay": "Measure from the logged 输入电压 edge to the first effective 加权输出电压 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 测试输入 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 输入电压 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3589,7 +3916,7 @@ max_test_duration_s=16.0
 
 ### 示例数据（自然语言）
 
-采用 G(s)=3(s+2)/(s^2+2s+10)；施加 0.25、0.5、0.75、1 四级阶跃，以 0.005 s 采样 12 s，并核对 0.6 直流增益。
+采用 Rin=100 kohm、C=10 uF，使 Rin*C=1 s；+1 V 输入产生 -1 V/s 输出斜率，并在输出达到 +/-10 V 前停止。
 
 ### 示例数据（JSON）
 
@@ -3599,23 +3926,21 @@ max_test_duration_s=16.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      3,
-      6
+      -1
     ],
     "denominator": [
       1,
-      2,
-      10
+      0
     ],
     "input_delay_s": 0,
     "input_signal_id": "输入电压",
     "output_signal_id": "积分器输出电压",
-    "input_units": "step_unit",
-    "output_units": "unit"
+    "input_units": "V",
+    "output_units": "V"
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.001,
+    "duration_s": 5,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3630,11 +3955,11 @@ max_test_duration_s=16.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 单位阶跃输入 to baseline and verify that 稳态输出 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 稳态输出 direction with its final direction.",
-    "delay": "Measure from the logged 单位阶跃输入 edge to the first effective 稳态输出 sample.",
+    "stability": "Return 输入电压 to baseline and verify that 积分器输出电压 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 积分器输出电压 direction with its final direction.",
+    "delay": "Measure from the logged 输入电压 edge to the first effective 积分器输出电压 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 单位阶跃输入 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 输入电压 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3679,7 +4004,7 @@ max_test_duration_s=16.0
 
 ### 示例数据（自然语言）
 
-采用 y_ddot+5 y_dot+4 y=u；先运行初值 (y0,ydot0)=(1,0) 与 (0,1)，再运行零初值输入 u=2 exp(-2t)，以 0.005 s 采样 10 s。
+采用磁通密度 0.5 T、直径 2 cm 的 20 匝线圈，得到 Bl=0.63 N/A；再取 M=0.02 kg、b=0.2 N*s/m、L=1 mH、R=8 ohm。
 
 ### 示例数据（JSON）
 
@@ -3689,22 +4014,23 @@ max_test_duration_s=16.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      1
+      0.63
     ],
     "denominator": [
-      1,
-      5,
-      4
+      2e-05,
+      0.1602,
+      1.9969,
+      0
     ],
     "input_delay_s": 0,
     "input_signal_id": "放大器电压",
     "output_signal_id": "锥盆位移",
-    "input_units": "N",
+    "input_units": "V",
     "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 5e-05,
+    "duration_s": 2,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3718,23 +4044,12 @@ max_test_duration_s=16.0
       1.1
     ]
   },
-  "initial_condition_cases": [
-    [
-      1,
-      0
-    ],
-    [
-      0,
-      1
-    ]
-  ],
-  "forced_input": "2*exp(-2*t)",
   "eight_segment_evidence": {
-    "stability": "Return 外部激励与给定初态释放 to baseline and verify that 状态与输出响应 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 状态与输出响应 direction with its final direction.",
-    "delay": "Measure from the logged 外部激励与给定初态释放 edge to the first effective 状态与输出响应 sample.",
+    "stability": "Return 放大器电压 to baseline and verify that 锥盆位移、线圈电流 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 锥盆位移、线圈电流 direction with its final direction.",
+    "delay": "Measure from the logged 放大器电压 edge to the first effective 锥盆位移、线圈电流 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 外部激励与给定初态释放 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 放大器电压 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3779,7 +4094,7 @@ max_test_duration_s=16.0
 
 ### 示例数据（自然语言）
 
-采用 m=1000 kg、b=50 N*s/m 和 500 N 力阶跃；以 0.05 s 采样 120 s 的速度与位置，位置模型为 Gx=0.001/[s(s+0.05)]。
+采用 J=0.01 kg*m^2、b=0.1 Nm*s/rad、Kt=Ke=0.01、R=1 ohm、L=0.5 H；用 +/-1 V 测试并记录电流、转速和位置。
 
 ### 示例数据（JSON）
 
@@ -3789,28 +4104,29 @@ max_test_duration_s=16.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      0.001
+      0.01
     ],
     "denominator": [
-      1,
-      0.05,
+      0.005,
+      0.06,
+      0.1001,
       0
     ],
     "input_delay_s": 0,
     "input_signal_id": "电枢电压",
     "output_signal_id": "电机位置",
-    "input_units": "N",
-    "output_units": "m"
+    "input_units": "V",
+    "output_units": "rad"
   },
   "experiment": {
-    "sample_time_s": 0.4,
-    "duration_s": 160,
+    "sample_time_s": 0.0005,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
-      -500,
-      -250,
-      250,
-      500
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3819,11 +4135,11 @@ max_test_duration_s=16.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 驱动力 to baseline and verify that 车辆位置与速度 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 车辆位置与速度 direction with its final direction.",
-    "delay": "Measure from the logged 驱动力 edge to the first effective 车辆位置与速度 sample.",
+    "stability": "Return 电枢电压 to baseline and verify that 电机位置、转速、电枢电流 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 电机位置、转速、电枢电流 direction with its final direction.",
+    "delay": "Measure from the logged 电枢电压 edge to the first effective 电机位置、转速、电枢电流 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 驱动力 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 电枢电压 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3868,7 +4184,7 @@ max_test_duration_s=16.0
 
 ### 示例数据（自然语言）
 
-采用 J=0.01 kg*m^2、b=0.001 Nm*s/rad、Kt=Ke=1、Ra=10 ohm、La=1 H；用 +/-1 V 测试，以 0.001 s 记录 5 s 的电流、转速和角度。
+采用齿轮比 n=4、电机侧惯量 J1=0.002 kg*m^2、负载惯量 J2=0.03 kg*m^2、b1=0.001 与 b2=0.02 Nm*s/rad。
 
 ### 示例数据（JSON）
 
@@ -3878,23 +4194,22 @@ max_test_duration_s=16.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      100
+      4
     ],
     "denominator": [
-      1,
-      10.1,
-      101,
+      0.062,
+      0.036,
       0
     ],
     "input_delay_s": 0,
     "input_signal_id": "电机力矩",
     "output_signal_id": "电机与负载角度",
-    "input_units": "V",
+    "input_units": "Nm",
     "output_units": "rad"
   },
   "experiment": {
-    "sample_time_s": 0.004,
-    "duration_s": 1.6,
+    "sample_time_s": 0.002,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3909,11 +4224,11 @@ max_test_duration_s=16.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 电枢电压 to baseline and verify that 电机速度与位置 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 电机速度与位置 direction with its final direction.",
-    "delay": "Measure from the logged 电枢电压 edge to the first effective 电机速度与位置 sample.",
+    "stability": "Return 电机力矩 to baseline and verify that 电机与负载角度、轴力矩 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 电机与负载角度、轴力矩 direction with its final direction.",
+    "delay": "Measure from the logged 电机力矩 edge to the first effective 电机与负载角度、轴力矩 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 电枢电压 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 电机力矩 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -4610,75 +4925,37 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用车辆质量 1000 kg、黏性阻力 50 N*s/m 和 500 N 力阶跃；力到车速的直流增益为 0.02 (m/s)/N，时间常数为 20 s，预测最终车速变化 10 m/s。
-
-未启用 LLM 时可在同一次提交末尾附上：`input_change=500 N; steady_output_change=10 m/s; response_time_s=20 s; input_min=-2000 N; input_max=4000 N; output_min=0 m/s; output_max=50 m/s;`
+取 k=2 s^-1；采用 u1(t)=1、u2(t)=sin(t)、系数 1.5 与 -0.5、时移 1 s，以 0.01 s 采样 8 s，并比较叠加与时移响应。
 
 ### 示例数据（JSON）
 
 ```json
 {
-  "specification_facts": [
-    {
-      "fact_id": "input_change",
-      "value": 500,
-      "unit": "N"
-    },
-    {
-      "fact_id": "steady_output_change",
-      "value": 10,
-      "unit": "m/s"
-    },
-    {
-      "fact_id": "response_time_s",
-      "value": 20,
-      "unit": "s"
-    },
-    {
-      "fact_id": "input_min",
-      "value": -2000,
-      "unit": "N"
-    },
-    {
-      "fact_id": "input_max",
-      "value": 4000,
-      "unit": "N"
-    },
-    {
-      "fact_id": "output_min",
-      "value": 0,
-      "unit": "m/s"
-    },
-    {
-      "fact_id": "output_max",
-      "value": 50,
-      "unit": "m/s"
-    }
-  ],
+  "specification_facts": [],
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      0.001
+      1
     ],
     "denominator": [
       1,
-      0.05
+      2
     ],
     "input_delay_s": 0,
     "input_signal_id": "给定测试信号",
     "output_signal_id": "系统输出响应",
-    "input_units": "N",
-    "output_units": "m/s"
+    "input_units": "unit/s",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.1,
-    "duration_s": 120,
-    "initial_output": 25,
+    "sample_time_s": 0.01,
+    "duration_s": 8,
+    "initial_output": 0,
     "input_amplitudes": [
-      -500,
-      -250,
-      250,
-      500
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -4687,11 +4964,11 @@ max_test_duration_s=20.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 纵向驱动力 to baseline and verify that 车速 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 车速 direction with its final direction.",
-    "delay": "Measure from the logged 纵向驱动力 edge to the first effective 车速 sample.",
+    "stability": "Return 给定测试信号 to baseline and verify that 系统输出响应 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 系统输出响应 direction with its final direction.",
+    "delay": "Measure from the logged 给定测试信号 edge to the first effective 系统输出响应 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 纵向驱动力 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 给定测试信号 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -4735,7 +5012,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用簧载质量 375 kg、车轮质量 20 kg、悬架刚度 130000 N/m、轮胎刚度 1000000 N/m 和阻尼 9800 N*s/m；施加 0.01、0.025、0.05 m 有界路面阶跃，以 1 ms 同步记录车身、车轮与悬架行程。
+取 k=0.5 s^-1；以 0.01 s 分辨率仿真 16 s 的单位冲激和单位阶跃，并把直接积分与 exp(-0.5 t) 卷积结果比较。
 
 ### 示例数据（JSON）
 
@@ -4745,31 +5022,27 @@ max_test_duration_s=20.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      1310000,
-      17423000
+      1
     ],
     "denominator": [
       1,
-      516.1,
-      56850,
-      1307000,
-      17330000
+      0.5
     ],
     "input_delay_s": 0,
     "input_signal_id": "输入信号",
     "output_signal_id": "输出响应",
-    "input_units": "m",
-    "output_units": "m"
+    "input_units": "impulse_unit",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.001,
-    "duration_s": 10,
+    "sample_time_s": 0.01,
+    "duration_s": 16,
     "initial_output": 0,
     "input_amplitudes": [
-      -0.05,
-      -0.025,
-      0.025,
-      0.05
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -4777,19 +5050,12 @@ max_test_duration_s=20.0
       1.1
     ]
   },
-  "physical_parameters": {
-    "sprung_mass_kg": 375,
-    "wheel_mass_kg": 20,
-    "suspension_stiffness_N_per_m": 130000,
-    "tire_stiffness_N_per_m": 1000000,
-    "damping_N_s_per_m": 9800
-  },
   "eight_segment_evidence": {
-    "stability": "Return 给定路面位移测试输入 to baseline and verify that 车身位移、车轮位移与悬架行程 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 车身位移、车轮位移与悬架行程 direction with its final direction.",
-    "delay": "Measure from the logged 给定路面位移测试输入 edge to the first effective 车身位移、车轮位移与悬架行程 sample.",
+    "stability": "Return 输入信号 to baseline and verify that 输出响应 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 输出响应 direction with its final direction.",
+    "delay": "Measure from the logged 输入信号 edge to the first effective 输出响应 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 给定路面位移测试输入 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 输入信号 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -4833,7 +5099,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用滚转和俯仰惯量 0.02 kg*m^2、偏航惯量 0.05 kg*m^2；四个旋翼力矩增量均限制为 +/-0.1 Nm，并分别激励滚转、俯仰和偏航混控列。
+采用 y_ddot+5 y_dot+4 y=2 u 且初值为零；施加 +/-0.5 与 +/-1 N 阶跃，以 0.01 s 采样 8 s，并核对 G(s)=2/(s^2+5s+4)。
 
 ### 示例数据（JSON）
 
@@ -4841,191 +5107,30 @@ max_test_duration_s=20.0
 {
   "specification_facts": [],
   "model": {
-    "kind": "state_space",
-    "a": [
-      [
-        0,
-        1,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        1,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        1
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ]
+    "kind": "transfer_function",
+    "numerator": [
+      2
     ],
-    "b": [
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        50,
-        -50,
-        -50,
-        50
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        50,
-        50,
-        -50,
-        -50
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        20,
-        -20,
-        20,
-        -20
-      ]
+    "denominator": [
+      1,
+      5,
+      4
     ],
-    "c": [
-      [
-        1,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        1,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        1,
-        0
-      ]
-    ],
-    "d": [
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ]
-    ],
-    "state_names": [
-      "roll",
-      "roll_rate",
-      "pitch",
-      "pitch_rate",
-      "yaw",
-      "yaw_rate"
-    ],
-    "input_signal_ids": [
-      "给定外部激励",
-      "给定外部激励",
-      "给定外部激励",
-      "给定外部激励"
-    ],
-    "output_signal_ids": [
-      "系统输出响应",
-      "系统输出响应",
-      "系统输出响应"
-    ],
-    "initial_state": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "signal_units": {
-      "rotor_1_torque": "Nm",
-      "rotor_2_torque": "Nm",
-      "rotor_3_torque": "Nm",
-      "rotor_4_torque": "Nm",
-      "roll angle": "rad",
-      "pitch angle": "rad",
-      "yaw angle": "rad"
-    },
-    "parameter_uncertainty": {
-      "inertias": 0.1,
-      "mixer_effectiveness": 0.1
-    }
+    "input_delay_s": 0,
+    "input_signal_id": "给定外部激励",
+    "output_signal_id": "系统输出响应",
+    "input_units": "N",
+    "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 0.002,
-    "duration_s": 12,
+    "sample_time_s": 0.01,
+    "duration_s": 8,
     "initial_output": 0,
     "input_amplitudes": [
-      -0.02,
-      -0.01,
-      0.01,
-      0.02
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -5034,11 +5139,11 @@ max_test_duration_s=20.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 四个旋翼推力增量 to baseline and verify that 滚转、俯仰与偏航响应 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 滚转、俯仰与偏航响应 direction with its final direction.",
-    "delay": "Measure from the logged 四个旋翼推力增量 edge to the first effective 滚转、俯仰与偏航响应 sample.",
+    "stability": "Return 给定外部激励 to baseline and verify that 系统输出响应 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 系统输出响应 direction with its final direction.",
+    "delay": "Measure from the logged 给定外部激励 edge to the first effective 系统输出响应 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 四个旋翼推力增量 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 给定外部激励 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5082,7 +5187,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用质量 1 kg、摆长 1 m、重力加速度 9.81 m/s^2；以 0.02 s 采样仿真 10 s，对正弦非线性模型和小角线性模型比较 1 Nm 与 4 Nm 力矩阶跃。
+取 R=10 kohm、C=100 uF，得到 RC=1 s；以 0.01 s 采样 8 s，施加 0.25、0.5、0.75、1 V 阶跃。
 
 ### 示例数据（JSON）
 
@@ -5096,18 +5201,17 @@ max_test_duration_s=20.0
     ],
     "denominator": [
       1,
-      0,
-      9.81
+      1
     ],
     "input_delay_s": 0,
     "input_signal_id": "输入电压",
     "output_signal_id": "电容电压",
-    "input_units": "Nm",
-    "output_units": "rad"
+    "input_units": "V",
+    "output_units": "V"
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 10,
+    "sample_time_s": 0.01,
+    "duration_s": 8,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5121,14 +5225,12 @@ max_test_duration_s=20.0
       1.1
     ]
   },
-  "nonlinear_equation": "theta_ddot=-9.81*sin(theta)+torque",
-  "linear_equation": "theta_ddot=-9.81*theta+torque",
   "eight_segment_evidence": {
-    "stability": "Return 枢轴力矩 to baseline and verify that 摆角与角速度 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 摆角与角速度 direction with its final direction.",
-    "delay": "Measure from the logged 枢轴力矩 edge to the first effective 摆角与角速度 sample.",
+    "stability": "Return 输入电压 to baseline and verify that 电容电压 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 电容电压 direction with its final direction.",
+    "delay": "Measure from the logged 输入电压 edge to the first effective 电容电压 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 枢轴力矩 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 输入电压 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5172,7 +5274,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用小车质量 1 kg、摆质量 0.2 kg、质心距离 0.5 m、转动惯量 0.006 kg*m^2、摩擦 0.1 N*s/m、推力限制 20 N、行程限制 1.5 m 和初始摆角 0.05 rad。
+取 k=1 s^-1、正弦幅值 1 V、omega=10 rad/s；以 0.002 s 采样 12 s，并在指数暂态消失后估计稳态幅值和相位。
 
 ### 示例数据（JSON）
 
@@ -5180,51 +5282,29 @@ max_test_duration_s=20.0
 {
   "specification_facts": [],
   "model": {
-    "kind": "registered_nonlinear",
-    "template_id": "underactuated_cartpole",
-    "parameters": {
-      "cart_mass_kg": 1,
-      "pole_mass_kg": 0.2,
-      "com_length_m": 0.5,
-      "pole_inertia_kg_m2": 0.006,
-      "cart_friction_n_s_m": 0.1,
-      "gravity_m_s2": 9.81,
-      "force_limit_n": 20,
-      "cart_position_limit_m": 1.5
-    },
-    "initial_state": {
-      "position_m": 0,
-      "velocity_m_s": 0,
-      "angle_rad": 0.05,
-      "angular_rate_rad_s": 0
-    },
-    "input_signal_ids": [
-      "正弦输入"
+    "kind": "transfer_function",
+    "numerator": [
+      1
     ],
-    "output_signal_ids": [
-      "正弦输出幅值与相位",
-      "正弦输出幅值与相位"
+    "denominator": [
+      1,
+      1
     ],
-    "signal_units": {
-      "trolley force": "N",
-      "trolley position": "m",
-      "pendulum angle": "rad"
-    },
-    "parameter_uncertainty": {
-      "cart_mass_kg": 0.1,
-      "pole_mass_kg": 0.1,
-      "com_length_m": 0.1
-    }
+    "input_delay_s": 0,
+    "input_signal_id": "正弦输入",
+    "output_signal_id": "正弦输出幅值与相位",
+    "input_units": "V",
+    "output_units": "V"
   },
   "experiment": {
-    "sample_time_s": 0.005,
+    "sample_time_s": 0.002,
     "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
-      -5,
-      -2.5,
-      2.5,
-      5
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -5233,11 +5313,11 @@ max_test_duration_s=20.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 小车水平力 to baseline and verify that 小车位置、摆角 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 小车位置、摆角 direction with its final direction.",
-    "delay": "Measure from the logged 小车水平力 edge to the first effective 小车位置、摆角 sample.",
+    "stability": "Return 正弦输入 to baseline and verify that 正弦输出幅值与相位 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 正弦输出幅值与相位 direction with its final direction.",
+    "delay": "Measure from the logged 正弦输入 edge to the first effective 正弦输出幅值与相位 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 小车水平力 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 正弦输入 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5281,7 +5361,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-取 R1=R2=10 kohm、C1=C2=10 uF，并采用核对后的二阶数值实现 G(s)=1/(0.01 s^2+0.2 s+1) 做 +/-1 V 试验。
+采用 G(s)=1/(s+1)、阶跃幅值 2、斜坡斜率 0.5、单位冲激面积 1、正弦频率 3 rad/s，以 0.005 s 采样 12 s。
 
 ### 示例数据（JSON）
 
@@ -5294,19 +5374,18 @@ max_test_duration_s=20.0
       1
     ],
     "denominator": [
-      0.01,
-      0.2,
+      1,
       1
     ],
     "input_delay_s": 0,
     "input_signal_id": "典型测试信号",
     "output_signal_id": "变换后的系统响应",
-    "input_units": "V",
-    "output_units": "V"
+    "input_units": "canonical_input",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.0005,
-    "duration_s": 1,
+    "sample_time_s": 0.005,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5321,11 +5400,11 @@ max_test_duration_s=20.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 输入电压 to baseline and verify that 输出与电容电压 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 输出与电容电压 direction with its final direction.",
-    "delay": "Measure from the logged 输入电压 edge to the first effective 输出与电容电压 sample.",
+    "stability": "Return 典型测试信号 to baseline and verify that 变换后的系统响应 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 变换后的系统响应 direction with its final direction.",
+    "delay": "Measure from the logged 典型测试信号 edge to the first effective 变换后的系统响应 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 输入电压 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 典型测试信号 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5369,7 +5448,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用 R1=R2=10 ohm、C1=C2=0.01 F、L=0.1 H，施加 0.1 A 有界电流阶跃，并记录全部电容电压和电感电流。
+采用 Y(s)=(s+2)(s+4)/[s(s+1)(s+3)]；以 0.005 s 采样 12 s 仿真单位冲激，并比较留数 8/3、-3/2、-1/6。
 
 ### 示例数据（JSON）
 
@@ -5379,28 +5458,31 @@ max_test_duration_s=20.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      100
+      1,
+      6,
+      8
     ],
     "denominator": [
-      0.001,
-      0.2,
-      10
+      1,
+      4,
+      3,
+      0
     ],
     "input_delay_s": 0,
     "input_signal_id": "给定变换域输入",
     "output_signal_id": "时域输出响应",
-    "input_units": "A",
-    "output_units": "V"
+    "input_units": "impulse_unit",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.0002,
-    "duration_s": 2,
+    "sample_time_s": 0.005,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
-      -0.1,
-      -0.05,
-      0.05,
-      0.1
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -5409,11 +5491,11 @@ max_test_duration_s=20.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 源电流 to baseline and verify that 两个电容电压与电感电流 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 两个电容电压与电感电流 direction with its final direction.",
-    "delay": "Measure from the logged 源电流 edge to the first effective 两个电容电压与电感电流 sample.",
+    "stability": "Return 给定变换域输入 to baseline and verify that 时域输出响应 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 时域输出响应 direction with its final direction.",
+    "delay": "Measure from the logged 给定变换域输入 edge to the first effective 时域输出响应 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 源电流 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 给定变换域输入 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5457,7 +5539,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-取 Rf=20 kohm、R1=10 kohm、R2=20 kohm，得到 vout=-2 v1-v2；各输入限制为 +/-5 V，输出限制为 +/-12 V。
+并行计算 Y1=3(s+2)/[s(s^2+2s+10)] 与 Y2=3/[s(s-2)]，以 0.002 s 采样 8 s，并在输出绝对值达到 100 时停止。
 
 ### 示例数据（JSON）
 
@@ -5465,54 +5547,26 @@ max_test_duration_s=20.0
 {
   "specification_facts": [],
   "model": {
-    "kind": "state_space",
-    "a": [
-      [
-        -1000
-      ]
+    "kind": "transfer_function",
+    "numerator": [
+      3,
+      6
     ],
-    "b": [
-      [
-        2000,
-        1000
-      ]
-    ],
-    "c": [
-      [
-        -1
-      ]
-    ],
-    "d": [
-      [
-        0,
-        0
-      ]
-    ],
-    "state_names": [
-      "amplifier_output_state"
-    ],
-    "input_signal_ids": [
-      "测试输入",
-      "测试输入"
-    ],
-    "output_signal_ids": [
-      "稳态输出"
-    ],
-    "initial_state": [
+    "denominator": [
+      1,
+      2,
+      10,
       0
     ],
-    "signal_units": {
-      "input_v1": "V",
-      "input_v2": "V",
-      "summer output voltage": "V"
-    },
-    "parameter_uncertainty": {
-      "resistor_ratios": 0.1
-    }
+    "input_delay_s": 0,
+    "input_signal_id": "测试输入",
+    "output_signal_id": "稳态输出",
+    "input_units": "step_unit",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 1e-05,
-    "duration_s": 0.02,
+    "sample_time_s": 0.002,
+    "duration_s": 8,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5526,12 +5580,28 @@ max_test_duration_s=20.0
       1.1
     ]
   },
+  "comparison_model": {
+    "kind": "transfer_function",
+    "numerator": [
+      3
+    ],
+    "denominator": [
+      1,
+      -2,
+      0
+    ],
+    "input_delay_s": 0,
+    "input_signal_id": "unstable case input",
+    "output_signal_id": "unstable case output",
+    "input_units": "step_unit",
+    "output_units": "unit"
+  },
   "eight_segment_evidence": {
-    "stability": "Return 输入电压 to baseline and verify that 加权输出电压 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 加权输出电压 direction with its final direction.",
-    "delay": "Measure from the logged 输入电压 edge to the first effective 加权输出电压 sample.",
+    "stability": "Return 测试输入 to baseline and verify that 稳态输出 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 稳态输出 direction with its final direction.",
+    "delay": "Measure from the logged 测试输入 edge to the first effective 稳态输出 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 输入电压 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 测试输入 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5575,7 +5645,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用 Rin=100 kohm、C=10 uF，使 Rin*C=1 s；+1 V 输入产生 -1 V/s 输出斜率，并在输出达到 +/-10 V 前停止。
+采用 G(s)=3(s+2)/(s^2+2s+10)；施加 0.25、0.5、0.75、1 四级阶跃，以 0.005 s 采样 12 s，并核对 0.6 直流增益。
 
 ### 示例数据（JSON）
 
@@ -5585,21 +5655,23 @@ max_test_duration_s=20.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      -1
+      3,
+      6
     ],
     "denominator": [
       1,
-      0
+      2,
+      10
     ],
     "input_delay_s": 0,
     "input_signal_id": "单位阶跃输入",
     "output_signal_id": "稳态输出",
-    "input_units": "V",
-    "output_units": "V"
+    "input_units": "step_unit",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.001,
-    "duration_s": 5,
+    "sample_time_s": 0.005,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5614,11 +5686,11 @@ max_test_duration_s=20.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 输入电压 to baseline and verify that 积分器输出电压 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 积分器输出电压 direction with its final direction.",
-    "delay": "Measure from the logged 输入电压 edge to the first effective 积分器输出电压 sample.",
+    "stability": "Return 单位阶跃输入 to baseline and verify that 稳态输出 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 稳态输出 direction with its final direction.",
+    "delay": "Measure from the logged 单位阶跃输入 edge to the first effective 稳态输出 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 输入电压 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 单位阶跃输入 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5662,7 +5734,7 @@ max_test_duration_s=20.0
 
 ### 示例数据（自然语言）
 
-采用磁通密度 0.5 T、直径 2 cm 的 20 匝线圈，得到 Bl=0.63 N/A；再取 M=0.02 kg、b=0.2 N*s/m、L=1 mH、R=8 ohm。
+采用 y_ddot+5 y_dot+4 y=u；先运行初值 (y0,ydot0)=(1,0) 与 (0,1)，再运行零初值输入 u=2 exp(-2t)，以 0.005 s 采样 10 s。
 
 ### 示例数据（JSON）
 
@@ -5672,23 +5744,22 @@ max_test_duration_s=20.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      0.63
+      1
     ],
     "denominator": [
-      2e-05,
-      0.1602,
-      1.9969,
-      0
+      1,
+      5,
+      4
     ],
     "input_delay_s": 0,
     "input_signal_id": "外部激励与给定初态释放",
     "output_signal_id": "状态与输出响应",
-    "input_units": "V",
+    "input_units": "N",
     "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 5e-05,
-    "duration_s": 2,
+    "sample_time_s": 0.005,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5702,12 +5773,23 @@ max_test_duration_s=20.0
       1.1
     ]
   },
+  "initial_condition_cases": [
+    [
+      1,
+      0
+    ],
+    [
+      0,
+      1
+    ]
+  ],
+  "forced_input": "2*exp(-2*t)",
   "eight_segment_evidence": {
-    "stability": "Return 放大器电压 to baseline and verify that 锥盆位移、线圈电流 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 锥盆位移、线圈电流 direction with its final direction.",
-    "delay": "Measure from the logged 放大器电压 edge to the first effective 锥盆位移、线圈电流 sample.",
+    "stability": "Return 外部激励与给定初态释放 to baseline and verify that 状态与输出响应 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 状态与输出响应 direction with its final direction.",
+    "delay": "Measure from the logged 外部激励与给定初态释放 edge to the first effective 状态与输出响应 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 放大器电压 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 外部激励与给定初态释放 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5751,7 +5833,7 @@ max_test_duration_s=16.0
 
 ### 示例数据（自然语言）
 
-采用 J=0.01 kg*m^2、b=0.1 Nm*s/rad、Kt=Ke=0.01、R=1 ohm、L=0.5 H；用 +/-1 V 测试并记录电流、转速和位置。
+采用 m=1000 kg、b=50 N*s/m 和 500 N 力阶跃；以 0.05 s 采样 120 s 的速度与位置，位置模型为 Gx=0.001/[s(s+0.05)]。
 
 ### 示例数据（JSON）
 
@@ -5761,29 +5843,28 @@ max_test_duration_s=16.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      0.01
+      0.001
     ],
     "denominator": [
-      0.005,
-      0.06,
-      0.1001,
+      1,
+      0.05,
       0
     ],
     "input_delay_s": 0,
     "input_signal_id": "驱动力",
     "output_signal_id": "车辆位置与速度",
-    "input_units": "V",
-    "output_units": "rad"
+    "input_units": "N",
+    "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 0.0005,
-    "duration_s": 10,
+    "sample_time_s": 0.05,
+    "duration_s": 120,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -500,
+      -250,
+      250,
+      500
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -5792,11 +5873,11 @@ max_test_duration_s=16.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 电枢电压 to baseline and verify that 电机位置、转速、电枢电流 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 电机位置、转速、电枢电流 direction with its final direction.",
-    "delay": "Measure from the logged 电枢电压 edge to the first effective 电机位置、转速、电枢电流 sample.",
+    "stability": "Return 驱动力 to baseline and verify that 车辆位置与速度 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 车辆位置与速度 direction with its final direction.",
+    "delay": "Measure from the logged 驱动力 edge to the first effective 车辆位置与速度 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 电枢电压 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 驱动力 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5840,7 +5921,7 @@ max_test_duration_s=16.0
 
 ### 示例数据（自然语言）
 
-采用齿轮比 n=4、电机侧惯量 J1=0.002 kg*m^2、负载惯量 J2=0.03 kg*m^2、b1=0.001 与 b2=0.02 Nm*s/rad。
+采用 J=0.01 kg*m^2、b=0.001 Nm*s/rad、Kt=Ke=1、Ra=10 ohm、La=1 H；用 +/-1 V 测试，以 0.001 s 记录 5 s 的电流、转速和角度。
 
 ### 示例数据（JSON）
 
@@ -5850,22 +5931,23 @@ max_test_duration_s=16.0
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      4
+      100
     ],
     "denominator": [
-      0.062,
-      0.036,
+      1,
+      10.1,
+      101,
       0
     ],
     "input_delay_s": 0,
     "input_signal_id": "电枢电压",
     "output_signal_id": "电机速度与位置",
-    "input_units": "Nm",
+    "input_units": "V",
     "output_units": "rad"
   },
   "experiment": {
-    "sample_time_s": 0.002,
-    "duration_s": 10,
+    "sample_time_s": 0.001,
+    "duration_s": 5,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5880,11 +5962,11 @@ max_test_duration_s=16.0
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return 电机力矩 to baseline and verify that 电机与负载角度、轴力矩 remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective 电机与负载角度、轴力矩 direction with its final direction.",
-    "delay": "Measure from the logged 电机力矩 edge to the first effective 电机与负载角度、轴力矩 sample.",
+    "stability": "Return 电枢电压 to baseline and verify that 电机速度与位置 remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective 电机速度与位置 direction with its final direction.",
+    "delay": "Measure from the logged 电枢电压 edge to the first effective 电机速度与位置 sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log 电机力矩 and every declared output on one clock.",
+    "sensing_and_actuation": "Log 电枢电压 and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -12095,8 +12177,8 @@ max_test_duration_s=40.0
       "推力器力"
     ],
     "output_signal_ids": [
-      "姿态角与角速度",
-      "姿态角与角速度"
+      "姿态角与角速度通道 1",
+      "姿态角与角速度通道 2"
     ],
     "initial_state": [
       0,
@@ -12772,8 +12854,8 @@ max_test_duration_s=16.0
       "枢轴力矩"
     ],
     "output_signal_ids": [
-      "摆角与角速度",
-      "摆角与角速度"
+      "摆角与角速度通道 1",
+      "摆角与角速度通道 2"
     ],
     "initial_state": [
       0.1,
@@ -13256,8 +13338,8 @@ max_test_duration_s=16.0
       "已知枢轴力矩"
     ],
     "output_signal_ids": [
-      "测量角与估计状态",
-      "测量角与估计状态"
+      "测量角与估计状态通道 1",
+      "测量角与估计状态通道 2"
     ],
     "initial_state": [
       0.2,
@@ -15358,8 +15440,8 @@ max_test_duration_s=40.0
       "数字力矩"
     ],
     "output_signal_ids": [
-      "卫星姿态与采样角速度",
-      "卫星姿态与采样角速度"
+      "卫星姿态与采样角速度通道 1",
+      "卫星姿态与采样角速度通道 2"
     ],
     "initial_state": [
       0,
@@ -15487,8 +15569,8 @@ max_test_duration_s=3.0
       "电磁铁电流"
     ],
     "output_signal_ids": [
-      "小球位移与电流",
-      "小球位移与电流"
+      "小球位移与电流通道 1",
+      "小球位移与电流通道 2"
     ],
     "initial_state": [
       0.0025,
@@ -15983,8 +16065,8 @@ max_test_duration_s=12.0
       "枢轴力矩"
     ],
     "output_signal_ids": [
-      "摆角与角速度",
-      "摆角与角速度"
+      "摆角与角速度通道 1",
+      "摆角与角速度通道 2"
     ],
     "initial_state": [
       0.05,
@@ -17448,8 +17530,8 @@ max_test_duration_s=20.0
       "给定初态释放"
     ],
     "output_signal_ids": [
-      "状态轨迹与衰减行为",
-      "状态轨迹与衰减行为"
+      "状态轨迹与衰减行为通道 1",
+      "状态轨迹与衰减行为通道 2"
     ],
     "initial_state": [
       1,
@@ -18960,16 +19042,16 @@ max_test_duration_s=40.0
       "pitch_rate_rad_s": 0
     },
     "input_signal_ids": [
-      "四个旋翼推力命令",
-      "四个旋翼推力命令"
+      "四个旋翼推力命令通道 1",
+      "四个旋翼推力命令通道 2"
     ],
     "output_signal_ids": [
       "位置",
       "姿态",
       "角速度",
-      "高度",
-      "高度",
-      "高度"
+      "高度通道 1",
+      "高度通道 2",
+      "高度通道 3"
     ],
     "signal_units": {
       "x_m": "m",
@@ -19165,16 +19247,16 @@ max_test_duration_s=40.0
       "pitch_rate_rad_s": 0
     },
     "input_signal_ids": [
-      "LQR 混控旋翼命令",
-      "LQR 混控旋翼命令"
+      "LQR 混控旋翼命令通道 1",
+      "LQR 混控旋翼命令通道 2"
     ],
     "output_signal_ids": [
-      "测量与估计的四旋翼轴状态",
-      "测量与估计的四旋翼轴状态",
-      "测量与估计的四旋翼轴状态",
-      "测量与估计的四旋翼轴状态",
-      "测量与估计的四旋翼轴状态",
-      "测量与估计的四旋翼轴状态"
+      "测量与估计的四旋翼轴状态通道 1",
+      "测量与估计的四旋翼轴状态通道 2",
+      "测量与估计的四旋翼轴状态通道 3",
+      "测量与估计的四旋翼轴状态通道 4",
+      "测量与估计的四旋翼轴状态通道 5",
+      "测量与估计的四旋翼轴状态通道 6"
     ],
     "signal_units": {
       "x_m": "m",

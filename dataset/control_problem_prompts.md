@@ -2572,37 +2572,75 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Set k=2 s^-1. Use u1(t)=1, u2(t)=sin(t), coefficients 1.5 and -0.5, and a 1 s shift; sample at 0.01 s for 8 s and compare superposed and shifted responses.
+Use vehicle mass 1000 kg, viscous drag 50 N*s/m, and a 500 N force step. The force-to-speed DC gain is 0.02 (m/s)/N, the time constant is 20 s, and the predicted final speed change is 10 m/s.
+
+Without an LLM, append this exact fact line to the same submission: `input_change=500 N; steady_output_change=10 m/s; response_time_s=20 s; input_min=-2000 N; input_max=4000 N; output_min=0 m/s; output_max=50 m/s;`
 
 ### Example Data (JSON)
 
 ```json
 {
-  "specification_facts": [],
+  "specification_facts": [
+    {
+      "fact_id": "input_change",
+      "value": 500,
+      "unit": "N"
+    },
+    {
+      "fact_id": "steady_output_change",
+      "value": 10,
+      "unit": "m/s"
+    },
+    {
+      "fact_id": "response_time_s",
+      "value": 20,
+      "unit": "s"
+    },
+    {
+      "fact_id": "input_min",
+      "value": -2000,
+      "unit": "N"
+    },
+    {
+      "fact_id": "input_max",
+      "value": 4000,
+      "unit": "N"
+    },
+    {
+      "fact_id": "output_min",
+      "value": 0,
+      "unit": "m/s"
+    },
+    {
+      "fact_id": "output_max",
+      "value": 50,
+      "unit": "m/s"
+    }
+  ],
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      1
+      0.001
     ],
     "denominator": [
       1,
-      2
+      0.05
     ],
     "input_delay_s": 0,
     "input_signal_id": "longitudinal drive force",
     "output_signal_id": "vehicle speed",
-    "input_units": "unit/s",
-    "output_units": "unit"
+    "input_units": "N",
+    "output_units": "m/s"
   },
   "experiment": {
-    "sample_time_s": 0.01,
-    "duration_s": 4,
-    "initial_output": 0,
+    "sample_time_s": 0.1,
+    "duration_s": 120,
+    "initial_output": 25,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -500,
+      -250,
+      250,
+      500
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -2611,11 +2649,11 @@ Set k=2 s^-1. Use u1(t)=1, u2(t)=sin(t), coefficients 1.5 and -0.5, and a 1 s sh
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return prescribed test signal to baseline and verify that system output response remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective system output response direction with its final direction.",
-    "delay": "Measure from the logged prescribed test signal edge to the first effective system output response sample.",
+    "stability": "Return longitudinal drive force to baseline and verify that vehicle speed remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective vehicle speed direction with its final direction.",
+    "delay": "Measure from the logged longitudinal drive force edge to the first effective vehicle speed sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log prescribed test signal and every declared output on one clock.",
+    "sensing_and_actuation": "Log longitudinal drive force and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -2660,7 +2698,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use k=0.5 s^-1. Simulate a unit impulse and a unit step at 0.01 s resolution for 16 s, then compare direct integration with convolution by exp(-0.5 t).
+Use sprung mass 375 kg, wheel mass 20 kg, suspension stiffness 130000 N/m, tire stiffness 1000000 N/m, and damping 9800 N*s/m. Apply bounded 0.01, 0.025, and 0.05 m road steps and record body displacement, wheel displacement, and suspension travel at 1 ms.
 
 ### Example Data (JSON)
 
@@ -2670,27 +2708,31 @@ Use k=0.5 s^-1. Simulate a unit impulse and a unit step at 0.01 s resolution for
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      1
+      1310000,
+      17423000
     ],
     "denominator": [
       1,
-      0.5
+      516.1,
+      56850,
+      1307000,
+      17330000
     ],
     "input_delay_s": 0,
     "input_signal_id": "prescribed road-displacement test input",
     "output_signal_id": "body displacement",
-    "input_units": "impulse_unit",
-    "output_units": "unit"
+    "input_units": "m",
+    "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 0.04,
-    "duration_s": 16,
+    "sample_time_s": 0.001,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -0.05,
+      -0.025,
+      0.025,
+      0.05
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -2698,12 +2740,19 @@ Use k=0.5 s^-1. Simulate a unit impulse and a unit step at 0.01 s resolution for
       1.1
     ]
   },
+  "physical_parameters": {
+    "sprung_mass_kg": 375,
+    "wheel_mass_kg": 20,
+    "suspension_stiffness_N_per_m": 130000,
+    "tire_stiffness_N_per_m": 1000000,
+    "damping_N_s_per_m": 9800
+  },
   "eight_segment_evidence": {
-    "stability": "Return input signal to baseline and verify that output response remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective output response direction with its final direction.",
-    "delay": "Measure from the logged input signal edge to the first effective output response sample.",
+    "stability": "Return prescribed road-displacement test input to baseline and verify that body displacement, wheel displacement, and suspension travel remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective body displacement, wheel displacement, and suspension travel direction with its final direction.",
+    "delay": "Measure from the logged prescribed road-displacement test input edge to the first effective body displacement, wheel displacement, and suspension travel sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log input signal and every declared output on one clock.",
+    "sensing_and_actuation": "Log prescribed road-displacement test input and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -2952,8 +3001,8 @@ Use main-body inertia 800 kg*m^2, remote inertia 200 kg*m^2, torsional stiffness
       "body torque on the main inertia"
     ],
     "output_signal_ids": [
-      "both body angles and rates",
-      "both body angles and rates"
+      "both body angles and rates channel 1",
+      "both body angles and rates channel 2"
     ],
     "initial_state": [
       0,
@@ -3015,7 +3064,7 @@ roll, pitch, and yaw response
 
 ### Actuators
 
-four rotor thrust perturbations
+four rotor thrust perturbations, rotor 1 torque perturbation, rotor 2 torque perturbation, rotor 3 torque perturbation, rotor 4 torque perturbation
 
 ### Safety Bounds
 
@@ -3037,7 +3086,7 @@ change several actuator channels simultaneously during the first identification 
 
 ### Example Data (Natural Language)
 
-Use y_ddot+5 y_dot+4 y=2 u with zero initial conditions. Apply +/-0.5 and +/-1 N steps, sample at 0.01 s for 8 s, and verify G(s)=2/(s^2+5s+4).
+Use roll and pitch inertia 0.02 kg*m^2 and yaw inertia 0.05 kg*m^2. Use four signed rotor-torque deviations limited to +/-0.1 Nm; excite the roll, pitch, and yaw mixer columns separately.
 
 ### Example Data (JSON)
 
@@ -3045,30 +3094,191 @@ Use y_ddot+5 y_dot+4 y=2 u with zero initial conditions. Apply +/-0.5 and +/-1 N
 {
   "specification_facts": [],
   "model": {
-    "kind": "transfer_function",
-    "numerator": [
-      2
+    "kind": "state_space",
+    "a": [
+      [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
     ],
-    "denominator": [
-      1,
-      5,
-      4
+    "b": [
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        50,
+        -50,
+        -50,
+        50
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        50,
+        50,
+        -50,
+        -50
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        20,
+        -20,
+        20,
+        -20
+      ]
     ],
-    "input_delay_s": 0,
-    "input_signal_id": "four rotor thrust perturbations",
-    "output_signal_id": "roll",
-    "input_units": "N",
-    "output_units": "m"
+    "c": [
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    ],
+    "d": [
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "state_names": [
+      "roll",
+      "roll_rate",
+      "pitch",
+      "pitch_rate",
+      "yaw",
+      "yaw_rate"
+    ],
+    "input_signal_ids": [
+      "rotor 1 torque perturbation",
+      "rotor 2 torque perturbation",
+      "rotor 3 torque perturbation",
+      "rotor 4 torque perturbation"
+    ],
+    "output_signal_ids": [
+      "roll",
+      "pitch",
+      "yaw response"
+    ],
+    "initial_state": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "signal_units": {
+      "rotor_1_torque": "Nm",
+      "rotor_2_torque": "Nm",
+      "rotor_3_torque": "Nm",
+      "rotor_4_torque": "Nm",
+      "roll angle": "rad",
+      "pitch angle": "rad",
+      "yaw angle": "rad"
+    },
+    "parameter_uncertainty": {
+      "inertias": 0.1,
+      "mixer_effectiveness": 0.1
+    }
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.002,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -0.02,
+      -0.01,
+      0.01,
+      0.02
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3077,11 +3287,11 @@ Use y_ddot+5 y_dot+4 y=2 u with zero initial conditions. Apply +/-0.5 and +/-1 N
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return prescribed forcing signal to baseline and verify that system output response remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective system output response direction with its final direction.",
-    "delay": "Measure from the logged prescribed forcing signal edge to the first effective system output response sample.",
+    "stability": "Return four rotor thrust perturbations to baseline and verify that roll, pitch, and yaw response remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective roll, pitch, and yaw response direction with its final direction.",
+    "delay": "Measure from the logged four rotor thrust perturbations edge to the first effective roll, pitch, and yaw response sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log prescribed forcing signal and every declared output on one clock.",
+    "sensing_and_actuation": "Log four rotor thrust perturbations and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3126,7 +3336,7 @@ replace the declared nonlinearity by an unrestricted linear element during safet
 
 ### Example Data (Natural Language)
 
-Use R=10 kohm and C=100 uF, giving RC=1 s. Apply 0.25, 0.5, 0.75, and 1 V steps at 0.01 s sampling for 8 s.
+Use mass 1 kg, length 1 m, gravity 9.81 m/s^2, and compare 1 Nm and 4 Nm torque steps for 10 s at 0.02 s sampling in both the sine model and its small-angle model.
 
 ### Example Data (JSON)
 
@@ -3140,23 +3350,24 @@ Use R=10 kohm and C=100 uF, giving RC=1 s. Apply 0.25, 0.5, 0.75, and 1 V steps 
     ],
     "denominator": [
       1,
-      1
+      0,
+      9.81
     ],
     "input_delay_s": 0,
     "input_signal_id": "pivot torque",
     "output_signal_id": "pendulum angle and angular rate",
-    "input_units": "V",
-    "output_units": "V"
+    "input_units": "Nm",
+    "output_units": "rad"
   },
   "experiment": {
     "sample_time_s": 0.02,
-    "duration_s": 8,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
+      -4,
       -1,
-      -0.5,
-      0.5,
-      1
+      1,
+      4
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3164,12 +3375,14 @@ Use R=10 kohm and C=100 uF, giving RC=1 s. Apply 0.25, 0.5, 0.75, and 1 V steps 
       1.1
     ]
   },
+  "nonlinear_equation": "theta_ddot=-9.81*sin(theta)+torque",
+  "linear_equation": "theta_ddot=-9.81*theta+torque",
   "eight_segment_evidence": {
-    "stability": "Return input voltage to baseline and verify that capacitor voltage remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective capacitor voltage direction with its final direction.",
-    "delay": "Measure from the logged input voltage edge to the first effective capacitor voltage sample.",
+    "stability": "Return pivot torque to baseline and verify that pendulum angle and angular rate remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective pendulum angle and angular rate direction with its final direction.",
+    "delay": "Measure from the logged pivot torque edge to the first effective pendulum angle and angular rate sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log input voltage and every declared output on one clock.",
+    "sensing_and_actuation": "Log pivot torque and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3214,7 +3427,7 @@ command an unactuated coordinate as though it had a direct actuator
 
 ### Example Data (Natural Language)
 
-Set k=1 s^-1, sinusoidal amplitude 1 V, and omega=10 rad/s. Sample at 0.002 s for 12 s and estimate steady amplitude and phase after the exponential transient.
+Use trolley mass 1 kg, pendulum mass 0.2 kg, center-of-mass length 0.5 m, inertia 0.006 kg*m^2, friction 0.1 N*s/m, force limit 20 N, travel limit 1.5 m, and an initial 0.05 rad angle.
 
 ### Example Data (JSON)
 
@@ -3222,29 +3435,51 @@ Set k=1 s^-1, sinusoidal amplitude 1 V, and omega=10 rad/s. Sample at 0.002 s fo
 {
   "specification_facts": [],
   "model": {
-    "kind": "transfer_function",
-    "numerator": [
-      1
+    "kind": "registered_nonlinear",
+    "template_id": "underactuated_cartpole",
+    "parameters": {
+      "cart_mass_kg": 1,
+      "pole_mass_kg": 0.2,
+      "com_length_m": 0.5,
+      "pole_inertia_kg_m2": 0.006,
+      "cart_friction_n_s_m": 0.1,
+      "gravity_m_s2": 9.81,
+      "force_limit_n": 20,
+      "cart_position_limit_m": 1.5
+    },
+    "initial_state": {
+      "position_m": 0,
+      "velocity_m_s": 0,
+      "angle_rad": 0.05,
+      "angular_rate_rad_s": 0
+    },
+    "input_signal_ids": [
+      "cart force"
     ],
-    "denominator": [
-      1,
-      1
+    "output_signal_ids": [
+      "cart position",
+      "pendulum angle"
     ],
-    "input_delay_s": 0,
-    "input_signal_id": "cart force",
-    "output_signal_id": "cart position",
-    "input_units": "V",
-    "output_units": "V"
+    "signal_units": {
+      "trolley force": "N",
+      "trolley position": "m",
+      "pendulum angle": "rad"
+    },
+    "parameter_uncertainty": {
+      "cart_mass_kg": 0.1,
+      "pole_mass_kg": 0.1,
+      "com_length_m": 0.1
+    }
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.005,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -5,
+      -2.5,
+      2.5,
+      5
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3253,11 +3488,11 @@ Set k=1 s^-1, sinusoidal amplitude 1 V, and omega=10 rad/s. Sample at 0.002 s fo
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return sinusoidal input to baseline and verify that sinusoidal output amplitude and phase remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective sinusoidal output amplitude and phase direction with its final direction.",
-    "delay": "Measure from the logged sinusoidal input edge to the first effective sinusoidal output amplitude and phase sample.",
+    "stability": "Return cart force to baseline and verify that cart position, pendulum angle remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective cart position, pendulum angle direction with its final direction.",
+    "delay": "Measure from the logged cart force edge to the first effective cart position, pendulum angle sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log sinusoidal input and every declared output on one clock.",
+    "sensing_and_actuation": "Log cart force and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3302,7 +3537,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use G(s)=1/(s+1), step amplitude 2, ramp slope 0.5, unit impulse area 1, and sinusoid omega=3 rad/s. Sample at 0.005 s for 12 s.
+Set R1=R2=10 kohm and C1=C2=10 uF, giving G(s)=(0.01 s^2+0.2 s+1)/(0.01 s^2+0.3 s+1). Use +/-1 V tests to verify the unity low- and high-frequency gains and the bridged mid-band response.
 
 ### Example Data (JSON)
 
@@ -3312,21 +3547,24 @@ Use G(s)=1/(s+1), step amplitude 2, ramp slope 0.5, unit impulse area 1, and sin
   "model": {
     "kind": "transfer_function",
     "numerator": [
+      0.01,
+      0.2,
       1
     ],
     "denominator": [
-      1,
+      0.01,
+      0.3,
       1
     ],
     "input_delay_s": 0,
     "input_signal_id": "input voltage",
     "output_signal_id": "output and capacitor voltages",
-    "input_units": "canonical_input",
-    "output_units": "unit"
+    "input_units": "V",
+    "output_units": "V"
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.0005,
+    "duration_s": 1,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3340,12 +3578,18 @@ Use G(s)=1/(s+1), step amplitude 2, ramp slope 0.5, unit impulse area 1, and sin
       1.1
     ]
   },
+  "physical_parameters": {
+    "R1_ohm": 10000,
+    "R2_ohm": 10000,
+    "C1_F": 1e-05,
+    "C2_F": 1e-05
+  },
   "eight_segment_evidence": {
-    "stability": "Return canonical test signal to baseline and verify that transformed system response remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective transformed system response direction with its final direction.",
-    "delay": "Measure from the logged canonical test signal edge to the first effective transformed system response sample.",
+    "stability": "Return input voltage to baseline and verify that output and capacitor voltages remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective output and capacitor voltages direction with its final direction.",
+    "delay": "Measure from the logged input voltage edge to the first effective output and capacitor voltages sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log canonical test signal and every declared output on one clock.",
+    "sensing_and_actuation": "Log input voltage and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3364,7 +3608,7 @@ This is a current-driven energy-storage circuit containing a resistor, an induct
 
 ### Observable Outputs
 
-two capacitor voltages and inductor current
+capacitor voltage 1, capacitor voltage 2, inductor current
 
 ### Actuators
 
@@ -3390,7 +3634,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use Y(s)=(s+2)(s+4)/[s(s+1)(s+3)]. Simulate a unit impulse at 0.005 s sampling for 12 s and compare residues 8/3, -3/2, and -1/6.
+Use R1=R2=10 ohm, C1=C2=0.01 F, and L=0.1 H, with a 0.1 A bounded current step and all capacitor voltages plus inductor current logged.
 
 ### Example Data (JSON)
 
@@ -3398,33 +3642,97 @@ Use Y(s)=(s+2)(s+4)/[s(s+1)(s+3)]. Simulate a unit impulse at 0.005 s sampling f
 {
   "specification_facts": [],
   "model": {
-    "kind": "transfer_function",
-    "numerator": [
-      1,
-      6,
-      8
+    "kind": "state_space",
+    "a": [
+      [
+        -10,
+        0,
+        -100
+      ],
+      [
+        0,
+        -10,
+        100
+      ],
+      [
+        10,
+        -10,
+        0
+      ]
     ],
-    "denominator": [
-      1,
-      4,
-      3,
+    "b": [
+      [
+        100
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "c": [
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "d": [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    "state_names": [
+      "capacitor_voltage_1",
+      "capacitor_voltage_2",
+      "inductor_current"
+    ],
+    "input_signal_ids": [
+      "source current"
+    ],
+    "output_signal_ids": [
+      "capacitor voltage 1",
+      "capacitor voltage 2",
+      "inductor current"
+    ],
+    "initial_state": [
+      0,
+      0,
       0
     ],
-    "input_delay_s": 0,
-    "input_signal_id": "source current",
-    "output_signal_id": "two capacitor voltages and inductor current",
-    "input_units": "impulse_unit",
-    "output_units": "unit"
+    "signal_units": {
+      "capacitor_voltage_1": "V",
+      "capacitor_voltage_2": "V",
+      "inductor_current": "A",
+      "source_current": "A"
+    }
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.0002,
+    "duration_s": 2,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -0.1,
+      -0.05,
+      0.05,
+      0.1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3432,12 +3740,19 @@ Use Y(s)=(s+2)(s+4)/[s(s+1)(s+3)]. Simulate a unit impulse at 0.005 s sampling f
       1.1
     ]
   },
+  "physical_parameters": {
+    "R1_ohm": 10,
+    "R2_ohm": 10,
+    "C1_F": 0.01,
+    "C2_F": 0.01,
+    "L_H": 0.1
+  },
   "eight_segment_evidence": {
-    "stability": "Return prescribed transformed input to baseline and verify that time-domain output response remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective time-domain output response direction with its final direction.",
-    "delay": "Measure from the logged prescribed transformed input edge to the first effective time-domain output response sample.",
+    "stability": "Return source current to baseline and verify that two capacitor voltages and inductor current remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective two capacitor voltages and inductor current direction with its final direction.",
+    "delay": "Measure from the logged source current edge to the first effective two capacitor voltages and inductor current sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log prescribed transformed input and every declared output on one clock.",
+    "sensing_and_actuation": "Log source current and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3460,7 +3775,7 @@ summed output voltage
 
 ### Actuators
 
-input voltages
+input voltages, input voltage 1, input voltage 2
 
 ### Safety Bounds
 
@@ -3482,7 +3797,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Evaluate Y1=3(s+2)/[s(s^2+2s+10)] and Y2=3/[s(s-2)] side by side, using 0.002 s sampling for 8 s and a stop threshold of absolute output 100.
+Choose Rf=20 kohm, R1=10 kohm, and R2=20 kohm, giving vout=-2 v1-v2; limit each input to +/-5 V and the output to +/-12 V.
 
 ### Example Data (JSON)
 
@@ -3490,26 +3805,54 @@ Evaluate Y1=3(s+2)/[s(s^2+2s+10)] and Y2=3/[s(s-2)] side by side, using 0.002 s 
 {
   "specification_facts": [],
   "model": {
-    "kind": "transfer_function",
-    "numerator": [
-      3,
-      6
+    "kind": "state_space",
+    "a": [
+      [
+        -1000
+      ]
     ],
-    "denominator": [
-      1,
-      2,
-      10,
+    "b": [
+      [
+        2000,
+        1000
+      ]
+    ],
+    "c": [
+      [
+        -1
+      ]
+    ],
+    "d": [
+      [
+        0,
+        0
+      ]
+    ],
+    "state_names": [
+      "amplifier_output_state"
+    ],
+    "input_signal_ids": [
+      "input voltage 1",
+      "input voltage 2"
+    ],
+    "output_signal_ids": [
+      "summed output voltage"
+    ],
+    "initial_state": [
       0
     ],
-    "input_delay_s": 0,
-    "input_signal_id": "input voltages",
-    "output_signal_id": "summed output voltage",
-    "input_units": "step_unit",
-    "output_units": "unit"
+    "signal_units": {
+      "input_v1": "V",
+      "input_v2": "V",
+      "summer output voltage": "V"
+    },
+    "parameter_uncertainty": {
+      "resistor_ratios": 0.1
+    }
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 1e-05,
+    "duration_s": 0.02,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3523,28 +3866,12 @@ Evaluate Y1=3(s+2)/[s(s^2+2s+10)] and Y2=3/[s(s-2)] side by side, using 0.002 s 
       1.1
     ]
   },
-  "comparison_model": {
-    "kind": "transfer_function",
-    "numerator": [
-      3
-    ],
-    "denominator": [
-      1,
-      -2,
-      0
-    ],
-    "input_delay_s": 0,
-    "input_signal_id": "unstable case input",
-    "output_signal_id": "unstable case output",
-    "input_units": "step_unit",
-    "output_units": "unit"
-  },
   "eight_segment_evidence": {
-    "stability": "Return test input to baseline and verify that steady-state output remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective steady-state output direction with its final direction.",
-    "delay": "Measure from the logged test input edge to the first effective steady-state output sample.",
+    "stability": "Return input voltages to baseline and verify that summed output voltage remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective summed output voltage direction with its final direction.",
+    "delay": "Measure from the logged input voltages edge to the first effective summed output voltage sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log test input and every declared output on one clock.",
+    "sensing_and_actuation": "Log input voltages and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3589,7 +3916,7 @@ apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Example Data (Natural Language)
 
-Use G(s)=3(s+2)/(s^2+2s+10). Apply step amplitudes 0.25, 0.5, 0.75, and 1, sample at 0.005 s for 12 s, and verify the 0.6 DC gain.
+Use Rin=100 kohm and C=10 uF so Rin*C=1 s. A +1 V input produces a -1 V/s output slope; stop before the output reaches +/-10 V.
 
 ### Example Data (JSON)
 
@@ -3599,23 +3926,21 @@ Use G(s)=3(s+2)/(s^2+2s+10). Apply step amplitudes 0.25, 0.5, 0.75, and 1, sampl
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      3,
-      6
+      -1
     ],
     "denominator": [
       1,
-      2,
-      10
+      0
     ],
     "input_delay_s": 0,
     "input_signal_id": "input voltage",
     "output_signal_id": "integrator output voltage",
-    "input_units": "step_unit",
-    "output_units": "unit"
+    "input_units": "V",
+    "output_units": "V"
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 0.001,
+    "duration_s": 5,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3630,11 +3955,11 @@ Use G(s)=3(s+2)/(s^2+2s+10). Apply step amplitudes 0.25, 0.5, 0.75, and 1, sampl
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return unit-step input to baseline and verify that steady output remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective steady output direction with its final direction.",
-    "delay": "Measure from the logged unit-step input edge to the first effective steady output sample.",
+    "stability": "Return input voltage to baseline and verify that integrator output voltage remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective integrator output voltage direction with its final direction.",
+    "delay": "Measure from the logged input voltage edge to the first effective integrator output voltage sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log unit-step input and every declared output on one clock.",
+    "sensing_and_actuation": "Log input voltage and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3679,7 +4004,7 @@ apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Example Data (Natural Language)
 
-Use y_ddot+5 y_dot+4 y=u. Run initial states (y0,ydot0)=(1,0) and (0,1), then the zero-initial input u=2 exp(-2t), at 0.005 s for 10 s.
+Use magnetic flux 0.5 T, 20 turns at 2 cm diameter so Bl=0.63 N/A, together with M=0.02 kg, b=0.2 N*s/m, L=1 mH, and R=8 ohm.
 
 ### Example Data (JSON)
 
@@ -3689,22 +4014,23 @@ Use y_ddot+5 y_dot+4 y=u. Run initial states (y0,ydot0)=(1,0) and (0,1), then th
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      1
+      0.63
     ],
     "denominator": [
-      1,
-      5,
-      4
+      2e-05,
+      0.1602,
+      1.9969,
+      0
     ],
     "input_delay_s": 0,
     "input_signal_id": "amplifier voltage",
     "output_signal_id": "cone displacement",
-    "input_units": "N",
+    "input_units": "V",
     "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 8,
+    "sample_time_s": 5e-05,
+    "duration_s": 2,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3718,23 +4044,12 @@ Use y_ddot+5 y_dot+4 y=u. Run initial states (y0,ydot0)=(1,0) and (0,1), then th
       1.1
     ]
   },
-  "initial_condition_cases": [
-    [
-      1,
-      0
-    ],
-    [
-      0,
-      1
-    ]
-  ],
-  "forced_input": "2*exp(-2*t)",
   "eight_segment_evidence": {
-    "stability": "Return forcing input and prescribed initial-state release to baseline and verify that state and output response remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective state and output response direction with its final direction.",
-    "delay": "Measure from the logged forcing input and prescribed initial-state release edge to the first effective state and output response sample.",
+    "stability": "Return amplifier voltage to baseline and verify that cone displacement, coil current remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective cone displacement, coil current direction with its final direction.",
+    "delay": "Measure from the logged amplifier voltage edge to the first effective cone displacement, coil current sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log forcing input and prescribed initial-state release and every declared output on one clock.",
+    "sensing_and_actuation": "Log amplifier voltage and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3779,7 +4094,7 @@ apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Example Data (Natural Language)
 
-Use m=1000 kg, b=50 N*s/m, and a 500 N force step. Sample speed and position at 0.05 s for 120 s; position uses Gx=0.001/[s(s+0.05)].
+Use J=0.01 kg*m^2, b=0.1 Nm*s/rad, Kt=Ke=0.01, R=1 ohm, and L=0.5 H; test +/-1 V and log current, speed, and position.
 
 ### Example Data (JSON)
 
@@ -3789,28 +4104,29 @@ Use m=1000 kg, b=50 N*s/m, and a 500 N force step. Sample speed and position at 
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      0.001
+      0.01
     ],
     "denominator": [
-      1,
-      0.05,
+      0.005,
+      0.06,
+      0.1001,
       0
     ],
     "input_delay_s": 0,
     "input_signal_id": "armature voltage",
     "output_signal_id": "motor position",
-    "input_units": "N",
-    "output_units": "m"
+    "input_units": "V",
+    "output_units": "rad"
   },
   "experiment": {
-    "sample_time_s": 0.4,
-    "duration_s": 160,
+    "sample_time_s": 0.0005,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
-      -500,
-      -250,
-      250,
-      500
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -3819,11 +4135,11 @@ Use m=1000 kg, b=50 N*s/m, and a 500 N force step. Sample speed and position at 
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return drive force to baseline and verify that vehicle position and speed remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective vehicle position and speed direction with its final direction.",
-    "delay": "Measure from the logged drive force edge to the first effective vehicle position and speed sample.",
+    "stability": "Return armature voltage to baseline and verify that motor position, speed, armature current remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective motor position, speed, armature current direction with its final direction.",
+    "delay": "Measure from the logged armature voltage edge to the first effective motor position, speed, armature current sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log drive force and every declared output on one clock.",
+    "sensing_and_actuation": "Log armature voltage and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -3868,7 +4184,7 @@ apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Example Data (Natural Language)
 
-Use J=0.01 kg*m^2, b=0.001 Nm*s/rad, Kt=Ke=1, Ra=10 ohm, and La=1 H. Test +/-1 V and record current, speed, and angle at 0.001 s for 5 s.
+Use gear ratio n=4, motor-side inertia J1=0.002 kg*m^2, load inertia J2=0.03 kg*m^2, b1=0.001 and b2=0.02 Nm*s/rad.
 
 ### Example Data (JSON)
 
@@ -3878,23 +4194,22 @@ Use J=0.01 kg*m^2, b=0.001 Nm*s/rad, Kt=Ke=1, Ra=10 ohm, and La=1 H. Test +/-1 V
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      100
+      4
     ],
     "denominator": [
-      1,
-      10.1,
-      101,
+      0.062,
+      0.036,
       0
     ],
     "input_delay_s": 0,
     "input_signal_id": "motor torque",
     "output_signal_id": "motor and load angle",
-    "input_units": "V",
+    "input_units": "Nm",
     "output_units": "rad"
   },
   "experiment": {
-    "sample_time_s": 0.004,
-    "duration_s": 1.6,
+    "sample_time_s": 0.002,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -3909,11 +4224,11 @@ Use J=0.01 kg*m^2, b=0.001 Nm*s/rad, Kt=Ke=1, Ra=10 ohm, and La=1 H. Test +/-1 V
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return armature voltage to baseline and verify that motor speed and position remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective motor speed and position direction with its final direction.",
-    "delay": "Measure from the logged armature voltage edge to the first effective motor speed and position sample.",
+    "stability": "Return motor torque to baseline and verify that motor and load angle, shaft torque remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective motor and load angle, shaft torque direction with its final direction.",
+    "delay": "Measure from the logged motor torque edge to the first effective motor and load angle, shaft torque sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log armature voltage and every declared output on one clock.",
+    "sensing_and_actuation": "Log motor torque and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -4610,75 +4925,37 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use vehicle mass 1000 kg, viscous drag 50 N*s/m, and a 500 N force step. The force-to-speed DC gain is 0.02 (m/s)/N, the time constant is 20 s, and the predicted final speed change is 10 m/s.
-
-Without an LLM, append this exact fact line to the same submission: `input_change=500 N; steady_output_change=10 m/s; response_time_s=20 s; input_min=-2000 N; input_max=4000 N; output_min=0 m/s; output_max=50 m/s;`
+Set k=2 s^-1. Use u1(t)=1, u2(t)=sin(t), coefficients 1.5 and -0.5, and a 1 s shift; sample at 0.01 s for 8 s and compare superposed and shifted responses.
 
 ### Example Data (JSON)
 
 ```json
 {
-  "specification_facts": [
-    {
-      "fact_id": "input_change",
-      "value": 500,
-      "unit": "N"
-    },
-    {
-      "fact_id": "steady_output_change",
-      "value": 10,
-      "unit": "m/s"
-    },
-    {
-      "fact_id": "response_time_s",
-      "value": 20,
-      "unit": "s"
-    },
-    {
-      "fact_id": "input_min",
-      "value": -2000,
-      "unit": "N"
-    },
-    {
-      "fact_id": "input_max",
-      "value": 4000,
-      "unit": "N"
-    },
-    {
-      "fact_id": "output_min",
-      "value": 0,
-      "unit": "m/s"
-    },
-    {
-      "fact_id": "output_max",
-      "value": 50,
-      "unit": "m/s"
-    }
-  ],
+  "specification_facts": [],
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      0.001
+      1
     ],
     "denominator": [
       1,
-      0.05
+      2
     ],
     "input_delay_s": 0,
     "input_signal_id": "prescribed test signal",
     "output_signal_id": "system output response",
-    "input_units": "N",
-    "output_units": "m/s"
+    "input_units": "unit/s",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.1,
-    "duration_s": 120,
-    "initial_output": 25,
+    "sample_time_s": 0.01,
+    "duration_s": 8,
+    "initial_output": 0,
     "input_amplitudes": [
-      -500,
-      -250,
-      250,
-      500
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -4687,11 +4964,11 @@ Without an LLM, append this exact fact line to the same submission: `input_chang
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return longitudinal drive force to baseline and verify that vehicle speed remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective vehicle speed direction with its final direction.",
-    "delay": "Measure from the logged longitudinal drive force edge to the first effective vehicle speed sample.",
+    "stability": "Return prescribed test signal to baseline and verify that system output response remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective system output response direction with its final direction.",
+    "delay": "Measure from the logged prescribed test signal edge to the first effective system output response sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log longitudinal drive force and every declared output on one clock.",
+    "sensing_and_actuation": "Log prescribed test signal and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -4735,7 +5012,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use sprung mass 375 kg, wheel mass 20 kg, suspension stiffness 130000 N/m, tire stiffness 1000000 N/m, and damping 9800 N*s/m. Apply bounded 0.01, 0.025, and 0.05 m road steps and record body displacement, wheel displacement, and suspension travel at 1 ms.
+Use k=0.5 s^-1. Simulate a unit impulse and a unit step at 0.01 s resolution for 16 s, then compare direct integration with convolution by exp(-0.5 t).
 
 ### Example Data (JSON)
 
@@ -4745,31 +5022,27 @@ Use sprung mass 375 kg, wheel mass 20 kg, suspension stiffness 130000 N/m, tire 
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      1310000,
-      17423000
+      1
     ],
     "denominator": [
       1,
-      516.1,
-      56850,
-      1307000,
-      17330000
+      0.5
     ],
     "input_delay_s": 0,
     "input_signal_id": "input signal",
     "output_signal_id": "output response",
-    "input_units": "m",
-    "output_units": "m"
+    "input_units": "impulse_unit",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.001,
-    "duration_s": 10,
+    "sample_time_s": 0.01,
+    "duration_s": 16,
     "initial_output": 0,
     "input_amplitudes": [
-      -0.05,
-      -0.025,
-      0.025,
-      0.05
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -4777,19 +5050,12 @@ Use sprung mass 375 kg, wheel mass 20 kg, suspension stiffness 130000 N/m, tire 
       1.1
     ]
   },
-  "physical_parameters": {
-    "sprung_mass_kg": 375,
-    "wheel_mass_kg": 20,
-    "suspension_stiffness_N_per_m": 130000,
-    "tire_stiffness_N_per_m": 1000000,
-    "damping_N_s_per_m": 9800
-  },
   "eight_segment_evidence": {
-    "stability": "Return prescribed road-displacement test input to baseline and verify that body displacement, wheel displacement, and suspension travel remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective body displacement, wheel displacement, and suspension travel direction with its final direction.",
-    "delay": "Measure from the logged prescribed road-displacement test input edge to the first effective body displacement, wheel displacement, and suspension travel sample.",
+    "stability": "Return input signal to baseline and verify that output response remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective output response direction with its final direction.",
+    "delay": "Measure from the logged input signal edge to the first effective output response sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log prescribed road-displacement test input and every declared output on one clock.",
+    "sensing_and_actuation": "Log input signal and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -4833,7 +5099,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use roll and pitch inertia 0.02 kg*m^2 and yaw inertia 0.05 kg*m^2. Use four signed rotor-torque deviations limited to +/-0.1 Nm; excite the roll, pitch, and yaw mixer columns separately.
+Use y_ddot+5 y_dot+4 y=2 u with zero initial conditions. Apply +/-0.5 and +/-1 N steps, sample at 0.01 s for 8 s, and verify G(s)=2/(s^2+5s+4).
 
 ### Example Data (JSON)
 
@@ -4841,191 +5107,30 @@ Use roll and pitch inertia 0.02 kg*m^2 and yaw inertia 0.05 kg*m^2. Use four sig
 {
   "specification_facts": [],
   "model": {
-    "kind": "state_space",
-    "a": [
-      [
-        0,
-        1,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        1,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        1
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ]
+    "kind": "transfer_function",
+    "numerator": [
+      2
     ],
-    "b": [
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        50,
-        -50,
-        -50,
-        50
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        50,
-        50,
-        -50,
-        -50
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        20,
-        -20,
-        20,
-        -20
-      ]
+    "denominator": [
+      1,
+      5,
+      4
     ],
-    "c": [
-      [
-        1,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        1,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        1,
-        0
-      ]
-    ],
-    "d": [
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0
-      ]
-    ],
-    "state_names": [
-      "roll",
-      "roll_rate",
-      "pitch",
-      "pitch_rate",
-      "yaw",
-      "yaw_rate"
-    ],
-    "input_signal_ids": [
-      "prescribed forcing signal",
-      "prescribed forcing signal",
-      "prescribed forcing signal",
-      "prescribed forcing signal"
-    ],
-    "output_signal_ids": [
-      "system output response",
-      "system output response",
-      "system output response"
-    ],
-    "initial_state": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "signal_units": {
-      "rotor_1_torque": "Nm",
-      "rotor_2_torque": "Nm",
-      "rotor_3_torque": "Nm",
-      "rotor_4_torque": "Nm",
-      "roll angle": "rad",
-      "pitch angle": "rad",
-      "yaw angle": "rad"
-    },
-    "parameter_uncertainty": {
-      "inertias": 0.1,
-      "mixer_effectiveness": 0.1
-    }
+    "input_delay_s": 0,
+    "input_signal_id": "prescribed forcing signal",
+    "output_signal_id": "system output response",
+    "input_units": "N",
+    "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 0.002,
-    "duration_s": 12,
+    "sample_time_s": 0.01,
+    "duration_s": 8,
     "initial_output": 0,
     "input_amplitudes": [
-      -0.02,
-      -0.01,
-      0.01,
-      0.02
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -5034,11 +5139,11 @@ Use roll and pitch inertia 0.02 kg*m^2 and yaw inertia 0.05 kg*m^2. Use four sig
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return four rotor thrust perturbations to baseline and verify that roll, pitch, and yaw response remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective roll, pitch, and yaw response direction with its final direction.",
-    "delay": "Measure from the logged four rotor thrust perturbations edge to the first effective roll, pitch, and yaw response sample.",
+    "stability": "Return prescribed forcing signal to baseline and verify that system output response remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective system output response direction with its final direction.",
+    "delay": "Measure from the logged prescribed forcing signal edge to the first effective system output response sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log four rotor thrust perturbations and every declared output on one clock.",
+    "sensing_and_actuation": "Log prescribed forcing signal and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5082,7 +5187,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use mass 1 kg, length 1 m, gravity 9.81 m/s^2, and compare 1 Nm and 4 Nm torque steps for 10 s at 0.02 s sampling in both the sine model and its small-angle model.
+Use R=10 kohm and C=100 uF, giving RC=1 s. Apply 0.25, 0.5, 0.75, and 1 V steps at 0.01 s sampling for 8 s.
 
 ### Example Data (JSON)
 
@@ -5096,18 +5201,17 @@ Use mass 1 kg, length 1 m, gravity 9.81 m/s^2, and compare 1 Nm and 4 Nm torque 
     ],
     "denominator": [
       1,
-      0,
-      9.81
+      1
     ],
     "input_delay_s": 0,
     "input_signal_id": "input voltage",
     "output_signal_id": "capacitor voltage",
-    "input_units": "Nm",
-    "output_units": "rad"
+    "input_units": "V",
+    "output_units": "V"
   },
   "experiment": {
-    "sample_time_s": 0.02,
-    "duration_s": 10,
+    "sample_time_s": 0.01,
+    "duration_s": 8,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5121,14 +5225,12 @@ Use mass 1 kg, length 1 m, gravity 9.81 m/s^2, and compare 1 Nm and 4 Nm torque 
       1.1
     ]
   },
-  "nonlinear_equation": "theta_ddot=-9.81*sin(theta)+torque",
-  "linear_equation": "theta_ddot=-9.81*theta+torque",
   "eight_segment_evidence": {
-    "stability": "Return pivot torque to baseline and verify that pendulum angle and angular rate remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective pendulum angle and angular rate direction with its final direction.",
-    "delay": "Measure from the logged pivot torque edge to the first effective pendulum angle and angular rate sample.",
+    "stability": "Return input voltage to baseline and verify that capacitor voltage remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective capacitor voltage direction with its final direction.",
+    "delay": "Measure from the logged input voltage edge to the first effective capacitor voltage sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log pivot torque and every declared output on one clock.",
+    "sensing_and_actuation": "Log input voltage and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5172,7 +5274,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use trolley mass 1 kg, pendulum mass 0.2 kg, center-of-mass length 0.5 m, inertia 0.006 kg*m^2, friction 0.1 N*s/m, force limit 20 N, travel limit 1.5 m, and an initial 0.05 rad angle.
+Set k=1 s^-1, sinusoidal amplitude 1 V, and omega=10 rad/s. Sample at 0.002 s for 12 s and estimate steady amplitude and phase after the exponential transient.
 
 ### Example Data (JSON)
 
@@ -5180,51 +5282,29 @@ Use trolley mass 1 kg, pendulum mass 0.2 kg, center-of-mass length 0.5 m, inerti
 {
   "specification_facts": [],
   "model": {
-    "kind": "registered_nonlinear",
-    "template_id": "underactuated_cartpole",
-    "parameters": {
-      "cart_mass_kg": 1,
-      "pole_mass_kg": 0.2,
-      "com_length_m": 0.5,
-      "pole_inertia_kg_m2": 0.006,
-      "cart_friction_n_s_m": 0.1,
-      "gravity_m_s2": 9.81,
-      "force_limit_n": 20,
-      "cart_position_limit_m": 1.5
-    },
-    "initial_state": {
-      "position_m": 0,
-      "velocity_m_s": 0,
-      "angle_rad": 0.05,
-      "angular_rate_rad_s": 0
-    },
-    "input_signal_ids": [
-      "sinusoidal input"
+    "kind": "transfer_function",
+    "numerator": [
+      1
     ],
-    "output_signal_ids": [
-      "sinusoidal output amplitude and phase",
-      "sinusoidal output amplitude and phase"
+    "denominator": [
+      1,
+      1
     ],
-    "signal_units": {
-      "trolley force": "N",
-      "trolley position": "m",
-      "pendulum angle": "rad"
-    },
-    "parameter_uncertainty": {
-      "cart_mass_kg": 0.1,
-      "pole_mass_kg": 0.1,
-      "com_length_m": 0.1
-    }
+    "input_delay_s": 0,
+    "input_signal_id": "sinusoidal input",
+    "output_signal_id": "sinusoidal output amplitude and phase",
+    "input_units": "V",
+    "output_units": "V"
   },
   "experiment": {
-    "sample_time_s": 0.005,
+    "sample_time_s": 0.002,
     "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
-      -5,
-      -2.5,
-      2.5,
-      5
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -5233,11 +5313,11 @@ Use trolley mass 1 kg, pendulum mass 0.2 kg, center-of-mass length 0.5 m, inerti
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return cart force to baseline and verify that cart position, pendulum angle remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective cart position, pendulum angle direction with its final direction.",
-    "delay": "Measure from the logged cart force edge to the first effective cart position, pendulum angle sample.",
+    "stability": "Return sinusoidal input to baseline and verify that sinusoidal output amplitude and phase remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective sinusoidal output amplitude and phase direction with its final direction.",
+    "delay": "Measure from the logged sinusoidal input edge to the first effective sinusoidal output amplitude and phase sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log cart force and every declared output on one clock.",
+    "sensing_and_actuation": "Log sinusoidal input and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5281,7 +5361,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Set R1=R2=10 kohm and C1=C2=10 uF, then use the resulting checked second-order numerical realization G(s)=1/(0.01 s^2+0.2 s+1) for +/-1 V tests.
+Use G(s)=1/(s+1), step amplitude 2, ramp slope 0.5, unit impulse area 1, and sinusoid omega=3 rad/s. Sample at 0.005 s for 12 s.
 
 ### Example Data (JSON)
 
@@ -5294,19 +5374,18 @@ Set R1=R2=10 kohm and C1=C2=10 uF, then use the resulting checked second-order n
       1
     ],
     "denominator": [
-      0.01,
-      0.2,
+      1,
       1
     ],
     "input_delay_s": 0,
     "input_signal_id": "canonical test signal",
     "output_signal_id": "transformed system response",
-    "input_units": "V",
-    "output_units": "V"
+    "input_units": "canonical_input",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.0005,
-    "duration_s": 1,
+    "sample_time_s": 0.005,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5321,11 +5400,11 @@ Set R1=R2=10 kohm and C1=C2=10 uF, then use the resulting checked second-order n
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return input voltage to baseline and verify that output and capacitor voltages remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective output and capacitor voltages direction with its final direction.",
-    "delay": "Measure from the logged input voltage edge to the first effective output and capacitor voltages sample.",
+    "stability": "Return canonical test signal to baseline and verify that transformed system response remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective transformed system response direction with its final direction.",
+    "delay": "Measure from the logged canonical test signal edge to the first effective transformed system response sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log input voltage and every declared output on one clock.",
+    "sensing_and_actuation": "Log canonical test signal and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5369,7 +5448,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use R1=R2=10 ohm, C1=C2=0.01 F, and L=0.1 H, with a 0.1 A bounded current step and all capacitor voltages plus inductor current logged.
+Use Y(s)=(s+2)(s+4)/[s(s+1)(s+3)]. Simulate a unit impulse at 0.005 s sampling for 12 s and compare residues 8/3, -3/2, and -1/6.
 
 ### Example Data (JSON)
 
@@ -5379,28 +5458,31 @@ Use R1=R2=10 ohm, C1=C2=0.01 F, and L=0.1 H, with a 0.1 A bounded current step a
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      100
+      1,
+      6,
+      8
     ],
     "denominator": [
-      0.001,
-      0.2,
-      10
+      1,
+      4,
+      3,
+      0
     ],
     "input_delay_s": 0,
     "input_signal_id": "prescribed transformed input",
     "output_signal_id": "time-domain output response",
-    "input_units": "A",
-    "output_units": "V"
+    "input_units": "impulse_unit",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.0002,
-    "duration_s": 2,
+    "sample_time_s": 0.005,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
-      -0.1,
-      -0.05,
-      0.05,
-      0.1
+      -1,
+      -0.5,
+      0.5,
+      1
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -5409,11 +5491,11 @@ Use R1=R2=10 ohm, C1=C2=0.01 F, and L=0.1 H, with a 0.1 A bounded current step a
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return source current to baseline and verify that two capacitor voltages and inductor current remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective two capacitor voltages and inductor current direction with its final direction.",
-    "delay": "Measure from the logged source current edge to the first effective two capacitor voltages and inductor current sample.",
+    "stability": "Return prescribed transformed input to baseline and verify that time-domain output response remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective time-domain output response direction with its final direction.",
+    "delay": "Measure from the logged prescribed transformed input edge to the first effective time-domain output response sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log source current and every declared output on one clock.",
+    "sensing_and_actuation": "Log prescribed transformed input and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5457,7 +5539,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Choose Rf=20 kohm, R1=10 kohm, and R2=20 kohm, giving vout=-2 v1-v2; limit each input to +/-5 V and the output to +/-12 V.
+Evaluate Y1=3(s+2)/[s(s^2+2s+10)] and Y2=3/[s(s-2)] side by side, using 0.002 s sampling for 8 s and a stop threshold of absolute output 100.
 
 ### Example Data (JSON)
 
@@ -5465,54 +5547,26 @@ Choose Rf=20 kohm, R1=10 kohm, and R2=20 kohm, giving vout=-2 v1-v2; limit each 
 {
   "specification_facts": [],
   "model": {
-    "kind": "state_space",
-    "a": [
-      [
-        -1000
-      ]
+    "kind": "transfer_function",
+    "numerator": [
+      3,
+      6
     ],
-    "b": [
-      [
-        2000,
-        1000
-      ]
-    ],
-    "c": [
-      [
-        -1
-      ]
-    ],
-    "d": [
-      [
-        0,
-        0
-      ]
-    ],
-    "state_names": [
-      "amplifier_output_state"
-    ],
-    "input_signal_ids": [
-      "test input",
-      "test input"
-    ],
-    "output_signal_ids": [
-      "steady-state output"
-    ],
-    "initial_state": [
+    "denominator": [
+      1,
+      2,
+      10,
       0
     ],
-    "signal_units": {
-      "input_v1": "V",
-      "input_v2": "V",
-      "summer output voltage": "V"
-    },
-    "parameter_uncertainty": {
-      "resistor_ratios": 0.1
-    }
+    "input_delay_s": 0,
+    "input_signal_id": "test input",
+    "output_signal_id": "steady-state output",
+    "input_units": "step_unit",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 1e-05,
-    "duration_s": 0.02,
+    "sample_time_s": 0.002,
+    "duration_s": 8,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5526,12 +5580,28 @@ Choose Rf=20 kohm, R1=10 kohm, and R2=20 kohm, giving vout=-2 v1-v2; limit each 
       1.1
     ]
   },
+  "comparison_model": {
+    "kind": "transfer_function",
+    "numerator": [
+      3
+    ],
+    "denominator": [
+      1,
+      -2,
+      0
+    ],
+    "input_delay_s": 0,
+    "input_signal_id": "unstable case input",
+    "output_signal_id": "unstable case output",
+    "input_units": "step_unit",
+    "output_units": "unit"
+  },
   "eight_segment_evidence": {
-    "stability": "Return input voltages to baseline and verify that summed output voltage remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective summed output voltage direction with its final direction.",
-    "delay": "Measure from the logged input voltages edge to the first effective summed output voltage sample.",
+    "stability": "Return test input to baseline and verify that steady-state output remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective steady-state output direction with its final direction.",
+    "delay": "Measure from the logged test input edge to the first effective steady-state output sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log input voltages and every declared output on one clock.",
+    "sensing_and_actuation": "Log test input and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5575,7 +5645,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use Rin=100 kohm and C=10 uF so Rin*C=1 s. A +1 V input produces a -1 V/s output slope; stop before the output reaches +/-10 V.
+Use G(s)=3(s+2)/(s^2+2s+10). Apply step amplitudes 0.25, 0.5, 0.75, and 1, sample at 0.005 s for 12 s, and verify the 0.6 DC gain.
 
 ### Example Data (JSON)
 
@@ -5585,21 +5655,23 @@ Use Rin=100 kohm and C=10 uF so Rin*C=1 s. A +1 V input produces a -1 V/s output
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      -1
+      3,
+      6
     ],
     "denominator": [
       1,
-      0
+      2,
+      10
     ],
     "input_delay_s": 0,
     "input_signal_id": "unit-step input",
     "output_signal_id": "steady output",
-    "input_units": "V",
-    "output_units": "V"
+    "input_units": "step_unit",
+    "output_units": "unit"
   },
   "experiment": {
-    "sample_time_s": 0.001,
-    "duration_s": 5,
+    "sample_time_s": 0.005,
+    "duration_s": 12,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5614,11 +5686,11 @@ Use Rin=100 kohm and C=10 uF so Rin*C=1 s. A +1 V input produces a -1 V/s output
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return input voltage to baseline and verify that integrator output voltage remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective integrator output voltage direction with its final direction.",
-    "delay": "Measure from the logged input voltage edge to the first effective integrator output voltage sample.",
+    "stability": "Return unit-step input to baseline and verify that steady output remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective steady output direction with its final direction.",
+    "delay": "Measure from the logged unit-step input edge to the first effective steady output sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log input voltage and every declared output on one clock.",
+    "sensing_and_actuation": "Log unit-step input and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5662,7 +5734,7 @@ increase the normalized excitation beyond the declared local operating range
 
 ### Example Data (Natural Language)
 
-Use magnetic flux 0.5 T, 20 turns at 2 cm diameter so Bl=0.63 N/A, together with M=0.02 kg, b=0.2 N*s/m, L=1 mH, and R=8 ohm.
+Use y_ddot+5 y_dot+4 y=u. Run initial states (y0,ydot0)=(1,0) and (0,1), then the zero-initial input u=2 exp(-2t), at 0.005 s for 10 s.
 
 ### Example Data (JSON)
 
@@ -5672,23 +5744,22 @@ Use magnetic flux 0.5 T, 20 turns at 2 cm diameter so Bl=0.63 N/A, together with
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      0.63
+      1
     ],
     "denominator": [
-      2e-05,
-      0.1602,
-      1.9969,
-      0
+      1,
+      5,
+      4
     ],
     "input_delay_s": 0,
     "input_signal_id": "forcing input and prescribed initial-state release",
     "output_signal_id": "state and output response",
-    "input_units": "V",
+    "input_units": "N",
     "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 5e-05,
-    "duration_s": 2,
+    "sample_time_s": 0.005,
+    "duration_s": 10,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5702,12 +5773,23 @@ Use magnetic flux 0.5 T, 20 turns at 2 cm diameter so Bl=0.63 N/A, together with
       1.1
     ]
   },
+  "initial_condition_cases": [
+    [
+      1,
+      0
+    ],
+    [
+      0,
+      1
+    ]
+  ],
+  "forced_input": "2*exp(-2*t)",
   "eight_segment_evidence": {
-    "stability": "Return amplifier voltage to baseline and verify that cone displacement, coil current remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective cone displacement, coil current direction with its final direction.",
-    "delay": "Measure from the logged amplifier voltage edge to the first effective cone displacement, coil current sample.",
+    "stability": "Return forcing input and prescribed initial-state release to baseline and verify that state and output response remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective state and output response direction with its final direction.",
+    "delay": "Measure from the logged forcing input and prescribed initial-state release edge to the first effective state and output response sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log amplifier voltage and every declared output on one clock.",
+    "sensing_and_actuation": "Log forcing input and prescribed initial-state release and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5751,7 +5833,7 @@ apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Example Data (Natural Language)
 
-Use J=0.01 kg*m^2, b=0.1 Nm*s/rad, Kt=Ke=0.01, R=1 ohm, and L=0.5 H; test +/-1 V and log current, speed, and position.
+Use m=1000 kg, b=50 N*s/m, and a 500 N force step. Sample speed and position at 0.05 s for 120 s; position uses Gx=0.001/[s(s+0.05)].
 
 ### Example Data (JSON)
 
@@ -5761,29 +5843,28 @@ Use J=0.01 kg*m^2, b=0.1 Nm*s/rad, Kt=Ke=0.01, R=1 ohm, and L=0.5 H; test +/-1 V
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      0.01
+      0.001
     ],
     "denominator": [
-      0.005,
-      0.06,
-      0.1001,
+      1,
+      0.05,
       0
     ],
     "input_delay_s": 0,
     "input_signal_id": "drive force",
     "output_signal_id": "vehicle position and speed",
-    "input_units": "V",
-    "output_units": "rad"
+    "input_units": "N",
+    "output_units": "m"
   },
   "experiment": {
-    "sample_time_s": 0.0005,
-    "duration_s": 10,
+    "sample_time_s": 0.05,
+    "duration_s": 120,
     "initial_output": 0,
     "input_amplitudes": [
-      -1,
-      -0.5,
-      0.5,
-      1
+      -500,
+      -250,
+      250,
+      500
     ],
     "uncertainty_multipliers": [
       0.9,
@@ -5792,11 +5873,11 @@ Use J=0.01 kg*m^2, b=0.1 Nm*s/rad, Kt=Ke=0.01, R=1 ohm, and L=0.5 H; test +/-1 V
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return armature voltage to baseline and verify that motor position, speed, armature current remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective motor position, speed, armature current direction with its final direction.",
-    "delay": "Measure from the logged armature voltage edge to the first effective motor position, speed, armature current sample.",
+    "stability": "Return drive force to baseline and verify that vehicle position and speed remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective vehicle position and speed direction with its final direction.",
+    "delay": "Measure from the logged drive force edge to the first effective vehicle position and speed sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log armature voltage and every declared output on one clock.",
+    "sensing_and_actuation": "Log drive force and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -5840,7 +5921,7 @@ apply an unbounded open-loop command to a marginal or unstable mode
 
 ### Example Data (Natural Language)
 
-Use gear ratio n=4, motor-side inertia J1=0.002 kg*m^2, load inertia J2=0.03 kg*m^2, b1=0.001 and b2=0.02 Nm*s/rad.
+Use J=0.01 kg*m^2, b=0.001 Nm*s/rad, Kt=Ke=1, Ra=10 ohm, and La=1 H. Test +/-1 V and record current, speed, and angle at 0.001 s for 5 s.
 
 ### Example Data (JSON)
 
@@ -5850,22 +5931,23 @@ Use gear ratio n=4, motor-side inertia J1=0.002 kg*m^2, load inertia J2=0.03 kg*
   "model": {
     "kind": "transfer_function",
     "numerator": [
-      4
+      100
     ],
     "denominator": [
-      0.062,
-      0.036,
+      1,
+      10.1,
+      101,
       0
     ],
     "input_delay_s": 0,
     "input_signal_id": "armature voltage",
     "output_signal_id": "motor speed and position",
-    "input_units": "Nm",
+    "input_units": "V",
     "output_units": "rad"
   },
   "experiment": {
-    "sample_time_s": 0.002,
-    "duration_s": 10,
+    "sample_time_s": 0.001,
+    "duration_s": 5,
     "initial_output": 0,
     "input_amplitudes": [
       -1,
@@ -5880,11 +5962,11 @@ Use gear ratio n=4, motor-side inertia J1=0.002 kg*m^2, load inertia J2=0.03 kg*
     ]
   },
   "eight_segment_evidence": {
-    "stability": "Return motor torque to baseline and verify that motor and load angle, shaft torque remains bounded or follows the declared unstable-event handling.",
-    "phase": "Apply equal small positive and negative changes and compare the first effective motor and load angle, shaft torque direction with its final direction.",
-    "delay": "Measure from the logged motor torque edge to the first effective motor and load angle, shaft torque sample.",
+    "stability": "Return armature voltage to baseline and verify that motor speed and position remains bounded or follows the declared unstable-event handling.",
+    "phase": "Apply equal small positive and negative changes and compare the first effective motor speed and position direction with its final direction.",
+    "delay": "Measure from the logged armature voltage edge to the first effective motor speed and position sample.",
     "order": "Compare early- and late-response residuals against the complete numerical model.",
-    "sensing_and_actuation": "Log motor torque and every declared output on one clock.",
+    "sensing_and_actuation": "Log armature voltage and every declared output on one clock.",
     "nonlinearity": "Repeat at 25%, 50%, 75%, and 100% of the local test amplitude.",
     "coupling": "Change one available input at a time while holding the others at baseline.",
     "uncertainty": "Repeat with relevant parameters multiplied by 0.9, 1.0, and 1.1."
@@ -12095,8 +12177,8 @@ Use lever arm d=1 m, inertia I=5000 kg*m^2, state [angle, rate], and +/-25 N pul
       "thruster force"
     ],
     "output_signal_ids": [
-      "attitude angle and angular rate",
-      "attitude angle and angular rate"
+      "attitude angle and angular rate channel 1",
+      "attitude angle and angular rate channel 2"
     ],
     "initial_state": [
       0,
@@ -12772,8 +12854,8 @@ Use omega0=1 rad/s and feedback K=[3,4]; release from angle 0.1 rad and compare 
       "pivot torque"
     ],
     "output_signal_ids": [
-      "pendulum angle and rate",
-      "pendulum angle and rate"
+      "pendulum angle and rate channel 1",
+      "pendulum angle and rate channel 2"
     ],
     "initial_state": [
       0.1,
@@ -13256,8 +13338,8 @@ Use omega0=1 and full-order estimator L=[20,99]; initialize the estimate at [0.2
       "known pivot torque"
     ],
     "output_signal_ids": [
-      "measured angle and estimated state",
-      "measured angle and estimated state"
+      "measured angle and estimated state channel 1",
+      "measured angle and estimated state channel 2"
     ],
     "initial_state": [
       0.2,
@@ -15358,8 +15440,8 @@ Use T=0.1 s exact double-integrator model and state feedback Kp=1.8097,Kv=1.9032
       "digital torque"
     ],
     "output_signal_ids": [
-      "satellite attitude and sampled rate",
-      "satellite attitude and sampled rate"
+      "satellite attitude and sampled rate channel 1",
+      "satellite attitude and sampled rate channel 2"
     ],
     "initial_state": [
       0,
@@ -15487,8 +15569,8 @@ Use m=0.02 kg,k1=20 N/m,k2=0.4 N/A,T=0.02 s; test state feedback Kx=94 A/m,Kv=2.
       "electromagnet current"
     ],
     "output_signal_ids": [
-      "ball displacement and current",
-      "ball displacement and current"
+      "ball displacement and current channel 1",
+      "ball displacement and current channel 2"
     ],
     "initial_state": [
       0.0025,
@@ -15983,8 +16065,8 @@ Use g=9.81 m/s^2,l=1 m and test equilibria theta=0 and pi with +/-0.05 rad pertu
       "pivot torque"
     ],
     "output_signal_ids": [
-      "pendulum angle and angular rate",
-      "pendulum angle and angular rate"
+      "pendulum angle and angular rate channel 1",
+      "pendulum angle and angular rate channel 2"
     ],
     "initial_state": [
       0.05,
@@ -17448,8 +17530,8 @@ Use alpha=1,beta=2, A=[[-1,2],[-2,-1]], Q=I, and initial states on radii 0.5,1,2
       "prescribed initial-state release"
     ],
     "output_signal_ids": [
-      "state trajectory and decay behavior",
-      "state trajectory and decay behavior"
+      "state trajectory and decay behavior channel 1",
+      "state trajectory and decay behavior channel 2"
     ],
     "initial_state": [
       1,
@@ -18960,16 +19042,16 @@ Use a 1 kg, Iyy=0.02 kg*m^2 VTOL/quadrotor slice with thrust 0..20 N and torque 
       "pitch_rate_rad_s": 0
     },
     "input_signal_ids": [
-      "four rotor thrust commands",
-      "four rotor thrust commands"
+      "four rotor thrust commands channel 1",
+      "four rotor thrust commands channel 2"
     ],
     "output_signal_ids": [
       "position",
       "attitude",
       "angular rates",
-      "altitude",
-      "altitude",
-      "altitude"
+      "altitude channel 1",
+      "altitude channel 2",
+      "altitude channel 3"
     ],
     "signal_units": {
       "x_m": "m",
@@ -19165,16 +19247,16 @@ Use the complete VTOL state and constraints, then compare the listed longitudina
       "pitch_rate_rad_s": 0
     },
     "input_signal_ids": [
-      "LQR mixed rotor commands",
-      "LQR mixed rotor commands"
+      "LQR mixed rotor commands channel 1",
+      "LQR mixed rotor commands channel 2"
     ],
     "output_signal_ids": [
-      "measured and estimated quadrotor axis states",
-      "measured and estimated quadrotor axis states",
-      "measured and estimated quadrotor axis states",
-      "measured and estimated quadrotor axis states",
-      "measured and estimated quadrotor axis states",
-      "measured and estimated quadrotor axis states"
+      "measured and estimated quadrotor axis states channel 1",
+      "measured and estimated quadrotor axis states channel 2",
+      "measured and estimated quadrotor axis states channel 3",
+      "measured and estimated quadrotor axis states channel 4",
+      "measured and estimated quadrotor axis states channel 5",
+      "measured and estimated quadrotor axis states channel 6"
     ],
     "signal_units": {
       "x_m": "m",

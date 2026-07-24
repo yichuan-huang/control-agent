@@ -5,12 +5,13 @@ import os
 import gradio as gr
 
 from cfdc.web.presentation import render_report
+from cfdc.web.linked_tuning_ui import (
+    bind_linked_tuning_events,
+    build_linked_tuning_panel,
+)
 from cfdc.web.service import (
-    ROUTE_CHOICES,
     continue_app_run,
     start_app_run,
-    submit_app_evidence,
-    submit_app_json,
     submit_app_specifications,
 )
 
@@ -177,34 +178,25 @@ def run_from_ui(
         raise gr.Error(str(exc)) from exc
 
 
-def continue_from_ui(state, answer_1, answer_2, answer_3, answer_4, supplemental):
+def continue_from_ui(
+    state,
+    answer_1,
+    answer_2,
+    answer_3,
+    answer_4,
+    supplemental,
+    base_url,
+    model,
+    api_key,
+):
     try:
         report, state = continue_app_run(
             state,
             [answer_1, answer_2, answer_3, answer_4],
             supplemental,
-        )
-        return _outputs(report, state)
-    except Exception as exc:
-        raise gr.Error(str(exc)) from exc
-
-
-def submit_evidence_from_ui(
-    state,
-    model_json,
-    validation_json,
-    simulation_bounds_confirmed,
-    demo_confirmed,
-):
-    try:
-        report, state = submit_app_evidence(
-            state,
-            model_json=model_json,
-            trace_files=None,
-            trace_manifest_json="",
-            validation_json=validation_json,
-            demo_confirmed=demo_confirmed,
-            simulation_bounds_confirmed=simulation_bounds_confirmed,
+            base_url=base_url,
+            model=model,
+            api_key=api_key,
         )
         return _outputs(report, state)
     except Exception as exc:
@@ -215,60 +207,26 @@ def submit_specifications_from_ui(
     state,
     specification_text,
     simulation_bounds_confirmed,
+    base_url,
+    model,
+    api_key,
 ):
     try:
         report, state = submit_app_specifications(
             state,
             specification_text,
             simulation_bounds_confirmed=simulation_bounds_confirmed,
+            base_url=base_url,
+            model=model,
+            api_key=api_key,
         )
         return _outputs(report, state)
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
-
-
-def submit_json_from_ui(state, uploaded_json, pasted_json, simulation_bounds_confirmed):
-    try:
-        report, state = submit_app_json(
-            state,
-            uploaded_json=uploaded_json,
-            pasted_json=pasted_json,
-            simulation_bounds_confirmed=simulation_bounds_confirmed,
-        )
-        return _outputs(report, state)
-    except Exception as exc:
-        raise gr.Error(str(exc)) from exc
-
-
-def update_run_mode(route_label: str):
-    natural_language = ROUTE_CHOICES.get(route_label) == "generic"
-    input_update = gr.update(interactive=natural_language)
-    llm_update = gr.update(interactive=natural_language, value=False if not natural_language else None)
-    provider_update = gr.update(interactive=natural_language)
-    note = (
-        "**自然语言自动分析：** 使用下方六项控制问题输入；可选择启用 LLM。"
-        if natural_language
-        else "**开发验证场景：** 使用预注册描述、诊断和 Profile；不会调用 LLM。下方用户输入仅暂时禁用并会被后端忽略，切回主流程后内容仍保留。"
-    )
-    return (
-        note,
-        input_update,
-        input_update,
-        input_update,
-        input_update,
-        input_update,
-        input_update,
-        llm_update,
-        provider_update,
-        provider_update,
-        provider_update,
-    )
 
 
 def reset_ui():
     return (
-        NATURAL_LANGUAGE_MODE,
-        "**自然语言自动分析：** 使用下方六项控制问题输入；可选择启用 LLM。",
         "",  # description
         "",  # observed outputs
         "",  # actuators
@@ -282,12 +240,7 @@ def reset_ui():
         "",  # API key
         "",  # supplemental description
         "",  # natural-language specifications
-        None,  # uploaded JSON
-        "",  # pasted JSON
-        "",  # advanced model JSON
-        "",  # validation JSON
         False,  # software-simulation boundary confirmation
-        False,  # demo confirmation
         {},
         "### 等待控制问题",
         "",
@@ -318,13 +271,12 @@ def build_app() -> gr.Blocks:
 
         with gr.Row(equal_height=False):
             with gr.Column(scale=5, min_width=360):
-                route = gr.Dropdown(
-                    choices=list(ROUTE_CHOICES),
-                    value=NATURAL_LANGUAGE_MODE,
-                    label="运行方式",
-                )
-                mode_note = gr.Markdown(
-                    "**自然语言自动分析：** 使用下方六项控制问题输入；可选择启用 LLM。"
+                route = gr.State(NATURAL_LANGUAGE_MODE)
+                gr.Markdown(
+                    "输入控制问题后，系统会完成诊断和初始控制器设计；"
+                    "完整规格会直接生成数学模型和初始控制器，随后请在"
+                    "“调优与适应”页签运行效果验证；只有未稳定时才请求"
+                    " AI 建议下一轮参数。"
                 )
                 description = gr.Textbox(
                     label="控制问题",
@@ -382,7 +334,7 @@ def build_app() -> gr.Blocks:
 
             with gr.Column(scale=8, min_width=560):
                 status = gr.Markdown("### 等待控制问题", elem_id="run-status")
-                progress = gr.HTML()
+                progress = gr.HTML(elem_id="stage-progress")
                 summary = gr.HTML()
                 performance_visual = gr.HTML()
                 with gr.Group(visible=False) as clarification_group:
@@ -403,7 +355,7 @@ def build_app() -> gr.Blocks:
                             "这不代表真实硬件安全认证，也不授权向真实物理硬件下发命令。"
                         ),
                     )
-                    gr.Markdown("**方式 1（推荐）· 回答当前设备规格问题**")
+                    gr.Markdown("**回答初始控制器设计所需的设备信息**")
                     specification_text = gr.Textbox(
                         label="用自然语言补充设备规格",
                         value="",
@@ -411,47 +363,6 @@ def build_app() -> gr.Blocks:
                         placeholder="可以描述已知参数、粘贴手册原文，或说明暂时不知道。未启用 LLM 时，请按上方问题顺序每行填写一个“数值 + 单位”。",
                     )
                     specification_button = gr.Button("提交规格信息", variant="primary")
-                    with gr.Accordion("方式 2 · 上传或粘贴 JSON 数据", open=False):
-                        uploaded_json = gr.File(
-                            label="JSON 数据文件（.json）",
-                            file_types=[".json"],
-                            type="filepath",
-                        )
-                        pasted_json = gr.Textbox(
-                            label="粘贴 JSON 数据（可选）",
-                            value="",
-                            lines=8,
-                            placeholder=(
-                                "可粘贴 dataset 中包含 specification_facts、model、"
-                                "experiment 与 eight_segment_evidence 的完整 JSON。"
-                            ),
-                        )
-                        json_button = gr.Button("提交 JSON 数据", variant="primary")
-                    with gr.Accordion("方式 3（高级）· 提供完整数值模型", open=False):
-                        model_json = gr.Textbox(
-                            label="数学模型 JSON",
-                            value="",
-                            lines=8,
-                            placeholder=(
-                                '{"kind":"transfer_function","numerator":[1.0],'
-                                '"denominator":[2.0,1.0],"input_signal_id":"heater",'
-                                '"output_signal_id":"temperature","input_units":"power",'
-                                '"output_units":"degC"}'
-                            ),
-                        )
-                        validation_json = gr.Textbox(
-                            label="闭环验证条件 JSON（可选）",
-                            value="",
-                            lines=6,
-                            placeholder="参考输入、时长、初始状态、执行器/状态边界和性能指标。",
-                        )
-                    with gr.Accordion("方式 4 · 运行标准对象演示", open=False):
-                        demo_confirmed = gr.Checkbox(
-                            label="确认仅运行标准对象演示",
-                            value=False,
-                            info="演示结果只代表标准 Fixture，不代表我的真实对象。",
-                        )
-                    evidence_button = gr.Button("提交高级模型 / 运行演示", variant="secondary")
 
                 with gr.Tabs():
                     with gr.Tab("结构诊断"):
@@ -502,9 +413,19 @@ def build_app() -> gr.Blocks:
                             interactive=False,
                             elem_classes="stage-table",
                         )
+                        linked_components = build_linked_tuning_panel()
                     with gr.Tab("审计 JSON"):
                         raw_json = gr.JSON(label="完整阶段记录")
 
+        bind_linked_tuning_events(
+            linked_components,
+            report_json=raw_json,
+            app_state=app_state,
+            base_url=base_url,
+            model=model,
+            api_key=api_key,
+            progress=progress,
+        )
         gr.Markdown(LICENSE_NOTICE, elem_id="license-notice")
 
         output_components = [
@@ -547,54 +468,36 @@ def build_app() -> gr.Blocks:
             ],
             outputs=output_components,
         )
-        route.change(
-            update_run_mode,
-            inputs=[route],
-            outputs=[
-                mode_note,
-                description,
-                observed_outputs,
-                actuators,
-                safety_bounds,
-                forbidden_actions,
-                time_scale_hint_s,
-                use_llm,
+        continue_button.click(
+            continue_from_ui,
+            inputs=[
+                app_state,
+                question_1,
+                question_2,
+                question_3,
+                question_4,
+                supplemental,
                 base_url,
                 model,
                 api_key,
             ],
-        )
-        continue_button.click(
-            continue_from_ui,
-            inputs=[app_state, question_1, question_2, question_3, question_4, supplemental],
             outputs=output_components,
         )
         specification_button.click(
             submit_specifications_from_ui,
-            inputs=[app_state, specification_text, simulation_bounds_confirmed],
-            outputs=output_components,
-        )
-        json_button.click(
-            submit_json_from_ui,
-            inputs=[app_state, uploaded_json, pasted_json, simulation_bounds_confirmed],
-            outputs=output_components,
-        )
-        evidence_button.click(
-            submit_evidence_from_ui,
             inputs=[
                 app_state,
-                model_json,
-                validation_json,
+                specification_text,
                 simulation_bounds_confirmed,
-                demo_confirmed,
+                base_url,
+                model,
+                api_key,
             ],
             outputs=output_components,
         )
         clear_button.click(
             reset_ui,
             outputs=[
-                route,
-                mode_note,
                 description,
                 observed_outputs,
                 actuators,
@@ -608,12 +511,7 @@ def build_app() -> gr.Blocks:
                 api_key,
                 supplemental,
                 specification_text,
-                uploaded_json,
-                pasted_json,
-                model_json,
-                validation_json,
                 simulation_bounds_confirmed,
-                demo_confirmed,
                 *output_components,
             ],
         )

@@ -15,6 +15,7 @@ from cfdc.diagnosis.evaluation import (
 from cfdc.diagnosis.llm import (
     DeterministicDiagnosticAdapter,
     OpenAICompatibleDiagnosticAdapter,
+    SimulationProposalAdapter,
     validate_agent_payload,
 )
 from cfdc.diagnosis.mechanism_cards import (
@@ -41,6 +42,7 @@ __all__ = [
     "DiagnosticEngine",
     "DeterministicDiagnosticAdapter",
     "OpenAICompatibleDiagnosticAdapter",
+    "SimulationProposalAdapter",
     "collect_and_save_llm_diagnostic_responses",
     "compare_diagnostic_evaluations",
     "diagnostic_case_catalog_sha256",

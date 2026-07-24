@@ -1,3 +1,5 @@
+import pytest
+
 from cfdc.controllers import pair_mimo_loops, synthesize_controller
 from cfdc.models import (
     ArchetypeClass,
@@ -90,6 +92,9 @@ def test_marginal_plant_controller_scales_pd_from_input_gain_and_saturates():
         "kp": 0.9**2 / conservative_gain,
         "kd": 2.0 * 1.15 * 0.9 / conservative_gain,
     }
+    assert controller.design_parameters["filter_cutoff_rad_s"] == pytest.approx(
+        9.0
+    )
     assert controller.saturation["output_max"] == 0.4
 
     half_gain = synthesize_controller(
@@ -120,6 +125,9 @@ def test_second_order_controller_scales_from_input_gain():
 
     assert double_gain.gains["kp"] == 0.5 * unit_gain.gains["kp"]
     assert double_gain.gains["kd"] == 0.5 * unit_gain.gains["kd"]
+    assert unit_gain.design_parameters[
+        "filter_cutoff_rad_s"
+    ] == pytest.approx(31.5)
     assert unit_gain.source_features == ["natural_frequency", "damping_ratio", "input_gain"]
 
 

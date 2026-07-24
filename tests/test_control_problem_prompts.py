@@ -327,8 +327,18 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
             if "output_signal_id" in model
             else set(model["output_signal_ids"])
         )
-        assert model_inputs.issubset(declared_inputs), (language, index, model_inputs, declared_inputs)
-        assert model_outputs.issubset(declared_outputs), (language, index, model_outputs, declared_outputs)
+        def is_declared(name: str, declared: set[str]) -> bool:
+            if name in declared:
+                return True
+            base = re.sub(r"(?: channel|通道) \d+$", "", name)
+            return base in declared
+
+        assert all(is_declared(name, declared_inputs) for name in model_inputs), (
+            language, index, model_inputs, declared_inputs
+        )
+        assert all(is_declared(name, declared_outputs) for name in model_outputs), (
+            language, index, model_outputs, declared_outputs
+        )
         assert set(example_payload["eight_segment_evidence"]) == {
             "stability",
             "phase",
@@ -401,6 +411,188 @@ def test_english_and_chinese_prompt_documents_preserve_numeric_and_structural_pa
         assert len(english_item["actions"]) == len(chinese_item["actions"]), index
         translated = [ASSESSMENT_TRANSLATION[value] for value in chinese_item["assessments"]]
         assert english_item["assessments"] == translated, index
+
+
+def _model_fingerprint(model: dict) -> tuple:
+    kind = model["kind"]
+    if kind == "transfer_function":
+        return kind, tuple(model["numerator"]), tuple(model["denominator"])
+    if kind == "state_space":
+        acceleration_row = 1 if len(model["b"]) > 1 else 0
+        return kind, len(model["a"]), tuple(model["b"][acceleration_row])
+    return kind, model["template_id"]
+
+
+def test_known_cross_paired_examples_match_their_technical_problem_models():
+    expected = {
+        21: ("transfer_function", (0.001,), (1, 0.05)),
+        41: ("transfer_function", (1,), (1, 2)),
+        22: ("transfer_function", (1310000, 17423000), (1, 516.1, 56850, 1307000, 17330000)),
+        42: ("transfer_function", (1,), (1, 0.5)),
+        25: ("state_space", 6, (50, -50, -50, 50)),
+        43: ("transfer_function", (2,), (1, 5, 4)),
+        26: ("transfer_function", (1,), (1, 0, 9.81)),
+        44: ("transfer_function", (1,), (1, 1)),
+        27: ("registered_nonlinear", "underactuated_cartpole"),
+        45: ("transfer_function", (1,), (1, 1)),
+        28: ("transfer_function", (0.01, 0.2, 1), (0.01, 0.3, 1)),
+        46: ("transfer_function", (1,), (1, 1)),
+        29: ("state_space", 3, (0,)),
+        47: ("transfer_function", (1, 6, 8), (1, 4, 3, 0)),
+        30: ("state_space", 1, (2000, 1000)),
+        48: ("transfer_function", (3, 6), (1, 2, 10, 0)),
+        31: ("transfer_function", (-1,), (1, 0)),
+        49: ("transfer_function", (3, 6), (1, 2, 10)),
+        32: ("transfer_function", (0.63,), (2e-05, 0.1602, 1.9969, 0)),
+        50: ("transfer_function", (1,), (1, 5, 4)),
+        33: ("transfer_function", (0.01,), (0.005, 0.06, 0.1001, 0)),
+        51: ("transfer_function", (0.001,), (1, 0.05, 0)),
+        34: ("transfer_function", (4,), (0.062, 0.036, 0)),
+        52: ("transfer_function", (100,), (1, 10.1, 101, 0)),
+    }
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+
+    for case_id, fingerprint in expected.items():
+        assert _model_fingerprint(
+            english[case_id - 1]["example_payload"]["model"]
+        ) == fingerprint
+        assert _model_fingerprint(
+            chinese[case_id - 1]["example_payload"]["model"]
+        ) == fingerprint
+
+    assert "vehicle mass 1000 kg" in english[20]["natural_example"]
+    assert "车辆质量 1000 kg" in chinese[20]["natural_example"]
+    assert "k=2 s^-1" in english[40]["natural_example"]
+    assert "k=2 s^-1" in chinese[40]["natural_example"]
+    assert "physical_parameters" in english[21]["example_payload"]
+    assert "physical_parameters" in chinese[21]["example_payload"]
+    assert "nonlinear_equation" in english[25]["example_payload"]
+    assert "nonlinear_equation" in chinese[25]["example_payload"]
+
+    for localized in (english, chinese):
+        model_28 = localized[27]["example_payload"]["model"]
+        assert model_28["numerator"] == [0.01, 0.2, 1]
+        assert model_28["denominator"] == [0.01, 0.3, 1]
+
+        model_29 = localized[28]["example_payload"]["model"]
+        assert model_29["kind"] == "state_space"
+        assert model_29["a"] == [[-10, 0, -100], [0, -10, 100], [10, -10, 0]]
+        assert model_29["b"] == [[100], [0], [0]]
+        assert model_29["c"] == [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        assert model_29["d"] == [[0], [0], [0]]
+
+
+PAIR_EVIDENCE_SIGNALS = {
+    21: (("longitudinal drive force", "vehicle speed"), ("纵向驱动力", "车速")),
+    41: (("prescribed test signal", "system output response"), ("给定测试信号", "系统输出响应")),
+    22: (("prescribed road-displacement test input", "body displacement, wheel displacement, and suspension travel"), ("给定路面位移测试输入", "车身位移、车轮位移与悬架行程")),
+    42: (("input signal", "output response"), ("输入信号", "输出响应")),
+    25: (("four rotor thrust perturbations", "roll, pitch, and yaw response"), ("四个旋翼推力增量", "滚转、俯仰与偏航响应")),
+    43: (("prescribed forcing signal", "system output response"), ("给定外部激励", "系统输出响应")),
+    26: (("pivot torque", "pendulum angle and angular rate"), ("枢轴力矩", "摆角与角速度")),
+    44: (("input voltage", "capacitor voltage"), ("输入电压", "电容电压")),
+    27: (("cart force", "cart position, pendulum angle"), ("小车水平力", "小车位置、摆角")),
+    45: (("sinusoidal input", "sinusoidal output amplitude and phase"), ("正弦输入", "正弦输出幅值与相位")),
+    28: (("input voltage", "output and capacitor voltages"), ("输入电压", "输出与电容电压")),
+    46: (("canonical test signal", "transformed system response"), ("典型测试信号", "变换后的系统响应")),
+    29: (("source current", "two capacitor voltages and inductor current"), ("源电流", "两个电容电压与电感电流")),
+    47: (("prescribed transformed input", "time-domain output response"), ("给定变换域输入", "时域输出响应")),
+    30: (("input voltages", "summed output voltage"), ("输入电压", "加权输出电压")),
+    48: (("test input", "steady-state output"), ("测试输入", "稳态输出")),
+    31: (("input voltage", "integrator output voltage"), ("输入电压", "积分器输出电压")),
+    49: (("unit-step input", "steady output"), ("单位阶跃输入", "稳态输出")),
+    32: (("amplifier voltage", "cone displacement, coil current"), ("放大器电压", "锥盆位移、线圈电流")),
+    50: (("forcing input and prescribed initial-state release", "state and output response"), ("外部激励与给定初态释放", "状态与输出响应")),
+    33: (("armature voltage", "motor position, speed, armature current"), ("电枢电压", "电机位置、转速、电枢电流")),
+    51: (("drive force", "vehicle position and speed"), ("驱动力", "车辆位置与速度")),
+    34: (("motor torque", "motor and load angle, shaft torque"), ("电机力矩", "电机与负载角度、轴力矩")),
+    52: (("armature voltage", "motor speed and position"), ("电枢电压", "电机速度与位置")),
+}
+
+
+def test_repaired_pair_evidence_is_bound_to_every_numbered_problem():
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+    expected_keys = {
+        "stability", "phase", "delay", "order", "sensing_and_actuation",
+        "nonlinearity", "coupling", "uncertainty",
+    }
+
+    for case_id, (english_signals, chinese_signals) in PAIR_EVIDENCE_SIGNALS.items():
+        for localized, (input_signal, output_signal) in (
+            (english, english_signals),
+            (chinese, chinese_signals),
+        ):
+            evidence = localized[case_id - 1]["example_payload"]["eight_segment_evidence"]
+            assert set(evidence) == expected_keys
+            assert input_signal in evidence["sensing_and_actuation"]
+            assert input_signal in evidence["delay"]
+            assert output_signal in evidence["stability"]
+            assert output_signal in evidence["phase"]
+
+
+def test_repaired_experiments_match_their_natural_examples_and_technical_source():
+    expected_timing = {
+        41: (0.01, 8),
+        42: (0.01, 16),
+        43: (0.01, 8),
+        44: (0.01, 8),
+        45: (0.002, 12),
+        46: (0.005, 12),
+        47: (0.005, 12),
+        48: (0.002, 8),
+        49: (0.005, 12),
+        50: (0.005, 10),
+        51: (0.05, 120),
+        52: (0.001, 5),
+    }
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+
+    for localized in (english, chinese):
+        for case_id, (sample_time_s, duration_s) in expected_timing.items():
+            experiment = localized[case_id - 1]["example_payload"]["experiment"]
+            assert experiment["sample_time_s"] == sample_time_s
+            assert experiment["duration_s"] == duration_s
+        assert 4 in localized[25]["example_payload"]["experiment"]["input_amplitudes"]
+
+
+def test_state_space_channels_are_unique_and_declared_in_each_localization():
+    for path, headings, language in (
+        (ENGLISH_PATH, ENGLISH_HEADINGS, "en"),
+        (CHINESE_PATH, CHINESE_HEADINGS, "cn"),
+    ):
+        entries = _parse_document(path, headings, language)
+        for case_id, entry in enumerate(entries, 1):
+            model = entry["example_payload"]["model"]
+            if model["kind"] != "state_space":
+                continue
+            assert len(model["input_signal_ids"]) == len(set(model["input_signal_ids"])), case_id
+            assert len(model["output_signal_ids"]) == len(set(model["output_signal_ids"])), case_id
+
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+    assert english[24]["example_payload"]["model"]["input_signal_ids"] == [
+        "rotor 1 torque perturbation",
+        "rotor 2 torque perturbation",
+        "rotor 3 torque perturbation",
+        "rotor 4 torque perturbation",
+    ]
+    assert chinese[24]["example_payload"]["model"]["input_signal_ids"] == [
+        "旋翼 1 力矩增量",
+        "旋翼 2 力矩增量",
+        "旋翼 3 力矩增量",
+        "旋翼 4 力矩增量",
+    ]
+    assert english[29]["example_payload"]["model"]["input_signal_ids"] == [
+        "input voltage 1",
+        "input voltage 2",
+    ]
+    assert chinese[29]["example_payload"]["model"]["input_signal_ids"] == [
+        "输入电压 1",
+        "输入电压 2",
+    ]
 
 
 def test_descriptions_are_problem_specific_instead_of_repeated_boilerplate():

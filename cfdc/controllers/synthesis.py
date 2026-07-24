@@ -216,12 +216,17 @@ def synthesize_controller(
         scale = math.copysign(conservative_gain, plant_gain.value)
         kp = 0.1 * wn * wn / scale
         kd = 0.1 * (2.0 * max(zeta, 0.1) * wn) / scale
+        filter_cutoff = 10.0 * max(wn_feature.upper_bound, 1e-9)
         return ControllerCandidate(
             architecture="detuned_PD",
             gains={"kp": kp, "kd": kd},
+            design_parameters={"filter_cutoff_rad_s": filter_cutoff},
             tunable_gain_names=["kp", "kd"],
             saturation=_output_saturation(safety, release_context),
-            constraints=["stable oscillatory gains reduced by a factor of 10"],
+            constraints=[
+                "stable oscillatory gains reduced by a factor of 10",
+                "derivative filter cutoff fixed at 10x the upper natural-frequency estimate",
+            ],
             source_features=["natural_frequency", "damping_ratio", "input_gain"],
             status="ready_for_conservative_trial",
         )
@@ -243,11 +248,15 @@ def synthesize_controller(
                 "kp": bandwidth**2 / gain_scale,
                 "kd": 2.0 * damping * bandwidth / gain_scale,
             },
+            design_parameters={
+                "filter_cutoff_rad_s": 10.0 * bandwidth,
+            },
             tunable_gain_names=["kp", "kd"],
             saturation=output_saturation,
             constraints=[
                 "PD gains are scaled by the measured input-to-acceleration gain",
                 "initial closed-loop bandwidth is bounded conservatively",
+                "derivative filter cutoff fixed at 10x the declared initial bandwidth",
                 "hard saturation is mandatory",
             ],
             source_features=["input_gain"],
@@ -416,6 +425,9 @@ def synthesize_controller(
         return ControllerCandidate(
             architecture="unstable_mode_conservative_PD",
             gains={"kp": 1.25 * wn**2 / gain_scale, "kd": 2.2 * wn / gain_scale},
+            design_parameters={
+                "filter_cutoff_rad_s": 10.0 * max(float(wn), 1e-9),
+            },
             tunable_gain_names=["kp", "kd"],
             saturation=_output_saturation(
                 safety, release_context, demo_min=-8.0, demo_max=8.0
@@ -429,6 +441,9 @@ def synthesize_controller(
     return ControllerCandidate(
         architecture="safe_online_gain_search",
         gains={"kp": 0.0, "kd": 0.01 * wn},
+        design_parameters={
+            "filter_cutoff_rad_s": 10.0 * max(float(wn), 1e-9),
+        },
         tunable_gain_names=["kp", "kd"],
         saturation=_output_saturation(safety, release_context),
         constraints=["do not de-tune unstable plants by nominal percentage", "increase stabilizing gains only under online safety monitoring"],

@@ -57,6 +57,13 @@ STAGES = [
     ),
 ]
 
+LINKED_VALIDATION_BLOCKED_STATES = {
+    "frozen",
+    "inconclusive",
+    "budget_exhausted",
+    "cancelled",
+}
+
 
 def _compact_report(report: CFDCRunReport) -> dict[str, Any]:
     payload = report.model_dump(mode="json")
@@ -208,7 +215,10 @@ def performance_rows(report: CFDCRunReport) -> list[list[Any]]:
     return rows
 
 
-def stage_progress_html(report: CFDCRunReport) -> str:
+def stage_progress_html(
+    report: CFDCRunReport,
+    linked_simulation_state: str | None = None,
+) -> str:
     blocked = report.status in {
         "feature_extraction_failed",
         "evidence_rejected",
@@ -228,13 +238,29 @@ def stage_progress_html(report: CFDCRunReport) -> str:
     first_pending_seen = False
     for index, (label, predicate) in enumerate(STAGES, start=1):
         complete = bool(predicate(report))
+        linked_state: str | None = None
+        if (
+            label == "效果验证"
+            and linked_simulation_state is not None
+        ):
+            complete = linked_simulation_state == "stable"
+            linked_state = (
+                "blocked"
+                if linked_simulation_state
+                in LINKED_VALIDATION_BLOCKED_STATES
+                else "waiting"
+            )
         state = "done" if complete else "pending"
         if not complete and not first_pending_seen:
             first_pending_seen = True
-            if waiting:
+            if linked_state is not None:
+                state = linked_state
+            elif waiting:
                 state = "waiting"
             elif blocked:
                 state = "blocked"
+        elif not complete and linked_state is not None:
+            state = linked_state
         icon = "✓" if complete else str(index)
         items.append(
             f'<div class="flow-step {state}"><span>{icon}</span><small>{label}</small></div>'

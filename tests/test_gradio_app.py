@@ -3,8 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from cfdc.web.presentation import render_report
+from cfdc.web.presentation import render_report, stage_progress_html
 from cfdc.web import service as web_service
+from cfdc.web import linked_tuning_service as linked_service
+from cfdc.web import linked_tuning_ui as linked_ui
+from cfdc.web.linked_tuning_service import (
+    decode_lab_state,
+    link_stage5_report,
+)
 from cfdc.web.service import (
     ROUTE_CHOICES,
     continue_app_run,
@@ -15,7 +21,7 @@ from cfdc.web.service import (
     submit_app_json,
     submit_app_specifications,
 )
-from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, build_app, reset_ui, update_run_mode
+from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, build_app, reset_ui
 from cfdc.diagnosis import DeterministicDiagnosticAdapter, submit_specifications_to_session
 from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.models import DiagnosticSessionState, SystemDescription
@@ -62,7 +68,9 @@ def test_app_runs_clear_description_and_renders_stage_tables():
 
     assert report.status == "awaiting_specifications"
     assert state["session"] is not None
-    assert state["api_key"] == ""
+    assert "api_key" not in state
+    assert "base_url" not in state
+    assert "model" not in state
     assert len(view["diagnosis"]) == 8
     assert dict(view["route"])["方法 Profile"] == "first_order_lag"
     assert view["experiments"] == []
@@ -73,6 +81,79 @@ def test_app_runs_clear_description_and_renders_stage_tables():
     assert "first_order_lag" in view["summary"]
     assert "不会提取核心特征" in view["specification_guidance"]
     assert view["raw"]["evidence_boundary"] == "structural_diagnosis_only"
+
+
+@pytest.fixture(scope="module")
+def candidate_report_with_first_four_stages_complete():
+    report, _ = start_app_run(
+        (
+            "A binary heater command controls room temperature through "
+            "fixed thermostat hysteresis. The temperature settles, starts "
+            "promptly in the final direction, and has no repeated peaks."
+        ),
+        "room temperature, heater state",
+        "binary heater command",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+    )
+    assert report.diagnosis is not None
+    assert report.classification is not None
+    return report.model_copy(
+        update={
+            "status": "candidate_unvalidated",
+            "compiled_specification_model": object(),
+            "features": [object()],
+            "controller": object(),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("linked_state", "expected_state", "expected_icon"),
+    [
+        ("trial_pending", "waiting", "5"),
+        ("needs_adjustment", "waiting", "5"),
+        ("rolled_back", "waiting", "5"),
+        ("stable", "done", "✓"),
+        ("inconclusive", "blocked", "5"),
+        ("budget_exhausted", "blocked", "5"),
+    ],
+)
+def test_effect_validation_progress_uses_linked_state(
+    candidate_report_with_first_four_stages_complete,
+    linked_state,
+    expected_state,
+    expected_icon,
+):
+    html = stage_progress_html(
+        candidate_report_with_first_four_stages_complete,
+        linked_simulation_state=linked_state,
+    )
+    fifth = html.split('<div class="flow-step ')[-1]
+
+    assert fifth.startswith(f'{expected_state}">')
+    assert (
+        f"<span>{expected_icon}</span><small>效果验证</small>"
+        in fifth
+    )
+
+
+@pytest.mark.parametrize(
+    "status",
+    ["validated_in_simulation", "demo_completed"],
+)
+def test_existing_validated_reports_keep_effect_validation_green(status):
+    report = run_cfdc_route("demo").model_copy(update={"status": status})
+
+    html = stage_progress_html(report)
+    fifth = html.split('<div class="flow-step ')[-1]
+
+    assert fifth.startswith('done">')
+    assert "<span>✓</span><small>效果验证</small>" in fifth
 
 
 def test_app_clarification_state_can_continue_into_full_simulation():
@@ -104,7 +185,9 @@ def test_app_clarification_state_can_continue_into_full_simulation():
     assert completed.semantic_selection.simulation_profile_id == "first_order_lag"
     assert completed.experiment_results == []
     assert next_state["session"] is not None
-    assert next_state["api_key"] == ""
+    assert "api_key" not in next_state
+    assert "base_url" not in next_state
+    assert "model" not in next_state
 
 
 def test_app_renders_matrix_core_feature_without_scalar_collapse():
@@ -147,15 +230,9 @@ def test_app_input_parsers_accept_common_multiline_forms():
         "input_min": -1.0,
         "input_max": 1.0,
     }
-    assert {
-        "cartpole",
-        "cartpole-boundary",
-        "vtol-position",
-        "vtol-boundary",
-        "vtol-altitude",
-        "vtol-hover",
-        "vtol-variation",
-    }.issubset(set(ROUTE_CHOICES.values()))
+    assert ROUTE_CHOICES == {
+        "自然语言自动分析（主流程）": "generic"
+    }
 
 
 def test_app_can_submit_structured_model_evidence_after_diagnosis():
@@ -376,6 +453,121 @@ def test_thermostat_natural_language_and_json_compile_equivalent_models():
     )["specification_guidance"]
     assert "经后端重算验证的推导规格" in guidance
     assert "3600 * heat_capacity / heat_transfer_coefficient" in guidance
+
+
+def test_thermostat_prompt_goes_directly_to_effect_validation_without_ai(
+    monkeypatch,
+):
+    problem = (
+        "这是一个由恒温器监测房间温度并控制电加热器通断的住宅供暖系统。"
+        "控制输入是二值加热命令，输出是由传感器或同步记录器连续获取的室温、"
+        "加热器状态。在多次小幅且可逆的试验中，室温开始时就沿最终方向变化，"
+        "不会先向相反方向运动；二值加热命令改变后，室温在一个采样周期内就"
+        "开始变化，不会出现独立静默区间，而且从执行作用到可见响应只涉及一到"
+        "两个主导储能或积分过程。把二值加热命令恢复到基准值后，室温最终会"
+        "收敛或保持有界，不会出现自行增长的运动。改变二值加热命令的方向和"
+        "幅值时，可以观察到固定滞环和继电切换，但非比例现象只存在于这条固定"
+        "输入输出规律中，不会增加新的动态状态。二值加热命令与室温、加热器"
+        "状态采用同一时钟记录，因此这些同步记录足以重建所有相关运动；装置"
+        "只有一条从执行作用到被测运动的主要物理通道，其他给定量只作为扰动"
+        "进入。在安全范围内改变负载、元件或运行条件并重复试验时，这些变化"
+        "会使响应速度和最终水平发生适度变化，但不会改变主要运动方向和通道"
+        "结构。"
+    )
+    prompt = (
+        "采用室外温度 50 degF、设定值 65 degF、等效热容 "
+        "20000 Btu/degF、传热系数 500 Btu/(h*degF)、炉子供热率 "
+        "25000 Btu/h 和滞环半宽 0.5 degF。初温取 64.5 degF 且炉子"
+        "开启，以 60 s 采样仿真 6 h。\n\n"
+        "input_change=1 binary_command; "
+        "steady_output_change=50 degF; "
+        "response_time_s=144000 s; "
+        "input_min=0 binary_command; "
+        "input_max=1 binary_command; "
+        "output_min=64.5 degF; "
+        "output_max=65.5 degF;"
+    )
+    initial, app_state = start_app_run(
+        problem,
+        "室温、加热器状态",
+        "二值加热命令",
+        (
+            "max_abs_reference_normalized=0.25\n"
+            "max_abs_output_normalized=1.5\n"
+            "max_abs_actuator_normalized=1.0\n"
+            "max_test_duration_s=80.0"
+        ),
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
+        forbidden_actions=(
+            "向真实物理硬件下发命令\n"
+            "关闭仿真饱和或自动停止检查\n"
+            "输出或执行器越界后继续运行\n"
+            "安全验证时把题目声明的非线性替换为无限制线性环节"
+        ),
+        time_scale_hint_s="10.0",
+    )
+    assert initial.status == "awaiting_specifications"
+    resolved, _ = submit_app_specifications(
+        app_state,
+        prompt,
+        simulation_bounds_confirmed=True,
+    )
+
+    def forbidden_adapter(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("model discovery must not be called")
+
+    monkeypatch.setattr(
+        linked_service,
+        "OpenAICompatibleDiagnosticAdapter",
+        forbidden_adapter,
+    )
+    state, view = link_stage5_report(
+        resolved.model_dump(mode="json"),
+        base_url="https://unused.example/v1",
+        model="must-not-be-called",
+        api_key="must-not-be-used",
+    )
+    session = decode_lab_state(state)
+
+    assert resolved.status == "candidate_unvalidated"
+    assert resolved.compiled_specification_model is not None
+    assert resolved.compiled_specification_model.derived_features[
+        "static_gain"
+    ] == pytest.approx(50.0)
+    assert resolved.compiled_specification_model.derived_features[
+        "time_constant"
+    ] == pytest.approx(144000.0)
+    assert session.origin == "stage5_candidate_model"
+    assert session.confirmed_model.numerator == pytest.approx([50.0])
+    assert session.confirmed_model.denominator == pytest.approx(
+        [144000.0, 1.0]
+    )
+    assert session.state == "trial_pending"
+    assert view["controls"]["run_trial"] is True
+    assert "discovery" not in state
+
+    compact_report = render_report(resolved)["raw"]
+    compact_trace = compact_report["experiment_results"][0]["trace"]
+    assert compact_trace["sample_count"] > 0
+    assert "time_s" not in compact_trace
+    ui_outputs = linked_ui._sync_callback(compact_report, {})
+    assert ui_outputs[0]["state"] == "trial_pending"
+    assert "flow-step waiting" in ui_outputs[-1]
+
+    trial_state, trial_view = linked_service.run_linked_trial(
+        state,
+        view["parameter_rows"],
+        expected_revision=state["revision"],
+    )
+    stored_trace = trial_state["trials"][-1]["traces"][0]
+    assert len(stored_trace["time_s"]) >= 3
+    assert trial_view["output_frame"]["time_s"].nunique() >= 3
+    assert trial_view["control_frame"]["time_s"].nunique() >= 3
 
 
 def test_app_dataset_wrapper_with_empty_facts_uses_its_complete_model():
@@ -790,7 +982,7 @@ def test_gradio_exposes_all_six_domain_inputs_with_blank_optional_defaults():
     assert textboxes["主导时间尺度（秒）"]["value"] == ""
 
 
-def test_gradio_exposes_object_evidence_inputs_and_five_stage_progress():
+def test_gradio_exposes_direct_effect_validation_and_tuning_flow():
     app = build_app()
     labels = {
         component["props"].get("label")
@@ -804,21 +996,27 @@ def test_gradio_exposes_object_evidence_inputs_and_five_stage_progress():
 
     assert {
         "用自然语言补充设备规格",
-        "数学模型 JSON",
-        "闭环验证条件 JSON（可选）",
-        "JSON 数据文件（.json）",
-        "粘贴 JSON 数据（可选）",
         "我确认所提交的输入/输出范围仅作为本次软件仿真的停止边界",
-        "确认仅运行标准对象演示",
+        "已编译对象模型",
+        "已载入控制器",
     }.issubset(labels)
-    assert "实测 CSV（可多选）" not in labels
-    assert "实测数据 Manifest JSON" not in labels
+    assert "数学模型 JSON" not in labels
+    assert "JSON 数据文件（.json）" not in labels
+    assert "确认仅运行标准对象演示" not in labels
+    assert "请用自然语言回答" not in labels
     assert {
         "开始诊断",
         "提交规格信息",
-        "提交 JSON 数据",
-        "提交高级模型 / 运行演示",
+        "运行初始控制器效果验证",
+        "请求 AI 下一轮参数",
+        "批准并运行下一轮",
     }.issubset(buttons)
+    assert {
+        "采用此示例值",
+        "请求 AI 判断还缺什么",
+        "提交回答并继续",
+        "确认该模型并继续",
+    }.isdisjoint(buttons)
 
     report, _ = start_app_run(
         "A measured first order heater settles after a small power change.",
@@ -828,6 +1026,74 @@ def test_gradio_exposes_object_evidence_inputs_and_five_stage_progress():
     progress = render_report(report)["progress"]
     assert progress.count('class="flow-step') == 5
     assert "规格模型" in progress
+
+
+def _ancestor_ids(layout, target_id, ancestors=()):
+    if layout["id"] == target_id:
+        return ancestors
+    for child in layout.get("children", []):
+        found = _ancestor_ids(
+            child,
+            target_id,
+            (*ancestors, layout["id"]),
+        )
+        if found is not None:
+            return found
+    return None
+
+
+def test_linked_tuning_panel_is_inside_tuning_tab():
+    app = build_app()
+    components = {
+        component["id"]: component
+        for component in app.config["components"]
+    }
+    panel_id = next(
+        component["id"]
+        for component in app.config["components"]
+        if component["props"].get("elem_id") == "linked-tuning-panel"
+    )
+    ancestors = _ancestor_ids(app.config["layout"], panel_id)
+    assert ancestors is not None
+    ancestor_labels = {
+        components[component_id]["props"].get("label")
+        for component_id in ancestors
+        if component_id in components
+    }
+
+    assert "调优与适应" in ancestor_labels
+    assert "控制器" not in ancestor_labels
+
+
+def test_linked_tuning_mutations_refresh_main_stage_progress():
+    app = build_app()
+    components = {
+        component["id"]: component
+        for component in app.config["components"]
+    }
+    run_trial_id = next(
+        component_id
+        for component_id, component in components.items()
+        if component["props"].get("elem_id") == "linked-run-trial"
+    )
+    progress_id = next(
+        component_id
+        for component_id, component in components.items()
+        if component["props"].get("elem_id") == "stage-progress"
+    )
+    report_id = next(
+        component_id
+        for component_id, component in components.items()
+        if component["props"].get("label") == "完整阶段记录"
+    )
+    dependency = next(
+        item
+        for item in app.config["dependencies"]
+        if (run_trial_id, "click") in item["targets"]
+    )
+
+    assert report_id in dependency["inputs"]
+    assert progress_id in dependency["outputs"]
 
 
 def test_first_example_accepts_uninitialized_optional_textboxes():
@@ -1127,44 +1393,18 @@ def test_first_five_examples_use_observations_without_diagnostic_answer_leakage(
     assert "Type I / II / III" not in ui_source
 
 
-def test_developer_route_ignores_user_inputs_and_never_builds_llm(monkeypatch):
-    def forbidden_adapter(*args, **kwargs):
-        raise AssertionError("developer validation route must not build an LLM adapter")
+def test_main_ui_has_no_case_or_developer_route_selector():
+    app = build_app()
+    dropdown_labels = {
+        component["props"].get("label")
+        for component in app.config["components"]
+        if component["type"] == "dropdown"
+    }
+    source = Path("cfdc/web/ui.py").read_text(encoding="utf-8")
 
-    monkeypatch.setattr("cfdc.web.service.build_adapter", forbidden_adapter)
-    report, state = start_app_run(
-        "This user description must be ignored.",
-        "wrong output",
-        "wrong actuator",
-        "this is deliberately not a valid safety bound",
-        "开发验证 · CartPole 完整流程",
-        True,
-        "not-a-url",
-        "wrong-model",
-        "wrong-key",
-    )
-
-    assert report.status == "demo_completed"
-    assert report.semantic_selection.simulation_profile_id == "underactuated_cartpole"
-    assert "rod hinged on a cart" in report.system_description.text
-    assert "This user description" not in report.system_description.text
-    assert state["use_llm"] is False
-    assert state["input_source"] == "preregistered_developer_scenario"
-
-
-def test_run_mode_disables_inputs_without_clearing_their_values():
-    validation_updates = update_run_mode("开发验证 · VTOL 位置控制")
-    natural_updates = update_run_mode(NATURAL_LANGUAGE_MODE)
-
-    assert "不会调用 LLM" in validation_updates[0]
-    assert "六项" in natural_updates[0]
-    for update in validation_updates[1:7]:
-        assert update["interactive"] is False
-        assert "value" not in update
-    assert validation_updates[7]["interactive"] is False
-    assert validation_updates[7]["value"] is False
-    assert all(update["interactive"] is True for update in natural_updates[1:7])
-    assert natural_updates[8]["interactive"] is True
+    assert "运行方式" not in dropdown_labels
+    assert "开发验证 ·" not in source
+    assert "运行标准对象演示" not in source
 
 
 def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_calls(monkeypatch):
@@ -1194,10 +1434,17 @@ def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_
         "I have a machine.", "", "", "", NATURAL_LANGUAGE_MODE,
         True, "https://provider.example/v1", "provider-model", "test-key",
     )
+    assert "test-key" not in json.dumps(state)
+    assert "api_key" not in state
+    assert "base_url" not in state
+    assert "model" not in state
     completed, _ = continue_app_run(
         state,
         ["Temperature is measured.", "A heater changes it.", "It moves in the expected direction.", "It starts promptly."],
         "It is a first order measured thermal process that settles.",
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="test-key",
     )
 
     assert completed.status == "awaiting_specifications"
@@ -1205,47 +1452,17 @@ def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_
     assert calls == {"diagnose": 2, "select": 1}
 
 
-def test_include_trajectory_exposes_route_trajectory_in_audit_json():
-    report, _ = start_app_run(
-        "ignored", "ignored", "ignored", "",
-        "开发验证 · VTOL 位置控制",
-        False, "", "", "", True,
-    )
-    compact = render_report(report)["raw"]
-
-    assert compact["vtol_simulation"]["trajectory"]
-
-
-def test_cartpole_audit_json_compacts_nested_trial_samples():
-    import json
-
-    report, _ = start_app_run(
-        "ignored", "ignored", "ignored", "",
-        "开发验证 · CartPole 完整流程",
-        False, "", "", "", False,
-    )
-    compact = render_report(report)["raw"]
-    boundary = compact["cartpole_boundary"]
-    trials = [*boundary["candidate_trials"], boundary["rollback_trial"]]
-
-    assert all("samples" not in trial for trial in trials)
-    assert all(trial["sample_count"] > 0 for trial in trials)
-    assert len(json.dumps(compact, ensure_ascii=False)) < 500_000
-
-
 def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     monkeypatch.setenv("CFDC_LLM_BASE_URL", "https://provider.example/v1")
     monkeypatch.setenv("CFDC_LLM_MODEL", "provider-model")
     reset = reset_ui()
 
-    assert len(reset) == 41
-    assert reset[0] == NATURAL_LANGUAGE_MODE
-    assert "六项" in reset[1]
-    assert reset[2:8] == ("", "", "", "", "", "")
-    assert reset[8] is False
-    assert reset[9] is False
-    assert reset[10] == "https://provider.example/v1"
-    assert reset[11] == "provider-model"
-    assert reset[12] == ""
-    assert reset[14:21] == ("", None, "", "", "", False, False)
-    assert reset[21] == {}
+    assert len(reset) == 34
+    assert reset[:6] == ("", "", "", "", "", "")
+    assert reset[6] is False
+    assert reset[7] is False
+    assert reset[8] == "https://provider.example/v1"
+    assert reset[9] == "provider-model"
+    assert reset[10] == ""
+    assert reset[11:14] == ("", "", False)
+    assert reset[14] == {}

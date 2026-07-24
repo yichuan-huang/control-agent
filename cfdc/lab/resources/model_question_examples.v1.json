@@ -1,0 +1,194 @@
+{
+  "schema_version": "model_question_examples/v1",
+  "catalog_version": "v1",
+  "examples": [
+    {
+      "example_id": "thermal.input_step.power.v1",
+      "fact_type": "input_step",
+      "unit_family": "power",
+      "context_tags": ["thermal", "siso", "step_response"],
+      "answer_text": "把加热功率从 500 W 调到 600 W。",
+      "value_payload": {"before": 500.0, "after": 600.0, "unit": "W"}
+    },
+    {
+      "example_id": "thermal.output_step.temperature.v1",
+      "fact_type": "output_step",
+      "unit_family": "temperature",
+      "context_tags": ["thermal", "siso", "step_response"],
+      "answer_text": "温度原来是 20 °C，最后稳定在 24 °C。",
+      "value_payload": {"before": 20.0, "after": 24.0, "unit": "degC"}
+    },
+    {
+      "example_id": "process.response_delay.seconds.v1",
+      "fact_type": "response_delay",
+      "unit_family": "time",
+      "context_tags": ["process", "step_response", "delay"],
+      "answer_text": "改变输入后约 2 s 开始看到输出变化。",
+      "value_payload": {"value": 2.0, "unit": "s"}
+    },
+    {
+      "example_id": "process.response_time_63.seconds.v1",
+      "fact_type": "response_time_63",
+      "unit_family": "time",
+      "context_tags": ["process", "step_response", "first_order"],
+      "answer_text": "从开始变化算起，约 5 s 达到最终变化量的 63%。",
+      "value_payload": {"value": 5.0, "unit": "s"}
+    },
+    {
+      "example_id": "oscillation.period.seconds.v1",
+      "fact_type": "oscillation_period",
+      "unit_family": "time",
+      "context_tags": ["oscillation", "ringing", "step_response"],
+      "answer_text": "相邻两个同方向峰值之间约相隔 1.2 s。",
+      "value_payload": {"value": 1.2, "unit": "s"}
+    },
+    {
+      "example_id": "oscillation.peak_ratio.dimensionless.v1",
+      "fact_type": "peak_ratio",
+      "unit_family": "dimensionless",
+      "context_tags": ["oscillation", "ringing", "damping"],
+      "answer_text": "第二个峰值偏差约为第一个峰值偏差的 0.45 倍。",
+      "value_payload": {"value": 0.45, "unit": "dimensionless"}
+    },
+    {
+      "example_id": "sampling.sample_time.seconds.v1",
+      "fact_type": "sample_time",
+      "unit_family": "time",
+      "context_tags": ["discrete", "sampling", "digital_control"],
+      "answer_text": "控制器每 0.02 s 更新一次。",
+      "value_payload": {"value": 0.02, "unit": "s"}
+    },
+    {
+      "example_id": "local.operating_point.valve_flow.v1",
+      "fact_type": "operating_point",
+      "unit_family": "operating_region",
+      "context_tags": ["local_linear", "valve", "flow"],
+      "answer_text": "工作点为阀门开度 50%，稳态流量 12 L/min。",
+      "value_payload": {
+        "inputs": {"valve": 50.0},
+        "outputs": {"flow": 12.0},
+        "signal_units": {"valve": "%", "flow": "L/min"}
+      }
+    },
+    {
+      "example_id": "local.validity_region.valve_flow.v1",
+      "fact_type": "validity_region",
+      "unit_family": "operating_region",
+      "context_tags": ["local_linear", "valve", "flow"],
+      "answer_text": "只研究阀门开度 40%–60%、流量 9–15 L/min 的范围，并保持上游压力不变。",
+      "value_payload": {
+        "input_ranges": {"valve": [40.0, 60.0]},
+        "output_ranges": {"flow": [9.0, 15.0]},
+        "signal_units": {"valve": "%", "flow": "L/min"}
+      }
+    },
+    {
+      "example_id": "signals.siso.definition.v1",
+      "fact_type": "signal_definition",
+      "unit_family": "signal",
+      "context_tags": ["siso", "signal_mapping", "units"],
+      "answer_text": "输入是加热功率 heater_power（W），输出是温度 temperature（°C）。",
+      "value_payload": {
+        "inputs": [{"signal_id": "heater_power", "unit": "W"}],
+        "outputs": [{"signal_id": "temperature", "unit": "degC"}]
+      }
+    },
+    {
+      "example_id": "state_space.matrices.two_state.v1",
+      "fact_type": "state_space_data",
+      "unit_family": "structured_model",
+      "context_tags": ["state_space", "two_state", "theory_problem"],
+      "answer_text": "题目给出 A=[[0,1],[-2,-3]]、B=[[0],[1]]、C=[[1,0]]、D=[[0]]，状态为位置和速度。",
+      "value_payload": {
+        "a": [[0.0, 1.0], [-2.0, -3.0]],
+        "b": [[0.0], [1.0]],
+        "c": [[1.0, 0.0]],
+        "d": [[0.0]],
+        "matrix_units": {
+          "a": [["1/s", "1"], ["1/s^2", "1/s"]],
+          "b": [["1"], ["1/s"]],
+          "c": [["1", "s"]],
+          "d": [["1"]]
+        }
+      }
+    },
+    {
+      "example_id": "thermal.reference_target.temperature.v1",
+      "fact_type": "reference_target",
+      "unit_family": "reference",
+      "context_tags": ["thermal", "reference", "experiment"],
+      "answer_text": "软件实验的目标温度设为 24 °C。",
+      "value_payload": {
+        "values": {"temperature": 24.0},
+        "signal_units": {"temperature": "degC"}
+      }
+    },
+    {
+      "example_id": "thermal.actuator_bounds.power.v1",
+      "fact_type": "actuator_bounds",
+      "unit_family": "bounds",
+      "context_tags": ["thermal", "actuator", "experiment"],
+      "answer_text": "软件实验中加热功率限制在 0–1000 W。",
+      "value_payload": {
+        "ranges": {"heater_power": [0.0, 1000.0]},
+        "signal_units": {"heater_power": "W"}
+      }
+    },
+    {
+      "example_id": "thermal.output_bounds.temperature.v1",
+      "fact_type": "output_bounds",
+      "unit_family": "bounds",
+      "context_tags": ["thermal", "output", "experiment"],
+      "answer_text": "软件实验中温度允许范围为 15–80 °C。",
+      "value_payload": {
+        "ranges": {"temperature": [15.0, 80.0]},
+        "signal_units": {"temperature": "degC"}
+      }
+    },
+    {
+      "example_id": "cartpole.parameters.registered.v1",
+      "fact_type": "cartpole_parameters",
+      "unit_family": "registered_parameters",
+      "context_tags": ["cartpole", "registered_nonlinear", "theory_problem"],
+      "answer_text": "采用题目给出的 CartPole 参数：小车 1.0 kg、摆杆 0.1 kg、质心距 0.5 m、重力加速度 9.81 m/s²。",
+      "value_payload": {
+        "cart_mass_kg": 1.0,
+        "pole_mass_kg": 0.1,
+        "com_length_m": 0.5,
+        "gravity_m_s2": 9.81
+      }
+    },
+    {
+      "example_id": "vtol.parameters.registered.v1",
+      "fact_type": "vtol_parameters",
+      "unit_family": "registered_parameters",
+      "context_tags": ["vtol", "registered_nonlinear", "theory_problem"],
+      "answer_text": "采用题目给出的 VTOL 参数：质量 1.5 kg、俯仰惯量 0.25 kg·m²、重力加速度 9.81 m/s²。",
+      "value_payload": {
+        "mass_kg": 1.5,
+        "pitch_inertia_kg_m2": 0.25,
+        "gravity_m_s2": 9.81
+      }
+    },
+    {
+      "example_id": "cartpole.parameter_uncertainty.relative.v1",
+      "fact_type": "parameter_uncertainty",
+      "unit_family": "uncertainty",
+      "context_tags": ["cartpole", "uncertainty", "registered_nonlinear"],
+      "answer_text": "CartPole 的质量和质心距参数采用 10% 的相对不确定度。",
+      "value_payload": {
+        "values": {
+          "cart_mass_kg": 0.1,
+          "com_length_m": 0.1,
+          "pole_mass_kg": 0.1
+        },
+        "parameter_units": {
+          "cart_mass_kg": "1",
+          "com_length_m": "1",
+          "pole_mass_kg": "1"
+        }
+      }
+    }
+  ],
+  "content_sha256": "c1e91efba7a8320cf3f0662d7f57e64e8c62dd6341f3f76fcc0b9f465328880d"
+}

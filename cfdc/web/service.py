@@ -29,25 +29,10 @@ from cfdc.runtime import run_cfdc_route
 
 ROUTE_CHOICES = {
     "自然语言自动分析（主流程）": "generic",
-    "开发验证 · CartPole 完整流程": "cartpole",
-    "开发验证 · CartPole 安全边界": "cartpole-boundary",
-    "开发验证 · VTOL 位置控制": "vtol-position",
-    "开发验证 · VTOL 安全边界": "vtol-boundary",
-    "开发验证 · VTOL 高度控制": "vtol-altitude",
-    "开发验证 · VTOL 悬停控制": "vtol-hover",
-    "开发验证 · VTOL 参数变化": "vtol-variation",
 }
 
-# Keep old labels valid for saved browser/API calls without showing them in the UI.
 LEGACY_ROUTE_LABELS = {
     "自动选择": "generic",
-    "CartPole 验证": "cartpole",
-    "CartPole 边界": "cartpole-boundary",
-    "VTOL 位置控制": "vtol-position",
-    "VTOL 安全边界": "vtol-boundary",
-    "VTOL 高度控制": "vtol-altitude",
-    "VTOL 悬停控制": "vtol-hover",
-    "VTOL 参数变化": "vtol-variation",
 }
 
 
@@ -185,22 +170,6 @@ def start_app_run(
     known_route_ids = set(ROUTE_CHOICES.values())
     if route_id not in known_route_ids:
         raise ValueError(f"未知运行方式：{route_label!r}")
-    if route_id != "generic":
-        report = run_cfdc_route(
-            route_id,
-            diagnostic_adapter=None,
-            include_trajectory=include_trajectory,
-        )
-        return report, {
-            "session": None,
-            "use_llm": False,
-            "base_url": "",
-            "model": "",
-            "api_key": "",
-            "include_trajectory": include_trajectory,
-            "input_source": "preregistered_developer_scenario",
-        }
-
     description_text = _textbox_text(description).strip()
     base_url_text = _textbox_text(base_url)
     model_text = _textbox_text(model)
@@ -266,9 +235,6 @@ def start_app_run(
     return report, {
         "session": session.model_dump(mode="json") if session is not None else None,
         "use_llm": use_llm if awaiting_llm_dialogue else False,
-        "base_url": base_url_text if awaiting_llm_dialogue else "",
-        "model": model_text if awaiting_llm_dialogue else "",
-        "api_key": api_key_text if awaiting_llm_dialogue else "",
         "include_trajectory": include_trajectory,
         "input_source": "natural_language",
     }
@@ -278,15 +244,19 @@ def continue_app_run(
     app_state: dict[str, Any],
     answers: list[str | None],
     supplemental_description: str | None,
+    *,
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     if not app_state or not app_state.get("session"):
         raise ValueError("当前没有等待回答的诊断会话。")
     session = DiagnosticSessionState.model_validate(app_state["session"])
     adapter = build_adapter(
         bool(app_state.get("use_llm")),
-        _textbox_text(app_state.get("base_url")),
-        _textbox_text(app_state.get("model")),
-        _textbox_text(app_state.get("api_key")),
+        base_url,
+        model,
+        api_key,
     )
     question_ids = list(clarification_question_map(session))
     question_map = clarification_question_map(session)
@@ -340,14 +310,7 @@ def continue_app_run(
         else None
     )
     if next_state["session"] is None:
-        next_state.update(
-            {
-                "use_llm": False,
-                "base_url": "",
-                "model": "",
-                "api_key": "",
-            }
-        )
+        next_state["use_llm"] = False
     return report, next_state
 
 
@@ -388,6 +351,10 @@ def submit_app_specifications(
     app_state: dict[str, Any],
     specification_text: str | None,
     simulation_bounds_confirmed: bool = False,
+    *,
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     """Advance the ordinary-user natural-language specification dialogue."""
 
@@ -409,9 +376,9 @@ def submit_app_specifications(
         raise ValueError("请填写已知设备规格、手册原文或明确选择暂时不知道。")
     adapter = build_adapter(
         bool(app_state.get("use_llm")),
-        _textbox_text(app_state.get("base_url")),
-        _textbox_text(app_state.get("model")),
-        _textbox_text(app_state.get("api_key")),
+        base_url,
+        model,
+        api_key,
     )
     report = run_cfdc_route(
         session.route_id,
@@ -432,7 +399,7 @@ def submit_app_specifications(
         else None
     )
     if not waiting:
-        next_state.update({"use_llm": False, "base_url": "", "model": "", "api_key": ""})
+        next_state["use_llm"] = False
     return report, next_state
 
 
@@ -508,6 +475,9 @@ def submit_app_json(
     uploaded_json,
     pasted_json: str | None,
     simulation_bounds_confirmed: bool = False,
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     """Submit a dataset wrapper, a bare executable model, or specification facts."""
 
@@ -531,6 +501,9 @@ def submit_app_json(
             confirmed_state,
             _specification_facts_to_text(session, payload["specification_facts"]),
             simulation_bounds_confirmed=True,
+            base_url=base_url,
+            model=model,
+            api_key=api_key,
         )
 
     model_payload = payload if "kind" in payload else payload.get("model")
