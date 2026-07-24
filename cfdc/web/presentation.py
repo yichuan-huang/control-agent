@@ -39,13 +39,20 @@ DIAGNOSIS_LABELS = {
 }
 
 STAGES = [
-    ("结构诊断", lambda report: bool(report.diagnosis and report.diagnosis.complete and report.classification)),
+    (
+        "结构诊断",
+        lambda report: bool(
+            report.diagnosis and report.diagnosis.complete and report.classification
+        ),
+    ),
     (
         "规格模型",
         lambda report: bool(
             report.compiled_specification_model
-            or
-            (report.evidence_readiness and report.evidence_readiness.decision == "ready")
+            or (
+                report.evidence_readiness
+                and report.evidence_readiness.decision == "ready"
+            )
             or report.status == "demo_completed"
         ),
     ),
@@ -102,30 +109,41 @@ def diagnosis_rows(report: CFDCRunReport) -> list[list[Any]]:
         assessment = field["assessment"]
         if estimate is not None:
             assessment = f"{assessment}（估计 {estimate} 阶）"
-        rows.append([
-            label,
-            assessment,
-            f"{100 * field['confidence']:.0f}%",
-            "；".join(field.get("evidence", [])),
-        ])
+        rows.append(
+            [
+                label,
+                assessment,
+                f"{100 * field['confidence']:.0f}%",
+                "；".join(field.get("evidence", [])),
+            ]
+        )
     return rows
 
 
 def route_rows(report: CFDCRunReport) -> list[list[str]]:
     rows: list[list[str]] = []
     if report.classification:
-        rows.extend([
-            ["动力学原型", str(report.classification.primary_class)],
-            ["控制架构", report.classification.control_architecture],
-        ])
+        rows.extend(
+            [
+                ["动力学原型", str(report.classification.primary_class)],
+                ["控制架构", report.classification.control_architecture],
+            ]
+        )
     if report.semantic_selection:
-        rows.extend([
-            ["方法 Profile", report.semantic_selection.simulation_profile_id],
-            ["特征 Bundle", report.semantic_selection.feature_bundle_id],
-            ["核心特征", ", ".join(report.semantic_selection.selected_feature_ids)],
-        ])
+        rows.extend(
+            [
+                ["方法 Profile", report.semantic_selection.simulation_profile_id],
+                ["特征 Bundle", report.semantic_selection.feature_bundle_id],
+                ["核心特征", ", ".join(report.semantic_selection.selected_feature_ids)],
+            ]
+        )
     if report.compiled_route:
-        rows.append(["Route 编译", "可执行" if report.compiled_route.executable else "存在能力缺口"])
+        rows.append(
+            [
+                "Route 编译",
+                "可执行" if report.compiled_route.executable else "存在能力缺口",
+            ]
+        )
     return rows
 
 
@@ -147,20 +165,26 @@ def feature_rows(report: CFDCRunReport) -> list[list[Any]]:
     rows = []
     for feature in report.features:
         value = feature.value
-        rendered = json.dumps(value, ensure_ascii=False) if isinstance(value, list) else f"{value:.6g}"
+        rendered = (
+            json.dumps(value, ensure_ascii=False)
+            if isinstance(value, list)
+            else f"{value:.6g}"
+        )
         interval = (
             "矩阵特征"
             if feature.lower_bound is None
             else f"[{feature.lower_bound:.6g}, {feature.upper_bound:.6g}]"
         )
-        rows.append([
-            feature.feature_id,
-            rendered,
-            feature.units,
-            interval,
-            f"{100 * feature.confidence:.0f}%",
-            feature.method,
-        ])
+        rows.append(
+            [
+                feature.feature_id,
+                rendered,
+                feature.units,
+                interval,
+                f"{100 * feature.confidence:.0f}%",
+                feature.method,
+            ]
+        )
     return rows
 
 
@@ -168,8 +192,13 @@ def controller_rows(report: CFDCRunReport) -> list[list[str]]:
     if report.controller is None:
         return []
     rows = [["架构", report.controller.architecture]]
-    rows.extend([f"增益 · {name}", f"{value:.6g}"] for name, value in report.final_gains.items())
-    rows.extend([f"前馈 · {name}", f"{value:.6g}"] for name, value in report.final_feedforward.items())
+    rows.extend(
+        [f"增益 · {name}", f"{value:.6g}"] for name, value in report.final_gains.items()
+    )
+    rows.extend(
+        [f"前馈 · {name}", f"{value:.6g}"]
+        for name, value in report.final_feedforward.items()
+    )
     rows.append(["候选状态", report.controller.status])
     rows.append(["发布等级", report.controller.release_level])
     if report.controller.plant_id:
@@ -180,19 +209,23 @@ def controller_rows(report: CFDCRunReport) -> list[list[str]]:
 def tuning_rows(report: CFDCRunReport) -> list[list[Any]]:
     rows: list[list[Any]] = []
     if report.algorithm1_state:
-        rows.append([
-            "Algorithm 1",
-            report.algorithm1_state.status,
-            report.algorithm1_state.iteration_count,
-            report.algorithm1_state.completion_reason or "-",
-        ])
+        rows.append(
+            [
+                "Algorithm 1",
+                report.algorithm1_state.status,
+                report.algorithm1_state.iteration_count,
+                report.algorithm1_state.completion_reason or "-",
+            ]
+        )
     for update in report.feature_tracking_updates:
-        rows.append([
-            update.feature_id,
-            "已更新" if update.controller_update_required else "仅跟踪",
-            f"{100 * update.relative_change:.2f}%",
-            f"{update.previous_value:.6g} → {update.updated_value:.6g}",
-        ])
+        rows.append(
+            [
+                update.feature_id,
+                "已更新" if update.controller_update_required else "仅跟踪",
+                f"{100 * update.relative_change:.2f}%",
+                f"{update.previous_value:.6g} → {update.updated_value:.6g}",
+            ]
+        )
     return rows
 
 
@@ -204,14 +237,18 @@ def performance_rows(report: CFDCRunReport) -> list[list[Any]]:
     ):
         if performance is None:
             continue
-        rows.append([
-            label,
-            "通过" if performance.success else "未通过",
-            f"{performance.abs_final_error:.6g}",
-            "-" if performance.settling_time_s is None else f"{performance.settling_time_s:.3f}",
-            f"{100 * performance.saturation_fraction:.2f}%",
-            ", ".join(performance.violations) or "无",
-        ])
+        rows.append(
+            [
+                label,
+                "通过" if performance.success else "未通过",
+                f"{performance.abs_final_error:.6g}",
+                "-"
+                if performance.settling_time_s is None
+                else f"{performance.settling_time_s:.3f}",
+                f"{100 * performance.saturation_fraction:.2f}%",
+                ", ".join(performance.violations) or "无",
+            ]
+        )
     return rows
 
 
@@ -239,15 +276,11 @@ def stage_progress_html(
     for index, (label, predicate) in enumerate(STAGES, start=1):
         complete = bool(predicate(report))
         linked_state: str | None = None
-        if (
-            label == "效果验证"
-            and linked_simulation_state is not None
-        ):
+        if label == "效果验证" and linked_simulation_state is not None:
             complete = linked_simulation_state == "stable"
             linked_state = (
                 "blocked"
-                if linked_simulation_state
-                in LINKED_VALIDATION_BLOCKED_STATES
+                if linked_simulation_state in LINKED_VALIDATION_BLOCKED_STATES
                 else "waiting"
             )
         state = "done" if complete else "pending"
@@ -270,7 +303,9 @@ def stage_progress_html(
 
 def summary_html(report: CFDCRunReport) -> str:
     archetype = (
-        str(report.classification.primary_class).replace("class_", "Class ").replace("_", " ")
+        str(report.classification.primary_class)
+        .replace("class_", "Class ")
+        .replace("_", " ")
         if report.classification
         else "待确认"
     )
@@ -295,10 +330,14 @@ def summary_html(report: CFDCRunReport) -> str:
         ("模型/数据运行", str(repeats) if repeats else "-"),
         ("质量门", quality),
     ]
-    return '<div class="metric-grid">' + "".join(
-        f'<div class="metric"><small>{label}</small><strong>{value}</strong></div>'
-        for label, value in cards
-    ) + "</div>"
+    return (
+        '<div class="metric-grid">'
+        + "".join(
+            f'<div class="metric"><small>{label}</small><strong>{value}</strong></div>'
+            for label, value in cards
+        )
+        + "</div>"
+    )
 
 
 def specification_guidance_markdown(report: CFDCRunReport) -> str:
@@ -313,11 +352,13 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
         for item in (template.fields if template is not None else [])
     }
     direct_facts = [
-        item for item in assessment.facts
+        item
+        for item in assessment.facts
         if item.source_type != "derived_from_declared_physics"
     ]
     derived_facts = [
-        item for item in assessment.facts
+        item
+        for item in assessment.facts
         if item.source_type == "derived_from_declared_physics"
     ]
     fact_sections: list[str] = []
@@ -346,9 +387,7 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
             field_labels.get(item, item) for item in assessment.missing_fact_ids
         ]
         missing = "\n\n**仍缺少：** " + "、".join(missing_labels)
-    progress_note = (
-        f"\n\n{assessment.rationale}" if assessment.no_progress else ""
-    )
+    progress_note = f"\n\n{assessment.rationale}" if assessment.no_progress else ""
     conflicts = "".join(f"\n- ⚠️ {item}" for item in assessment.conflicts)
     questions = []
     visible_questions = [] if assessment.no_progress else assessment.questions
@@ -390,7 +429,11 @@ def performance_html(report: CFDCRunReport) -> str:
         width = max(3.0, 100.0 * item.abs_final_error / max_error)
         outcome = "安全通过" if item.success else "未通过"
         outcome_class = "safe" if item.success else "unsafe"
-        settling = "未稳定" if item.settling_time_s is None else f"{item.settling_time_s:.2f} s"
+        settling = (
+            "未稳定"
+            if item.settling_time_s is None
+            else f"{item.settling_time_s:.2f} s"
+        )
         rows.append(
             '<div class="comparison-row">'
             f'<div class="comparison-label"><strong>{label}</strong><span class="{outcome_class}">{outcome}</span></div>'

@@ -113,7 +113,9 @@ def test_generated_envelope_wraps_without_changing_executable_model_schema():
     assert envelope.envelope_schema_version == "generated_model_envelope/v1"
     assert envelope.model.kind == "transfer_function"
     assert "model_role" not in envelope.model.model_dump()
-    assert hashlib.sha256(envelope.model.model_dump_json().encode()).hexdigest() == before
+    assert (
+        hashlib.sha256(envelope.model.model_dump_json().encode()).hexdigest() == before
+    )
 
 
 def test_contracts_reject_extra_fields_placeholder_units_and_non_finite_values():
@@ -228,8 +230,7 @@ def test_generated_model_results_are_strictly_discriminated():
     adapter = TypeAdapter(GeneratedModelResult)
 
     assert [
-        adapter.validate_python(item.model_dump(mode="json")).status
-        for item in results
+        adapter.validate_python(item.model_dump(mode="json")).status for item in results
     ] == ["need_more", "ready", "rejected"]
     with pytest.raises(ValidationError):
         adapter.validate_python({"status": "unknown"})
@@ -367,14 +368,10 @@ def registered_envelope(
                 else actuator_bounds
             ),
             state_bounds=(
-                runtime["state_bounds"]
-                if state_bounds is None
-                else state_bounds
+                runtime["state_bounds"] if state_bounds is None else state_bounds
             ),
             output_bounds=(
-                runtime["output_bounds"]
-                if output_bounds is None
-                else output_bounds
+                runtime["output_bounds"] if output_bounds is None else output_bounds
             ),
             signal_units=model.signal_units,
             evidence_fact_ids=[fact_id],
@@ -525,9 +522,9 @@ def test_registered_envelope_rejects_missing_or_unknown_bound_signals(
 
 def test_non_registered_envelope_cannot_claim_registry_policy():
     payload = generated_first_order_envelope().model_dump(mode="json")
-    payload["experiment_proposal"][
-        "registry_policy_id"
-    ] = "registered_cartpole_five_scenario/v1"
+    payload["experiment_proposal"]["registry_policy_id"] = (
+        "registered_cartpole_five_scenario/v1"
+    )
 
     with pytest.raises(ValidationError, match="non-registered"):
         GeneratedModelEnvelopeV1.model_validate(payload)

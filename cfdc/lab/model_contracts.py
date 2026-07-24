@@ -78,9 +78,7 @@ def _scan_finite(value: Any, path: str = "$") -> None:
     if isinstance(value, Mapping):
         for key, item in value.items():
             _scan_finite(item, f"{path}.{key}")
-    elif isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         for index, item in enumerate(value):
             _scan_finite(item, f"{path}[{index}]")
 
@@ -89,16 +87,12 @@ def _scan_forbidden_payload_keys(value: Any, path: str = "$") -> None:
     if isinstance(value, Mapping):
         for key, item in value.items():
             normalized = "".join(
-                character
-                for character in str(key).casefold()
-                if character.isalnum()
+                character for character in str(key).casefold() if character.isalnum()
             )
             if normalized in _FORBIDDEN_PAYLOAD_KEYS:
                 raise ValueError(f"forbidden payload key at {path}.{key}")
             _scan_forbidden_payload_keys(item, f"{path}.{key}")
-    elif isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         for index, item in enumerate(value):
             _scan_forbidden_payload_keys(item, f"{path}[{index}]")
 
@@ -167,9 +161,7 @@ def _unit_mapping(value: Any, path: str) -> dict[str, str]:
     return result
 
 
-def _range_mapping(
-    value: Any, path: str
-) -> dict[str, tuple[float, float]]:
+def _range_mapping(value: Any, path: str) -> dict[str, tuple[float, float]]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{path} range payload must be an object")
     result: dict[str, tuple[float, float]] = {}
@@ -210,17 +202,13 @@ def _matrix(value: Any, path: str) -> list[list[float]]:
 
 
 def _validate_step_payload(payload: Mapping[str, Any]) -> None:
-    _require_payload_keys(
-        payload, required={"before", "after", "unit"}
-    )
+    _require_payload_keys(payload, required={"before", "after", "unit"})
     _number(payload["before"], "value_payload.before")
     _number(payload["after"], "value_payload.after")
     _validate_unit(payload["unit"])
 
 
-def _validate_scalar_payload(
-    fact_type: str, payload: Mapping[str, Any]
-) -> None:
+def _validate_scalar_payload(fact_type: str, payload: Mapping[str, Any]) -> None:
     _require_payload_keys(payload, required={"value", "unit"})
     value = _number(payload["value"], "value_payload.value")
     _validate_unit(payload["unit"])
@@ -242,9 +230,7 @@ def _validate_operating_point_payload(payload: Mapping[str, Any]) -> None:
         for name in ("inputs", "outputs")
     ]
     if "states" in payload:
-        groups.append(
-            _numeric_mapping(payload["states"], "value_payload.states")
-        )
+        groups.append(_numeric_mapping(payload["states"], "value_payload.states"))
     signals = set().union(*(set(group) for group in groups))
     units = _unit_mapping(payload["signal_units"], "value_payload.signal_units")
     if not signals or set(units) != signals:
@@ -265,37 +251,27 @@ def _validate_validity_region_payload(payload: Mapping[str, Any]) -> None:
     ]
     if "state_ranges" in payload:
         groups.append(
-            _range_mapping(
-                payload["state_ranges"], "value_payload.state_ranges"
-            )
+            _range_mapping(payload["state_ranges"], "value_payload.state_ranges")
         )
     signals = set().union(*(set(group) for group in groups))
     units = _unit_mapping(payload["signal_units"], "value_payload.signal_units")
     if not signals or set(units) != signals:
-        raise ValueError(
-            "validity-region payload units must exactly cover every range"
-        )
+        raise ValueError("validity-region payload units must exactly cover every range")
 
 
 def _validate_signal_definition_payload(payload: Mapping[str, Any]) -> None:
-    _require_payload_keys(
-        payload, required={"inputs", "outputs"}, optional={"states"}
-    )
+    _require_payload_keys(payload, required={"inputs", "outputs"}, optional={"states"})
     seen: set[str] = set()
     for group_name in ("inputs", "outputs", "states"):
         if group_name not in payload:
             continue
         group = payload[group_name]
         if not isinstance(group, list) or not group:
-            raise ValueError(
-                f"value_payload.{group_name} must be a non-empty list"
-            )
+            raise ValueError(f"value_payload.{group_name} must be a non-empty list")
         for index, item in enumerate(group):
             if not isinstance(item, Mapping):
                 raise ValueError("signal definitions must be objects")
-            _require_payload_keys(
-                item, required={"signal_id", "unit"}
-            )
+            _require_payload_keys(item, required={"signal_id", "unit"})
             signal_id = item["signal_id"]
             if not isinstance(signal_id, str) or not signal_id:
                 raise ValueError("signal_id must be a non-empty string")
@@ -343,8 +319,7 @@ def _validate_state_space_payload(payload: Mapping[str, Any]) -> None:
                 not isinstance(units, list)
                 or len(units) != len(matrix)
                 or any(
-                    not isinstance(row, list)
-                    or len(row) != len(matrix[row_index])
+                    not isinstance(row, list) or len(row) != len(matrix[row_index])
                     for row_index, row in enumerate(units)
                 )
             ):
@@ -357,27 +332,17 @@ def _validate_state_space_payload(payload: Mapping[str, Any]) -> None:
 
 
 def _validate_reference_target_payload(payload: Mapping[str, Any]) -> None:
-    _require_payload_keys(
-        payload, required={"values", "signal_units"}
-    )
+    _require_payload_keys(payload, required={"values", "signal_units"})
     values = _numeric_mapping(payload["values"], "value_payload.values")
-    units = _unit_mapping(
-        payload["signal_units"], "value_payload.signal_units"
-    )
+    units = _unit_mapping(payload["signal_units"], "value_payload.signal_units")
     if not values or set(values) != set(units):
-        raise ValueError(
-            "reference-target units must exactly cover every signal"
-        )
+        raise ValueError("reference-target units must exactly cover every signal")
 
 
 def _validate_bound_fact_payload(payload: Mapping[str, Any]) -> None:
-    _require_payload_keys(
-        payload, required={"ranges", "signal_units"}
-    )
+    _require_payload_keys(payload, required={"ranges", "signal_units"})
     ranges = _range_mapping(payload["ranges"], "value_payload.ranges")
-    units = _unit_mapping(
-        payload["signal_units"], "value_payload.signal_units"
-    )
+    units = _unit_mapping(payload["signal_units"], "value_payload.signal_units")
     if not ranges or set(ranges) != set(units):
         raise ValueError("bound-fact units must exactly cover every signal")
 
@@ -385,12 +350,8 @@ def _validate_bound_fact_payload(payload: Mapping[str, Any]) -> None:
 def _validate_parameter_uncertainty_payload(
     payload: Mapping[str, Any],
 ) -> None:
-    _require_payload_keys(
-        payload, required={"values", "parameter_units"}
-    )
-    values = _numeric_mapping(
-        payload["values"], "value_payload.values"
-    )
+    _require_payload_keys(payload, required={"values", "parameter_units"})
+    values = _numeric_mapping(payload["values"], "value_payload.values")
     units = _unit_mapping(
         payload["parameter_units"],
         "value_payload.parameter_units",
@@ -402,9 +363,7 @@ def _validate_parameter_uncertainty_payload(
     if any(value < 0.0 for value in values.values()):
         raise ValueError("parameter uncertainty cannot be negative")
     if set(units.values()) != {"1"}:
-        raise ValueError(
-            "parameter uncertainty is relative and must use unit 1"
-        )
+        raise ValueError("parameter uncertainty is relative and must use unit 1")
 
 
 _CARTPOLE_PARAMETER_NAMES = frozenset(
@@ -489,9 +448,7 @@ def _validate_fact_payload(
 def _fact_type_from_validation_info(info: ValidationInfo) -> str:
     fact_type = info.data.get("fact_type")
     if not isinstance(fact_type, str) or not fact_type:
-        raise ValueError(
-            "value_payload requires a valid fact_type"
-        )
+        raise ValueError("value_payload requires a valid fact_type")
     return fact_type
 
 
@@ -521,9 +478,7 @@ class ModelQuestionExample(CFDCModel):
 
 
 class ModelQuestionExampleCatalog(CFDCModel):
-    schema_version: Literal[
-        "model_question_examples/v1"
-    ] = "model_question_examples/v1"
+    schema_version: Literal["model_question_examples/v1"] = "model_question_examples/v1"
     catalog_version: Literal[MODEL_QUESTION_CATALOG_VERSION] = (
         MODEL_QUESTION_CATALOG_VERSION
     )
@@ -590,9 +545,7 @@ class ModelFactAnswer(CFDCModel):
     example_catalog_version: str | None = Field(
         default=None, min_length=1, max_length=100
     )
-    example_content_sha256: str | None = Field(
-        default=None, pattern=r"^[0-9a-f]{64}$"
-    )
+    example_content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     adopted_at: str | None = Field(default=None, min_length=1, max_length=100)
 
     @field_validator("unit_family")
@@ -626,9 +579,7 @@ class ModelFactAnswer(CFDCModel):
                     "and adoption time"
                 )
         elif any(value is not None for value in provenance):
-            raise ValueError(
-                "only user-adopted examples may carry example provenance"
-            )
+            raise ValueError("only user-adopted examples may carry example provenance")
         return self
 
 
@@ -749,12 +700,8 @@ class ExperimentProposal(CFDCModel):
 
     @model_validator(mode="after")
     def validate_experiment(self) -> "ExperimentProposal":
-        _validate_bounds(
-            (self.actuator_bounds, self.state_bounds, self.output_bounds)
-        )
-        sample_count = (
-            math.floor(self.horizon_s / self.sample_time_s + 1e-12) + 1
-        )
+        _validate_bounds((self.actuator_bounds, self.state_bounds, self.output_bounds))
+        sample_count = math.floor(self.horizon_s / self.sample_time_s + 1e-12) + 1
         if sample_count > 20_000:
             raise ValueError("experiment proposal exceeds 20,000 samples")
         signals = (
@@ -805,8 +752,7 @@ def _validate_registered_experiment(
     expected_policy_id = _REGISTERED_POLICY_IDS[model.template_id]
     if experiment.registry_policy_id != expected_policy_id:
         raise ValueError(
-            "registered model requires exact registry policy ID "
-            f"{expected_policy_id!r}"
+            f"registered model requires exact registry policy ID {expected_policy_id!r}"
         )
 
     # Imported lazily because the registered runtime imports the public lab
@@ -839,9 +785,9 @@ def _validate_registered_experiment(
 
 
 class GeneratedModelEnvelopeV1(CFDCModel):
-    envelope_schema_version: Literal[
+    envelope_schema_version: Literal["generated_model_envelope/v1"] = (
         "generated_model_envelope/v1"
-    ] = "generated_model_envelope/v1"
+    )
     model_role: Literal[
         "user_evidence_model",
         "example_hypothesis",
@@ -867,21 +813,20 @@ class GeneratedModelEnvelopeV1(CFDCModel):
                 "a local-linear hypothesis requires an operating point and "
                 "validity region"
             )
-        if any(
-            item.source == "user_adopted_example"
-            for item in self.parameter_evidence
-        ) and self.model_role != "example_hypothesis":
+        if (
+            any(
+                item.source == "user_adopted_example"
+                for item in self.parameter_evidence
+            )
+            and self.model_role != "example_hypothesis"
+        ):
             raise ValueError(
                 "adopted example evidence requires model_role=example_hypothesis"
             )
         if isinstance(self.model, RegisteredNonlinearModelSpec):
-            _validate_registered_experiment(
-                self.model, self.experiment_proposal
-            )
+            _validate_registered_experiment(self.model, self.experiment_proposal)
         elif self.experiment_proposal.registry_policy_id is not None:
-            raise ValueError(
-                "a non-registered model cannot claim a registry policy"
-            )
+            raise ValueError("a non-registered model cannot claim a registry policy")
         self._validate_model_units()
         return self
 

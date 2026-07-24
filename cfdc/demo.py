@@ -14,7 +14,9 @@ def _cartpole_result(report) -> dict[str, Any]:
     comparison = report.baseline_comparison
     metrics = simulation.metrics if simulation is not None else {}
     performance = simulation.performance if simulation is not None else None
-    position = performance.channels.get("cart_position") if performance is not None else None
+    position = (
+        performance.channels.get("cart_position") if performance is not None else None
+    )
     angle = performance.channels.get("pole_angle") if performance is not None else None
     passed = bool(
         report.status == "demo_completed"
@@ -29,7 +31,8 @@ def _cartpole_result(report) -> dict[str, Any]:
         and angle is not None
         and angle.settled
         and angle.abs_final_error <= 0.12
-        and performance.saturation_fraction <= performance.limits["max_force_saturation_fraction"]
+        and performance.saturation_fraction
+        <= performance.limits["max_force_saturation_fraction"]
         and simulation.max_abs_cart_position_m < 2.4
         and simulation.max_abs_force_n <= 10.0
         and boundary is not None
@@ -56,9 +59,22 @@ def _cartpole_result(report) -> dict[str, Any]:
         "passed": passed,
         "stop_reason": simulation.stop_reason if simulation is not None else "not_run",
         "final_gains": report.final_gains,
-        "performance": performance.model_dump(mode="json") if performance is not None else None,
-        "boundary": boundary.model_dump(mode="json", exclude={"candidate_trials": {"__all__": {"samples"}}, "rollback_trial": {"samples"}, "trajectory": True}) if boundary is not None else None,
-        "baseline_comparison": comparison.model_dump(mode="json") if comparison is not None else None,
+        "performance": performance.model_dump(mode="json")
+        if performance is not None
+        else None,
+        "boundary": boundary.model_dump(
+            mode="json",
+            exclude={
+                "candidate_trials": {"__all__": {"samples"}},
+                "rollback_trial": {"samples"},
+                "trajectory": True,
+            },
+        )
+        if boundary is not None
+        else None,
+        "baseline_comparison": comparison.model_dump(mode="json")
+        if comparison is not None
+        else None,
         "metrics": metrics,
     }
 
@@ -71,7 +87,11 @@ def _vtol_result(report) -> dict[str, Any]:
     if report.route_id == "vtol-variation":
         variation = report.vtol_variation
         updated = (
-            [scenario for scenario in variation.scenarios if scenario.feature_source == "updated"]
+            [
+                scenario
+                for scenario in variation.scenarios
+                if scenario.feature_source == "updated"
+            ]
             if variation is not None
             else []
         )
@@ -98,14 +118,29 @@ def _vtol_result(report) -> dict[str, Any]:
             "passed": passed,
             "stop_reason": "variation_complete" if variation is not None else "not_run",
             "final_gains": report.final_gains,
-            "performance": performance.model_dump(mode="json") if performance is not None else None,
-            "variation": variation.model_dump(mode="json", exclude={"scenarios": {"__all__": {"simulation": {"trajectory"}}}}) if variation is not None else None,
+            "performance": performance.model_dump(mode="json")
+            if performance is not None
+            else None,
+            "variation": variation.model_dump(
+                mode="json",
+                exclude={"scenarios": {"__all__": {"simulation": {"trajectory"}}}},
+            )
+            if variation is not None
+            else None,
             "metrics": metrics,
         }
     if report.route_id == "vtol-position":
-        lateral = performance.channels.get("lateral_position") if performance is not None else None
-        altitude = performance.channels.get("altitude") if performance is not None else None
-        attitude = performance.channels.get("attitude") if performance is not None else None
+        lateral = (
+            performance.channels.get("lateral_position")
+            if performance is not None
+            else None
+        )
+        altitude = (
+            performance.channels.get("altitude") if performance is not None else None
+        )
+        attitude = (
+            performance.channels.get("attitude") if performance is not None else None
+        )
         passed = bool(
             report.status == "demo_completed"
             and simulation is not None
@@ -157,8 +192,12 @@ def _vtol_result(report) -> dict[str, Any]:
         "passed": passed,
         "stop_reason": simulation.stop_reason if simulation is not None else "not_run",
         "final_gains": report.final_gains,
-        "performance": performance.model_dump(mode="json") if performance is not None else None,
-        "baseline_comparison": comparison.model_dump(mode="json") if comparison is not None else None,
+        "performance": performance.model_dump(mode="json")
+        if performance is not None
+        else None,
+        "baseline_comparison": comparison.model_dump(mode="json")
+        if comparison is not None
+        else None,
         "metrics": metrics,
     }
 
@@ -166,8 +205,12 @@ def _vtol_result(report) -> dict[str, Any]:
 def run_demo_validation() -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     for route_id in STABLE_DEMO_ROUTES:
-        report = run_cfdc_route(route_id, include_trajectory=False, run_id=f"stable-demo-{route_id}")
-        result = _cartpole_result(report) if route_id == "cartpole" else _vtol_result(report)
+        report = run_cfdc_route(
+            route_id, include_trajectory=False, run_id=f"stable-demo-{route_id}"
+        )
+        result = (
+            _cartpole_result(report) if route_id == "cartpole" else _vtol_result(report)
+        )
         results.append(result)
     return {
         "validation_scope": "stable_software_demo",

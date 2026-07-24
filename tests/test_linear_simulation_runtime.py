@@ -79,9 +79,7 @@ def _continuous_ss(
     )
 
 
-def _discrete_ss(
-    a_value: float, *, initial_state: float = 0.25
-) -> StateSpaceModelSpec:
+def _discrete_ss(a_value: float, *, initial_state: float = 0.25) -> StateSpaceModelSpec:
     return StateSpaceModelSpec(
         a=[[a_value]],
         b=[[1.0]],
@@ -228,9 +226,7 @@ def test_trace_contract_validates_lengths_finiteness_and_sample_cap():
         "requested_controls",
         "applied_controls",
     ):
-        too_long[group] = {
-            name: [0.0] * size for name in too_long[group]
-        }
+        too_long[group] = {name: [0.0] * size for name in too_long[group]}
     with pytest.raises(ValidationError, match="20,000"):
         SimulationTrace(**too_long)
 
@@ -568,8 +564,10 @@ def test_continuous_delay_uses_buffer_and_reports_third_order_pade_evidence():
     ]
     assert early == pytest.approx([0.0] * len(early), abs=1e-12)
     assert result.stability.pole_analysis_method == "third_order_pade_auxiliary"
-    assert any("Padé" in item and "time-domain delay buffer" in item
-               for item in result.stability.evidence)
+    assert any(
+        "Padé" in item and "time-domain delay buffer" in item
+        for item in result.stability.evidence
+    )
 
 
 def test_fractional_continuous_delay_is_causal_and_integrated_piecewise():
@@ -648,11 +646,7 @@ def test_multi_sample_fractional_delay_analysis_matches_rollout_queue_order():
     augmented_b = np.asarray([[0.0], [0.0], [0.0], [1.0]])
     augmented_c = np.asarray([[1.0, 0.0, 0.0, 0.0]])
     expected_radius = max(
-        abs(
-            np.linalg.eigvals(
-                augmented_a - augmented_b @ (gain * augmented_c)
-            )
-        )
+        abs(np.linalg.eigvals(augmented_a - augmented_b @ (gain * augmented_c)))
     )
     radius_evidence = next(
         item
@@ -834,9 +828,15 @@ def test_nonfinite_divergence_aborts_without_serializing_nonfinite_values():
 def test_runtime_rejects_duplicate_signal_names_before_trace_dict_creation(
     duplicate_group,
 ):
-    state_names = ["duplicate", "duplicate"] if duplicate_group == "state" else ["x1", "x2"]
-    input_names = ["duplicate", "duplicate"] if duplicate_group == "input" else ["u1", "u2"]
-    output_names = ["duplicate", "duplicate"] if duplicate_group == "output" else ["y1", "y2"]
+    state_names = (
+        ["duplicate", "duplicate"] if duplicate_group == "state" else ["x1", "x2"]
+    )
+    input_names = (
+        ["duplicate", "duplicate"] if duplicate_group == "input" else ["u1", "u2"]
+    )
+    output_names = (
+        ["duplicate", "duplicate"] if duplicate_group == "output" else ["y1", "y2"]
+    )
     plant = StateSpaceModelSpec(
         a=[[-1.0, 0.0], [0.0, -2.0]],
         b=[[1.0, 0.0], [0.0, 1.0]],

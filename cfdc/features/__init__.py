@@ -1,4 +1,8 @@
-from cfdc.features.dispatcher import extract_features_from_result, extract_features_from_results, extract_features_from_repeated_results
+from cfdc.features.dispatcher import (
+    extract_features_from_result,
+    extract_features_from_results,
+    extract_features_from_repeated_results,
+)
 from cfdc.features.extractors import (
     estimate_coupling_gain,
     estimate_damping_ratio,

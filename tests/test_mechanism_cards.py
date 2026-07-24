@@ -55,7 +55,9 @@ def test_catalog_contains_all_three_layers_and_fourteen_cards():
         "execution_condition",
     ]
     assert list(cards) == EXPECTED_CARD_IDS
-    assert {card_id for card_ids in layers.values() for card_id in card_ids} == set(cards)
+    assert {card_id for card_ids in layers.values() for card_id in card_ids} == set(
+        cards
+    )
     assert all(card["layer"] in layers for card in cards.values())
     assert json.loads(json.dumps(catalog)) == catalog
 
@@ -143,8 +145,14 @@ def test_delay_and_hysteresis_cards_are_selected_from_diagnosis_and_description(
         "delayed_or_transport_process",
     ]
     assert hysteretic_classification is not None
-    assert "actuator_nonlinearity_or_hysteresis" in hysteretic_classification.supplemental_mechanism_cards
-    assert "constraint_or_saturation_limited" in hysteretic_classification.supplemental_mechanism_cards
+    assert (
+        "actuator_nonlinearity_or_hysteresis"
+        in hysteretic_classification.supplemental_mechanism_cards
+    )
+    assert (
+        "constraint_or_saturation_limited"
+        in hysteretic_classification.supplemental_mechanism_cards
+    )
 
 
 def test_no_reported_delay_does_not_select_delay_card():

@@ -20,7 +20,10 @@ def _feature_map(features: list[CoreFeatureArtifact]) -> dict[str, CoreFeatureAr
 
 
 def _relative_uncertainty(feature: CoreFeatureArtifact) -> float:
-    width = max(abs(feature.upper_bound - feature.value), abs(feature.value - feature.lower_bound))
+    width = max(
+        abs(feature.upper_bound - feature.value),
+        abs(feature.value - feature.lower_bound),
+    )
     return width / max(abs(feature.value), 1e-9)
 
 
@@ -50,7 +53,12 @@ def _output_saturation(
             "output_max": float(safety_limits["output_max"]),
         }
     output_max = float(safety_limits.get("output_max", demo_max))
-    output_min = float(safety_limits.get("output_min", -abs(output_max) if "output_max" in safety_limits else demo_min))
+    output_min = float(
+        safety_limits.get(
+            "output_min",
+            -abs(output_max) if "output_max" in safety_limits else demo_min,
+        )
+    )
     return {"output_min": output_min, "output_max": output_max}
 
 
@@ -65,7 +73,9 @@ def synthesize_controller(
     missing = missing_required_features(classification, features)
     if missing:
         joined = ", ".join(missing)
-        raise ValueError(f"missing required core features for {classification.primary_class}: {joined}")
+        raise ValueError(
+            f"missing required core features for {classification.primary_class}: {joined}"
+        )
     fmap = _feature_map(features)
     archetype = str(classification.primary_class)
     if release_context == "user_object":
@@ -276,9 +286,15 @@ def synthesize_controller(
             return ControllerCandidate(
                 architecture="conservative_mimo_pairing_with_half_strength_decoupling",
                 gains=gains,
-                design_parameters={"pairing_indicator": float(fmap["pairing_indicator"].value)},
+                design_parameters={
+                    "pairing_indicator": float(fmap["pairing_indicator"].value)
+                },
                 tunable_gain_names=list(gains),
-                feedforward={f"decoupler_{r}_{c}": value for r, row in enumerate(pairing["half_strength_decoupler"]) for c, value in enumerate(row)},
+                feedforward={
+                    f"decoupler_{r}_{c}": value
+                    for r, row in enumerate(pairing["half_strength_decoupler"])
+                    for c, value in enumerate(row)
+                },
                 saturation=(
                     _output_saturation(safety, release_context)
                     if release_context == "user_object"
@@ -288,9 +304,15 @@ def synthesize_controller(
                     "use matrix-valued evidence without scalar collapse",
                     "apply half-strength static decoupling",
                 ],
-                source_features=["local_gain_matrix", "local_time_constant", "pairing_indicator"],
+                source_features=[
+                    "local_gain_matrix",
+                    "local_time_constant",
+                    "pairing_indicator",
+                ],
                 status="ready_for_conservative_trial",
-                notes=["The 2x2 normalized prototype uses global pairing and a half-strength pseudoinverse decoupler."],
+                notes=[
+                    "The 2x2 normalized prototype uses global pairing and a half-strength pseudoinverse decoupler."
+                ],
             )
         return ControllerCandidate(
             architecture="conservative_mimo_pairing",
@@ -301,7 +323,10 @@ def synthesize_controller(
                 if release_context == "user_object"
                 else {"per_input_limit": _limit("per_input_limit", safety, 1.0)}
             ),
-            constraints=["pair loops conservatively", "multiply static decoupling by 0.5"],
+            constraints=[
+                "pair loops conservatively",
+                "multiply static decoupling by 0.5",
+            ],
             source_features=["coupling_gain"],
             status="ready_for_conservative_trial",
         )
@@ -316,9 +341,15 @@ def synthesize_controller(
                 "bind each feature packet to one declared operating region",
                 "do not release a global PI controller from one local response",
             ],
-            source_features=["local_static_gain", "local_time_constant", "gain_variation_ratio"],
+            source_features=[
+                "local_static_gain",
+                "local_time_constant",
+                "gain_variation_ratio",
+            ],
             status="refuse",
-            notes=["Gain scheduling and operating-region transition validation are not implemented."],
+            notes=[
+                "Gain scheduling and operating-region transition validation are not implemented."
+            ],
         )
 
     if "input_to_unactuated_coupling_gain" in fmap:
@@ -333,10 +364,16 @@ def synthesize_controller(
             ],
             source_features=["natural_frequency", "input_to_unactuated_coupling_gain"],
             status="refuse",
-            notes=["Only the Cartpole-specific underactuated route currently has closed-loop validation."],
+            notes=[
+                "Only the Cartpole-specific underactuated route currently has closed-loop validation."
+            ],
         )
 
-    if "inverse_response_severity" in fmap and "static_gain" in fmap and "time_constant" in fmap:
+    if (
+        "inverse_response_severity" in fmap
+        and "static_gain" in fmap
+        and "time_constant" in fmap
+    ):
         gain = fmap["static_gain"]
         tau = fmap["time_constant"]
         severity = fmap["inverse_response_severity"].value
@@ -352,8 +389,15 @@ def synthesize_controller(
             gains={"kp": kp, "ki": kp / ti, "integral_time": ti},
             tunable_gain_names=["kp", "ki"],
             saturation=_output_saturation(safety, release_context),
-            constraints=["outer-loop gain starts below stable PI rule", "freeze if inverse-response undershoot grows"],
-            source_features=["static_gain", "time_constant", "inverse_response_severity"],
+            constraints=[
+                "outer-loop gain starts below stable PI rule",
+                "freeze if inverse-response undershoot grows",
+            ],
+            source_features=[
+                "static_gain",
+                "time_constant",
+                "inverse_response_severity",
+            ],
             status="ready_for_conservative_trial",
         )
 
@@ -407,10 +451,19 @@ def synthesize_controller(
                 "max_tilt_rad": max_tilt,
                 "max_torque": max_torque,
             },
-            constraints=["NMP outer-loop bandwidth starts far below inner-loop bandwidth", "online undershoot monitor must freeze lateral gains"],
-            source_features=["hover_thrust", "angular_acceleration_gain", "lateral_coupling_gain"],
+            constraints=[
+                "NMP outer-loop bandwidth starts far below inner-loop bandwidth",
+                "online undershoot monitor must freeze lateral gains",
+            ],
+            source_features=[
+                "hover_thrust",
+                "angular_acceleration_gain",
+                "lateral_coupling_gain",
+            ],
             status="ready_for_conservative_trial",
-            notes=["Vertical and attitude channels use 0.1 nominal scaling; lateral outer loop uses 0.05 scaling."],
+            notes=[
+                "Vertical and attitude channels use 0.1 nominal scaling; lateral outer loop uses 0.05 scaling."
+            ],
         )
 
     wn = fmap["natural_frequency"].value if "natural_frequency" in fmap else 1.0
@@ -432,7 +485,10 @@ def synthesize_controller(
             saturation=_output_saturation(
                 safety, release_context, demo_min=-8.0, demo_max=8.0
             ),
-            constraints=["stabilizing proportional gain starts above the extracted unstable pole threshold", "bounded Algorithm 1 trial is mandatory"],
+            constraints=[
+                "stabilizing proportional gain starts above the extracted unstable pole threshold",
+                "bounded Algorithm 1 trial is mandatory",
+            ],
             source_features=["natural_frequency", "input_gain"],
             status="requires_online_search",
         )
@@ -446,7 +502,10 @@ def synthesize_controller(
         },
         tunable_gain_names=["kp", "kd"],
         saturation=_output_saturation(safety, release_context),
-        constraints=["do not de-tune unstable plants by nominal percentage", "increase stabilizing gains only under online safety monitoring"],
+        constraints=[
+            "do not de-tune unstable plants by nominal percentage",
+            "increase stabilizing gains only under online safety monitoring",
+        ],
         source_features=list(fmap),
         status="requires_online_search",
     )
@@ -465,7 +524,9 @@ def pair_mimo_loops(gain_matrix: list[list[float]] | np.ndarray) -> dict[str, ob
         strength = abs(float(matrix[row, col]))
         row_sum = float(np.sum(np.abs(matrix[row, :])))
         dominance = float(strength / max(row_sum, 1e-12))
-        pairing.append({"output_index": row, "input_index": col, "dominance": dominance})
+        pairing.append(
+            {"output_index": row, "input_index": col, "dominance": dominance}
+        )
 
     decoupler = 0.5 * np.linalg.pinv(matrix)
     diagonal_dominance = min(item["dominance"] for item in pairing)

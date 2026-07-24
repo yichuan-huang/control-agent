@@ -112,4 +112,6 @@ def demo_fixture_by_method_profile_id(method_profile_id: str) -> DemoPlantFixtur
     for fixture in default_demo_plant_fixture_catalog().fixtures:
         if fixture.method_profile_id == method_profile_id:
             return fixture
-    raise ValueError(f"no demo fixture is registered for method profile '{method_profile_id}'")
+    raise ValueError(
+        f"no demo fixture is registered for method profile '{method_profile_id}'"
+    )

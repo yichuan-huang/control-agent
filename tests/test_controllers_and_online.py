@@ -86,15 +86,15 @@ def test_marginal_plant_controller_scales_pd_from_input_gain_and_saturates():
         safety_constraints=[],
         rationale="test",
     )
-    controller = synthesize_controller(classification, [feature("input_gain", 1.0)], {"output_max": 0.4})
+    controller = synthesize_controller(
+        classification, [feature("input_gain", 1.0)], {"output_max": 0.4}
+    )
     conservative_gain = 1.05
     assert controller.gains == {
         "kp": 0.9**2 / conservative_gain,
         "kd": 2.0 * 1.15 * 0.9 / conservative_gain,
     }
-    assert controller.design_parameters["filter_cutoff_rad_s"] == pytest.approx(
-        9.0
-    )
+    assert controller.design_parameters["filter_cutoff_rad_s"] == pytest.approx(9.0)
     assert controller.saturation["output_max"] == 0.4
 
     half_gain = synthesize_controller(
@@ -116,19 +116,29 @@ def test_second_order_controller_scales_from_input_gain():
     )
     unit_gain = synthesize_controller(
         classification,
-        [feature("natural_frequency", 3.0), feature("damping_ratio", 0.2), feature("input_gain", 1.0)],
+        [
+            feature("natural_frequency", 3.0),
+            feature("damping_ratio", 0.2),
+            feature("input_gain", 1.0),
+        ],
     )
     double_gain = synthesize_controller(
         classification,
-        [feature("natural_frequency", 3.0), feature("damping_ratio", 0.2), feature("input_gain", 2.0)],
+        [
+            feature("natural_frequency", 3.0),
+            feature("damping_ratio", 0.2),
+            feature("input_gain", 2.0),
+        ],
     )
 
     assert double_gain.gains["kp"] == 0.5 * unit_gain.gains["kp"]
     assert double_gain.gains["kd"] == 0.5 * unit_gain.gains["kd"]
-    assert unit_gain.design_parameters[
-        "filter_cutoff_rad_s"
-    ] == pytest.approx(31.5)
-    assert unit_gain.source_features == ["natural_frequency", "damping_ratio", "input_gain"]
+    assert unit_gain.design_parameters["filter_cutoff_rad_s"] == pytest.approx(31.5)
+    assert unit_gain.source_features == [
+        "natural_frequency",
+        "damping_ratio",
+        "input_gain",
+    ]
 
 
 def test_second_order_controller_rejects_missing_input_gain_clearly():
@@ -288,7 +298,9 @@ def test_unstable_safe_gain_search_accepts_then_freezes_on_violation():
         [feature("natural_frequency", 4.0), feature("input_gain", 1.0)],
         {"output_min": -1.0, "output_max": 1.0},
     )
-    state = initialize_safe_gain_search(controller, search_direction={"kp": 1.0, "kd": 1.0})
+    state = initialize_safe_gain_search(
+        controller, search_direction={"kp": 1.0, "kd": 1.0}
+    )
     pending = propose_unstable_gain_candidate(state)
     assert pending.status == "trial_pending"
     assert pending.candidate_gains["kp"] == state.accepted_gains["kp"] * 1.05
@@ -302,7 +314,9 @@ def test_unstable_safe_gain_search_accepts_then_freezes_on_violation():
         actuator_saturation_fraction=0.0,
         nmp_undershoot=0.02,
     )
-    accepted = evaluate_unstable_gain_trial(pending, safe_metrics, {"max_overshoot": 0.2})
+    accepted = evaluate_unstable_gain_trial(
+        pending, safe_metrics, {"max_overshoot": 0.2}
+    )
     assert accepted.status == "accepted"
     assert accepted.accepted_gains == pending.candidate_gains
 
@@ -315,7 +329,9 @@ def test_unstable_safe_gain_search_accepts_then_freezes_on_violation():
         actuator_saturation_fraction=0.0,
         nmp_undershoot=0.02,
     )
-    frozen = evaluate_unstable_gain_trial(unsafe_pending, unsafe_metrics, {"max_overshoot": 0.2})
+    frozen = evaluate_unstable_gain_trial(
+        unsafe_pending, unsafe_metrics, {"max_overshoot": 0.2}
+    )
     assert frozen.frozen
     assert frozen.status == "frozen"
     assert frozen.accepted_gains == accepted.accepted_gains
@@ -323,7 +339,9 @@ def test_unstable_safe_gain_search_accepts_then_freezes_on_violation():
 
 
 def test_online_refinement_rolls_back_and_freezes_on_violation():
-    state = OnlineTuningState(gains={"kp": 1.1, "kd": 0.2}, previous_gains={"kp": 1.0, "kd": 0.19})
+    state = OnlineTuningState(
+        gains={"kp": 1.1, "kd": 0.2}, previous_gains={"kp": 1.0, "kd": 0.19}
+    )
     metrics = OnlinePerformanceMetrics(
         overshoot=0.3,
         settling_time_s=2.0,
@@ -363,7 +381,9 @@ def test_online_refinement_changes_only_declared_tunable_gains():
 
 
 def test_feature_tracking_smoothly_updates_after_threshold():
-    update = update_tracked_feature("hover_thrust", previous_value=10.0, measured_value=10.8)
+    update = update_tracked_feature(
+        "hover_thrust", previous_value=10.0, measured_value=10.8
+    )
     assert update.controller_update_required
     assert abs(update.updated_value - 10.008) < 1e-12
 
@@ -380,7 +400,9 @@ def test_mimo_pairing_returns_half_strength_decoupler():
 def test_mimo_pairing_uses_global_maximum_weight_assignment():
     result = pair_mimo_loops([[10.0, 9.0], [9.0, 0.0]])
 
-    assert [(item["output_index"], item["input_index"]) for item in result["pairing"]] == [
+    assert [
+        (item["output_index"], item["input_index"]) for item in result["pairing"]
+    ] == [
         (0, 1),
         (1, 0),
     ]

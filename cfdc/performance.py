@@ -21,8 +21,12 @@ def calculate_channel_performance(
         r = np.full_like(y, float(reference), dtype=float)
     else:
         r = np.asarray(reference, dtype=float)
-    if not (t.ndim == y.ndim == r.ndim == 1 and t.size == y.size == r.size and t.size >= 2):
-        raise ValueError("time, reference, and output must be equal-length vectors with at least two samples")
+    if not (
+        t.ndim == y.ndim == r.ndim == 1 and t.size == y.size == r.size and t.size >= 2
+    ):
+        raise ValueError(
+            "time, reference, and output must be equal-length vectors with at least two samples"
+        )
 
     final_reference = float(r[-1])
     final_output = float(y[-1])

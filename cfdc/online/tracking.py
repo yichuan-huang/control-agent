@@ -57,7 +57,9 @@ def update_fll_window(
     time = np.asarray(time_s, dtype=float)
     values = np.asarray(signal, dtype=float)
     if time.ndim != 1 or values.ndim != 1 or len(time) != len(values) or len(time) < 8:
-        raise ValueError("FLL window requires equal one-dimensional arrays with at least 8 samples")
+        raise ValueError(
+            "FLL window requires equal one-dimensional arrays with at least 8 samples"
+        )
     if not np.all(np.isfinite(time)) or not np.all(np.isfinite(values)):
         raise ValueError("FLL window values must be finite")
     if np.any(np.diff(time) <= 0.0):
@@ -145,9 +147,8 @@ def update_hover_average(
         raise ValueError("hover average requires finite effort and positive dt_s")
     alpha = 1.0 - math.exp(-dt_s / state.time_constant_s)
     average = (
-        (1.0 - alpha) * state.average_control_effort
-        + alpha * measured_control_effort
-    )
+        1.0 - alpha
+    ) * state.average_control_effort + alpha * measured_control_effort
     return state.model_copy(
         update={
             "average_control_effort": average,
@@ -181,20 +182,15 @@ def adapt_controller_from_tracked_feature(
         feedforward["hover_thrust"] = update.updated_value
     elif feature_id == "natural_frequency" and previous_value != 0.0:
         ratio = update.updated_value / previous_value
-        gains = {
-            name: value * ratio
-            for name, value in gains.items()
-        }
-    elif feature_id in {"input_gain", "angular_acceleration_gain"} and update.updated_value != 0.0:
+        gains = {name: value * ratio for name, value in gains.items()}
+    elif (
+        feature_id in {"input_gain", "angular_acceleration_gain"}
+        and update.updated_value != 0.0
+    ):
         inverse_ratio = previous_value / update.updated_value
-        gains = {
-            name: value * inverse_ratio
-            for name, value in gains.items()
-        }
+        gains = {name: value * inverse_ratio for name, value in gains.items()}
     relative_change = update.relative_change
-    nmp_retune_requested = (
-        feature_id == "hover_thrust" and relative_change > 0.10
-    )
+    nmp_retune_requested = feature_id == "hover_thrust" and relative_change > 0.10
     return (
         controller.model_copy(update={"gains": gains, "feedforward": feedforward}),
         update,

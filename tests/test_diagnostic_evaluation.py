@@ -19,7 +19,9 @@ from cfdc.models import ArchetypeClassification, SystemDescription
 from cfdc.pipeline import run_cfdc_pipeline
 
 
-FROZEN_CATALOG_SHA256 = "c353e12d63877bce2127e0a84b4db056631734686c7e0efb70702ecc4deb6893"
+FROZEN_CATALOG_SHA256 = (
+    "c353e12d63877bce2127e0a84b4db056631734686c7e0efb70702ecc4deb6893"
+)
 
 
 def test_diagnostic_case_catalog_contains_prompt_8_and_complex_4():
@@ -72,9 +74,7 @@ def test_offline_diagnostic_scorer_reports_each_decision_dimension(use_saved):
 def test_diagnostic_scorer_identifies_premature_controller_release_cases():
     result = run_diagnostic_evaluation()
     premature = {
-        row.case_id
-        for row in result.cases
-        if row.premature_controller_release
+        row.case_id for row in result.cases if row.premature_controller_release
     }
 
     assert premature == set()
@@ -89,7 +89,9 @@ def test_archive_audit_dimensions_reject_extra_constraint_and_overclaim():
     )
     target = responses[target_index]
     evidence = {name: list(items) for name, items in target.field_evidence.items()}
-    evidence["open_loop_stability"].append("The controller is physically validated and proven safe.")
+    evidence["open_loop_stability"].append(
+        "The controller is physically validated and proven safe."
+    )
     responses[target_index] = target.model_copy(
         update={
             "required_core_features": [
@@ -206,14 +208,18 @@ def test_llm_like_and_deterministic_adapters_make_same_delay_decisions():
     assert llm_diagnosis.significant_delay.assessment == (
         deterministic_diagnosis.significant_delay.assessment
     )
-    assert llm_classification.primary_class == deterministic_classification.primary_class
+    assert (
+        llm_classification.primary_class == deterministic_classification.primary_class
+    )
     assert (
         llm_classification.required_core_features
         == deterministic_classification.required_core_features
     )
     assert [
         instruction.estimates
-        for instruction in plan_safe_experiments(llm_diagnosis, llm_classification).instructions
+        for instruction in plan_safe_experiments(
+            llm_diagnosis, llm_classification
+        ).instructions
     ] == [
         instruction.estimates
         for instruction in plan_safe_experiments(

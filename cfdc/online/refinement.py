@@ -24,8 +24,13 @@ def compute_performance_metrics(
     r = np.asarray(reference, dtype=float)
     y = np.asarray(output, dtype=float)
     u = np.asarray(control, dtype=float)
-    if not (t.ndim == r.ndim == y.ndim == u.ndim == 1 and t.size == r.size == y.size == u.size):
-        raise ValueError("time, reference, output, and control must be equal-length vectors")
+    if not (
+        t.ndim == r.ndim == y.ndim == u.ndim == 1
+        and t.size == r.size == y.size == u.size
+    ):
+        raise ValueError(
+            "time, reference, output, and control must be equal-length vectors"
+        )
     if t.size < 3:
         raise ValueError("at least three samples are required")
 
@@ -68,11 +73,17 @@ def _violations(
         metrics.settling_time_s is None or metrics.settling_time_s > max_settling
     ):
         reasons.append("settling_time")
-    if metrics.integral_absolute_error > constraints.get("max_integral_absolute_error", float("inf")):
+    if metrics.integral_absolute_error > constraints.get(
+        "max_integral_absolute_error", float("inf")
+    ):
         reasons.append("integral_absolute_error")
-    if metrics.high_frequency_control_rms > constraints.get("max_high_frequency_control_rms", float("inf")):
+    if metrics.high_frequency_control_rms > constraints.get(
+        "max_high_frequency_control_rms", float("inf")
+    ):
         reasons.append("high_frequency_control_rms")
-    if metrics.actuator_saturation_fraction > constraints.get("max_actuator_saturation_fraction", float("inf")):
+    if metrics.actuator_saturation_fraction > constraints.get(
+        "max_actuator_saturation_fraction", float("inf")
+    ):
         reasons.append("actuator_saturation")
     if metrics.nmp_undershoot > constraints.get("max_nmp_undershoot", float("inf")):
         reasons.append("nmp_undershoot")
@@ -144,7 +155,9 @@ def initialize_safe_gain_search(
     """Create a safe-search state from an unstable-plant controller candidate."""
 
     if controller.status != "requires_online_search":
-        raise ValueError("safe gain search should start from a controller requiring online search")
+        raise ValueError(
+            "safe gain search should start from a controller requiring online search"
+        )
     direction = search_direction or {name: 1.0 for name in controller.gains}
     return SafeGainSearchState(
         accepted_gains=dict(controller.gains),

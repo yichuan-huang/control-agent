@@ -189,10 +189,7 @@ def test_ready_model_is_frozen_only_after_explicit_confirmation():
 
     assert confirmed.state == "controller_compatibility_check"
     assert confirmed.confirmed_envelope == proposed.pending_envelope
-    assert (
-        confirmed.confirmed_envelope_sha256
-        == proposed.pending_envelope_sha256
-    )
+    assert confirmed.confirmed_envelope_sha256 == proposed.pending_envelope_sha256
     assert proposed.confirmed_envelope is None
 
 
@@ -232,16 +229,12 @@ class ReadyFromNaturalAnswerAdapter(NeedMoreAdapter):
             item for item in model_facts() if item.fact_id == "input_step"
         )
         payload = ready_payload()
-        payload["recognized_facts"] = [
-            input_step.model_dump(mode="json")
-        ]
+        payload["recognized_facts"] = [input_step.model_dump(mode="json")]
         return payload
 
 
 def test_natural_answer_is_typed_and_retained_by_the_audited_model_call():
-    initial_facts = [
-        item for item in model_facts() if item.fact_id != "input_step"
-    ]
+    initial_facts = [item for item in model_facts() if item.fact_id != "input_step"]
     created = create_model_discovery_session(
         stage5=stage5_snapshot(),
         initial_facts=initial_facts,
@@ -253,11 +246,7 @@ def test_natural_answer_is_typed_and_retained_by_the_audited_model_call():
     )
     answered = record_model_answers(
         questioned,
-        {
-            "q-heater-input-step": (
-                "Power changed from 0 W to 1 W."
-            )
-        },
+        {"q-heater-input-step": ("Power changed from 0 W to 1 W.")},
         expected_revision=questioned.revision,
     )
 
@@ -272,9 +261,7 @@ def test_natural_answer_is_typed_and_retained_by_the_audited_model_call():
         item.fact_id for item in model_facts()
     }
     input_answer = next(
-        item
-        for item in proposed.answers
-        if item.fact_id == "input_step"
+        item for item in proposed.answers if item.fact_id == "input_step"
     )
     assert input_answer.typed_fact is not None
     assert input_answer.answer_text == "Power changed from 0 W to 1 W."

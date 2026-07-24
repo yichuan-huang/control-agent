@@ -160,9 +160,7 @@ def unit_family(unit: str) -> str:
 def unit_is_compatible_with_examples(unit: str, examples: list[str]) -> bool:
     resolution = resolve_unit(unit)
     example_dimensions = {
-        item.dimension
-        for example in examples
-        if (item := resolve_unit(example)).known
+        item.dimension for example in examples if (item := resolve_unit(example)).known
     }
     return resolution.known and resolution.dimension in example_dimensions
 

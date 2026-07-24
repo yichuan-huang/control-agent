@@ -58,7 +58,9 @@ def _validate_catalog(catalog: dict[str, Any]) -> None:
 
     card_ids = tuple(card.get("card_id") for card in cards)
     if card_ids != EXPECTED_CARD_IDS or len(set(card_ids)) != len(card_ids):
-        raise ValueError("mechanism-card catalog IDs are incomplete, duplicated, or out of order")
+        raise ValueError(
+            "mechanism-card catalog IDs are incomplete, duplicated, or out of order"
+        )
 
     cards_by_id = {card["card_id"]: card for card in cards}
     layered_ids: list[str] = []
@@ -88,10 +90,14 @@ def _validate_catalog(catalog: dict[str, Any]) -> None:
         }
         missing = required.difference(card)
         if missing:
-            raise ValueError(f"card {card['card_id']} is missing fields: {sorted(missing)}")
+            raise ValueError(
+                f"card {card['card_id']} is missing fields: {sorted(missing)}"
+            )
         unknown_roles = set(card["default_roles"]).difference(allowed_roles)
         if unknown_roles:
-            raise ValueError(f"card {card['card_id']} uses unknown roles: {sorted(unknown_roles)}")
+            raise ValueError(
+                f"card {card['card_id']} uses unknown roles: {sorted(unknown_roles)}"
+            )
 
 
 @lru_cache(maxsize=1)
@@ -155,7 +161,10 @@ def select_supplemental_mechanism_cards(
         selected.add("integrating_or_drifting")
     elif _contains_any(text, ["oscillat", "vibrat", "resonan", "natural frequency"]):
         selected.add("oscillatory_modal")
-    elif "stable" in stability or primary_class == ArchetypeClass.CLASS_I_FIRST_ORDER_LAG.value:
+    elif (
+        "stable" in stability
+        or primary_class == ArchetypeClass.CLASS_I_FIRST_ORDER_LAG.value
+    ):
         selected.add("self_regulating_process")
     elif primary_class == ArchetypeClass.CLASS_II_SECOND_ORDER_OSCILLATOR.value:
         selected.add("oscillatory_modal")
@@ -223,7 +232,15 @@ def select_supplemental_mechanism_cards(
 
     if _contains_any(
         description_text,
-        ["deadzone", "dead zone", "backlash", "hysteresis", "stiction", "up-sweep", "down-sweep"],
+        [
+            "deadzone",
+            "dead zone",
+            "backlash",
+            "hysteresis",
+            "stiction",
+            "up-sweep",
+            "down-sweep",
+        ],
     ):
         selected.add("actuator_nonlinearity_or_hysteresis")
 

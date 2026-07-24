@@ -3,7 +3,13 @@ from __future__ import annotations
 import numpy as np
 
 from cfdc.controllers import synthesize_controller
-from cfdc.models import BenchmarkRouteIR, ControllerCandidate, CoreFeatureArtifact, SimulationPerformanceSummary, SimulationProfile
+from cfdc.models import (
+    BenchmarkRouteIR,
+    ControllerCandidate,
+    CoreFeatureArtifact,
+    SimulationPerformanceSummary,
+    SimulationProfile,
+)
 from cfdc.performance import build_performance_summary, calculate_channel_performance
 from cfdc.sim.generic import run_scalar_closed_loop
 
@@ -32,54 +38,163 @@ def _feature_params(features: list[CoreFeatureArtifact]) -> dict[str, float]:
     return values
 
 
-def _route(profile: SimulationProfile, params: dict[str, float], *, changed: bool = False) -> BenchmarkRouteIR:
+def _route(
+    profile: SimulationProfile, params: dict[str, float], *, changed: bool = False
+) -> BenchmarkRouteIR:
     family = _family(profile.profile_id)
     if family == "double_integrator":
-        return BenchmarkRouteIR(case_id=f"{profile.profile_id}-{'changed' if changed else 'nominal'}", plant_family=family, reference={"output": 1.0}, horizon_s=16.0, dt_s=0.01, plant_params=params, actuator_limits={"input_min": -1.0, "input_max": 1.0}, state_limits={"max_abs_output": 1.6, "max_abs_velocity": 1.4}, performance_limits={"max_abs_final_error": 0.12, "max_overshoot": 0.25, "max_settling_time_s": 14.0, "max_saturation_fraction": 0.6, "settling_band_absolute": 0.03})
+        return BenchmarkRouteIR(
+            case_id=f"{profile.profile_id}-{'changed' if changed else 'nominal'}",
+            plant_family=family,
+            reference={"output": 1.0},
+            horizon_s=16.0,
+            dt_s=0.01,
+            plant_params=params,
+            actuator_limits={"input_min": -1.0, "input_max": 1.0},
+            state_limits={"max_abs_output": 1.6, "max_abs_velocity": 1.4},
+            performance_limits={
+                "max_abs_final_error": 0.12,
+                "max_overshoot": 0.25,
+                "max_settling_time_s": 14.0,
+                "max_saturation_fraction": 0.6,
+                "settling_band_absolute": 0.03,
+            },
+        )
     if family in {"second_order_oscillator", "unstable_second_order"}:
-        return BenchmarkRouteIR(case_id=f"{profile.profile_id}-{'changed' if changed else 'nominal'}", plant_family=family, reference={"output": 0.0}, horizon_s=14.0, dt_s=0.005, plant_params=params, initial_state={"output": 1.0, "velocity": 0.0}, actuator_limits={"input_min": -8.0, "input_max": 8.0}, state_limits={"max_abs_output": 1.5}, performance_limits={"max_abs_final_error": 0.12, "max_settling_time_s": 12.0, "max_saturation_fraction": 0.6, "settling_band_absolute": 0.03})
-    return BenchmarkRouteIR(case_id=f"{profile.profile_id}-{'changed' if changed else 'nominal'}", plant_family=family, reference={"output": 0.7}, horizon_s=2500.0, dt_s=0.2, plant_params=params, actuator_limits={"input_min": 0.0, "input_max": 1.0}, state_limits={"max_abs_output": 1.5}, performance_limits={"max_abs_final_error": 0.12, "max_overshoot": 0.3, "max_settling_time_s": 2400.0, "max_saturation_fraction": 0.7, "settling_band_absolute": 0.03})
+        return BenchmarkRouteIR(
+            case_id=f"{profile.profile_id}-{'changed' if changed else 'nominal'}",
+            plant_family=family,
+            reference={"output": 0.0},
+            horizon_s=14.0,
+            dt_s=0.005,
+            plant_params=params,
+            initial_state={"output": 1.0, "velocity": 0.0},
+            actuator_limits={"input_min": -8.0, "input_max": 8.0},
+            state_limits={"max_abs_output": 1.5},
+            performance_limits={
+                "max_abs_final_error": 0.12,
+                "max_settling_time_s": 12.0,
+                "max_saturation_fraction": 0.6,
+                "settling_band_absolute": 0.03,
+            },
+        )
+    return BenchmarkRouteIR(
+        case_id=f"{profile.profile_id}-{'changed' if changed else 'nominal'}",
+        plant_family=family,
+        reference={"output": 0.7},
+        horizon_s=2500.0,
+        dt_s=0.2,
+        plant_params=params,
+        actuator_limits={"input_min": 0.0, "input_max": 1.0},
+        state_limits={"max_abs_output": 1.5},
+        performance_limits={
+            "max_abs_final_error": 0.12,
+            "max_overshoot": 0.3,
+            "max_settling_time_s": 2400.0,
+            "max_saturation_fraction": 0.7,
+            "settling_band_absolute": 0.03,
+        },
+    )
 
 
 def changed_features(features: list[CoreFeatureArtifact]) -> list[CoreFeatureArtifact]:
-    factors = {"static_gain": 0.8, "time_constant": 1.25, "natural_frequency": 0.82, "input_gain": 0.75, "damping_ratio": 0.9, "inverse_response_severity": 1.2}
+    factors = {
+        "static_gain": 0.8,
+        "time_constant": 1.25,
+        "natural_frequency": 0.82,
+        "input_gain": 0.75,
+        "damping_ratio": 0.9,
+        "inverse_response_severity": 1.2,
+    }
     changed: list[CoreFeatureArtifact] = []
     for feature in features:
         factor = factors.get(feature.feature_id, 1.0)
         value = feature.value * factor
         width = max(abs(value) * 0.05, 1e-6)
-        changed.append(feature.model_copy(update={"object_id": None, "value": value, "lower_bound": value-width, "upper_bound": value+width, "method": f"{feature.method}+online_tracking"}))
+        changed.append(
+            feature.model_copy(
+                update={
+                    "object_id": None,
+                    "value": value,
+                    "lower_bound": value - width,
+                    "upper_bound": value + width,
+                    "method": f"{feature.method}+online_tracking",
+                }
+            )
+        )
     return changed
 
 
-def run_scalar_profile_adaptation(profile: SimulationProfile, classification, features: list[CoreFeatureArtifact], controller: ControllerCandidate) -> tuple[SimulationPerformanceSummary, SimulationPerformanceSummary, ControllerCandidate, list[tuple[str, float, float]]]:
+def run_scalar_profile_adaptation(
+    profile: SimulationProfile,
+    classification,
+    features: list[CoreFeatureArtifact],
+    controller: ControllerCandidate,
+) -> tuple[
+    SimulationPerformanceSummary,
+    SimulationPerformanceSummary,
+    ControllerCandidate,
+    list[tuple[str, float, float]],
+]:
     updated_features = changed_features(features)
     changed_params = _feature_params(updated_features)
-    stale = run_scalar_closed_loop(_route(profile, changed_params, changed=True), controller)
+    stale = run_scalar_closed_loop(
+        _route(profile, changed_params, changed=True), controller
+    )
     adapted_controller = synthesize_controller(classification, updated_features)
-    adapted = run_scalar_closed_loop(_route(profile, changed_params, changed=True), adapted_controller)
-    updates = [(before.feature_id, before.value, after.value) for before, after in zip(features, updated_features) if before.value != after.value]
+    adapted = run_scalar_closed_loop(
+        _route(profile, changed_params, changed=True), adapted_controller
+    )
+    updates = [
+        (before.feature_id, before.value, after.value)
+        for before, after in zip(features, updated_features)
+        if before.value != after.value
+    ]
     return stale, adapted, adapted_controller, updates
 
 
 def _matrix_feature(features: list[CoreFeatureArtifact]) -> np.ndarray:
-    value = next(feature.value for feature in features if feature.feature_id == "local_gain_matrix")
+    value = next(
+        feature.value
+        for feature in features
+        if feature.feature_id == "local_gain_matrix"
+    )
     if not isinstance(value, list):
         raise ValueError("local_gain_matrix must be matrix-valued")
     return np.asarray(value, dtype=float)
 
 
-def changed_mimo_features(features: list[CoreFeatureArtifact]) -> list[CoreFeatureArtifact]:
+def changed_mimo_features(
+    features: list[CoreFeatureArtifact],
+) -> list[CoreFeatureArtifact]:
     changed: list[CoreFeatureArtifact] = []
     for feature in features:
         if feature.feature_id == "local_gain_matrix":
             matrix = _matrix_feature([feature])
             drifted = matrix * np.asarray([[0.82, 1.55], [1.50, 0.86]])
-            changed.append(feature.model_copy(update={"object_id": None, "value": drifted.tolist(), "method": f"{feature.method}+matrix_rls_tracking"}))
+            changed.append(
+                feature.model_copy(
+                    update={
+                        "object_id": None,
+                        "value": drifted.tolist(),
+                        "method": f"{feature.method}+matrix_rls_tracking",
+                    }
+                )
+            )
         elif feature.feature_id == "pairing_indicator":
             assert isinstance(feature.value, float)
             value = max(0.0, feature.value * 0.78)
-            changed.append(feature.model_copy(update={"object_id": None, "value": value, "lower_bound": max(0.0, value - 0.03), "upper_bound": min(1.0, value + 0.03), "method": f"{feature.method}+matrix_rls_tracking"}))
+            changed.append(
+                feature.model_copy(
+                    update={
+                        "object_id": None,
+                        "value": value,
+                        "lower_bound": max(0.0, value - 0.03),
+                        "upper_bound": min(1.0, value + 0.03),
+                        "method": f"{feature.method}+matrix_rls_tracking",
+                    }
+                )
+            )
         else:
             changed.append(feature)
     return changed
@@ -95,9 +210,14 @@ def run_mimo_closed_loop(
     references = np.asarray([0.65, -0.45], dtype=float)
     output = np.zeros(2, dtype=float)
     integral = np.zeros(2, dtype=float)
-    gains = np.asarray([controller.gains["loop_1_gain"], controller.gains["loop_2_gain"]])
+    gains = np.asarray(
+        [controller.gains["loop_1_gain"], controller.gains["loop_2_gain"]]
+    )
     decoupler = np.asarray(
-        [[controller.feedforward[f"decoupler_{row}_{column}"] for column in range(2)] for row in range(2)],
+        [
+            [controller.feedforward[f"decoupler_{row}_{column}"] for column in range(2)]
+            for row in range(2)
+        ],
         dtype=float,
     )
     transform = 0.5 * np.eye(2) + decoupler
@@ -118,7 +238,12 @@ def run_mimo_closed_loop(
         if step < steps:
             output += dt_s * (-output + plant_matrix @ control)
     channels = {
-        f"output_{index + 1}": calculate_channel_performance(times, float(references[index]), outputs[index], settling_band_absolute=0.035)
+        f"output_{index + 1}": calculate_channel_performance(
+            times,
+            float(references[index]),
+            outputs[index],
+            settling_band_absolute=0.035,
+        )
         for index in range(2)
     }
     saturation_fractions = {
@@ -137,7 +262,11 @@ def run_mimo_closed_loop(
         primary_channel="output_1",
         channels=channels,
         actuator_saturation_fractions=saturation_fractions,
-        state_boundaries={"max_abs_output": max(max(abs(value) for value in channel) for channel in outputs)},
+        state_boundaries={
+            "max_abs_output": max(
+                max(abs(value) for value in channel) for channel in outputs
+            )
+        },
         limits={"max_abs_final_error": 0.08, "max_saturation_fraction": 0.25},
         violations=violations,
         success=not violations,
@@ -149,7 +278,12 @@ def run_mimo_profile_adaptation(
     classification,
     features: list[CoreFeatureArtifact],
     controller: ControllerCandidate,
-) -> tuple[SimulationPerformanceSummary, SimulationPerformanceSummary, ControllerCandidate, list[tuple[str, float, float]]]:
+) -> tuple[
+    SimulationPerformanceSummary,
+    SimulationPerformanceSummary,
+    ControllerCandidate,
+    list[tuple[str, float, float]],
+]:
     del profile
     updated_features = changed_mimo_features(features)
     changed_matrix = _matrix_feature(updated_features)
@@ -157,5 +291,12 @@ def run_mimo_profile_adaptation(
     adapted_controller = synthesize_controller(classification, updated_features)
     adapted = run_mimo_closed_loop(changed_matrix, adapted_controller)
     old_matrix = _matrix_feature(features)
-    relative_change = float(np.linalg.norm(changed_matrix - old_matrix) / np.linalg.norm(old_matrix))
-    return stale, adapted, adapted_controller, [("local_gain_matrix", 1.0, 1.0 + relative_change)]
+    relative_change = float(
+        np.linalg.norm(changed_matrix - old_matrix) / np.linalg.norm(old_matrix)
+    )
+    return (
+        stale,
+        adapted,
+        adapted_controller,
+        [("local_gain_matrix", 1.0, 1.0 + relative_change)],
+    )

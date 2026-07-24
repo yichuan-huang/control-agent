@@ -34,9 +34,8 @@ def modal_trace(
     sample_count: int = 1600,
 ) -> tuple[np.ndarray, np.ndarray]:
     time_s = np.linspace(0.0, duration_s, sample_count)
-    output_signal = (
-        np.exp(-damping_ratio * omega_rad_s * time_s)
-        * np.cos(omega_rad_s * time_s)
+    output_signal = np.exp(-damping_ratio * omega_rad_s * time_s) * np.cos(
+        omega_rad_s * time_s
     )
     return time_s, output_signal
 

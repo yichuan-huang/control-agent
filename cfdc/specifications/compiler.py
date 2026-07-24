@@ -134,7 +134,9 @@ def _second_order_model(
         viscous = _scalar(facts, "damping_n_s_m")
         actuator = _scalar(facts, "actuator_force_per_input")
         if mass <= 0.0 or stiffness <= 0.0 or viscous < 0.0:
-            raise ValueError("mass and stiffness must be positive and damping non-negative")
+            raise ValueError(
+                "mass and stiffness must be positive and damping non-negative"
+            )
         omega = math.sqrt(stiffness / mass)
         damping = viscous / (2.0 * math.sqrt(stiffness * mass))
         input_gain = actuator / mass
@@ -233,7 +235,9 @@ def _inverse_response_severity_for_zero(
     settled = float(np.median(response[-tail:]))
     total_change = settled - baseline
     if abs(total_change) <= 1e-12:
-        raise ValueError("canonical inverse-response model has no resolvable final change")
+        raise ValueError(
+            "canonical inverse-response model has no resolvable final change"
+        )
     reverse = (
         max(0.0, baseline - float(np.min(response)))
         if total_change >= 0.0
@@ -255,15 +259,20 @@ def _calibrate_inverse_zero_time(
     lower = 0.0
     upper = max(time_constant_s, recovery_time_s)
     for _ in range(20):
-        if _inverse_response_severity_for_zero(
-            zero_time_s=upper,
-            time_constant_s=time_constant_s,
-            recovery_time_s=recovery_time_s,
-        ) >= target_severity:
+        if (
+            _inverse_response_severity_for_zero(
+                zero_time_s=upper,
+                time_constant_s=time_constant_s,
+                recovery_time_s=recovery_time_s,
+            )
+            >= target_severity
+        ):
             break
         upper *= 2.0
     else:
-        raise ValueError("declared inverse-response severity cannot be represented by the canonical template")
+        raise ValueError(
+            "declared inverse-response severity cannot be represented by the canonical template"
+        )
 
     for _ in range(50):
         midpoint = 0.5 * (lower + upper)
@@ -284,7 +293,9 @@ def _nmp_model(description: SystemDescription, facts: dict[str, SpecificationFac
     steady = _scalar(facts, "steady_output_change")
     inverse = abs(_scalar(facts, "inverse_peak_change"))
     if input_change == 0.0 or steady == 0.0:
-        raise ValueError("inverse-response input and steady output changes must be non-zero")
+        raise ValueError(
+            "inverse-response input and steady output changes must be non-zero"
+        )
     gain = steady / input_change
     tau = _scalar(facts, "response_time_s")
     fast_tau = _scalar(facts, "inverse_recovery_time_s")
@@ -332,19 +343,27 @@ def _registered_model(
 ):
     if template_id == "underactuated_cartpole":
         parameter_ids = {
-            "cart_mass_kg", "pole_mass_kg", "com_length_m",
-            "pole_inertia_kg_m2", "cart_friction_n_s_m", "gravity_m_s2",
-            "force_limit_n", "cart_position_limit_m",
+            "cart_mass_kg",
+            "pole_mass_kg",
+            "com_length_m",
+            "pole_inertia_kg_m2",
+            "cart_friction_n_s_m",
+            "gravity_m_s2",
+            "force_limit_n",
+            "cart_position_limit_m",
         }
-        parameters = {
-            fact_id: _scalar(facts, fact_id) for fact_id in parameter_ids
-        }
+        parameters = {fact_id: _scalar(facts, fact_id) for fact_id in parameter_ids}
         input_ids = description.actuators or ["force"]
         output_ids = description.observed_outputs or ["position", "angle"]
         model = RegisteredNonlinearModelSpec(
             template_id="underactuated_cartpole",
             parameters=parameters,
-            initial_state={"position_m": 0.0, "velocity_m_s": 0.0, "angle_rad": 0.0, "angular_rate_rad_s": 0.0},
+            initial_state={
+                "position_m": 0.0,
+                "velocity_m_s": 0.0,
+                "angle_rad": 0.0,
+                "angular_rate_rad_s": 0.0,
+            },
             input_signal_ids=input_ids,
             output_signal_ids=output_ids,
             signal_units={
@@ -356,16 +375,32 @@ def _registered_model(
             },
         )
         omega = math.sqrt(parameters["gravity_m_s2"] / parameters["com_length_m"])
-        return model, {"natural_frequency": omega}, {
-            "natural_frequency": _sources(
-                "cart_mass_kg", "pole_mass_kg", "com_length_m",
-                "pole_inertia_kg_m2", "gravity_m_s2"
-            )
-        }, 1.0 / omega, ["Zero initial state is used for specification-model feature scheduling only."]
+        return (
+            model,
+            {"natural_frequency": omega},
+            {
+                "natural_frequency": _sources(
+                    "cart_mass_kg",
+                    "pole_mass_kg",
+                    "com_length_m",
+                    "pole_inertia_kg_m2",
+                    "gravity_m_s2",
+                )
+            },
+            1.0 / omega,
+            [
+                "Zero initial state is used for specification-model feature scheduling only."
+            ],
+        )
     parameter_ids = {
-        "mass_kg", "pitch_inertia_kg_m2", "gravity_m_s2",
-        "linear_drag_n_s_m", "pitch_damping_n_m_s", "thrust_min_n",
-        "thrust_max_n", "torque_limit_n_m",
+        "mass_kg",
+        "pitch_inertia_kg_m2",
+        "gravity_m_s2",
+        "linear_drag_n_s_m",
+        "pitch_damping_n_m_s",
+        "thrust_min_n",
+        "thrust_max_n",
+        "torque_limit_n_m",
     }
     parameters = {fact_id: _scalar(facts, fact_id) for fact_id in parameter_ids}
     input_ids = description.actuators or ["thrust", "torque"]
@@ -394,24 +429,32 @@ def _registered_model(
             },
         },
     )
-    return model, {
-        "hover_thrust": parameters["mass_kg"] * parameters["gravity_m_s2"],
-        "angular_acceleration_gain": 1.0 / parameters["pitch_inertia_kg_m2"],
-        "lateral_coupling_gain": parameters["gravity_m_s2"],
-    }, {
-        "hover_thrust": _sources("mass_kg", "gravity_m_s2"),
-        "angular_acceleration_gain": _sources("pitch_inertia_kg_m2"),
-        "lateral_coupling_gain": _sources("gravity_m_s2"),
-    }, _scalar(facts, "response_time_s"), [
-        "Zero hover initial state is used for specification-model feature scheduling only.",
-        "Initial vertical bandwidth uses the disclosed CFDC specification-policy factor 0.1 divided by the declared response time.",
-    ]
+    return (
+        model,
+        {
+            "hover_thrust": parameters["mass_kg"] * parameters["gravity_m_s2"],
+            "angular_acceleration_gain": 1.0 / parameters["pitch_inertia_kg_m2"],
+            "lateral_coupling_gain": parameters["gravity_m_s2"],
+        },
+        {
+            "hover_thrust": _sources("mass_kg", "gravity_m_s2"),
+            "angular_acceleration_gain": _sources("pitch_inertia_kg_m2"),
+            "lateral_coupling_gain": _sources("gravity_m_s2"),
+        },
+        _scalar(facts, "response_time_s"),
+        [
+            "Zero hover initial state is used for specification-model feature scheduling only.",
+            "Initial vertical bandwidth uses the disclosed CFDC specification-policy factor 0.1 divided by the declared response time.",
+        ],
+    )
 
 
 def _mimo_model(description: SystemDescription, facts: dict[str, SpecificationFact]):
     matrix = facts["local_gain_matrix"].value
-    if not isinstance(matrix, list) or len(matrix) != 2 or any(
-        not isinstance(row, list) or len(row) != 2 for row in matrix
+    if (
+        not isinstance(matrix, list)
+        or len(matrix) != 2
+        or any(not isinstance(row, list) or len(row) != 2 for row in matrix)
     ):
         raise ValueError("local_gain_matrix must be an explicit 2x2 matrix")
     tau = _scalar(facts, "local_time_constant_s")
@@ -427,12 +470,23 @@ def _mimo_model(description: SystemDescription, facts: dict[str, SpecificationFa
         input_signal_ids=description.actuators[:2] or ["input_1", "input_2"],
         output_signal_ids=description.observed_outputs[:2] or ["output_1", "output_2"],
         initial_state=[0.0, 0.0],
-        signal_units={name: "declared_unit" for name in [*description.actuators, *description.observed_outputs]},
+        signal_units={
+            name: "declared_unit"
+            for name in [*description.actuators, *description.observed_outputs]
+        },
     )
-    return model, {"local_gain_matrix": gain, "local_time_constant": tau}, {
-        "local_gain_matrix": _sources("local_gain_matrix"),
-        "local_time_constant": _sources("local_time_constant_s"),
-    }, tau, ["A common first-order local time constant is used for both declared output channels."]
+    return (
+        model,
+        {"local_gain_matrix": gain, "local_time_constant": tau},
+        {
+            "local_gain_matrix": _sources("local_gain_matrix"),
+            "local_time_constant": _sources("local_time_constant_s"),
+        },
+        tau,
+        [
+            "A common first-order local time constant is used for both declared output channels."
+        ],
+    )
 
 
 def compile_specification_model(
@@ -468,32 +522,36 @@ def compile_specification_model(
     if template.compiler_id == "cartpole":
         position_limit = _scalar(facts, "cart_position_limit_m")
         force_limit = _scalar(facts, "force_limit_n")
-        bounds.update({
-            "max_abs_force": force_limit,
-            "input_min": -force_limit,
-            "input_max": force_limit,
-            "max_abs_position": position_limit,
-            "output_min": -position_limit,
-            "output_max": position_limit,
-            "state_range": 2.0 * position_limit,
-        })
+        bounds.update(
+            {
+                "max_abs_force": force_limit,
+                "input_min": -force_limit,
+                "input_max": force_limit,
+                "max_abs_position": position_limit,
+                "output_min": -position_limit,
+                "output_max": position_limit,
+                "state_range": 2.0 * position_limit,
+            }
+        )
     elif template.compiler_id == "vtol":
-        bounds.update({
-            "gravity": _scalar(facts, "gravity_m_s2"),
-            "max_torque": _scalar(facts, "torque_limit_n_m"),
-            "min_thrust": _scalar(facts, "thrust_min_n"),
-            "max_thrust": _scalar(facts, "thrust_max_n"),
-            "max_tilt_rad": _scalar(facts, "max_tilt_rad"),
-            "max_altitude_error": _scalar(facts, "max_altitude_error"),
-            "vertical_bandwidth_rad_s": 0.1
-            / _scalar(facts, "response_time_s"),
-        })
+        bounds.update(
+            {
+                "gravity": _scalar(facts, "gravity_m_s2"),
+                "max_torque": _scalar(facts, "torque_limit_n_m"),
+                "min_thrust": _scalar(facts, "thrust_min_n"),
+                "max_thrust": _scalar(facts, "thrust_max_n"),
+                "max_tilt_rad": _scalar(facts, "max_tilt_rad"),
+                "max_altitude_error": _scalar(facts, "max_altitude_error"),
+                "vertical_bandwidth_rad_s": 0.1 / _scalar(facts, "response_time_s"),
+            }
+        )
     elif template.compiler_id == "double_integrator":
-        bounds.update({
-            "initial_bandwidth_rad_s": 0.1
-            / _scalar(facts, "motion_time_scale_s"),
-            "initial_damping_ratio": 1.15,
-        })
+        bounds.update(
+            {
+                "initial_bandwidth_rad_s": 0.1 / _scalar(facts, "motion_time_scale_s"),
+                "initial_damping_ratio": 1.15,
+            }
+        )
         assumptions.append(
             "Initial bandwidth uses the versioned CFDC specification-policy factor 0.1 divided by the declared motion time; damping ratio 1.15 is a disclosed dimensionless conservative policy value."
         )

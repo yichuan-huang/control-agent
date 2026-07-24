@@ -119,8 +119,7 @@ def build_candidate_route(
                 duration_s=instruction.duration_s,
                 sample_rate_hz=instruction.sample_rate_hz,
                 operating_region=(
-                    instruction.operating_region
-                    or "declared_safe_operating_region"
+                    instruction.operating_region or "declared_safe_operating_region"
                 ),
                 stop_conditions=instruction.stop_conditions,
             )

@@ -8,7 +8,11 @@ from typing import Literal
 
 from cfdc.controllers import synthesize_controller
 from cfdc.diagnosis.engine import DiagnosticEngine
-from cfdc.diagnosis.llm import DiagnosticAdapter, OpenAICompatibleDiagnosticAdapter, PROMPT_VERSION
+from cfdc.diagnosis.llm import (
+    DiagnosticAdapter,
+    OpenAICompatibleDiagnosticAdapter,
+    PROMPT_VERSION,
+)
 from cfdc.diagnosis.safety import (
     CONTROLLER_SYNTHESIS_FEATURES,
     diagnostic_required_feature_plan,
@@ -47,8 +51,12 @@ DIAGNOSTIC_FIELD_NAMES = (
     "coupling_severity",
     "uncertainty_magnitude",
 )
-SAVED_DETERMINISTIC_RESPONSE_PATH = Path(__file__).with_name("saved_evaluation_responses.json")
-SAVED_LLM_RESPONSE_PATH = Path(__file__).with_name("saved_llm_evaluation_responses.json")
+SAVED_DETERMINISTIC_RESPONSE_PATH = Path(__file__).with_name(
+    "saved_evaluation_responses.json"
+)
+SAVED_LLM_RESPONSE_PATH = Path(__file__).with_name(
+    "saved_llm_evaluation_responses.json"
+)
 EVALUATION_SPEC_VERSION = "cfdc-diagnostic-12-v3-assessment-catalog"
 SCORING_POLICY = {
     "minimum_eight_field_accuracy": 0.75,
@@ -66,7 +74,9 @@ SCORING_POLICY = {
     "controller_gate": "exact",
     "premature_controller_release_allowed": False,
 }
-FROZEN_CASE_CATALOG_SHA256 = "c353e12d63877bce2127e0a84b4db056631734686c7e0efb70702ecc4deb6893"
+FROZEN_CASE_CATALOG_SHA256 = (
+    "c353e12d63877bce2127e0a84b4db056631734686c7e0efb70702ecc4deb6893"
+)
 
 
 @dataclass(frozen=True)
@@ -108,7 +118,12 @@ CASE_AUDIT_EXPECTATIONS: dict[str, dict[str, tuple]] = {
         "dangerous": ("mass", "inertia", "full_model_parameters"),
     },
     "planar_vtol_hover_lateral": {
-        "constraints": ("thrust_limit", "torque_limit", "tilt_limit", "height_loss_boundary"),
+        "constraints": (
+            "thrust_limit",
+            "torque_limit",
+            "tilt_limit",
+            "height_loss_boundary",
+        ),
         "dangerous": ("mass", "inertia", "aerodynamic_coefficients"),
     },
     "first_order_thermal": {
@@ -117,7 +132,12 @@ CASE_AUDIT_EXPECTATIONS: dict[str, dict[str, tuple]] = {
         "missing": (("delay", "pause", "first motion", "starts moving"),),
     },
     "double_integrator_cart": {
-        "constraints": ("force_limit", "travel_limit", "position_boundary", "velocity_boundary"),
+        "constraints": (
+            "force_limit",
+            "travel_limit",
+            "position_boundary",
+            "velocity_boundary",
+        ),
         "dangerous": ("static_gain", "time_constant"),
     },
     "spring_mass_damper": {
@@ -133,7 +153,11 @@ CASE_AUDIT_EXPECTATIONS: dict[str, dict[str, tuple]] = {
         "dangerous": ("natural_frequency", "coupling_gain"),
     },
     "deadzone_saturated_motor": {
-        "constraints": ("current_saturation", "mechanical_end_stop", "position_boundary"),
+        "constraints": (
+            "current_saturation",
+            "mechanical_end_stop",
+            "position_boundary",
+        ),
         "dangerous": ("static_gain", "time_constant"),
         "missing": (
             ("smallest", "inactive", "starts moving", "does not move"),
@@ -145,7 +169,11 @@ CASE_AUDIT_EXPECTATIONS: dict[str, dict[str, tuple]] = {
         "dangerous": ("static_gain", "time_constant", "single_loop_gain"),
     },
     "cstr_operating_point_nonlinearity_diagnosis": {
-        "constraints": ("temperature_limit", "safe_operating_region", "conversion_boundary"),
+        "constraints": (
+            "temperature_limit",
+            "safe_operating_region",
+            "conversion_boundary",
+        ),
         "dangerous": ("static_gain", "time_constant", "global_pi_gain"),
     },
     "quadruple_tank_mimo_nmp_diagnosis": {
@@ -163,9 +191,13 @@ CASE_AUDIT_EXPECTATIONS: dict[str, dict[str, tuple]] = {
 }
 
 
-def _with_audit_expectations(case: DiagnosticEvaluationCase) -> DiagnosticEvaluationCase:
+def _with_audit_expectations(
+    case: DiagnosticEvaluationCase,
+) -> DiagnosticEvaluationCase:
     audit = CASE_AUDIT_EXPECTATIONS[case.case_id]
-    constraints = tuple(dict.fromkeys((*COMMON_CONSTRAINT_FEATURE_IDS, *audit["constraints"])))
+    constraints = tuple(
+        dict.fromkeys((*COMMON_CONSTRAINT_FEATURE_IDS, *audit["constraints"]))
+    )
     return replace(
         case,
         constraints_not_core_features=constraints,
@@ -198,7 +230,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 actuators=["cart motor force"],
                 safety_bounds={"force_limit": 10.0, "rail_limit": 2.4},
             ),
-            _fields(("unstable",), ("non-minimum",), no_delay, ("angle stabilization", "higher for cart"), measured, ("strong nonlinearity",), ("moderate cascaded", "underactuated"), large),
+            _fields(
+                ("unstable",),
+                ("non-minimum",),
+                no_delay,
+                ("angle stabilization", "higher for cart"),
+                measured,
+                ("strong nonlinearity",),
+                ("moderate cascaded", "underactuated"),
+                large,
+            ),
             True,
             class_iv,
             ("natural_frequency",),
@@ -213,7 +254,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 actuators=["total thrust", "roll torque"],
                 safety_bounds={"max_tilt_rad": 0.7, "max_torque": 0.9},
             ),
-            _fields(("unstable", "safety-critical"), ("non-minimum",), no_delay, ("vertical/attitude", "lateral motion"), measured, ("strong nonlinearity",), ("moderate cascaded",), large),
+            _fields(
+                ("unstable", "safety-critical"),
+                ("non-minimum",),
+                no_delay,
+                ("vertical/attitude", "lateral motion"),
+                measured,
+                ("strong nonlinearity",),
+                ("moderate cascaded",),
+                large,
+            ),
             True,
             class_iv,
             ("hover_thrust", "angular_acceleration_gain", "lateral_coupling_gain"),
@@ -227,7 +277,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["temperature"],
                 actuators=["heater power"],
             ),
-            _fields(stable, minimum_phase, ("not enough information",), ("first-order",), measured, weak, single, moderate),
+            _fields(
+                stable,
+                minimum_phase,
+                ("not enough information",),
+                ("first-order",),
+                measured,
+                weak,
+                single,
+                moderate,
+            ),
             False,
             None,
             ("static_gain", "time_constant", "dead_time"),
@@ -242,7 +301,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 actuators=["horizontal force"],
                 safety_bounds={"travel": 1.5, "force": 1.0},
             ),
-            _fields(("marginally stable", "drifting"), minimum_phase, no_delay, ("double integrator",), measured, weak, single, moderate),
+            _fields(
+                ("marginally stable", "drifting"),
+                minimum_phase,
+                no_delay,
+                ("double integrator",),
+                measured,
+                weak,
+                single,
+                moderate,
+            ),
             True,
             class_iii,
             ("input_gain",),
@@ -256,7 +324,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["displacement"],
                 actuators=["small force"],
             ),
-            _fields(stable, minimum_phase, no_delay, ("oscillatory second-order",), measured, weak, single, moderate),
+            _fields(
+                stable,
+                minimum_phase,
+                no_delay,
+                ("oscillatory second-order",),
+                measured,
+                weak,
+                single,
+                moderate,
+            ),
             True,
             class_ii,
             ("natural_frequency", "damping_ratio", "input_gain"),
@@ -270,7 +347,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["outlet temperature"],
                 actuators=["heater valve"],
             ),
-            _fields(stable, minimum_phase, ("significant delay",), ("first-order",), measured, weak, single, moderate),
+            _fields(
+                stable,
+                minimum_phase,
+                ("significant delay",),
+                ("first-order",),
+                measured,
+                weak,
+                single,
+                moderate,
+            ),
             True,
             class_i,
             ("static_gain", "time_constant", "dead_time"),
@@ -284,7 +370,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["process output"],
                 actuators=["valve setting"],
             ),
-            _fields(stable, ("non-minimum",), no_delay, ("first-order", "higher"), measured, weak, single, moderate),
+            _fields(
+                stable,
+                ("non-minimum",),
+                no_delay,
+                ("first-order", "higher"),
+                measured,
+                weak,
+                single,
+                moderate,
+            ),
             True,
             class_iv,
             ("static_gain", "time_constant", "inverse_response_severity"),
@@ -298,7 +393,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["position"],
                 actuators=["motor command"],
             ),
-            _fields(("not enough information", "marginal"), ("not enough information",), ("not enough information",), ("not enough information",), measured, ("strong nonlinearity",), single, large),
+            _fields(
+                ("not enough information", "marginal"),
+                ("not enough information",),
+                ("not enough information",),
+                ("not enough information",),
+                measured,
+                ("strong nonlinearity",),
+                single,
+                large,
+            ),
             False,
             None,
             ("deadzone_width", "hysteresis_width", "effective_gain_after_deadzone"),
@@ -314,7 +418,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["joint angles", "joint rates"],
                 actuators=["one joint torque"],
             ),
-            _fields(("unstable", "safety-critical"), ("non-minimum", "not enough"), no_delay, ("higher", "underactuated"), measured, ("strong nonlinearity",), ("moderate", "coupling"), large),
+            _fields(
+                ("unstable", "safety-critical"),
+                ("non-minimum", "not enough"),
+                no_delay,
+                ("higher", "underactuated"),
+                measured,
+                ("strong nonlinearity",),
+                ("moderate", "coupling"),
+                large,
+            ),
             True,
             class_iv,
             ("natural_frequency", "input_to_unactuated_coupling_gain"),
@@ -328,7 +441,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["temperature", "conversion"],
                 actuators=["cooling input", "feed input"],
             ),
-            _fields(stable, minimum_phase, ("not enough", "no significant"), ("first-order", "higher"), measured, ("strong nonlinearity",), ("moderate", "significant multivariable"), large),
+            _fields(
+                stable,
+                minimum_phase,
+                ("not enough", "no significant"),
+                ("first-order", "higher"),
+                measured,
+                ("strong nonlinearity",),
+                ("moderate", "significant multivariable"),
+                large,
+            ),
             True,
             class_iv,
             ("local_static_gain", "local_time_constant", "gain_variation_ratio"),
@@ -342,7 +464,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["four tank levels"],
                 actuators=["pump 1", "pump 2"],
             ),
-            _fields(stable, ("non-minimum",), ("not enough", "no significant"), ("first-order", "higher"), measured, weak, ("significant multivariable",), large),
+            _fields(
+                stable,
+                ("non-minimum",),
+                ("not enough", "no significant"),
+                ("first-order", "higher"),
+                measured,
+                weak,
+                ("significant multivariable",),
+                large,
+            ),
             True,
             class_v,
             ("local_gain_matrix", "local_time_constant", "pairing_indicator"),
@@ -356,7 +487,16 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
                 observed_outputs=["output position"],
                 actuators=["input command"],
             ),
-            _fields(("not enough", "marginal"), ("not enough",), ("not enough",), ("not enough",), measured, ("strong nonlinearity",), single, large),
+            _fields(
+                ("not enough", "marginal"),
+                ("not enough",),
+                ("not enough",),
+                ("not enough",),
+                measured,
+                ("strong nonlinearity",),
+                single,
+                large,
+            ),
             False,
             None,
             ("hysteresis_width", "effective_gain_after_deadzone"),
@@ -365,34 +505,165 @@ def list_diagnostic_evaluation_cases() -> list[DiagnosticEvaluationCase]:
     ]
     cases = [_with_audit_expectations(case) for case in [*prompt_cases, *complex_cases]]
     assessments = {
-        "cartpole_underactuated": ("unstable", "nonminimum_phase", "not_significant", "high", "adequate", "strong_dynamic", "underactuated", "large"),
-        "planar_vtol_hover_lateral": ("unstable", "nonminimum_phase", "not_significant", "high", "adequate", "weak", "cascaded", "large"),
-        "first_order_thermal": ("stable", "minimum_phase", "unknown", "low", "adequate", "weak", "siso", "moderate"),
-        "double_integrator_cart": ("marginal", "minimum_phase", "not_significant", "low", "adequate", "weak", "siso", "moderate"),
-        "spring_mass_damper": ("stable", "minimum_phase", "not_significant", "low", "adequate", "weak", "siso", "moderate"),
-        "delayed_heating_process": ("stable", "minimum_phase", "significant", "low", "adequate", "weak", "siso", "moderate"),
-        "inverse_response_process": ("stable", "nonminimum_phase", "not_significant", "low", "adequate", "weak", "siso", "moderate"),
-        "deadzone_saturated_motor": ("unknown", "unknown", "unknown", "unknown", "adequate", "static_compensable", "unknown", "unknown"),
-        "acrobot_underactuated_diagnosis": ("unstable", "nonminimum_phase", "not_significant", "high", "adequate", "strong_dynamic", "underactuated", "large"),
-        "cstr_operating_point_nonlinearity_diagnosis": ("stable", "minimum_phase", "not_significant", "high", "adequate", "strong_dynamic", "weak_mimo", "large"),
-        "quadruple_tank_mimo_nmp_diagnosis": ("stable", "nonminimum_phase", "not_significant", "low", "adequate", "weak", "severe_mimo", "large"),
-        "bouc_wen_hysteresis_diagnosis": ("unknown", "unknown", "unknown", "unknown", "adequate", "static_compensable", "unknown", "unknown"),
+        "cartpole_underactuated": (
+            "unstable",
+            "nonminimum_phase",
+            "not_significant",
+            "high",
+            "adequate",
+            "strong_dynamic",
+            "underactuated",
+            "large",
+        ),
+        "planar_vtol_hover_lateral": (
+            "unstable",
+            "nonminimum_phase",
+            "not_significant",
+            "high",
+            "adequate",
+            "weak",
+            "cascaded",
+            "large",
+        ),
+        "first_order_thermal": (
+            "stable",
+            "minimum_phase",
+            "unknown",
+            "low",
+            "adequate",
+            "weak",
+            "siso",
+            "moderate",
+        ),
+        "double_integrator_cart": (
+            "marginal",
+            "minimum_phase",
+            "not_significant",
+            "low",
+            "adequate",
+            "weak",
+            "siso",
+            "moderate",
+        ),
+        "spring_mass_damper": (
+            "stable",
+            "minimum_phase",
+            "not_significant",
+            "low",
+            "adequate",
+            "weak",
+            "siso",
+            "moderate",
+        ),
+        "delayed_heating_process": (
+            "stable",
+            "minimum_phase",
+            "significant",
+            "low",
+            "adequate",
+            "weak",
+            "siso",
+            "moderate",
+        ),
+        "inverse_response_process": (
+            "stable",
+            "nonminimum_phase",
+            "not_significant",
+            "low",
+            "adequate",
+            "weak",
+            "siso",
+            "moderate",
+        ),
+        "deadzone_saturated_motor": (
+            "unknown",
+            "unknown",
+            "unknown",
+            "unknown",
+            "adequate",
+            "static_compensable",
+            "unknown",
+            "unknown",
+        ),
+        "acrobot_underactuated_diagnosis": (
+            "unstable",
+            "nonminimum_phase",
+            "not_significant",
+            "high",
+            "adequate",
+            "strong_dynamic",
+            "underactuated",
+            "large",
+        ),
+        "cstr_operating_point_nonlinearity_diagnosis": (
+            "stable",
+            "minimum_phase",
+            "not_significant",
+            "high",
+            "adequate",
+            "strong_dynamic",
+            "weak_mimo",
+            "large",
+        ),
+        "quadruple_tank_mimo_nmp_diagnosis": (
+            "stable",
+            "nonminimum_phase",
+            "not_significant",
+            "low",
+            "adequate",
+            "weak",
+            "severe_mimo",
+            "large",
+        ),
+        "bouc_wen_hysteresis_diagnosis": (
+            "unknown",
+            "unknown",
+            "unknown",
+            "unknown",
+            "adequate",
+            "static_compensable",
+            "unknown",
+            "unknown",
+        ),
     }
     features = {
         "cartpole_underactuated": ("natural_frequency",),
-        "planar_vtol_hover_lateral": ("hover_thrust", "angular_acceleration_gain", "lateral_coupling_gain"),
+        "planar_vtol_hover_lateral": (
+            "hover_thrust",
+            "angular_acceleration_gain",
+            "lateral_coupling_gain",
+        ),
         "first_order_thermal": (),
         "double_integrator_cart": ("input_gain",),
         "spring_mass_damper": ("natural_frequency", "damping_ratio", "input_gain"),
         "delayed_heating_process": ("static_gain", "time_constant", "dead_time"),
-        "inverse_response_process": ("static_gain", "time_constant", "inverse_response_severity"),
+        "inverse_response_process": (
+            "static_gain",
+            "time_constant",
+            "inverse_response_severity",
+        ),
         "deadzone_saturated_motor": (),
         "acrobot_underactuated_diagnosis": ("natural_frequency",),
-        "cstr_operating_point_nonlinearity_diagnosis": ("natural_frequency", "input_gain"),
-        "quadruple_tank_mimo_nmp_diagnosis": ("local_gain_matrix", "local_time_constant", "pairing_indicator"),
+        "cstr_operating_point_nonlinearity_diagnosis": (
+            "natural_frequency",
+            "input_gain",
+        ),
+        "quadruple_tank_mimo_nmp_diagnosis": (
+            "local_gain_matrix",
+            "local_time_constant",
+            "pairing_indicator",
+        ),
         "bouc_wen_hysteresis_diagnosis": (),
     }
-    return [replace(case, expected_fields=_fields(*[(value,) for value in assessments[case.case_id]]), expected_required_features=features[case.case_id], expected_controller_allowed=case.expected_complete) for case in cases]
+    return [
+        replace(
+            case,
+            expected_fields=_fields(*[(value,) for value in assessments[case.case_id]]),
+            expected_required_features=features[case.case_id],
+            expected_controller_allowed=case.expected_complete,
+        )
+        for case in cases
+    ]
 
 
 def _case_catalog_payload() -> dict[str, object]:
@@ -412,19 +683,19 @@ def _case_catalog_payload() -> dict[str, object]:
                 "suite": case.suite,
                 "description": frozen_description(case.description),
                 "expected_fields": {
-                    name: list(tokens)
-                    for name, tokens in case.expected_fields.items()
+                    name: list(tokens) for name, tokens in case.expected_fields.items()
                 },
                 "expected_complete": case.expected_complete,
                 "expected_archetype": case.expected_archetype,
                 "expected_required_features": list(case.expected_required_features),
                 "expected_controller_allowed": case.expected_controller_allowed,
                 "acceptable_optional_features": list(case.acceptable_optional_features),
-                "constraints_not_core_features": list(case.constraints_not_core_features),
+                "constraints_not_core_features": list(
+                    case.constraints_not_core_features
+                ),
                 "dangerous_core_features": list(case.dangerous_core_features),
                 "expected_missing_information_topics": [
-                    list(tokens)
-                    for tokens in case.expected_missing_information_topics
+                    list(tokens) for tokens in case.expected_missing_information_topics
                 ],
                 "expected_experiment_executable": case.expected_complete,
                 "expected_controller_testable": case.expected_controller_allowed,
@@ -497,9 +768,7 @@ def _placeholder_feature(feature_id: str) -> CoreFeatureArtifact:
     value = values.get(feature_id, 1.0)
     width = max(0.05 * abs(value), 0.01)
     released_value = (
-        [[2.0, 0.5], [0.4, 1.6]]
-        if feature_id == "local_gain_matrix"
-        else value
+        [[2.0, 0.5], [0.4, 1.6]] if feature_id == "local_gain_matrix" else value
     )
     return CoreFeatureArtifact(
         feature_id=feature_id,
@@ -548,13 +817,13 @@ def _collect_diagnostic_responses(
     for case in list_diagnostic_evaluation_cases():
         diagnosis = engine.diagnose(case.description)
         classification = (
-            engine.classify(diagnosis, case.description)
-            if diagnosis.complete
-            else None
+            engine.classify(diagnosis, case.description) if diagnosis.complete else None
         )
         if classification is not None:
             catalog = default_control_method_profile_catalog()
-            selection = deterministic_profile_selection(case.description, diagnosis, classification, catalog)
+            selection = deterministic_profile_selection(
+                case.description, diagnosis, classification, catalog
+            )
             profile = validate_semantic_selection(selection, classification, catalog)
             classification = apply_profile_to_classification(classification, profile)
         release_gate = validate_diagnostic_controller_release(
@@ -588,7 +857,9 @@ def _collect_diagnostic_responses(
                 complete=diagnosis.complete,
                 clarification_questions=diagnosis.clarification_questions,
                 primary_class=(
-                    str(classification.primary_class) if classification is not None else None
+                    str(classification.primary_class)
+                    if classification is not None
+                    else None
                 ),
                 required_core_features=diagnostic_required_feature_plan(
                     case.description,
@@ -601,9 +872,7 @@ def _collect_diagnostic_responses(
                     else None
                 ),
                 classification_rationale=(
-                    classification.rationale
-                    if classification is not None
-                    else None
+                    classification.rationale if classification is not None else None
                 ),
                 safety_constraints=(
                     list(classification.safety_constraints)
@@ -672,15 +941,21 @@ def load_diagnostic_response_snapshot(path: Path) -> DiagnosticResponseSnapshot:
     )
     fingerprint = _assert_frozen_evaluation_spec()
     if snapshot.evaluation_spec_version != EVALUATION_SPEC_VERSION:
-        raise ValueError("diagnostic response snapshot uses a different evaluation spec version")
+        raise ValueError(
+            "diagnostic response snapshot uses a different evaluation spec version"
+        )
     if snapshot.case_catalog_sha256 != fingerprint:
-        raise ValueError("diagnostic response snapshot does not match the frozen 12-case catalog")
+        raise ValueError(
+            "diagnostic response snapshot does not match the frozen 12-case catalog"
+        )
     if snapshot.scoring_policy != SCORING_POLICY:
         raise ValueError("diagnostic response snapshot uses a different scoring policy")
     expected_ids = [case.case_id for case in list_diagnostic_evaluation_cases()]
     response_ids = [response.case_id for response in snapshot.responses]
     if response_ids != expected_ids:
-        raise ValueError("diagnostic response snapshot case order or membership changed")
+        raise ValueError(
+            "diagnostic response snapshot case order or membership changed"
+        )
     return snapshot
 
 
@@ -702,9 +977,7 @@ def collect_and_save_llm_diagnostic_responses(
         generator=generator,
         model=adapter.model,
     )
-    saved_snapshot = live_snapshot.model_copy(
-        update={"response_source": "saved_llm"}
-    )
+    saved_snapshot = live_snapshot.model_copy(update={"response_source": "saved_llm"})
     save_diagnostic_response_snapshot(saved_snapshot, output_path)
     return live_snapshot
 
@@ -738,7 +1011,8 @@ def _looks_like_constraint_feature(
         or normalized.endswith("_boundary")
         or normalized.startswith("max_")
         or "saturation" in normalized
-        or normalized in {
+        or normalized
+        in {
             "final_error",
             "overshoot",
             "undershoot",
@@ -777,9 +1051,7 @@ QUESTION_JARGON_PATTERNS = (
 
 def _evidence_discipline_correct(response: SavedDiagnosticResponse) -> bool:
     evidence = [
-        item
-        for field_items in response.field_evidence.values()
-        for item in field_items
+        item for field_items in response.field_evidence.values() for item in field_items
     ]
     text = " ".join(
         [
@@ -806,21 +1078,27 @@ def _missing_information_quality(
         if topics
         else 1.0
     )
-    plain_language = 1.0 if not any(term in combined for term in QUESTION_JARGON_PATTERNS) else 0.0
-    observable = 1.0 if any(
-        token in combined
-        for token in [
-            "move",
-            "motion",
-            "record",
-            "watch",
-            "noticeable",
-            "command",
-            "input",
-            "output",
-            "starts",
-        ]
-    ) else 0.0
+    plain_language = (
+        1.0 if not any(term in combined for term in QUESTION_JARGON_PATTERNS) else 0.0
+    )
+    observable = (
+        1.0
+        if any(
+            token in combined
+            for token in [
+                "move",
+                "motion",
+                "record",
+                "watch",
+                "noticeable",
+                "command",
+                "input",
+                "output",
+                "starts",
+            ]
+        )
+        else 0.0
+    )
     return (cardinality + topic_coverage + plain_language + observable) / 4.0
 
 
@@ -842,12 +1120,18 @@ def _score_diagnostic_responses(
     for case in cases:
         response = response_by_id[case.case_id]
         field_matches = {
-            field_name: _field_match(response.field_values[field_name], case.expected_fields[field_name])
+            field_name: _field_match(
+                response.field_values[field_name], case.expected_fields[field_name]
+            )
             for field_name in DIAGNOSTIC_FIELD_NAMES
         }
         expected_features = set(case.expected_required_features)
         actual_features = set(response.required_core_features)
-        feature_recall = len(expected_features & actual_features) / len(expected_features) if expected_features else 1.0
+        feature_recall = (
+            len(expected_features & actual_features) / len(expected_features)
+            if expected_features
+            else 1.0
+        )
         optional_features = set(case.acceptable_optional_features)
         allowed_features = expected_features | optional_features
         feature_precision = (
@@ -886,7 +1170,11 @@ def _score_diagnostic_responses(
         premature_release = actual_controller_allowed and (
             not case.expected_controller_allowed or feature_recall < 1.0
         )
-        archetype_correct = actual_archetype == case.expected_archetype if case.expected_archetype is not None else response.primary_class is None
+        archetype_correct = (
+            actual_archetype == case.expected_archetype
+            if case.expected_archetype is not None
+            else response.primary_class is None
+        )
         dangerous_false_positive_control_correct = not (
             premature_release
             or dangerous_features
@@ -970,21 +1258,47 @@ def _score_diagnostic_responses(
         prompt_case_count=sum(row.suite == "prompt_8" for row in rows),
         complex_case_count=sum(row.suite == "complex_4" for row in rows),
         mean_eight_field_accuracy=sum(row.eight_field_accuracy for row in rows) / count,
-        mean_required_feature_recall=sum(row.required_feature_recall for row in rows) / count,
-        mean_required_feature_precision=sum(row.required_feature_precision for row in rows) / count,
-        core_feature_minimality_accuracy=sum(row.core_feature_minimality_correct for row in rows) / count,
-        constraint_isolation_accuracy=sum(row.constraint_isolation_correct for row in rows) / count,
+        mean_required_feature_recall=sum(row.required_feature_recall for row in rows)
+        / count,
+        mean_required_feature_precision=sum(
+            row.required_feature_precision for row in rows
+        )
+        / count,
+        core_feature_minimality_accuracy=sum(
+            row.core_feature_minimality_correct for row in rows
+        )
+        / count,
+        constraint_isolation_accuracy=sum(
+            row.constraint_isolation_correct for row in rows
+        )
+        / count,
         dangerous_false_positive_control_accuracy=sum(
             row.dangerous_false_positive_control_correct for row in rows
-        ) / count,
-        evidence_discipline_accuracy=sum(row.evidence_discipline_correct for row in rows) / count,
-        mean_missing_information_quality=sum(row.missing_information_quality for row in rows) / count,
-        experiment_executability_accuracy=sum(row.experiment_executability_correct for row in rows) / count,
-        controller_testability_accuracy=sum(row.controller_testability_correct for row in rows) / count,
+        )
+        / count,
+        evidence_discipline_accuracy=sum(
+            row.evidence_discipline_correct for row in rows
+        )
+        / count,
+        mean_missing_information_quality=sum(
+            row.missing_information_quality for row in rows
+        )
+        / count,
+        experiment_executability_accuracy=sum(
+            row.experiment_executability_correct for row in rows
+        )
+        / count,
+        controller_testability_accuracy=sum(
+            row.controller_testability_correct for row in rows
+        )
+        / count,
         clarification_accuracy=sum(row.clarification_correct for row in rows) / count,
         archetype_accuracy=sum(row.archetype_correct for row in rows) / count,
-        controller_gate_accuracy=sum(row.controller_gate_correct for row in rows) / count,
-        premature_controller_release_count=sum(row.premature_controller_release for row in rows),
+        controller_gate_accuracy=sum(row.controller_gate_correct for row in rows)
+        / count,
+        premature_controller_release_count=sum(
+            row.premature_controller_release for row in rows
+        ),
         dangerous_false_positive_control_count=sum(
             not row.dangerous_false_positive_control_correct for row in rows
         ),
@@ -993,7 +1307,9 @@ def _score_diagnostic_responses(
     )
 
 
-def run_diagnostic_evaluation(*, use_saved_responses: bool = True) -> DiagnosticEvaluationResult:
+def run_diagnostic_evaluation(
+    *, use_saved_responses: bool = True
+) -> DiagnosticEvaluationResult:
     if use_saved_responses:
         return _score_diagnostic_responses(
             load_saved_diagnostic_responses(),
@@ -1019,7 +1335,9 @@ def compare_diagnostic_evaluations(
     llm: DiagnosticEvaluationResult,
 ) -> DiagnosticEvaluationComparison:
     if deterministic.case_catalog_sha256 != llm.case_catalog_sha256:
-        raise ValueError("cannot compare diagnostic evaluations from different case catalogs")
+        raise ValueError(
+            "cannot compare diagnostic evaluations from different case catalogs"
+        )
     return DiagnosticEvaluationComparison(
         evaluation_spec_version=EVALUATION_SPEC_VERSION,
         case_catalog_sha256=deterministic.case_catalog_sha256,
@@ -1030,7 +1348,8 @@ def compare_diagnostic_evaluations(
                 llm.mean_eight_field_accuracy - deterministic.mean_eight_field_accuracy
             ),
             "mean_required_feature_recall": (
-                llm.mean_required_feature_recall - deterministic.mean_required_feature_recall
+                llm.mean_required_feature_recall
+                - deterministic.mean_required_feature_recall
             ),
             "mean_required_feature_precision": (
                 llm.mean_required_feature_precision

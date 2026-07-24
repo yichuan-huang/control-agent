@@ -159,9 +159,7 @@ class ModelAnswerRecord(CFDCModel):
 
 
 class ModelDiscoverySession(CFDCModel):
-    schema_version: Literal[
-        "model_discovery_session/v1"
-    ] = "model_discovery_session/v1"
+    schema_version: Literal["model_discovery_session/v1"] = "model_discovery_session/v1"
     session_id: str = Field(pattern=r"^discovery-[0-9a-f]{20}$")
     state: DiscoveryState
     stage5: Stage5DiscoverySnapshot
@@ -178,9 +176,7 @@ class ModelDiscoverySession(CFDCModel):
     model_rationale: str | None = Field(default=None, max_length=8000)
     material_requests: list[str] = Field(default_factory=list, max_length=20)
     pending_envelope: GeneratedModelEnvelopeV1 | None = None
-    pending_envelope_sha256: str | None = Field(
-        default=None, pattern=r"^[0-9a-f]{64}$"
-    )
+    pending_envelope_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     confirmed_envelope: GeneratedModelEnvelopeV1 | None = None
     confirmed_envelope_sha256: str | None = Field(
         default=None, pattern=r"^[0-9a-f]{64}$"
@@ -190,32 +186,22 @@ class ModelDiscoverySession(CFDCModel):
     selected_tuning_profile: TuningProfile | None = None
     recommended_controller: ControllerRuntimeSpec | None = None
     recommended_tuning_profile: TuningProfile | None = None
-    replacement_sha256: str | None = Field(
-        default=None, pattern=r"^[0-9a-f]{64}$"
-    )
-    bound_model_sha256: str | None = Field(
-        default=None, pattern=r"^[0-9a-f]{64}$"
-    )
+    replacement_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    bound_model_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     run_config: SimulationRunConfig | None = None
     llm_calls: list[LLMCallRecord] = Field(default_factory=list)
-    transition_history: list[DiscoveryTransitionRecord] = Field(
-        default_factory=list
-    )
+    transition_history: list[DiscoveryTransitionRecord] = Field(default_factory=list)
     simulation_session_id: str | None = None
     revision: int = Field(ge=0)
     created_at: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
-    content_sha256: str | None = Field(
-        default=None, pattern=r"^[0-9a-f]{64}$"
-    )
+    content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def validate_hashes(self) -> "ModelDiscoverySession":
         if self.stage5_sha256 != _sha256(self.stage5):
             raise ValueError("Stage-5 snapshot hash mismatch")
-        if (self.pending_envelope is None) != (
-            self.pending_envelope_sha256 is None
-        ):
+        if (self.pending_envelope is None) != (self.pending_envelope_sha256 is None):
             raise ValueError("pending envelope and hash must resolve together")
         if self.pending_envelope is not None and (
             self.pending_envelope_sha256 != _sha256(self.pending_envelope)
@@ -229,19 +215,13 @@ class ModelDiscoverySession(CFDCModel):
             self.confirmed_envelope_sha256 != _sha256(self.confirmed_envelope)
         ):
             raise ValueError("confirmed envelope hash mismatch")
-        if (self.selected_controller is None) != (
-            self.selected_tuning_profile is None
-        ):
+        if (self.selected_controller is None) != (self.selected_tuning_profile is None):
             raise ValueError("selected controller/profile must resolve together")
         if (self.recommended_controller is None) != (
             self.recommended_tuning_profile is None
         ):
-            raise ValueError(
-                "recommended controller/profile must resolve together"
-            )
-        if (self.recommended_controller is None) != (
-            self.replacement_sha256 is None
-        ):
+            raise ValueError("recommended controller/profile must resolve together")
+        if (self.recommended_controller is None) != (self.replacement_sha256 is None):
             raise ValueError(
                 "recommended controller and replacement hash must resolve together"
             )
@@ -252,9 +232,7 @@ class ModelDiscoverySession(CFDCModel):
         if self.state == "controller_compatibility_check" and (
             self.confirmed_envelope is None
         ):
-            raise ValueError(
-                "compatibility check requires a confirmed generated model"
-            )
+            raise ValueError("compatibility check requires a confirmed generated model")
         if self.state == "simulation_ready" and (
             self.selected_controller is None
             or self.selected_tuning_profile is None
@@ -265,9 +243,7 @@ class ModelDiscoverySession(CFDCModel):
                 "simulation-ready discovery state requires a bound controller"
             )
         if self.content_sha256 is not None:
-            expected = _sha256(
-                self.model_dump(mode="json", exclude={"content_sha256"})
-            )
+            expected = _sha256(self.model_dump(mode="json", exclude={"content_sha256"}))
             if self.content_sha256 != expected:
                 raise ValueError("model-discovery session content hash mismatch")
         return self
@@ -308,13 +284,10 @@ def create_model_discovery_session(
     )
 
 
-def _expect_revision(
-    session: ModelDiscoverySession, expected_revision: int
-) -> None:
+def _expect_revision(session: ModelDiscoverySession, expected_revision: int) -> None:
     if expected_revision != session.revision:
         raise StaleRevisionError(
-            f"stale discovery revision {expected_revision}; "
-            f"current={session.revision}"
+            f"stale discovery revision {expected_revision}; current={session.revision}"
         )
 
 
@@ -410,10 +383,7 @@ def _replace_answer_payload(
     session: ModelDiscoverySession,
     records: list[ModelAnswerRecord],
 ) -> dict[str, Any]:
-    current = {
-        item.question_id: item
-        for item in session.answers
-    }
+    current = {item.question_id: item for item in session.answers}
     facts = {item.fact_id: item for item in session.facts}
     for record in records:
         current[record.question_id] = record
@@ -445,9 +415,7 @@ def _replace_answer_payload(
 
 def record_model_answers(
     session: ModelDiscoverySession,
-    answers: Mapping[
-        str, str | ModelFactAnswer | Mapping[str, Any]
-    ],
+    answers: Mapping[str, str | ModelFactAnswer | Mapping[str, Any]],
     *,
     expected_revision: int,
 ) -> ModelDiscoverySession:
@@ -543,10 +511,9 @@ def request_model_for_discovery_session(
     call = request_model_discovery(adapter, context, typed_catalog)
     llm_calls = [*session.llm_calls, call.call_record]
     if call.result is None:
-        errors = (
-            call.call_record.validation_errors
-            or ["模型服务调用失败；已保留现有回答，请重试。"]
-        )
+        errors = call.call_record.validation_errors or [
+            "模型服务调用失败；已保留现有回答，请重试。"
+        ]
         return _transition(
             session,
             action="request_model",
@@ -557,23 +524,15 @@ def request_model_for_discovery_session(
             },
             reason=errors[0],
         )
-    recognized = list(
-        getattr(call.result, "recognized_facts", [])
-    )
-    recognized_by_id = {
-        fact.fact_id: fact for fact in recognized
-    }
+    recognized = list(getattr(call.result, "recognized_facts", []))
+    recognized_by_id = {fact.fact_id: fact for fact in recognized}
     recognized_answers = [
-        answer.model_copy(
-            update={"typed_fact": recognized_by_id[answer.fact_id]}
-        )
+        answer.model_copy(update={"typed_fact": recognized_by_id[answer.fact_id]})
         if answer.fact_id in recognized_by_id
         else answer
         for answer in session.answers
     ]
-    recognized_facts = {
-        fact.fact_id: fact for fact in session.facts
-    }
+    recognized_facts = {fact.fact_id: fact for fact in session.facts}
     recognized_facts.update(recognized_by_id)
     recognized_updates = {
         "answers": recognized_answers,
@@ -641,10 +600,7 @@ def confirm_generated_model(
         raise SessionActionError(
             "generated model confirmation requires model_review state"
         )
-    if (
-        session.pending_envelope is None
-        or session.pending_envelope_sha256 is None
-    ):
+    if session.pending_envelope is None or session.pending_envelope_sha256 is None:
         raise SessionActionError("there is no generated model to confirm")
     return _transition(
         session,
@@ -652,9 +608,7 @@ def confirm_generated_model(
         to_state="controller_compatibility_check",
         updates={
             "confirmed_envelope": session.pending_envelope,
-            "confirmed_envelope_sha256": (
-                session.pending_envelope_sha256
-            ),
+            "confirmed_envelope_sha256": (session.pending_envelope_sha256),
             "material_requests": [],
         },
         reason="The user explicitly confirmed the generated software model.",

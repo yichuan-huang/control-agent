@@ -32,11 +32,13 @@ def test_policy_restricts_multiplier_to_five_through_ten_percent():
 def test_proposal_multiplies_only_declared_tunable_gains():
     state = propose_algorithm1_candidate(_state())
 
-    assert state.candidate_gains == pytest.approx({
-        "kp": 2.1,
-        "kd": 3.15,
-        "feedforward": 4.0,
-    })
+    assert state.candidate_gains == pytest.approx(
+        {
+            "kp": 2.1,
+            "kd": 3.15,
+            "feedforward": 4.0,
+        }
+    )
     assert state.accepted_gains["feedforward"] == 4.0
 
 

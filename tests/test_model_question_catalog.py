@@ -41,13 +41,14 @@ def test_catalog_is_versioned_and_covers_required_fact_types():
 def test_catalog_rows_are_fixed_chinese_examples_with_unique_ids():
     catalog = load_model_question_examples()
 
-    assert len(catalog.examples) == len(
-        {item.example_id for item in catalog.examples}
-    )
+    assert len(catalog.examples) == len({item.example_id for item in catalog.examples})
     assert all(item.context_tags for item in catalog.examples)
     assert all(item.answer_text for item in catalog.examples)
     assert all(item.value_payload for item in catalog.examples)
-    assert any("\u4e00" <= character <= "\u9fff" for character in catalog.examples[0].answer_text)
+    assert any(
+        "\u4e00" <= character <= "\u9fff"
+        for character in catalog.examples[0].answer_text
+    )
 
 
 def test_adoption_records_exact_version_hash_and_source():
@@ -90,9 +91,7 @@ def test_adoption_rejects_unknown_or_mismatched_example():
     )
 
     with pytest.raises(ValueError, match="unknown example"):
-        adopt_example_answer(
-            unknown, catalog, adopted_at="2026-07-23T12:00:00+00:00"
-        )
+        adopt_example_answer(unknown, catalog, adopted_at="2026-07-23T12:00:00+00:00")
     with pytest.raises(ValueError, match="does not match"):
         adopt_example_answer(
             mismatched, catalog, adopted_at="2026-07-23T12:00:00+00:00"
@@ -104,9 +103,7 @@ def test_catalog_rejects_version_or_content_hash_mismatch():
     payload = catalog.model_dump(mode="json")
 
     with pytest.raises(ValueError, match="version"):
-        ModelQuestionExampleCatalog.model_validate(
-            {**payload, "catalog_version": "v2"}
-        )
+        ModelQuestionExampleCatalog.model_validate({**payload, "catalog_version": "v2"})
     with pytest.raises(ValueError, match="hash"):
         ModelQuestionExampleCatalog.model_validate(
             {**payload, "content_sha256": "0" * 64}

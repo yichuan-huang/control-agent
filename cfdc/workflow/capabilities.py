@@ -59,7 +59,11 @@ def default_capability_catalog() -> CapabilityCatalog:
             ),
             "damping_pd": ControllerTemplateCapability(
                 compatible_classes=[class_ii],
-                required_feature_ids=["natural_frequency", "damping_ratio", "input_gain"],
+                required_feature_ids=[
+                    "natural_frequency",
+                    "damping_ratio",
+                    "input_gain",
+                ],
             ),
             "saturated_pd": ControllerTemplateCapability(
                 compatible_classes=[class_iii],
@@ -173,12 +177,8 @@ def compile_candidate_route(
                 )
             )
         signal_requirement = catalog.primitive_signal_requirements[primitive]
-        if (
-            signal_requirement.input_required
-            and not request.input_signal_ids
-        ) or (
-            signal_requirement.output_required
-            and not request.output_signal_ids
+        if (signal_requirement.input_required and not request.input_signal_ids) or (
+            signal_requirement.output_required and not request.output_signal_ids
         ):
             gaps.append(
                 _gap(

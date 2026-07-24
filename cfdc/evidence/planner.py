@@ -40,7 +40,12 @@ _EXPERIMENT_SPECS = (
     ),
     (
         "bounded_scan",
-        {"local_gain_matrix", "local_time_constant", "pairing_indicator", "coupling_gain"},
+        {
+            "local_gain_matrix",
+            "local_time_constant",
+            "pairing_indicator",
+            "coupling_gain",
+        },
         ["time", "all_inputs", "all_outputs"],
     ),
 )
@@ -66,13 +71,17 @@ def build_evidence_requirement_plan(
     """Describe the object-specific evidence required after structural diagnosis."""
 
     if not diagnosis.complete:
-        raise ValueError("evidence requirements require a complete structural diagnosis")
+        raise ValueError(
+            "evidence requirements require a complete structural diagnosis"
+        )
     required = list(classification.required_core_features)
     required_set = set(required)
     requirements: list[EvidenceExperimentRequirement] = []
     covered: set[str] = set()
     for primitive, supported_features, signals in _EXPERIMENT_SPECS:
-        selected = [feature_id for feature_id in required if feature_id in supported_features]
+        selected = [
+            feature_id for feature_id in required if feature_id in supported_features
+        ]
         if not selected:
             continue
         requirements.append(
@@ -86,7 +95,9 @@ def build_evidence_requirement_plan(
     unsupported = required_set - covered
     if unsupported:
         names = ", ".join(sorted(unsupported))
-        raise ValueError(f"no evidence protocol is registered for required features: {names}")
+        raise ValueError(
+            f"no evidence protocol is registered for required features: {names}"
+        )
 
     missing_items: list[str] = []
     questions: list[str] = []

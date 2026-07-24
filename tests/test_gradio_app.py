@@ -22,7 +22,10 @@ from cfdc.web.service import (
     submit_app_specifications,
 )
 from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, build_app, reset_ui
-from cfdc.diagnosis import DeterministicDiagnosticAdapter, submit_specifications_to_session
+from cfdc.diagnosis import (
+    DeterministicDiagnosticAdapter,
+    submit_specifications_to_session,
+)
 from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.models import DiagnosticSessionState, SystemDescription
 from cfdc.runtime import run_cfdc_route
@@ -136,10 +139,7 @@ def test_effect_validation_progress_uses_linked_state(
     fifth = html.split('<div class="flow-step ')[-1]
 
     assert fifth.startswith(f'{expected_state}">')
-    assert (
-        f"<span>{expected_icon}</span><small>效果验证</small>"
-        in fifth
-    )
+    assert f"<span>{expected_icon}</span><small>效果验证</small>" in fifth
 
 
 @pytest.mark.parametrize(
@@ -177,7 +177,12 @@ def test_app_clarification_state_can_continue_into_full_simulation():
 
     completed, next_state = continue_app_run(
         state,
-        ["Temperature can be recorded.", "A heater changes it.", "It immediately moves in the expected direction.", "The response starts promptly."],
+        [
+            "Temperature can be recorded.",
+            "A heater changes it.",
+            "It immediately moves in the expected direction.",
+            "The response starts promptly.",
+        ],
         "It is a measured first-order thermal process that settles after a heater change.",
     )
 
@@ -207,9 +212,15 @@ def test_app_renders_matrix_core_feature_without_scalar_collapse():
 
 
 def test_app_input_parsers_accept_common_multiline_forms():
-    assert parse_names("temperature, pressure\nflow") == ["temperature", "pressure", "flow"]
+    assert parse_names("temperature, pressure\nflow") == [
+        "temperature",
+        "pressure",
+        "flow",
+    ]
     assert parse_names("室温、加热器状态") == ["室温", "加热器状态"]
-    assert parse_names("body displacement, wheel displacement, and suspension travel") == [
+    assert parse_names(
+        "body displacement, wheel displacement, and suspension travel"
+    ) == [
         "body displacement",
         "wheel displacement",
         "suspension travel",
@@ -230,9 +241,7 @@ def test_app_input_parsers_accept_common_multiline_forms():
         "input_min": -1.0,
         "input_max": 1.0,
     }
-    assert ROUTE_CHOICES == {
-        "自然语言自动分析（主流程）": "generic"
-    }
+    assert ROUTE_CHOICES == {"自然语言自动分析（主流程）": "generic"}
 
 
 def test_app_can_submit_structured_model_evidence_after_diagnosis():
@@ -279,8 +288,14 @@ def test_app_can_submit_structured_model_evidence_after_diagnosis():
 def test_standard_demo_is_exempt_from_user_simulation_boundary_confirmation():
     report, state = start_app_run(
         "A measured first order heater settles after a small power change.",
-        "temperature", "heater", "", NATURAL_LANGUAGE_MODE,
-        False, "", "", "",
+        "temperature",
+        "heater",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
     )
     assert report.status == "awaiting_specifications"
 
@@ -352,31 +367,39 @@ def test_app_can_submit_dataset_json_wrapper_from_pasted_text():
 
     assert resolved.status == "candidate_unvalidated"
     assert resolved.compiled_specification_model.model.input_units == "binary_command"
-    assert resolved.system_description.simulation_boundary_confirmation.confirmed is True
+    assert (
+        resolved.system_description.simulation_boundary_confirmation.confirmed is True
+    )
     assert next_state["session"] is None
 
 
 def test_app_can_submit_dataset_json_wrapper_from_uploaded_file(tmp_path):
     report, state = start_app_run(
         "A measured first order heater settles after a small power change.",
-        "temperature", "heater",
+        "temperature",
+        "heater",
         "input_min=-1\ninput_max=1\noutput_min=-20\noutput_max=20",
         NATURAL_LANGUAGE_MODE,
-        False, "", "", "",
+        False,
+        "",
+        "",
+        "",
     )
     payload_path = tmp_path / "thermostat.json"
     payload_path.write_text(
-        json.dumps({
-            "specification_facts": [
-                {"fact_id": "input_change", "value": 1, "unit": "binary_command"},
-                {"fact_id": "steady_output_change", "value": 50, "unit": "degF"},
-                {"fact_id": "response_time_s", "value": 20, "unit": "s"},
-                {"fact_id": "input_min", "value": 0, "unit": "binary_command"},
-                {"fact_id": "input_max", "value": 1, "unit": "binary_command"},
-                {"fact_id": "output_min", "value": 64.5, "unit": "degF"},
-                {"fact_id": "output_max", "value": 65.5, "unit": "degF"},
-            ]
-        }),
+        json.dumps(
+            {
+                "specification_facts": [
+                    {"fact_id": "input_change", "value": 1, "unit": "binary_command"},
+                    {"fact_id": "steady_output_change", "value": 50, "unit": "degF"},
+                    {"fact_id": "response_time_s", "value": 20, "unit": "s"},
+                    {"fact_id": "input_min", "value": 0, "unit": "binary_command"},
+                    {"fact_id": "input_max", "value": 1, "unit": "binary_command"},
+                    {"fact_id": "output_min", "value": 64.5, "unit": "degF"},
+                    {"fact_id": "output_max", "value": 65.5, "unit": "degF"},
+                ]
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -388,7 +411,9 @@ def test_app_can_submit_dataset_json_wrapper_from_uploaded_file(tmp_path):
     )
 
     assert resolved.status == "candidate_unvalidated"
-    assert resolved.compiled_specification_model.derived_features["static_gain"] == pytest.approx(50.0)
+    assert resolved.compiled_specification_model.derived_features[
+        "static_gain"
+    ] == pytest.approx(50.0)
     assert next_state["session"] is None
 
 
@@ -404,12 +429,26 @@ def test_thermostat_natural_language_and_json_compile_equivalent_models():
         "滞环半宽 0.5 degF。"
     )
     natural_initial, natural_state = start_app_run(
-        description, "room temperature, heater state", "binary heater command", "",
-        NATURAL_LANGUAGE_MODE, False, "", "", "",
+        description,
+        "room temperature, heater state",
+        "binary heater command",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
     )
     _, json_state = start_app_run(
-        description, "room temperature, heater state", "binary heater command", "",
-        NATURAL_LANGUAGE_MODE, False, "", "", "",
+        description,
+        "room temperature, heater state",
+        "binary heater command",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
     )
 
     facts_payload = [
@@ -438,17 +477,18 @@ def test_thermostat_natural_language_and_json_compile_equivalent_models():
         for item in json_reviewed.specification_assessment.facts
     }
     assert natural_facts == json_facts
-    assert (
-        natural_reviewed.compiled_specification_model.model.model_dump(mode="json")
-        == json_reviewed.compiled_specification_model.model.model_dump(mode="json")
-    )
+    assert natural_reviewed.compiled_specification_model.model.model_dump(
+        mode="json"
+    ) == json_reviewed.compiled_specification_model.model.model_dump(mode="json")
     assert (
         natural_reviewed.compiled_specification_model.safety_bounds
         == json_reviewed.compiled_specification_model.safety_bounds
     )
     guidance = render_report(
         natural_initial.model_copy(
-            update={"specification_assessment": natural_reviewed.specification_assessment}
+            update={
+                "specification_assessment": natural_reviewed.specification_assessment
+            }
         )
     )["specification_guidance"]
     assert "经后端重算验证的推导规格" in guidance
@@ -544,9 +584,7 @@ def test_thermostat_prompt_goes_directly_to_effect_validation_without_ai(
     ] == pytest.approx(144000.0)
     assert session.origin == "stage5_candidate_model"
     assert session.confirmed_model.numerator == pytest.approx([50.0])
-    assert session.confirmed_model.denominator == pytest.approx(
-        [144000.0, 1.0]
-    )
+    assert session.confirmed_model.denominator == pytest.approx([144000.0, 1.0])
     assert session.state == "trial_pending"
     assert view["controls"]["run_trial"] is True
     assert "discovery" not in state
@@ -573,10 +611,15 @@ def test_thermostat_prompt_goes_directly_to_effect_validation_without_ai(
 def test_app_dataset_wrapper_with_empty_facts_uses_its_complete_model():
     report, state = start_app_run(
         "A measured first order heater settles after a small power change.",
-        "temperature", "heater",
+        "temperature",
+        "heater",
         "max_abs_output_normalized=20\nmax_abs_actuator_normalized=1",
         NATURAL_LANGUAGE_MODE,
-        False, "", "", "", time_scale_hint_s="4",
+        False,
+        "",
+        "",
+        "",
+        time_scale_hint_s="4",
     )
     assert report.status == "awaiting_specifications"
     payload = {
@@ -660,8 +703,14 @@ def test_app_trace_manifest_cannot_read_an_unuploaded_server_path(tmp_path):
 def test_app_can_submit_plain_language_specifications_as_default_path():
     report, state = start_app_run(
         "A measured first order heater settles after a small power change.",
-        "temperature", "heater power", "", NATURAL_LANGUAGE_MODE,
-        False, "", "", "",
+        "temperature",
+        "heater power",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
     )
     assert report.status == "awaiting_specifications"
 
@@ -686,7 +735,9 @@ def test_app_can_submit_plain_language_specifications_as_default_path():
     assert resolved.status == "candidate_unvalidated"
     assert resolved.evidence_boundary == "declared_specification_model_only"
     assert resolved.controller.release_level == "candidate_unvalidated"
-    assert resolved.system_description.simulation_boundary_confirmation.confirmed is True
+    assert (
+        resolved.system_description.simulation_boundary_confirmation.confirmed is True
+    )
     assert (
         resolved.system_description.simulation_boundary_confirmation.scope
         == "software_simulation_only"
@@ -694,7 +745,9 @@ def test_app_can_submit_plain_language_specifications_as_default_path():
     assert next_state["session"] is None
 
 
-def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_acceleration_units(monkeypatch):
+def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_acceleration_units(
+    monkeypatch,
+):
     report, state = start_app_run(
         (
             "A low-friction motor positioning axis accelerates under applied voltage "
@@ -722,6 +775,7 @@ def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_accel
     class MotorSpecificationAdapter:
         def assess_specifications(self, *args):
             template = args[4][0]
+
             def fact(fact_id, value, unit, source_text):
                 return {
                     "fact_id": fact_id,
@@ -746,10 +800,16 @@ def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_accel
                     fact("input_min", -5.0, "V", "range of −5.0 V to +5.0 V"),
                     fact("input_max", 5.0, "V", "range of −5.0 V to +5.0 V"),
                     fact(
-                        "output_min", -2.5, "rad", "position range is −2.5 rad to +2.5 rad"
+                        "output_min",
+                        -2.5,
+                        "rad",
+                        "position range is −2.5 rad to +2.5 rad",
                     ),
                     fact(
-                        "output_max", 2.5, "rad", "position range is −2.5 rad to +2.5 rad"
+                        "output_max",
+                        2.5,
+                        "rad",
+                        "position range is −2.5 rad to +2.5 rad",
                     ),
                 ],
                 "missing_fact_ids": [],
@@ -783,7 +843,9 @@ def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_accel
     assert next_state["session"] is None
 
 
-def test_gradio_missing_unit_returns_to_specification_questions_instead_of_error(monkeypatch):
+def test_gradio_missing_unit_returns_to_specification_questions_instead_of_error(
+    monkeypatch,
+):
     report, state = start_app_run(
         "A measured first order heater settles after a small power change.",
         "temperature",
@@ -803,13 +865,15 @@ def test_gradio_missing_unit_returns_to_specification_questions_instead_of_error
             return {
                 "status": "need_more",
                 "template_id": template.template_id,
-                "facts": [{
-                    "fact_id": "input_change",
-                    "value": 1.0,
-                    "unit": "",
-                    "source_type": "user_known_behavior",
-                    "source_text": "input change is 1",
-                }],
+                "facts": [
+                    {
+                        "fact_id": "input_change",
+                        "value": 1.0,
+                        "unit": "",
+                        "source_type": "user_known_behavior",
+                        "source_text": "input change is 1",
+                    }
+                ],
                 "missing_fact_ids": ["input_change"],
                 "conflicts": [],
                 "questions": [],
@@ -862,8 +926,14 @@ def test_repeated_specification_gap_is_rendered_as_no_progress_not_full_question
 def test_no_llm_specification_form_accepts_answers_in_visible_question_order():
     report, state = start_app_run(
         "A measured first order heater settles after a small power change.",
-        "temperature", "heater power", "", NATURAL_LANGUAGE_MODE,
-        False, "", "", "",
+        "temperature",
+        "heater power",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
     )
     assert report.status == "awaiting_specifications"
 
@@ -876,7 +946,10 @@ def test_no_llm_specification_form_accepts_answers_in_visible_question_order():
     assert partial.status == "need_more_specifications"
     facts = partial.specification_assessment.facts
     assert {item.fact_id for item in facts} == {
-        "input_change", "steady_output_change", "response_time_s", "input_min"
+        "input_change",
+        "steady_output_change",
+        "response_time_s",
+        "input_min",
     }
 
     resolved, state = submit_app_specifications(
@@ -911,7 +984,9 @@ def test_time_scale_hint_parser_rejects_nonpositive_or_nonfinite_values(value):
         web_service.parse_time_scale_hint(value)
 
 
-def test_start_app_run_passes_forbidden_actions_and_time_scale_to_system_description(monkeypatch):
+def test_start_app_run_passes_forbidden_actions_and_time_scale_to_system_description(
+    monkeypatch,
+):
     captured = {}
     real_system_description = SystemDescription
 
@@ -938,7 +1013,10 @@ def test_start_app_run_passes_forbidden_actions_and_time_scale_to_system_descrip
     assert report.status == "awaiting_specifications"
     assert captured["forbidden_actions"] == ["free release", "physical deployment"]
     assert captured["time_scale_hint_s"] == 2.5
-    assert report.system_description.forbidden_actions == ["free release", "physical deployment"]
+    assert report.system_description.forbidden_actions == [
+        "free release",
+        "physical deployment",
+    ]
     assert report.system_description.time_scale_hint_s == 2.5
     assert report.experiment_plan.instructions[0].duration_s == 20.0
 
@@ -984,10 +1062,7 @@ def test_gradio_exposes_all_six_domain_inputs_with_blank_optional_defaults():
 
 def test_gradio_exposes_direct_effect_validation_and_tuning_flow():
     app = build_app()
-    labels = {
-        component["props"].get("label")
-        for component in app.config["components"]
-    }
+    labels = {component["props"].get("label") for component in app.config["components"]}
     buttons = {
         component["props"].get("value")
         for component in app.config["components"]
@@ -1020,8 +1095,14 @@ def test_gradio_exposes_direct_effect_validation_and_tuning_flow():
 
     report, _ = start_app_run(
         "A measured first order heater settles after a small power change.",
-        "temperature", "heater", "", NATURAL_LANGUAGE_MODE,
-        False, "", "", "",
+        "temperature",
+        "heater",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        False,
+        "",
+        "",
+        "",
     )
     progress = render_report(report)["progress"]
     assert progress.count('class="flow-step') == 5
@@ -1044,10 +1125,7 @@ def _ancestor_ids(layout, target_id, ancestors=()):
 
 def test_linked_tuning_panel_is_inside_tuning_tab():
     app = build_app()
-    components = {
-        component["id"]: component
-        for component in app.config["components"]
-    }
+    components = {component["id"]: component for component in app.config["components"]}
     panel_id = next(
         component["id"]
         for component in app.config["components"]
@@ -1067,10 +1145,7 @@ def test_linked_tuning_panel_is_inside_tuning_tab():
 
 def test_linked_tuning_mutations_refresh_main_stage_progress():
     app = build_app()
-    components = {
-        component["id"]: component
-        for component in app.config["components"]
-    }
+    components = {component["id"]: component for component in app.config["components"]}
     run_trial_id = next(
         component_id
         for component_id, component in components.items()
@@ -1190,7 +1265,9 @@ def test_app_rejects_nonfinite_duplicate_bounds_and_unknown_routes():
     with pytest.raises(ValueError, match="重复定义"):
         parse_safety_bounds("max_abs_output=1\nmax_abs_output=2")
     with pytest.raises(ValueError, match="未知运行方式"):
-        start_app_run("description", "output", "input", "", "unknown-route", False, "", "", "")
+        start_app_run(
+            "description", "output", "input", "", "unknown-route", False, "", "", ""
+        )
 
 
 def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
@@ -1204,9 +1281,13 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
 
         def select_profile(self, description, diagnosis, classification, catalog):
             calls["select"] += 1
-            return delegate.select_profile(description, diagnosis, classification, catalog)
+            return delegate.select_profile(
+                description, diagnosis, classification, catalog
+            )
 
-    monkeypatch.setattr("cfdc.web.service.build_adapter", lambda *args: CountingAdapter())
+    monkeypatch.setattr(
+        "cfdc.web.service.build_adapter", lambda *args: CountingAdapter()
+    )
     report, _ = start_app_run(
         "A measured first order heater settles after a small power change.",
         "temperature",
@@ -1407,7 +1488,9 @@ def test_main_ui_has_no_case_or_developer_route_selector():
     assert "运行标准对象演示" not in source
 
 
-def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_calls(monkeypatch):
+def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_calls(
+    monkeypatch,
+):
     calls = {"diagnose": 0, "select": 0}
     incomplete = infer_structural_diagnosis(SystemDescription(text="I have a machine."))
     complete = infer_structural_diagnosis(
@@ -1422,17 +1505,28 @@ def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_
     class SequencedAdapter:
         def diagnose(self, description):
             calls["diagnose"] += 1
-            return (incomplete if calls["diagnose"] == 1 else complete).model_dump(mode="json")
+            return (incomplete if calls["diagnose"] == 1 else complete).model_dump(
+                mode="json"
+            )
 
         def select_profile(self, description, diagnosis, classification, catalog):
             calls["select"] += 1
-            return delegate.select_profile(description, diagnosis, classification, catalog)
+            return delegate.select_profile(
+                description, diagnosis, classification, catalog
+            )
 
     adapter = SequencedAdapter()
     monkeypatch.setattr("cfdc.web.service.build_adapter", lambda *args: adapter)
     _, state = start_app_run(
-        "I have a machine.", "", "", "", NATURAL_LANGUAGE_MODE,
-        True, "https://provider.example/v1", "provider-model", "test-key",
+        "I have a machine.",
+        "",
+        "",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        True,
+        "https://provider.example/v1",
+        "provider-model",
+        "test-key",
     )
     assert "test-key" not in json.dumps(state)
     assert "api_key" not in state
@@ -1440,7 +1534,12 @@ def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_
     assert "model" not in state
     completed, _ = continue_app_run(
         state,
-        ["Temperature is measured.", "A heater changes it.", "It moves in the expected direction.", "It starts promptly."],
+        [
+            "Temperature is measured.",
+            "A heater changes it.",
+            "It moves in the expected direction.",
+            "It starts promptly.",
+        ],
         "It is a first order measured thermal process that settles.",
         base_url="https://provider.example/v1",
         model="provider-model",

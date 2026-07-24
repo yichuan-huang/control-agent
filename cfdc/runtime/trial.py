@@ -18,7 +18,9 @@ from cfdc.runtime.safety import check_sample_safety
 StateDict = dict[str, float]
 ControlDict = dict[str, float]
 ReferenceDict = dict[str, float]
-ControllerFn = Callable[[StateDict, ReferenceDict, dict[str, float], float], ControlDict]
+ControllerFn = Callable[
+    [StateDict, ReferenceDict, dict[str, float], float], ControlDict
+]
 PlantStepFn = Callable[[StateDict, ControlDict, float], StateDict]
 ReferenceFn = Callable[[float], ReferenceDict]
 
@@ -43,9 +45,21 @@ def _metric_violations(
 ) -> list[SafetyViolation]:
     checks = [
         ("max_overshoot", metrics.overshoot, "overshoot"),
-        ("max_integral_absolute_error", metrics.integral_absolute_error, "integral absolute error"),
-        ("max_high_frequency_control_rms", metrics.high_frequency_control_rms, "high-frequency control RMS"),
-        ("max_actuator_saturation_fraction", metrics.actuator_saturation_fraction, "actuator saturation fraction"),
+        (
+            "max_integral_absolute_error",
+            metrics.integral_absolute_error,
+            "integral absolute error",
+        ),
+        (
+            "max_high_frequency_control_rms",
+            metrics.high_frequency_control_rms,
+            "high-frequency control RMS",
+        ),
+        (
+            "max_actuator_saturation_fraction",
+            metrics.actuator_saturation_fraction,
+            "actuator saturation fraction",
+        ),
         ("max_nmp_undershoot", metrics.nmp_undershoot, "NMP undershoot"),
     ]
     violations: list[SafetyViolation] = []
@@ -105,7 +119,10 @@ class SafeTrialRunner:
         state = dict(initial_state)
         samples: list[TrialSample] = []
         safety_violations: list[SafetyViolation] = []
-        steps = min(int(np.ceil(self.config.duration_s / self.config.dt_s)) + 1, self.config.max_samples)
+        steps = min(
+            int(np.ceil(self.config.duration_s / self.config.dt_s)) + 1,
+            self.config.max_samples,
+        )
         stop_reason = "duration_elapsed"
 
         for step in range(steps):
@@ -132,7 +149,9 @@ class SafeTrialRunner:
 
         metrics = self._metrics(samples)
         if metrics is not None:
-            aggregate_violations = _metric_violations(metrics, self.config.constraints, samples[-1].time_s)
+            aggregate_violations = _metric_violations(
+                metrics, self.config.constraints, samples[-1].time_s
+            )
             safety_violations.extend(aggregate_violations)
             if aggregate_violations and stop_reason == "duration_elapsed":
                 stop_reason = aggregate_violations[0].constraint
@@ -178,7 +197,10 @@ class SafeTrialRunner:
         time_s = [sample.time_s for sample in samples]
         output = [sample.state[self.config.output_key] for sample in samples]
         reference = [
-            sample.reference.get(self.config.reference_key, sample.reference.get(self.config.output_key, 0.0))
+            sample.reference.get(
+                self.config.reference_key,
+                sample.reference.get(self.config.output_key, 0.0),
+            )
             for sample in samples
         ]
         control = [sample.control[self.config.control_key] for sample in samples]

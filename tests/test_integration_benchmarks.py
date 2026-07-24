@@ -33,7 +33,10 @@ def test_seven_case_cfdc_closed_loop_benchmark_passes():
         "cfdc.sim.vtol",
     }
     by_id = {row["case_id"]: row for row in summary["results"]}
-    assert by_id["cartpole_underactuated_sim"]["controller"]["status"] == "ready_for_conservative_trial"
+    assert (
+        by_id["cartpole_underactuated_sim"]["controller"]["status"]
+        == "ready_for_conservative_trial"
+    )
     assert by_id["cartpole_underactuated_sim"]["controller"]["gains"]["kp"] > 0.0
     assert by_id["planar_vtol_hover_lateral_sim"]["controller"]["gains"]["kp_y"] == 0.34
 
@@ -44,8 +47,14 @@ def test_benchmark_experiment_plans_cover_stage_one_required_features():
         diagnosis = engine.diagnose(case.description)
         classification = engine.classify(diagnosis)
         plan = plan_safe_experiments(diagnosis, classification)
-        estimates = {feature for instruction in plan.instructions for feature in instruction.estimates}
-        assert set(classification.required_core_features).issubset(estimates), case.case_id
+        estimates = {
+            feature
+            for instruction in plan.instructions
+            for feature in instruction.estimates
+        }
+        assert set(classification.required_core_features).issubset(estimates), (
+            case.case_id
+        )
 
 
 def test_feature_ablation_suite_compares_minimal_noisy_and_full_model_packets():
@@ -60,7 +69,9 @@ def test_feature_ablation_suite_compares_minimal_noisy_and_full_model_packets():
         "full_model_reference",
     }
     for case_id in {trial.case_id for trial in result.trials}:
-        rows = {trial.variant: trial for trial in result.trials if trial.case_id == case_id}
+        rows = {
+            trial.variant: trial for trial in result.trials if trial.case_id == case_id
+        }
         assert rows["minimal_core_feature"].success
         assert rows["full_model_reference"].success
         assert (
@@ -82,7 +93,10 @@ def test_cartpole_energy_swingup_reaches_safe_handoff_window():
     assert abs(result.final_state.pole_angle_rad) < 0.18
     assert abs(result.final_state.pole_angular_velocity_rad_s) < 1.0
     assert result.performance.capture_success is True
-    assert result.performance.actuator_saturation_fractions["force"] == result.metrics["force_saturation_fraction"]
+    assert (
+        result.performance.actuator_saturation_fractions["force"]
+        == result.metrics["force_saturation_fraction"]
+    )
     assert result.metrics["final_error"] == result.performance.final_error
     assert result.metrics["final_output"] == result.performance.final_output
 
@@ -126,10 +140,22 @@ def test_vtol_position_and_boundary_simulations_run():
     assert position.success
     assert abs(position.metrics["final_x_error_m"]) < 0.18
     assert position.performance.primary_channel == "lateral_position"
-    assert position.metrics["settled"] == position.performance.channels["lateral_position"].settled
-    assert position.metrics["settling_time_s"] == position.performance.channels["lateral_position"].settling_time_s
-    assert set(position.performance.actuator_saturation_fractions) == {"thrust", "torque"}
-    assert position.metrics["torque_saturation_fraction"] == position.performance.actuator_saturation_fractions["torque"]
+    assert (
+        position.metrics["settled"]
+        == position.performance.channels["lateral_position"].settled
+    )
+    assert (
+        position.metrics["settling_time_s"]
+        == position.performance.channels["lateral_position"].settling_time_s
+    )
+    assert set(position.performance.actuator_saturation_fractions) == {
+        "thrust",
+        "torque",
+    }
+    assert (
+        position.metrics["torque_saturation_fraction"]
+        == position.performance.actuator_saturation_fractions["torque"]
+    )
     assert {feature.feature_id for feature in position.features} >= {
         "hover_thrust",
         "vertical_input_gain",
@@ -184,7 +210,9 @@ def test_strict_gate_rejects_unsettled_vtol_response():
 def test_vtol_core_feature_uses_signed_lateral_convention():
     from cfdc.sim import extract_vtol_core_features
 
-    features = {feature.feature_id: feature.value for feature in extract_vtol_core_features()}
+    features = {
+        feature.feature_id: feature.value for feature in extract_vtol_core_features()
+    }
     assert features["lateral_coupling_gain"] < 0.0
 
 
@@ -193,7 +221,10 @@ def test_vtol_altitude_mode_reports_altitude_settling():
 
     assert result.performance.primary_channel == "altitude"
     assert result.metrics["settled"] == result.performance.channels["altitude"].settled
-    assert result.metrics["settling_time_s"] == result.performance.channels["altitude"].settling_time_s
+    assert (
+        result.metrics["settling_time_s"]
+        == result.performance.channels["altitude"].settling_time_s
+    )
 
 
 def test_vtol_torque_saturation_and_lateral_boundary_participate_in_acceptance():

@@ -16,20 +16,14 @@ from cfdc.models import (
 
 
 def _example_map():
-    return {
-        item.example_id: item
-        for item in load_model_question_examples().examples
-    }
+    return {item.example_id: item for item in load_model_question_examples().examples}
 
 
 def _question_slots(
     session: ModelDiscoverySession,
 ) -> list[dict[str, Any]]:
     examples = _example_map()
-    answers = {
-        item.question_id: item
-        for item in session.answers
-    }
+    answers = {item.question_id: item for item in session.answers}
     slots: list[dict[str, Any]] = []
     for question in session.current_questions:
         example = examples[question.example_id]
@@ -86,9 +80,7 @@ def _markdown_table(
     header = "| " + " | ".join(headers) + " |"
     rule = "| " + " | ".join("---" for _ in headers) + " |"
     body = [
-        "| "
-        + " | ".join(str(value).replace("|", "\\|") for value in row)
-        + " |"
+        "| " + " | ".join(str(value).replace("|", "\\|") for value in row) + " |"
         for row in rows
     ]
     return "\n".join([header, rule, *body])
@@ -221,8 +213,7 @@ def _model_card(session: ModelDiscoverySession) -> str:
         ],
     ]
     equations = "\n\n".join(
-        f"$$\n{equation}\n$$"
-        for equation in envelope.equation_latex
+        f"$$\n{equation}\n$$" for equation in envelope.equation_latex
     )
     role_note = {
         "user_evidence_model": "参数来自用户或问题中明确给出的事实。",
@@ -232,9 +223,7 @@ def _model_card(session: ModelDiscoverySession) -> str:
         "local_linear_hypothesis": (
             "这是工作点附近的局部线性近似，越界后立即停止判定。"
         ),
-        "registered_nonlinear_model": (
-            "这是 CartPole/VTOL 的闭合注册非线性模板。"
-        ),
+        "registered_nonlinear_model": ("这是 CartPole/VTOL 的闭合注册非线性模板。"),
     }[envelope.model_role]
     sections = [
         "### AI 对系统的理解",
@@ -268,10 +257,7 @@ def _model_card(session: ModelDiscoverySession) -> str:
         "\n".join(f"- {item}" for item in envelope.assumptions),
         "#### 限制",
         "\n".join(f"- {item}" for item in envelope.limitations),
-        (
-            "**这里只能说明当前确认的软件模型是否稳定，不能代表真实对象"
-            "或硬件安全。**"
-        ),
+        ("**这里只能说明当前确认的软件模型是否稳定，不能代表真实对象或硬件安全。**"),
     ]
     return "\n\n".join(section for section in sections if section)
 
@@ -304,9 +290,7 @@ def _status_markdown(session: ModelDiscoverySession) -> str:
         "controller_replacement_review": "请确认替代控制器",
         "simulation_ready": "模型和控制器均已确认，可以运行仿真",
     }
-    requests = "\n".join(
-        f"- {item}" for item in session.material_requests
-    )
+    requests = "\n".join(f"- {item}" for item in session.material_requests)
     return (
         f"### {labels[session.state]}\n\n"
         f"{requests}\n\n"
@@ -324,15 +308,12 @@ def render_model_discovery(
         "state": session.state,
         "initial_controller_architecture": candidate.architecture,
         "initial_controller_rows": [
-            [name, value]
-            for name, value in candidate.gains.items()
+            [name, value] for name, value in candidate.gains.items()
         ],
         "questions": _question_slots(session),
         "model_card_markdown": _model_card(session),
         "technical_json": (
-            envelope.model_dump(mode="json")
-            if envelope is not None
-            else {}
+            envelope.model_dump(mode="json") if envelope is not None else {}
         ),
         "show_technical_json": envelope is not None,
         "technical_json_open": False,
@@ -342,22 +323,15 @@ def render_model_discovery(
             if session.recommended_controller is not None
             else {}
         ),
-        "llm_audit": [
-            item.model_dump(mode="json")
-            for item in session.llm_calls
-        ],
+        "llm_audit": [item.model_dump(mode="json") for item in session.llm_calls],
         "controls": {
-            "request_model": (
-                session.state == "collecting_model_information"
-            ),
+            "request_model": (session.state == "collecting_model_information"),
             "submit_answers": (
                 session.state == "collecting_model_information"
                 and bool(session.current_questions)
             ),
             "confirm_model": session.state == "model_review",
-            "return_to_answers": session.state != (
-                "collecting_model_information"
-            ),
+            "return_to_answers": session.state != ("collecting_model_information"),
             "confirm_replacement": (
                 session.state == "controller_replacement_review"
                 and session.recommended_controller is not None

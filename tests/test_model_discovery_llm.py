@@ -362,9 +362,7 @@ def test_low_confidence_does_not_reject_complete_evidence_bound_model():
 def test_absolute_operating_facts_recompute_as_deviation_trial_values():
     context_payload = discovery_context().model_dump(mode="python")
     input_step = next(
-        fact
-        for fact in context_payload["facts"]
-        if fact["fact_id"] == "input_step"
+        fact for fact in context_payload["facts"] if fact["fact_id"] == "input_step"
     )
     input_step["answer_text"] = "Power changed from 500 W to 600 W."
     input_step["value_payload"] = {
@@ -412,9 +410,7 @@ def test_absolute_operating_facts_recompute_as_deviation_trial_values():
         source="deterministic_derivation",
         derivation_rule_id="output_step_delta_reference/v1",
     )
-    envelope["experiment_proposal"]["actuator_bounds"][
-        "heater_power"
-    ] = [-500.0, 500.0]
+    envelope["experiment_proposal"]["actuator_bounds"]["heater_power"] = [-500.0, 500.0]
     for index, value in enumerate((-500.0, 500.0)):
         envelope["parameter_evidence"][7 + index] = _evidence(
             f"experiment_proposal.actuator_bounds.heater_power[{index}]",
@@ -424,9 +420,7 @@ def test_absolute_operating_facts_recompute_as_deviation_trial_values():
             source="deterministic_derivation",
             derivation_rule_id="center_actuator_bounds_at_input_before/v1",
         )
-    envelope["experiment_proposal"]["output_bounds"][
-        "temperature"
-    ] = [-5.0, 60.0]
+    envelope["experiment_proposal"]["output_bounds"]["temperature"] = [-5.0, 60.0]
     for index, value in enumerate((-5.0, 60.0)):
         envelope["parameter_evidence"][9 + index] = _evidence(
             f"experiment_proposal.output_bounds.temperature[{index}]",
@@ -444,9 +438,7 @@ def test_absolute_operating_facts_recompute_as_deviation_trial_values():
     )
 
     assert result.status == "ready", result
-    assert result.envelope.experiment_proposal.reference == {
-        "temperature": 2.0
-    }
+    assert result.envelope.experiment_proposal.reference == {"temperature": 2.0}
     assert result.envelope.experiment_proposal.actuator_bounds == {
         "heater_power": (-500.0, 500.0)
     }
@@ -473,11 +465,7 @@ def test_derived_use_of_adopted_fact_requires_example_hypothesis_role():
     )
     context_payload = discovery_context().model_dump(mode="python")
     context_payload["facts"] = [
-        (
-            adopted.model_dump(mode="python")
-            if fact["fact_id"] == "input_step"
-            else fact
-        )
+        (adopted.model_dump(mode="python") if fact["fact_id"] == "input_step" else fact)
         for fact in context_payload["facts"]
     ]
     payload = ready_payload()
@@ -546,9 +534,7 @@ def test_safe_latex_is_display_only_and_unknown_derivation_rule_is_rejected():
     assert accepted.status == "ready"
 
     unsafe_latex = deepcopy(payload)
-    unsafe_latex["envelope"]["equation_latex"] = [
-        "```python\nimport os\n```"
-    ]
+    unsafe_latex["envelope"]["equation_latex"] = ["```python\nimport os\n```"]
     assert (
         validate_generated_model_payload(
             unsafe_latex, discovery_context(), example_catalog()
@@ -653,9 +639,7 @@ def test_discrete_tf_coefficients_cannot_use_continuous_step_rules():
         ).model_dump(mode="python")
     )
     payload = ready_payload()
-    payload["envelope"]["model"].update(
-        time_domain="discrete", sample_time_s=0.1
-    )
+    payload["envelope"]["model"].update(time_domain="discrete", sample_time_s=0.1)
     payload["envelope"]["parameter_evidence"].append(
         _evidence(
             "model.sample_time_s",
@@ -679,9 +663,7 @@ def test_discrete_tf_coefficients_cannot_use_continuous_step_rules():
 
 def test_response_time_derivation_cannot_attest_uncertainty():
     payload = ready_payload()
-    payload["envelope"]["model"]["parameter_uncertainty"] = {
-        "gain_relative": 5.0
-    }
+    payload["envelope"]["model"]["parameter_uncertainty"] = {"gain_relative": 5.0}
     payload["envelope"]["parameter_evidence"].append(
         _evidence(
             "model.parameter_uncertainty.gain_relative",
@@ -711,16 +693,12 @@ def test_time_derivation_requires_seconds_target_unit():
     context = ModelDiscoveryContext.model_validate(context_payload)
     payload = ready_payload()
     for evidence in payload["envelope"]["parameter_evidence"]:
-        if (
-            evidence["source_fact_ids"] == ["response_time_63"]
-            and evidence["derivation_rule_id"]
-            not in {"normalized_one/v1", "normalized_zero/v1"}
-        ):
+        if evidence["source_fact_ids"] == ["response_time_63"] and evidence[
+            "derivation_rule_id"
+        ] not in {"normalized_one/v1", "normalized_zero/v1"}:
             evidence["unit"] = "ms"
 
-    result = validate_generated_model_payload(
-        payload, context, example_catalog()
-    )
+    result = validate_generated_model_payload(payload, context, example_catalog())
 
     assert result.status == "rejected"
 
@@ -737,9 +715,7 @@ def test_direct_evidence_must_match_a_referenced_numeric_leaf_and_unit(
     if mutation == "unrelated_fact":
         evidence["source_fact_ids"] = ["input_step"]
     elif mutation == "mismatched_value":
-        payload["envelope"]["experiment_proposal"]["reference"][
-            "temperature"
-        ] = 25.0
+        payload["envelope"]["experiment_proposal"]["reference"]["temperature"] = 25.0
         evidence["value"] = 25.0
     elif mutation == "mismatched_unit":
         evidence["unit"] = "K"
@@ -770,13 +746,11 @@ def test_direct_evidence_uses_exact_semantic_leaf_not_same_valued_fact():
     )
     context = ModelDiscoveryContext.model_validate(context_payload)
     payload = ready_payload()
-    payload["envelope"]["parameter_evidence"][4][
-        "source_fact_ids"
-    ] = ["unrelated_temperature"]
+    payload["envelope"]["parameter_evidence"][4]["source_fact_ids"] = [
+        "unrelated_temperature"
+    ]
 
-    result = validate_generated_model_payload(
-        payload, context, example_catalog()
-    )
+    result = validate_generated_model_payload(payload, context, example_catalog())
 
     assert result.status == "rejected"
 
@@ -806,9 +780,7 @@ def test_registered_unit_conversion_is_recomputed_on_exact_fact_leaf():
         }
     )
 
-    result = validate_generated_model_payload(
-        payload, context, example_catalog()
-    )
+    result = validate_generated_model_payload(payload, context, example_catalog())
 
     assert result.status == "ready"
 
@@ -916,7 +888,9 @@ def test_envelope_validator_accepts_typed_context_and_rejects_improper_tf():
     context = ModelValidationContext.model_validate(
         discovery_context().model_dump(mode="python")
     )
-    assert validate_generated_model_envelope(result.envelope, context) is result.envelope
+    assert (
+        validate_generated_model_envelope(result.envelope, context) is result.envelope
+    )
 
     invalid = result.envelope.model_copy(deep=True)
     invalid.model.numerator = [1.0, 2.0, 3.0]
@@ -1086,9 +1060,7 @@ def state_space_ready_payload_and_context():
         for fact in context_payload["facts"]
         if fact["fact_id"] == "validity_region"
     )
-    validity["value_payload"]["state_ranges"] = {
-        "temperature_state": [-10.0, 100.0]
-    }
+    validity["value_payload"]["state_ranges"] = {"temperature_state": [-10.0, 100.0]}
     validity["value_payload"]["signal_units"]["temperature_state"] = "degC"
     context_payload["facts"].append(
         ModelFactAnswer(
@@ -1134,24 +1106,16 @@ def state_space_ready_payload_and_context():
         },
         "parameter_uncertainty": {},
     }
-    envelope["experiment_proposal"]["initial_state"] = {
-        "temperature_state": 0.0
-    }
-    envelope["experiment_proposal"]["signal_units"][
-        "temperature_state"
-    ] = "degC"
+    envelope["experiment_proposal"]["initial_state"] = {"temperature_state": 0.0}
+    envelope["experiment_proposal"]["signal_units"]["temperature_state"] = "degC"
     envelope["experiment_proposal"]["state_bounds"] = {
         "temperature_state": [-10.0, 100.0]
     }
     envelope["parameter_evidence"] = [
         _evidence("model.a[0][0]", -0.2, "1/s", ["state_space_data"]),
-        _evidence(
-            "model.b[0][0]", 0.4, "degC/(W*s)", ["state_space_data"]
-        ),
+        _evidence("model.b[0][0]", 0.4, "degC/(W*s)", ["state_space_data"]),
         _evidence("model.c[0][0]", 1.0, "1", ["state_space_data"]),
-        _evidence(
-            "model.d[0][0]", 0.0, "degC/W", ["state_space_data"]
-        ),
+        _evidence("model.d[0][0]", 0.0, "degC/W", ["state_space_data"]),
         _evidence(
             "model.initial_state[0]",
             0.0,
@@ -1192,13 +1156,9 @@ def test_significant_delay_state_space_without_delay_representation_fails_closed
     )
     baseline = ModelDiscoveryContext.model_validate(baseline_payload)
 
-    accepted = validate_generated_model_payload(
-        payload, baseline, example_catalog()
-    )
+    accepted = validate_generated_model_payload(payload, baseline, example_catalog())
 
-    result = validate_generated_model_payload(
-        payload, context, example_catalog()
-    )
+    result = validate_generated_model_payload(payload, context, example_catalog())
 
     assert accepted.status == "ready"
     assert result.status == "rejected"
@@ -1224,9 +1184,7 @@ def test_response_time_derivation_cannot_attest_state_space_matrix():
         derivation_rule_id="response_time_63/v1",
     )
 
-    result = validate_generated_model_payload(
-        payload, context, example_catalog()
-    )
+    result = validate_generated_model_payload(payload, context, example_catalog())
 
     assert result.status == "rejected"
 
@@ -1284,9 +1242,7 @@ def test_discrete_state_space_matrix_units_omit_per_second_dimension():
     )
     matrix_fact["value_payload"]["matrix_units"]["a"] = [["1"]]
     matrix_fact["value_payload"]["matrix_units"]["b"] = [["degC/W"]]
-    payload["envelope"]["model"].update(
-        time_domain="discrete", sample_time_s=0.1
-    )
+    payload["envelope"]["model"].update(time_domain="discrete", sample_time_s=0.1)
     payload["envelope"]["parameter_evidence"][0]["unit"] = "1"
     payload["envelope"]["parameter_evidence"][1]["unit"] = "degC/W"
     payload["envelope"]["parameter_evidence"].append(
@@ -1344,9 +1300,7 @@ def test_exact_registered_cartpole_policy_passes_the_deterministic_gate():
             observed_outputs=model.output_signal_ids,
         ),
         diagnosis=StructuralDiagnosis.model_validate(diagnosis_payload),
-        classification=ArchetypeClassification.model_validate(
-            classification_payload
-        ),
+        classification=ArchetypeClassification.model_validate(classification_payload),
         facts=[
             ModelFactAnswer(
                 fact_id="cartpole_parameters",
@@ -1365,8 +1319,7 @@ def test_exact_registered_cartpole_policy_passes_the_deterministic_gate():
                     "inputs": {},
                     "outputs": {},
                     "signal_units": {
-                        name: model.signal_units[name]
-                        for name in model.initial_state
+                        name: model.signal_units[name] for name in model.initial_state
                     },
                 },
                 unit_family="operating_region",
@@ -1541,9 +1494,7 @@ def test_exact_registered_cartpole_policy_passes_the_deterministic_gate():
             "rationale": "Complete registered evidence.",
         }
     )
-    unsafe_policy["envelope"]["parameter_evidence"][0]["source"] = (
-        "registry_policy"
-    )
+    unsafe_policy["envelope"]["parameter_evidence"][0]["source"] = "registry_policy"
     rejected = validate_generated_model_payload(
         unsafe_policy, context, example_catalog()
     )
@@ -1598,9 +1549,7 @@ def test_discovery_fails_closed_when_adapter_cannot_send_exact_messages():
             return need_more_payload(1)
 
     adapter = LegacyOnlyAdapter()
-    result = request_model_discovery(
-        adapter, discovery_context(), example_catalog()
-    )
+    result = request_model_discovery(adapter, discovery_context(), example_catalog())
 
     assert adapter.calls == 0
     assert result.result is None
@@ -1609,14 +1558,8 @@ def test_discovery_fails_closed_when_adapter_cannot_send_exact_messages():
 
 def alternate_example_catalog():
     payload = example_catalog().model_dump(mode="json")
-    payload["examples"][0]["answer_text"] += (
-        " Alternate audited wording test-key."
-    )
-    identity = {
-        key: value
-        for key, value in payload.items()
-        if key != "content_sha256"
-    }
+    payload["examples"][0]["answer_text"] += " Alternate audited wording test-key."
+    identity = {key: value for key, value in payload.items() if key != "content_sha256"}
     payload["content_sha256"] = hashlib.sha256(
         json.dumps(
             identity,
@@ -1659,13 +1602,10 @@ def test_openai_provider_receives_exactly_the_audited_alternate_catalog_prompt(
     )
     catalog = alternate_example_catalog()
 
-    result = request_model_discovery(
-        adapter, discovery_context(), catalog
-    )
+    result = request_model_discovery(adapter, discovery_context(), catalog)
 
     audited = [
-        message.model_dump(mode="json")
-        for message in result.call_record.messages
+        message.model_dump(mode="json") for message in result.call_record.messages
     ]
     assert result.result is not None
     assert calls[0]["messages"] == audited
@@ -1700,9 +1640,7 @@ def test_discovery_call_result_is_separate_and_all_audit_paths_are_sanitized():
 
 def test_discovery_error_is_audited_without_leaking_secret():
     adapter = FakeDiscoveryAdapter(error="provider leaked LITERAL-API-KEY")
-    result = request_model_discovery(
-        adapter, discovery_context(), example_catalog()
-    )
+    result = request_model_discovery(adapter, discovery_context(), example_catalog())
     assert result.result is None
     assert result.call_record.validation_status == "error"
     assert "LITERAL-API-KEY" not in result.call_record.model_dump_json()
@@ -1711,9 +1649,7 @@ def test_discovery_error_is_audited_without_leaking_secret():
 def test_secret_literals_are_removed_before_the_provider_receives_context():
     context_payload = discovery_context().model_dump(mode="python")
     context_payload["description"]["text"] += " XYZZY-42"
-    context_payload["description"]["metadata"][
-        "nested-XYZZY-42"
-    ] = "metadata"
+    context_payload["description"]["metadata"]["nested-XYZZY-42"] = "metadata"
     context_payload["facts"][0]["answer_text"] += " XYZZY-42"
     context = ModelDiscoveryContext.model_validate(context_payload)
     adapter = FakeDiscoveryAdapter(response=need_more_payload(1))
@@ -1754,16 +1690,12 @@ def test_unsafe_context_fails_before_adapter_invocation_and_is_audited(
     context = ModelDiscoveryContext.model_validate(context_payload)
     adapter = FakeDiscoveryAdapter(response=need_more_payload(1))
 
-    result = request_model_discovery(
-        adapter, context, example_catalog()
-    )
+    result = request_model_discovery(adapter, context, example_catalog())
 
     assert result.result is None
     assert adapter.calls == 0
     assert result.call_record.validation_status == "error"
-    assert "unsafe" in " ".join(
-        result.call_record.validation_errors
-    ).casefold()
+    assert "unsafe" in " ".join(result.call_record.validation_errors).casefold()
 
 
 @pytest.mark.parametrize(
@@ -1782,15 +1714,11 @@ def test_malicious_identifiers_fail_before_provider_and_never_enter_audit(
     if field_name == "fact_id":
         context_payload["facts"][0]["fact_id"] = malicious_value
     else:
-        context_payload["description"]["metadata"][field_name] = (
-            malicious_value
-        )
+        context_payload["description"]["metadata"][field_name] = malicious_value
     context = ModelDiscoveryContext.model_validate(context_payload)
     adapter = FakeDiscoveryAdapter(response=need_more_payload(1))
 
-    result = request_model_discovery(
-        adapter, context, example_catalog()
-    )
+    result = request_model_discovery(adapter, context, example_catalog())
 
     assert adapter.calls == 0
     assert result.result is None
@@ -1813,9 +1741,7 @@ def test_unsafe_arbitrary_mapping_keys_fail_before_provider(attack, malicious):
     if attack == "metadata_key":
         context_payload["description"]["metadata"][malicious] = "value"
     elif attack == "nested_key":
-        context_payload["description"]["metadata"]["nested"] = {
-            malicious: "value"
-        }
+        context_payload["description"]["metadata"]["nested"] = {malicious: "value"}
     else:
         fact = next(
             item
@@ -1876,9 +1802,7 @@ def test_non_executable_text_gate_covers_all_result_text_fields(
 
 
 def test_discovery_prompt_demands_typed_three_state_json_and_fixed_examples():
-    messages = build_model_discovery_messages(
-        discovery_context(), example_catalog()
-    )
+    messages = build_model_discovery_messages(discovery_context(), example_catalog())
     rendered = json.dumps(messages)
     assert "need_more|ready|rejected" in rendered
     assert "equation_latex" in rendered
@@ -1891,17 +1815,13 @@ def test_discovery_prompt_demands_typed_three_state_json_and_fixed_examples():
 
 def test_ready_result_can_type_a_verbatim_natural_language_answer():
     all_facts = model_facts()
-    input_step = next(
-        item for item in all_facts if item.fact_id == "input_step"
-    )
+    input_step = next(item for item in all_facts if item.fact_id == "input_step")
     base = discovery_context()
     context = ModelDiscoveryContext(
         description=base.description,
         diagnosis=base.diagnosis,
         classification=base.classification,
-        facts=[
-            item for item in all_facts if item.fact_id != "input_step"
-        ],
+        facts=[item for item in all_facts if item.fact_id != "input_step"],
         natural_language_answers=[
             NaturalLanguageModelAnswer(
                 question_id="q-input-step",
@@ -1913,9 +1833,7 @@ def test_ready_result_can_type_a_verbatim_natural_language_answer():
         ],
     )
     payload = ready_payload()
-    payload["recognized_facts"] = [
-        input_step.model_dump(mode="json")
-    ]
+    payload["recognized_facts"] = [input_step.model_dump(mode="json")]
 
     result = validate_generated_model_payload(
         payload,
@@ -1929,17 +1847,13 @@ def test_ready_result_can_type_a_verbatim_natural_language_answer():
 
 def test_typed_natural_answer_cannot_introduce_an_unwritten_number():
     all_facts = model_facts()
-    input_step = next(
-        item for item in all_facts if item.fact_id == "input_step"
-    )
+    input_step = next(item for item in all_facts if item.fact_id == "input_step")
     base = discovery_context()
     context = ModelDiscoveryContext(
         description=base.description,
         diagnosis=base.diagnosis,
         classification=base.classification,
-        facts=[
-            item for item in all_facts if item.fact_id != "input_step"
-        ],
+        facts=[item for item in all_facts if item.fact_id != "input_step"],
         natural_language_answers=[
             NaturalLanguageModelAnswer(
                 question_id="q-input-step",
@@ -1960,9 +1874,7 @@ def test_typed_natural_answer_cannot_introduce_an_unwritten_number():
         }
     )
     payload = ready_payload()
-    payload["recognized_facts"] = [
-        invented.model_dump(mode="json")
-    ]
+    payload["recognized_facts"] = [invented.model_dump(mode="json")]
 
     assert (
         validate_generated_model_payload(

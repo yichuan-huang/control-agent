@@ -127,7 +127,9 @@ def evaluate_feature_quality(
             )
         if isinstance(feature.value, list):
             matrix_values = [value for row in feature.value for value in row]
-            if not matrix_values or not all(math.isfinite(value) for value in matrix_values):
+            if not matrix_values or not all(
+                math.isfinite(value) for value in matrix_values
+            ):
                 issues.append(
                     _issue(
                         "non_finite_feature_value",
@@ -199,8 +201,7 @@ def evaluate_feature_quality(
                 )
             )
         if feature_id in _CRITICAL_NONZERO and (
-            feature.value == 0.0
-            or feature.lower_bound <= 0.0 <= feature.upper_bound
+            feature.value == 0.0 or feature.lower_bound <= 0.0 <= feature.upper_bound
         ):
             issues.append(
                 _issue(
@@ -254,7 +255,10 @@ def evaluate_feature_quality(
                     )
                 )
 
-        if feature.trace_sha256 is not None and _SHA256.fullmatch(feature.trace_sha256) is None:
+        if (
+            feature.trace_sha256 is not None
+            and _SHA256.fullmatch(feature.trace_sha256) is None
+        ):
             issues.append(
                 _issue(
                     "invalid_trace_sha256",
@@ -263,7 +267,10 @@ def evaluate_feature_quality(
                     "Simulation-derived features require a valid trace SHA-256 digest.",
                 )
             )
-        if feature.model_sha256 is not None and _SHA256.fullmatch(feature.model_sha256) is None:
+        if (
+            feature.model_sha256 is not None
+            and _SHA256.fullmatch(feature.model_sha256) is None
+        ):
             issues.append(
                 _issue(
                     "invalid_model_sha256",
@@ -283,9 +290,7 @@ def evaluate_feature_quality(
         decision=decision,
         issues=issues,
         accepted_feature_ids=(
-            [feature.feature_id for feature in features]
-            if decision == "accept"
-            else []
+            [feature.feature_id for feature in features] if decision == "accept" else []
         ),
         policy=resolved_policy,
     )

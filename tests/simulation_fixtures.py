@@ -167,8 +167,6 @@ def cartpole_session():
             open_loop_behavior="unstable",
             profile_id="test-cartpole-v1",
         ),
-        run_config=SimulationRunConfig.model_validate(
-            registered_run_envelope(model)
-        ),
+        run_config=SimulationRunConfig.model_validate(registered_run_envelope(model)),
         expected_revision=2,
     )

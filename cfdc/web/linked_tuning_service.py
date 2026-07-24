@@ -95,9 +95,7 @@ def _run_config(
     required = {"input_min", "input_max", "output_min", "output_max"}
     missing = sorted(required - set(bounds))
     if missing:
-        raise ValueError(
-            "已编译规格缺少仿真边界：" + ", ".join(missing)
-        )
+        raise ValueError("已编译规格缺少仿真边界：" + ", ".join(missing))
     input_min = float(bounds["input_min"])
     input_max = float(bounds["input_max"])
     output_min = float(bounds["output_min"])
@@ -127,8 +125,7 @@ def _run_config(
 
     time_scale = float(
         description.time_scale_hint_s
-        if description is not None
-        and description.time_scale_hint_s is not None
+        if description is not None and description.time_scale_hint_s is not None
         else compiled.time_scale_hint_s
     )
     horizon = 6.0 * time_scale
@@ -143,12 +140,8 @@ def _run_config(
         sample_time = min(time_scale / 100.0, horizon / 100.0)
     sample_time = max(sample_time, horizon / 19_999.0)
 
-    reference_limit = 0.1 * (
-        runtime_output_bounds[1] - runtime_output_bounds[0]
-    )
-    declared_reference = description_bounds.get(
-        "max_abs_reference_normalized"
-    )
+    reference_limit = 0.1 * (runtime_output_bounds[1] - runtime_output_bounds[0])
+    declared_reference = description_bounds.get("max_abs_reference_normalized")
     if declared_reference is not None and float(declared_reference) > 0.0:
         reference_limit = min(reference_limit, float(declared_reference))
     if not math.isfinite(reference_limit) or reference_limit <= 0.0:
@@ -160,12 +153,8 @@ def _run_config(
             reference={name: reference_limit for name in output_ids},
             horizon_s=horizon,
             sample_time_s=sample_time,
-            actuator_bounds={
-                name: runtime_input_bounds for name in input_ids
-            },
-            output_bounds={
-                name: runtime_output_bounds for name in output_ids
-            },
+            actuator_bounds={name: runtime_input_bounds for name in input_ids},
+            output_bounds={name: runtime_output_bounds for name in output_ids},
         ),
         assumptions,
     )
@@ -180,8 +169,7 @@ def _candidate_from_report(report: Mapping[str, Any]) -> ControllerCandidate:
     final_gains = report.get("final_gains")
     if isinstance(gains, Mapping) and isinstance(final_gains, Mapping):
         payload["gains"] = {
-            name: final_gains.get(name, value)
-            for name, value in gains.items()
+            name: final_gains.get(name, value) for name, value in gains.items()
         }
     return ControllerCandidate.model_validate(payload)
 
@@ -198,9 +186,7 @@ def link_stage5_report(
 
     del base_url, model, api_key
     if not isinstance(report_payload, Mapping):
-        return {}, empty_linked_tuning_view(
-            "五步流程尚未产生结构化结果。"
-        )
+        return {}, empty_linked_tuning_view("五步流程尚未产生结构化结果。")
     raw_compiled = report_payload.get("compiled_specification_model")
     if not isinstance(raw_compiled, Mapping):
         return {}, empty_linked_tuning_view(
@@ -209,9 +195,7 @@ def link_stage5_report(
     try:
         compiled = CompiledSpecificationModel.model_validate(raw_compiled)
         description = (
-            SystemDescription.model_validate(
-                report_payload["system_description"]
-            )
+            SystemDescription.model_validate(report_payload["system_description"])
             if isinstance(
                 report_payload.get("system_description"),
                 Mapping,
@@ -220,13 +204,9 @@ def link_stage5_report(
         )
         candidate = _candidate_from_report(report_payload)
         if candidate.plant_id != compiled.plant_id:
-            raise ValueError(
-                "控制器候选与已编译对象的 plant_id 不一致"
-            )
+            raise ValueError("控制器候选与已编译对象的 plant_id 不一致")
         run_config, assumptions = _run_config(compiled, description)
-        cutoff = candidate.design_parameters.get(
-            "filter_cutoff_rad_s"
-        )
+        cutoff = candidate.design_parameters.get("filter_cutoff_rad_s")
         bootstrap = bootstrap_controller_candidate(
             candidate,
             compiled.model,
@@ -237,9 +217,7 @@ def link_stage5_report(
             or bootstrap.controller is None
             or bootstrap.tuning_profile is None
         ):
-            raise ValueError(
-                bootstrap.lock_reason or "控制器架构无法安全转换"
-            )
+            raise ValueError(bootstrap.lock_reason or "控制器架构无法安全转换")
         run_id = report_payload.get("run_id")
         if not isinstance(run_id, str) or not run_id.strip():
             raise ValueError("五步报告缺少 run_id")
@@ -329,10 +307,7 @@ def run_linked_trial(
     session = decode_lab_state(payload)
     parameters = _parameter_mapping(parameter_rows)
     if not session.trials:
-        if (
-            session.trial_controller is None
-            or session.tuning_profile is None
-        ):
+        if session.trial_controller is None or session.tuning_profile is None:
             raise ValueError("关联会话没有可运行的控制器")
         current = extract_tunable_parameters(
             session.trial_controller,

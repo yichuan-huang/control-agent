@@ -41,7 +41,9 @@ def test_complete_diagnosis_enters_object_specific_specification_stage():
     assert report.experiment_results == []
     assert report.features == []
     assert report.controller is None
-    rendered = " ".join(item.prompt for item in report.specification_assessment.questions)
+    rendered = " ".join(
+        item.prompt for item in report.specification_assessment.questions
+    )
     assert "heater power" in rendered or "temperature" in rendered
     assert "三次" not in rendered
     assert "CSV" not in rendered
@@ -65,7 +67,9 @@ def test_each_method_profile_has_plain_language_specification_guidance(
     profile_id, expected_phrase
 ):
     catalog = default_specification_template_catalog()
-    template = next(item for item in catalog.templates if item.method_profile_id == profile_id)
+    template = next(
+        item for item in catalog.templates if item.method_profile_id == profile_id
+    )
     description = SystemDescription(
         text=f"A user described {profile_id} object.",
         observed_outputs=["measured output"],
@@ -83,7 +87,8 @@ def test_each_method_profile_has_plain_language_specification_guidance(
 
 def test_continuous_dynamic_questions_exclude_discrete_status_outputs():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "first_order_lag"
     )
     description = SystemDescription(
@@ -94,7 +99,8 @@ def test_continuous_dynamic_questions_exclude_discrete_status_outputs():
 
     assessment = build_initial_specification_assessment(description, template)
     dynamic_questions = [
-        item for item in assessment.questions
+        item
+        for item in assessment.questions
         if item.requested_fact_ids[0] in {"steady_output_change", "response_time_s"}
     ]
 
@@ -105,7 +111,8 @@ def test_continuous_dynamic_questions_exclude_discrete_status_outputs():
 
 def test_first_order_template_calls_user_ranges_simulation_boundaries():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "first_order_lag"
     )
     rendered = " ".join(
@@ -179,12 +186,20 @@ def test_explicit_thermostat_physics_complete_first_order_specifications_without
     assert facts["steady_output_change"].value == pytest.approx(50.0)
     assert facts["steady_output_change"].unit == "degF"
     assert facts["steady_output_change"].source_type == "derived_from_declared_physics"
-    assert facts["steady_output_change"].derivation.rule_id == "thermal_steady_rise_q_over_h"
+    assert (
+        facts["steady_output_change"].derivation.rule_id
+        == "thermal_steady_rise_q_over_h"
+    )
     assert facts["response_time_s"].value == pytest.approx(144000.0)
-    assert facts["response_time_s"].derivation.rule_id == "thermal_time_constant_c_over_h"
+    assert (
+        facts["response_time_s"].derivation.rule_id == "thermal_time_constant_c_over_h"
+    )
     assert facts["output_min"].value == pytest.approx(64.5)
     assert facts["output_max"].value == pytest.approx(65.5)
-    assert facts["output_min"].derivation.rule_id == "thermostat_band_setpoint_plus_minus_half_width"
+    assert (
+        facts["output_min"].derivation.rule_id
+        == "thermostat_band_setpoint_plus_minus_half_width"
+    )
     assert facts["input_min"].derivation.rule_id == "binary_command_domain"
     compiled = compile_specification_model(
         plant_id="thermostat-room",
@@ -222,8 +237,13 @@ def test_explicit_thermostat_physics_complete_specifications_with_llm_enabled():
                 "template_id": report.specification_templates[0].template_id,
                 "facts": [],
                 "missing_fact_ids": [
-                    "input_change", "steady_output_change", "response_time_s",
-                    "input_min", "input_max", "output_min", "output_max",
+                    "input_change",
+                    "steady_output_change",
+                    "response_time_s",
+                    "input_min",
+                    "input_max",
+                    "output_min",
+                    "output_max",
                 ],
                 "conflicts": [],
                 "questions": [],
@@ -258,30 +278,37 @@ def test_validated_llm_questions_are_used_for_the_current_object_and_gap():
             return {
                 "status": "need_more",
                 "template_id": template.template_id,
-                "facts": [{
-                    "fact_id": "input_change",
-                    "value": 1.0,
-                    "unit": "kW",
-                    "source_type": "manufacturer_document",
-                    "source_text": "input change is 1 kW",
-                    "lower_bound": None,
-                    "upper_bound": None,
-                }],
+                "facts": [
+                    {
+                        "fact_id": "input_change",
+                        "value": 1.0,
+                        "unit": "kW",
+                        "source_type": "manufacturer_document",
+                        "source_text": "input change is 1 kW",
+                        "lower_bound": None,
+                        "upper_bound": None,
+                    }
+                ],
                 "missing_fact_ids": ["steady_output_change"],
                 "conflicts": [],
-                "questions": [{
-                    "question_id": "heater_final_temperature_change",
-                    "requested_fact_ids": ["steady_output_change"],
-                    "prompt": "加热功率增加 1 kW 后，这台恒温箱最终升温多少？",
-                    "why_needed": "用来计算这台恒温箱的实际加热作用。",
-                    "where_to_find": "可查看恒温箱手册中的温升/功率规格。",
-                    "answer_kind": "number",
-                    "unit_hint": "degC / K",
-                    "example": "例如：最终升高 10 degC。",
-                    "answer_options": [
-                        "填写已知数值", "粘贴手册规格", "暂时不知道", "改用完整数值模型"
-                    ],
-                }],
+                "questions": [
+                    {
+                        "question_id": "heater_final_temperature_change",
+                        "requested_fact_ids": ["steady_output_change"],
+                        "prompt": "加热功率增加 1 kW 后，这台恒温箱最终升温多少？",
+                        "why_needed": "用来计算这台恒温箱的实际加热作用。",
+                        "where_to_find": "可查看恒温箱手册中的温升/功率规格。",
+                        "answer_kind": "number",
+                        "unit_hint": "degC / K",
+                        "example": "例如：最终升高 10 degC。",
+                        "answer_options": [
+                            "填写已知数值",
+                            "粘贴手册规格",
+                            "暂时不知道",
+                            "改用完整数值模型",
+                        ],
+                    }
+                ],
                 "rationale": "One explicit fact was extracted.",
             }
 
@@ -311,13 +338,15 @@ def test_llm_fact_with_fabricated_source_is_reported_as_rejected_no_progress():
             return {
                 "status": "need_more",
                 "template_id": template.template_id,
-                "facts": [{
-                    "fact_id": "input_change",
-                    "value": 1.0,
-                    "unit": "kW",
-                    "source_type": "user_known_behavior",
-                    "source_text": "the manual explicitly says 1 kW",
-                }],
+                "facts": [
+                    {
+                        "fact_id": "input_change",
+                        "value": 1.0,
+                        "unit": "kW",
+                        "source_type": "user_known_behavior",
+                        "source_text": "the manual explicitly says 1 kW",
+                    }
+                ],
                 "missing_fact_ids": ["input_change"],
                 "conflicts": [],
                 "questions": [],
@@ -370,7 +399,9 @@ def test_vague_language_cannot_become_a_numeric_fact():
 
 def test_multiple_plain_language_turns_reduce_gaps_and_compile_only_when_complete():
     report = run_cfdc_route("generic", description=_heater_description())
-    session = start_diagnostic_session(report.system_description, diagnosis=report.diagnosis)
+    session = start_diagnostic_session(
+        report.system_description, diagnosis=report.diagnosis
+    )
     partial = submit_specifications_to_session(
         session,
         "Manual: input_change=1 normalized_input; steady_output_change=10 degC; response_time_s=20 s.",
@@ -395,7 +426,9 @@ def test_multiple_plain_language_turns_reduce_gaps_and_compile_only_when_complet
 
 def test_conflicting_specification_values_stop_model_compilation():
     report = run_cfdc_route("generic", description=_heater_description())
-    session = start_diagnostic_session(report.system_description, diagnosis=report.diagnosis)
+    session = start_diagnostic_session(
+        report.system_description, diagnosis=report.diagnosis
+    )
     first = submit_specifications_to_session(
         session,
         "input_change=1 normalized_input;",
@@ -431,7 +464,10 @@ def test_cross_field_unit_conflict_stops_before_model_compilation():
     assert report.compiled_specification_model is None
     assert report.features == []
     assert report.controller is None
-    assert any("incompatible units" in item for item in report.specification_assessment.conflicts)
+    assert any(
+        "incompatible units" in item
+        for item in report.specification_assessment.conflicts
+    )
 
 
 def test_common_unit_spellings_and_scales_are_normalized():
@@ -490,13 +526,18 @@ def test_number_without_a_unit_remains_a_specification_gap():
 
     assert report.status == "need_more_specifications"
     assert "input_change" in report.specification_assessment.missing_fact_ids
-    assert all(item.fact_id != "input_change" for item in report.specification_assessment.facts)
-    assert any("单位" in item.prompt for item in report.specification_assessment.questions)
+    assert all(
+        item.fact_id != "input_change" for item in report.specification_assessment.facts
+    )
+    assert any(
+        "单位" in item.prompt for item in report.specification_assessment.questions
+    )
 
 
 def test_llm_specification_payload_rejects_unknown_facts_and_extra_keys_but_recovers_unit_issues():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "first_order_lag"
     )
     base = {
@@ -513,10 +554,15 @@ def test_llm_specification_payload_rejects_unknown_facts_and_extra_keys_but_reco
 
     unknown = {
         **base,
-        "facts": [{
-            "fact_id": "invented_gain", "value": 1.0, "unit": "ratio",
-            "source_type": "user_known_behavior", "source_text": "gain=1",
-        }],
+        "facts": [
+            {
+                "fact_id": "invented_gain",
+                "value": 1.0,
+                "unit": "ratio",
+                "source_type": "user_known_behavior",
+                "source_text": "gain=1",
+            }
+        ],
     }
     with pytest.raises(ValueError, match="unknown specification fact"):
         validate_specification_assessment_payload(
@@ -525,10 +571,15 @@ def test_llm_specification_payload_rejects_unknown_facts_and_extra_keys_but_reco
 
     wrong_unit = {
         **base,
-        "facts": [{
-            "fact_id": "response_time_s", "value": 1.0, "unit": "kg",
-            "source_type": "manufacturer_document", "source_text": "time=1 kg",
-        }],
+        "facts": [
+            {
+                "fact_id": "response_time_s",
+                "value": 1.0,
+                "unit": "kg",
+                "source_type": "manufacturer_document",
+                "source_text": "time=1 kg",
+            }
+        ],
     }
     incompatible = validate_specification_assessment_payload(
         wrong_unit, template=template, source_texts=["time=1 kg"]
@@ -539,10 +590,15 @@ def test_llm_specification_payload_rejects_unknown_facts_and_extra_keys_but_reco
 
     missing_unit = {
         **base,
-        "facts": [{
-            "fact_id": "response_time_s", "value": 1.0, "unit": "",
-            "source_type": "manufacturer_document", "source_text": "time=1",
-        }],
+        "facts": [
+            {
+                "fact_id": "response_time_s",
+                "value": 1.0,
+                "unit": "",
+                "source_type": "manufacturer_document",
+                "source_text": "time=1",
+            }
+        ],
     }
     recovered = validate_specification_assessment_payload(
         missing_unit, template=template, source_texts=["time=1"]
@@ -553,19 +609,24 @@ def test_llm_specification_payload_rejects_unknown_facts_and_extra_keys_but_reco
 
     leaked_protocol = {
         **base,
-        "questions": [{
-            "question_id": "bad_internal_question",
-            "requested_fact_ids": ["response_time_s"],
-            "prompt": "Please provide time_constant by uploading CSV three times.",
-            "why_needed": "Needed for natural_frequency.",
-            "where_to_find": "CSV",
-            "answer_kind": "number",
-            "unit_hint": "s",
-            "example": "time_constant=1",
-            "answer_options": [
-                "填写已知数值", "粘贴手册规格", "暂时不知道", "改用完整数值模型"
-            ],
-        }],
+        "questions": [
+            {
+                "question_id": "bad_internal_question",
+                "requested_fact_ids": ["response_time_s"],
+                "prompt": "Please provide time_constant by uploading CSV three times.",
+                "why_needed": "Needed for natural_frequency.",
+                "where_to_find": "CSV",
+                "answer_kind": "number",
+                "unit_hint": "s",
+                "example": "time_constant=1",
+                "answer_options": [
+                    "填写已知数值",
+                    "粘贴手册规格",
+                    "暂时不知道",
+                    "改用完整数值模型",
+                ],
+            }
+        ],
     }
     with pytest.raises(ValueError, match="user-facing specification question"):
         validate_specification_assessment_payload(
@@ -575,7 +636,8 @@ def test_llm_specification_payload_rejects_unknown_facts_and_extra_keys_but_reco
 
 def test_llm_registered_derivation_is_recomputed_from_verbatim_inputs():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "first_order_lag"
     )
     heat_capacity_source = "thermal capacitance is 20000 Btu/degF"
@@ -583,35 +645,41 @@ def test_llm_registered_derivation_is_recomputed_from_verbatim_inputs():
     payload = {
         "status": "need_more",
         "template_id": template.template_id,
-        "facts": [{
-            "fact_id": "response_time_s",
-            "value": 144000.0,
-            "unit": "s",
-            "source_type": "derived_from_declared_physics",
-            "source_text": "C/H = 40 h = 144000 s",
-            "derivation": {
-                "rule_id": "thermal_time_constant_c_over_h",
-                "expression": "3600 * heat_capacity / heat_transfer_coefficient",
-                "inputs": [
-                    {
-                        "name": "heat_capacity",
-                        "value": 20000.0,
-                        "unit": "Btu/degF",
-                        "source_text": heat_capacity_source,
-                    },
-                    {
-                        "name": "heat_transfer_coefficient",
-                        "value": 500.0,
-                        "unit": "Btu/(h degF)",
-                        "source_text": heat_transfer_source,
-                    },
-                ],
-                "source_excerpts": [heat_capacity_source, heat_transfer_source],
-            },
-        }],
+        "facts": [
+            {
+                "fact_id": "response_time_s",
+                "value": 144000.0,
+                "unit": "s",
+                "source_type": "derived_from_declared_physics",
+                "source_text": "C/H = 40 h = 144000 s",
+                "derivation": {
+                    "rule_id": "thermal_time_constant_c_over_h",
+                    "expression": "3600 * heat_capacity / heat_transfer_coefficient",
+                    "inputs": [
+                        {
+                            "name": "heat_capacity",
+                            "value": 20000.0,
+                            "unit": "Btu/degF",
+                            "source_text": heat_capacity_source,
+                        },
+                        {
+                            "name": "heat_transfer_coefficient",
+                            "value": 500.0,
+                            "unit": "Btu/(h degF)",
+                            "source_text": heat_transfer_source,
+                        },
+                    ],
+                    "source_excerpts": [heat_capacity_source, heat_transfer_source],
+                },
+            }
+        ],
         "missing_fact_ids": [
-            "input_change", "steady_output_change", "input_min", "input_max",
-            "output_min", "output_max",
+            "input_change",
+            "steady_output_change",
+            "input_min",
+            "input_max",
+            "output_min",
+            "output_max",
         ],
         "conflicts": [],
         "questions": [],
@@ -632,7 +700,8 @@ def test_llm_registered_derivation_is_recomputed_from_verbatim_inputs():
 
 def test_all_registered_thermostat_derivation_rules_are_backend_verified():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "first_order_lag"
     )
     binary_source = "binary heater command"
@@ -658,35 +727,66 @@ def test_all_registered_thermostat_derivation_rules_are_backend_verified():
 
     binary_facts = [
         derived_fact(
-            fact_id, value, "binary_command", "binary_command_domain",
-            "binary command domain {0, 1}", [], [binary_source],
+            fact_id,
+            value,
+            "binary_command",
+            "binary_command_domain",
+            "binary command domain {0, 1}",
+            [],
+            [binary_source],
         )
-        for fact_id, value in (("input_change", 1.0), ("input_min", 0.0), ("input_max", 1.0))
+        for fact_id, value in (
+            ("input_change", 1.0),
+            ("input_min", 0.0),
+            ("input_max", 1.0),
+        )
     ]
     transfer_input = {
-        "name": "heat_transfer_coefficient", "value": 500.0,
-        "unit": "Btu/(h degF)", "source_text": transfer_source,
+        "name": "heat_transfer_coefficient",
+        "value": 500.0,
+        "unit": "Btu/(h degF)",
+        "source_text": transfer_source,
     }
     steady_fact = derived_fact(
-        "steady_output_change", 50.0, "degF", "thermal_steady_rise_q_over_h",
+        "steady_output_change",
+        50.0,
+        "degF",
+        "thermal_steady_rise_q_over_h",
         "furnace_rate / heat_transfer_coefficient",
         [
-            {"name": "furnace_rate", "value": 25000.0, "unit": "Btu/h", "source_text": rate_source},
+            {
+                "name": "furnace_rate",
+                "value": 25000.0,
+                "unit": "Btu/h",
+                "source_text": rate_source,
+            },
             transfer_input,
         ],
         [rate_source, transfer_source],
     )
     band_inputs = [
-        {"name": "setpoint", "value": 65.0, "unit": "degF", "source_text": setpoint_source},
         {
-            "name": "hysteresis_half_width", "value": 0.5,
-            "unit": "degF", "source_text": band_source,
+            "name": "setpoint",
+            "value": 65.0,
+            "unit": "degF",
+            "source_text": setpoint_source,
+        },
+        {
+            "name": "hysteresis_half_width",
+            "value": 0.5,
+            "unit": "degF",
+            "source_text": band_source,
         },
     ]
     band_facts = [
         derived_fact(
-            fact_id, value, "degF", "thermostat_band_setpoint_plus_minus_half_width",
-            expression, band_inputs, [setpoint_source, band_source],
+            fact_id,
+            value,
+            "degF",
+            "thermostat_band_setpoint_plus_minus_half_width",
+            expression,
+            band_inputs,
+            [setpoint_source, band_source],
         )
         for fact_id, value, expression in (
             ("output_min", 64.5, "setpoint - hysteresis_half_width"),
@@ -741,7 +841,8 @@ def test_unverified_llm_derivations_are_rejected_as_remaining_gaps(
     rule_id, declared_value, source_override, expected_reason
 ):
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "first_order_lag"
     )
     heat_capacity_source = "thermal capacitance is 20000 Btu/degF"
@@ -749,33 +850,37 @@ def test_unverified_llm_derivations_are_rejected_as_remaining_gaps(
     payload = {
         "status": "need_more",
         "template_id": template.template_id,
-        "facts": [{
-            "fact_id": "response_time_s",
-            "value": declared_value,
-            "unit": "s",
-            "source_type": "derived_from_declared_physics",
-            "source_text": "candidate thermal time constant",
-            "derivation": {
-                "rule_id": rule_id,
-                "expression": "3600 * C / H",
-                "inputs": [
-                    {
-                        "name": "heat_capacity", "value": 20000.0,
-                        "unit": "Btu/degF",
-                        "source_text": source_override or heat_capacity_source,
-                    },
-                    {
-                        "name": "heat_transfer_coefficient", "value": 500.0,
-                        "unit": "Btu/(h degF)",
-                        "source_text": heat_transfer_source,
-                    },
-                ],
-                "source_excerpts": [
-                    source_override or heat_capacity_source,
-                    heat_transfer_source,
-                ],
-            },
-        }],
+        "facts": [
+            {
+                "fact_id": "response_time_s",
+                "value": declared_value,
+                "unit": "s",
+                "source_type": "derived_from_declared_physics",
+                "source_text": "candidate thermal time constant",
+                "derivation": {
+                    "rule_id": rule_id,
+                    "expression": "3600 * C / H",
+                    "inputs": [
+                        {
+                            "name": "heat_capacity",
+                            "value": 20000.0,
+                            "unit": "Btu/degF",
+                            "source_text": source_override or heat_capacity_source,
+                        },
+                        {
+                            "name": "heat_transfer_coefficient",
+                            "value": 500.0,
+                            "unit": "Btu/(h degF)",
+                            "source_text": heat_transfer_source,
+                        },
+                    ],
+                    "source_excerpts": [
+                        source_override or heat_capacity_source,
+                        heat_transfer_source,
+                    ],
+                },
+            }
+        ],
         "missing_fact_ids": ["response_time_s"],
         "conflicts": [],
         "questions": [],
@@ -796,7 +901,8 @@ def test_unverified_llm_derivations_are_rejected_as_remaining_gaps(
 
 def test_motor_voltage_paragraph_compiles_with_unicode_units_and_no_unit_whitelist_error():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "double_integrator"
     )
     description = SystemDescription(
@@ -829,37 +935,51 @@ def test_motor_voltage_paragraph_compiles_with_unicode_units_and_no_unit_whiteli
                 "template_id": template.template_id,
                 "facts": [
                     {
-                        "fact_id": "input_change", "value": 0.5, "unit": "V",
+                        "fact_id": "input_change",
+                        "value": 0.5,
+                        "unit": "V",
                         "source_type": "user_known_behavior",
                         "source_text": "voltage is changed by +0.5 V",
                     },
                     {
-                        "fact_id": "acceleration_change", "value": 1.0,
-                        "unit": "rad/s²", "source_type": "user_known_behavior",
+                        "fact_id": "acceleration_change",
+                        "value": 1.0,
+                        "unit": "rad/s²",
+                        "source_type": "user_known_behavior",
                         "source_text": "angular-acceleration change of approximately +1.0 rad/s²",
                     },
                     {
-                        "fact_id": "motion_time_scale_s", "value": 2.0,
-                        "unit": "sec", "source_type": "user_known_behavior",
+                        "fact_id": "motion_time_scale_s",
+                        "value": 2.0,
+                        "unit": "sec",
+                        "source_type": "user_known_behavior",
                         "source_text": "takes approximately 2.0 s",
                     },
                     {
-                        "fact_id": "input_min", "value": -5.0, "unit": "V",
+                        "fact_id": "input_min",
+                        "value": -5.0,
+                        "unit": "V",
                         "source_type": "user_known_behavior",
                         "source_text": "range of −5.0 V to +5.0 V",
                     },
                     {
-                        "fact_id": "input_max", "value": 5.0, "unit": "V",
+                        "fact_id": "input_max",
+                        "value": 5.0,
+                        "unit": "V",
                         "source_type": "user_known_behavior",
                         "source_text": "range of −5.0 V to +5.0 V",
                     },
                     {
-                        "fact_id": "output_min", "value": -2.5, "unit": "rad",
+                        "fact_id": "output_min",
+                        "value": -2.5,
+                        "unit": "rad",
                         "source_type": "user_known_behavior",
                         "source_text": "permitted position range is −2.5 rad to +2.5 rad",
                     },
                     {
-                        "fact_id": "output_max", "value": 2.5, "unit": "rad",
+                        "fact_id": "output_max",
+                        "value": 2.5,
+                        "unit": "rad",
                         "source_type": "user_known_behavior",
                         "source_text": "permitted position range is −2.5 rad to +2.5 rad",
                     },
@@ -885,7 +1005,9 @@ def test_motor_voltage_paragraph_compiles_with_unicode_units_and_no_unit_whiteli
     )
 
     assert assessment.status == "ready"
-    assert {item.fact_id: item.unit for item in assessment.facts}["acceleration_change"] == "rad/s^2"
+    assert {item.fact_id: item.unit for item in assessment.facts}[
+        "acceleration_change"
+    ] == "rad/s^2"
     assert compiled.model.input_units == "V"
     assert compiled.model.output_units == "rad"
     assert compiled.derived_features["input_gain"] == pytest.approx(2.0)
@@ -893,7 +1015,8 @@ def test_motor_voltage_paragraph_compiles_with_unicode_units_and_no_unit_whiteli
 
 def test_known_acceleration_and_position_dimensions_must_describe_the_same_motion():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "double_integrator"
     )
     description = SystemDescription(
@@ -913,12 +1036,15 @@ def test_known_acceleration_and_position_dimensions_must_describe_the_same_motio
     )
 
     assert assessment.status == "conflict"
-    assert any("acceleration" in item and "position" in item for item in assessment.conflicts)
+    assert any(
+        "acceleration" in item and "position" in item for item in assessment.conflicts
+    )
 
 
 def test_physical_acceleration_requires_conversion_for_opaque_position_units():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "double_integrator"
     )
     description = SystemDescription(
@@ -943,7 +1069,8 @@ def test_physical_acceleration_requires_conversion_for_opaque_position_units():
 
 def test_opaque_position_and_its_second_derivative_form_a_valid_behavioral_path():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "double_integrator"
     )
     description = SystemDescription(
@@ -974,7 +1101,8 @@ def test_opaque_position_and_its_second_derivative_form_a_valid_behavioral_path(
 
 def test_physical_mass_and_actuator_units_must_belong_to_the_same_motion_domain():
     template = next(
-        item for item in default_specification_template_catalog().templates
+        item
+        for item in default_specification_template_catalog().templates
         if item.method_profile_id == "double_integrator"
     )
     assessment = assess_specification_text(
@@ -1026,13 +1154,25 @@ def test_two_same_class_natural_language_specifications_produce_different_candid
     )
 
     assert first.status == second.status == "candidate_unvalidated"
-    assert first.controller.release_level == second.controller.release_level == "candidate_unvalidated"
-    assert first.evidence_boundary == second.evidence_boundary == "declared_specification_model_only"
+    assert (
+        first.controller.release_level
+        == second.controller.release_level
+        == "candidate_unvalidated"
+    )
+    assert (
+        first.evidence_boundary
+        == second.evidence_boundary
+        == "declared_specification_model_only"
+    )
     assert first.final_gains != second.final_gains
     first_features = {item.feature_id: item.value for item in first.features}
     second_features = {item.feature_id: item.value for item in second.features}
-    assert first_features["static_gain"] != pytest.approx(second_features["static_gain"])
-    assert first_features["time_constant"] != pytest.approx(second_features["time_constant"])
+    assert first_features["static_gain"] != pytest.approx(
+        second_features["static_gain"]
+    )
+    assert first_features["time_constant"] != pytest.approx(
+        second_features["time_constant"]
+    )
     assert first.controller_validation is None
     assert all(
         item.model_sha256 == first.compiled_specification_model.model_sha256
@@ -1053,7 +1193,9 @@ def test_natural_language_specifications_reject_reversed_safety_bounds():
 
     assert report.status == "specification_conflict"
     assert report.controller is None
-    assert any("input_min" in item for item in report.specification_assessment.conflicts)
+    assert any(
+        "input_min" in item for item in report.specification_assessment.conflicts
+    )
 
 
 def test_equivalent_declared_units_compile_to_the_same_canonical_object_model():
@@ -1088,25 +1230,38 @@ def test_equivalent_declared_units_compile_to_the_same_canonical_object_model():
 def test_second_order_behavioral_specs_compile_with_deterministic_formulas():
     catalog = default_specification_template_catalog()
     template = next(
-        item for item in catalog.templates
+        item
+        for item in catalog.templates
         if item.method_profile_id == "second_order_oscillator"
     )
     facts = [
         SpecificationFact(
-            fact_id="oscillation_period_s", value=2.0, unit="s",
-            source_type="manufacturer_document", source_text="period=2 s",
+            fact_id="oscillation_period_s",
+            value=2.0,
+            unit="s",
+            source_type="manufacturer_document",
+            source_text="period=2 s",
         ),
         SpecificationFact(
-            fact_id="successive_peak_ratio", value=0.5, unit="ratio",
-            source_type="user_known_behavior", source_text="next peak is 50%",
+            fact_id="successive_peak_ratio",
+            value=0.5,
+            unit="ratio",
+            source_type="user_known_behavior",
+            source_text="next peak is 50%",
         ),
         SpecificationFact(
-            fact_id="input_change", value=2.0, unit="N",
-            source_type="manufacturer_document", source_text="input change 2 N",
+            fact_id="input_change",
+            value=2.0,
+            unit="N",
+            source_type="manufacturer_document",
+            source_text="input change 2 N",
         ),
         SpecificationFact(
-            fact_id="acceleration_change", value=4.0, unit="m/s^2",
-            source_type="manufacturer_document", source_text="acceleration 4 m/s^2",
+            fact_id="acceleration_change",
+            value=4.0,
+            unit="m/s^2",
+            source_type="manufacturer_document",
+            source_text="acceleration 4 m/s^2",
         ),
     ]
     assessment = SpecificationAssessment(
@@ -1154,7 +1309,9 @@ def test_second_order_plain_language_specs_generate_an_unvalidated_candidate():
 
     assert report.status == "candidate_unvalidated"
     assert {item.feature_id for item in report.features} == {
-        "natural_frequency", "damping_ratio", "input_gain"
+        "natural_frequency",
+        "damping_ratio",
+        "input_gain",
     }
     assert report.controller.release_level == "candidate_unvalidated"
 
@@ -1202,7 +1359,8 @@ def test_inverse_response_specs_compile_without_reusing_demo_severity():
 
     assert report.status == "candidate_unvalidated"
     severity = next(
-        item.value for item in report.features
+        item.value
+        for item in report.features
         if item.feature_id == "inverse_response_severity"
     )
     assert severity == pytest.approx(0.2, rel=0.2)
@@ -1211,7 +1369,9 @@ def test_inverse_response_specs_compile_without_reusing_demo_severity():
 
 def test_schema_v2_evidence_session_migrates_to_specifications_without_losing_diagnosis():
     report = run_cfdc_route("generic", description=_heater_description())
-    session = start_diagnostic_session(report.system_description, diagnosis=report.diagnosis)
+    session = start_diagnostic_session(
+        report.system_description, diagnosis=report.diagnosis
+    )
     legacy = session.model_dump(mode="json")
     legacy["schema_version"] = "2.0"
     legacy["status"] = "awaiting_evidence"

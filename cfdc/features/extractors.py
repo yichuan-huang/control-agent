@@ -27,7 +27,9 @@ def _integrate(values: np.ndarray, time_s: np.ndarray) -> float:
     return float(np.trapezoid(values, time_s))
 
 
-def low_pass_filter(values: np.ndarray | list[float], dt_s: float, cutoff_hz: float) -> np.ndarray:
+def low_pass_filter(
+    values: np.ndarray | list[float], dt_s: float, cutoff_hz: float
+) -> np.ndarray:
     data = _as_array(values)
     if dt_s <= 0 or cutoff_hz <= 0:
         raise ValueError("dt_s and cutoff_hz must be positive")
@@ -93,9 +95,9 @@ def estimate_natural_frequency(
     high_hz = peak_hz + search_half_width
     grid = np.linspace(low_hz, high_hz, 500)
     centered_norm = centered / max(float(np.std(centered)), 1e-12)
-    scores = np.array([
-        abs(np.sum(centered_norm * np.exp(-2j * math.pi * freq * t))) for freq in grid
-    ])
+    scores = np.array(
+        [abs(np.sum(centered_norm * np.exp(-2j * math.pi * freq * t))) for freq in grid]
+    )
     best_idx = int(np.argmax(scores))
     best_hz = float(grid[best_idx])
     omega = 2.0 * math.pi * best_hz
@@ -239,7 +241,11 @@ def estimate_step_features(
         crossed = np.where(y[step_idx:] >= target)[0]
     else:
         crossed = np.where(y[step_idx:] <= target)[0]
-    tau = float(t[step_idx + int(crossed[0])] - step_time) if crossed.size else float(t[-1] - step_time)
+    tau = (
+        float(t[step_idx + int(crossed[0])] - step_time)
+        if crossed.size
+        else float(t[-1] - step_time)
+    )
     gain = dy / du
 
     steady = steady_state_detected(y, window=min(40, max(5, n // 8)))
@@ -304,8 +310,16 @@ def estimate_dead_time(
         raise ValueError("insufficient change for dead-time extraction")
     input_threshold = u0 + 0.1 * du
     output_threshold = y0 + 0.05 * dy
-    input_idx = np.where(u >= input_threshold)[0] if du >= 0 else np.where(u <= input_threshold)[0]
-    output_idx = np.where(y >= output_threshold)[0] if dy >= 0 else np.where(y <= output_threshold)[0]
+    input_idx = (
+        np.where(u >= input_threshold)[0]
+        if du >= 0
+        else np.where(u <= input_threshold)[0]
+    )
+    output_idx = (
+        np.where(y >= output_threshold)[0]
+        if dy >= 0
+        else np.where(y <= output_threshold)[0]
+    )
     start = int(input_idx[0]) if input_idx.size else head
     response = int(output_idx[0]) if output_idx.size else start
     dead_time = max(0.0, float(t[response] - t[start]))
@@ -400,7 +414,11 @@ def estimate_pulse_input_gain(
     if not ratios:
         raise ValueError("pulse integral is too small")
     gain = float(np.mean(ratios))
-    spread = float(np.std(ratios, ddof=1)) if len(ratios) > 1 else max(0.05 * abs(gain), 1e-6)
+    spread = (
+        float(np.std(ratios, ddof=1))
+        if len(ratios) > 1
+        else max(0.05 * abs(gain), 1e-6)
+    )
     half_width = max(2.0 * spread, 0.05 * abs(gain), 1e-6)
     lower, upper = _bounds(gain, half_width)
     confidence = 0.9 if len(ratios) > 1 else 0.76
@@ -437,7 +455,10 @@ def estimate_hover_thrust(
         lift = _as_array(lift_signal)
         if lift.size != t.size:
             raise ValueError("lift signal must match time array")
-        threshold = float(np.median(lift[: max(3, lift.size // 10)]) + 0.5 * (np.max(lift) - np.min(lift)))
+        threshold = float(
+            np.median(lift[: max(3, lift.size // 10)])
+            + 0.5 * (np.max(lift) - np.min(lift))
+        )
         crossing = np.where(lift >= threshold)[0]
         idx = int(crossing[0]) if crossing.size else int(0.8 * t.size)
         hover = float(thrust[idx])
@@ -476,7 +497,9 @@ def estimate_coupling_gain(
     u = _as_array(input_signal)
     primary = _as_array(primary_output_signal)
     if not (t.size == u.size == primary.size):
-        raise ValueError("time, input, and primary output arrays must have equal length")
+        raise ValueError(
+            "time, input, and primary output arrays must have equal length"
+        )
     if float(np.ptp(u)) < 1e-12 or float(np.ptp(primary)) < 1e-12:
         raise ValueError("bounded scan has insufficient input or primary-output motion")
 
@@ -525,7 +548,9 @@ def estimate_signal_ratio_feature(
     numerator = _as_array(numerator_signal)
     denominator = _as_array(denominator_signal)
     if not (t.size == numerator.size == denominator.size):
-        raise ValueError("time, numerator, and denominator arrays must have equal length")
+        raise ValueError(
+            "time, numerator, and denominator arrays must have equal length"
+        )
 
     head = max(3, t.size // 10)
     num = numerator - float(np.median(numerator[:head]))
@@ -546,7 +571,9 @@ def estimate_signal_ratio_feature(
     denominator_scale = max(float(np.sqrt(np.mean(den[active] ** 2))), 1e-12)
     half_width = max(0.05 * abs(value), residual_scale / denominator_scale, 1e-6)
     lower, upper = _bounds(value, half_width)
-    relative_residual = residual_scale / max(float(np.sqrt(np.mean(num[active] ** 2))), 1e-12)
+    relative_residual = residual_scale / max(
+        float(np.sqrt(np.mean(num[active] ** 2))), 1e-12
+    )
     confidence = max(0.5, min(0.9, 0.9 - 0.25 * relative_residual))
     flags = [] if relative_residual < 0.25 else ["large_ratio_residual"]
 

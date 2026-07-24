@@ -125,13 +125,11 @@ class StateFeedbackControllerSpec(CFDCModel):
     def validate_complete_dimensions(self) -> "StateFeedbackControllerSpec":
         state_count = len(self.equilibrium_state)
         input_count = len(self.equilibrium_input)
-        if (
-            len(self.gain_matrix) != input_count
-            or any(len(row) != state_count for row in self.gain_matrix)
+        if len(self.gain_matrix) != input_count or any(
+            len(row) != state_count for row in self.gain_matrix
         ):
             raise ValueError(
-                "gain_matrix/equilibrium dimensions must be "
-                "input_count x state_count"
+                "gain_matrix/equilibrium dimensions must be input_count x state_count"
             )
         if len(self.reference_gain_matrix) != input_count:
             raise ValueError(
@@ -167,9 +165,7 @@ class RegisteredControllerSpec(CFDCModel):
         "configuration",
     )
     @classmethod
-    def freeze_scalar_mapping(
-        cls, values: dict[str, float]
-    ) -> dict[str, float]:
+    def freeze_scalar_mapping(cls, values: dict[str, float]) -> dict[str, float]:
         return _FrozenFloatDict(values)
 
     @model_validator(mode="after")
@@ -240,9 +236,7 @@ class RegisteredControllerSpec(CFDCModel):
                 )
         feedforward_keys = set(self.feedforward)
         if feedforward_keys not in expected["feedforward_options"]:
-            allowed = [
-                sorted(option) for option in expected["feedforward_options"]
-            ]
+            allowed = [sorted(option) for option in expected["feedforward_options"]]
             raise ValueError(
                 f"{self.controller_id} feedforward must match one exact key "
                 f"set from {allowed}"
@@ -319,8 +313,7 @@ class SimulationTrace(CFDCModel):
             # explicit wording is stable for API clients and audit logs.
             raise ValueError("SimulationTrace cannot exceed 20,000 samples")
         if any(
-            later <= earlier
-            for earlier, later in zip(self.time_s, self.time_s[1:])
+            later <= earlier for earlier, later in zip(self.time_s, self.time_s[1:])
         ):
             raise ValueError("time_s must be strictly increasing")
         channel_groups = {
@@ -387,10 +380,13 @@ class StabilityDecision(CFDCModel):
         "exact_discrete_delay_augmentation",
         "registered_nonlinear_local_linearization",
     ]
-    registered_template_id: Literal[
-        "underactuated_cartpole",
-        "vtol_cascaded",
-    ] | None = None
+    registered_template_id: (
+        Literal[
+            "underactuated_cartpole",
+            "vtol_cascaded",
+        ]
+        | None
+    ) = None
     poles: list[ComplexValue] = Field(default_factory=list)
     spectral_radius: float | None = Field(default=None, ge=0.0)
     trajectory_finite: bool
@@ -400,9 +396,7 @@ class StabilityDecision(CFDCModel):
     hard_failure: bool = False
     violations: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(min_length=1)
-    scenario_evidence: list[NonlinearScenarioEvidence] = Field(
-        default_factory=list
-    )
+    scenario_evidence: list[NonlinearScenarioEvidence] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_domain_evidence(self) -> "StabilityDecision":
@@ -445,25 +439,17 @@ class StabilityDecision(CFDCModel):
             },
         }
         is_registered = (
-            self.pole_analysis_method
-            == "registered_nonlinear_local_linearization"
+            self.pole_analysis_method == "registered_nonlinear_local_linearization"
         )
         if not is_registered and self.registered_template_id is not None:
             raise ValueError(
-                "registered_template_id is only valid for registered "
-                "nonlinear analysis"
+                "registered_template_id is only valid for registered nonlinear analysis"
             )
         if is_registered:
             if self.registered_template_id is None:
-                raise ValueError(
-                    "registered nonlinear analysis requires a template ID"
-                )
-            expected_scenarios = registered_scenarios[
-                self.registered_template_id
-            ]
-            scenario_ids = [
-                item.scenario_id for item in self.scenario_evidence
-            ]
+                raise ValueError("registered nonlinear analysis requires a template ID")
+            expected_scenarios = registered_scenarios[self.registered_template_id]
+            scenario_ids = [item.scenario_id for item in self.scenario_evidence]
             if (
                 len(scenario_ids) != len(set(scenario_ids))
                 or set(scenario_ids) != expected_scenarios
@@ -473,10 +459,7 @@ class StabilityDecision(CFDCModel):
                     "deterministic scenario IDs"
                 )
             expected_pole_count = (
-                4
-                if self.registered_template_id
-                == "underactuated_cartpole"
-                else 6
+                4 if self.registered_template_id == "underactuated_cartpole" else 6
             )
             if len(self.poles) != expected_pole_count:
                 raise ValueError(
@@ -498,8 +481,7 @@ class StabilityDecision(CFDCModel):
                 abs_tol=1e-12,
             ):
                 raise ValueError(
-                    "spectral_radius must match the maximum recorded pole "
-                    "magnitude"
+                    "spectral_radius must match the maximum recorded pole magnitude"
                 )
         if self.status == "stable":
             if (
@@ -526,8 +508,7 @@ class StabilityDecision(CFDCModel):
                 and self.spectral_radius >= 1.0 - 1e-6
             ):
                 raise ValueError(
-                    "a discrete stable decision requires spectral_radius "
-                    "below 1-1e-6"
+                    "a discrete stable decision requires spectral_radius below 1-1e-6"
                 )
             if self.scenario_evidence and (
                 len(self.scenario_evidence) != 5

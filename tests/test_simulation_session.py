@@ -173,9 +173,7 @@ def test_run_next_records_evaluating_and_stops_at_first_stable():
     complete = run_next_trial(
         session,
         expected_revision=session.revision,
-        runner=runner_for(
-            decision("stable", pole=-0.5, contraction=0.2)
-        ),
+        runner=runner_for(decision("stable", pole=-0.5, contraction=0.2)),
     )
     assert complete.state == "stable"
     assert complete.revision == session.revision + 2
@@ -215,9 +213,7 @@ def test_zero_gain_and_bounds_fail_closed_instead_of_looping():
     )
     assert propose_deterministic_update(zero).state == "inconclusive"
     movable = run_next_trial(
-        ready_session(
-            open_loop="unstable", gain=0.0, zero_scale=2.0, bounds=(-1, 1)
-        ),
+        ready_session(open_loop="unstable", gain=0.0, zero_scale=2.0, bounds=(-1, 1)),
         runner=runner_for(decision()),
     )
     moved = propose_deterministic_update(movable)
@@ -230,9 +226,7 @@ def test_llm_proposal_requires_exact_whitelist_ten_percent_and_approval():
         runner=runner_for(decision()),
     )
     with pytest.raises(ProposalValidationError):
-        register_llm_proposal(
-            session, new_parameters={"unknown": 2.1}, rationale="bad"
-        )
+        register_llm_proposal(session, new_parameters={"unknown": 2.1}, rationale="bad")
     with pytest.raises(ProposalValidationError, match="more than 10"):
         register_llm_proposal(
             session, new_parameters={"kp": 2.21}, rationale="too large"
@@ -244,9 +238,7 @@ def test_llm_proposal_requires_exact_whitelist_ten_percent_and_approval():
     )
     assert pending.state == "needs_adjustment"
     assert pending.trial_controller.kp == 2.0
-    approved = approve_llm_proposal(
-        pending, expected_revision=pending.revision
-    )
+    approved = approve_llm_proposal(pending, expected_revision=pending.revision)
     assert approved.state == "trial_pending"
     assert approved.trial_controller.kp == 2.2
     with pytest.raises(SessionActionError):
@@ -337,9 +329,7 @@ def test_exact_twenty_trial_budget_and_trial_20_stable_wins():
 
     budget = ready_session(open_loop="unstable")
     for _ in range(20):
-        budget = run_next_trial(
-            budget, runner=runner_for(decision(pole=0.2))
-        )
+        budget = run_next_trial(budget, runner=runner_for(decision(pole=0.2)))
         if budget.state == "needs_adjustment":
             budget = propose_deterministic_update(budget)
     assert budget.state == "budget_exhausted"
@@ -424,12 +414,8 @@ def test_unrelated_audit_revision_marks_pending_llm_proposal_stale():
         structured_response={"status": "audit-only"},
         validation_status="accepted",
     )
-    revised = append_llm_call(
-        pending, record, expected_revision=pending.revision
-    )
-    stale = approve_llm_proposal(
-        revised, expected_revision=revised.revision
-    )
+    revised = append_llm_call(pending, record, expected_revision=pending.revision)
+    stale = approve_llm_proposal(revised, expected_revision=revised.revision)
     assert stale.state == "needs_adjustment"
     assert stale.pending_proposal.approval_state == "stale"
     assert stale.trial_controller.kp == 1.0

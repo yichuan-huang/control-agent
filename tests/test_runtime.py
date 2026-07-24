@@ -12,14 +12,20 @@ def test_safe_trial_runner_accepts_bounded_first_order_trial():
         return {"input": gains["kp"] * (reference["output"] - state["output"])}
 
     def plant_step(state, control, dt_s):
-        return {"output": state["output"] + dt_s * (-state["output"] + control["input"])}
+        return {
+            "output": state["output"] + dt_s * (-state["output"] + control["input"])
+        }
 
     runner = SafeTrialRunner(
         SafeTrialConfig(
             trial_id="first_order_safe_trial",
             dt_s=0.02,
             duration_s=2.0,
-            constraints={"max_abs_output": 1.5, "max_abs_control": 2.0, "max_overshoot": 0.4},
+            constraints={
+                "max_abs_output": 1.5,
+                "max_abs_control": 2.0,
+                "max_overshoot": 0.4,
+            },
         )
     )
     report = runner.run(

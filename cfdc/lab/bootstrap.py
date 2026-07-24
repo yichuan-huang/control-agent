@@ -88,16 +88,17 @@ def bootstrap_controller_candidate(
     )
 
     if architecture in {"P", "proportional", "conservative_P"}:
-        if set(candidate.gains) != {"kp"} or set(
-            candidate.tunable_gain_names
-        ) != {"kp"}:
+        if set(candidate.gains) != {"kp"} or set(candidate.tunable_gain_names) != {
+            "kp"
+        }:
             return _locked("P conversion requires exact kp tunable")
         controller = PControllerSpec(kp=candidate.gains["kp"])
         bindings = {"kp": "kp"}
     elif architecture in _PI_ARCHITECTURES:
-        if set(candidate.gains) < {"kp", "ki"} or set(
-            candidate.tunable_gain_names
-        ) != {"kp", "ki"}:
+        if set(candidate.gains) < {"kp", "ki"} or set(candidate.tunable_gain_names) != {
+            "kp",
+            "ki",
+        }:
             return _locked("PI conversion requires exact kp/ki tunables")
         controller = PIControllerSpec(
             kp=candidate.gains["kp"],
@@ -106,9 +107,7 @@ def bootstrap_controller_candidate(
         bindings = {"kp": "kp", "ki": "ki"}
     elif architecture in _PD_ARCHITECTURES:
         if declared_cutoff is None or declared_cutoff <= 0.0:
-            return _locked(
-                "filtered PD conversion requires a declared positive cutoff"
-            )
+            return _locked("filtered PD conversion requires a declared positive cutoff")
         if set(candidate.gains) != {"kp", "kd"} or set(
             candidate.tunable_gain_names
         ) != {"kp", "kd"}:
@@ -129,9 +128,7 @@ def bootstrap_controller_candidate(
             candidate.tunable_gain_names
         ) != {"kp", "ki", "kd"}:
             return _locked("PID conversion requires exact kp/ki/kd gains")
-        integrator_limit = candidate.design_parameters.get(
-            "integrator_limit"
-        )
+        integrator_limit = candidate.design_parameters.get("integrator_limit")
         if integrator_limit is not None and integrator_limit <= 0.0:
             return _locked("PID integrator_limit must be positive")
         controller = FilteredPIDControllerSpec(
@@ -144,9 +141,9 @@ def bootstrap_controller_candidate(
         )
         bindings = {"kp": "kp", "ki": "ki", "kd": "kd"}
     elif architecture in {"lead", "lead_compensator"}:
-        if set(candidate.gains) != {"gain"} or set(
-            candidate.tunable_gain_names
-        ) != {"gain"}:
+        if set(candidate.gains) != {"gain"} or set(candidate.tunable_gain_names) != {
+            "gain"
+        }:
             return _locked("lead conversion requires exact gain tunable")
         zero = candidate.design_parameters.get("zero_rad_s")
         pole = candidate.design_parameters.get("pole_rad_s")
@@ -162,9 +159,9 @@ def bootstrap_controller_candidate(
             return _locked(f"invalid lead fixed design: {exc}")
         bindings = {"gain": "gain"}
     elif architecture in {"lag", "lag_compensator"}:
-        if set(candidate.gains) != {"gain"} or set(
-            candidate.tunable_gain_names
-        ) != {"gain"}:
+        if set(candidate.gains) != {"gain"} or set(candidate.tunable_gain_names) != {
+            "gain"
+        }:
             return _locked("lag conversion requires exact gain tunable")
         zero = candidate.design_parameters.get("zero_rad_s")
         pole = candidate.design_parameters.get("pole_rad_s")
@@ -180,9 +177,9 @@ def bootstrap_controller_candidate(
             return _locked(f"invalid lag fixed design: {exc}")
         bindings = {"gain": "gain"}
     elif architecture in {"notch", "notch_filter"}:
-        if set(candidate.gains) != {"gain"} or set(
-            candidate.tunable_gain_names
-        ) != {"gain"}:
+        if set(candidate.gains) != {"gain"} or set(candidate.tunable_gain_names) != {
+            "gain"
+        }:
             return _locked("notch conversion requires exact gain tunable")
         required = {
             "center_frequency_rad_s",
@@ -199,12 +196,8 @@ def bootstrap_controller_candidate(
                 center_frequency_rad_s=candidate.design_parameters[
                     "center_frequency_rad_s"
                 ],
-                zero_damping_ratio=candidate.design_parameters[
-                    "zero_damping_ratio"
-                ],
-                pole_damping_ratio=candidate.design_parameters[
-                    "pole_damping_ratio"
-                ],
+                zero_damping_ratio=candidate.design_parameters["zero_damping_ratio"],
+                pole_damping_ratio=candidate.design_parameters["pole_damping_ratio"],
             )
         except ValueError as exc:
             return _locked(f"invalid notch fixed design: {exc}")
@@ -223,16 +216,15 @@ def bootstrap_controller_candidate(
             "kp_y",
             "kd_y",
         }
-        if set(candidate.gains) != expected or set(
-            candidate.tunable_gain_names
-        ) != expected:
+        if (
+            set(candidate.gains) != expected
+            or set(candidate.tunable_gain_names) != expected
+        ):
             return _locked("VTOL cascade requires the exact six gains")
         hover = candidate.feedforward.get("hover_thrust")
         tilt = candidate.saturation.get("max_tilt_rad")
         if hover is None or tilt is None or hover <= 0.0 or tilt <= 0.0:
-            return _locked(
-                "VTOL cascade requires hover thrust and positive tilt limit"
-            )
+            return _locked("VTOL cascade requires hover thrust and positive tilt limit")
         controller = RegisteredControllerSpec(
             controller_id="vtol_cascaded",
             parameters={name: candidate.gains[name] for name in expected},
@@ -252,9 +244,7 @@ def bootstrap_controller_candidate(
         if parameter_bindings is None or set(parameter_bindings) != set(
             candidate.tunable_gain_names
         ):
-            return _locked(
-                "state feedback requires exact matrix parameter bindings"
-            )
+            return _locked("state feedback requires exact matrix parameter bindings")
         controller = explicit_controller
         bindings = dict(parameter_bindings)
     else:

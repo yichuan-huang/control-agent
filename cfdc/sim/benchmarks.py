@@ -101,7 +101,11 @@ def list_benchmark_cases() -> list[BenchmarkCase]:
                 actuators=["valve setting"],
                 safety_bounds={"output_max": 1.0},
             ),
-            params={"static_gain": 1.0, "time_constant": 6.0, "inverse_response_severity": 0.25},
+            params={
+                "static_gain": 1.0,
+                "time_constant": 6.0,
+                "inverse_response_severity": 0.25,
+            },
             safety_limits={"output_min": 0.0, "output_max": 1.0},
         ),
         BenchmarkCase(
@@ -123,13 +127,19 @@ def list_benchmark_cases() -> list[BenchmarkCase]:
                 actuators=["total thrust", "roll torque"],
                 safety_bounds={"max_tilt_rad": 0.26, "max_torque": 0.9},
             ),
-            params={"hover_thrust": 11.77, "angular_acceleration_gain": 28.57, "lateral_coupling_gain": -9.81},
+            params={
+                "hover_thrust": 11.77,
+                "angular_acceleration_gain": 28.57,
+                "lateral_coupling_gain": -9.81,
+            },
             safety_limits={"max_tilt_rad": 0.26, "max_torque": 0.9, "gravity": 9.81},
         ),
     ]
 
 
-def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list[CoreFeatureArtifact]:
+def _extract_required_features(
+    case: BenchmarkCase, required: list[str]
+) -> list[CoreFeatureArtifact]:
     params = case.params
     results: list[SimulationExperimentRecord] = []
     if {"static_gain", "time_constant"} & set(required):
@@ -141,7 +151,12 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
         )
         estimates = [
             feature_id
-            for feature_id in ["static_gain", "time_constant", "dead_time", "inverse_response_severity"]
+            for feature_id in [
+                "static_gain",
+                "time_constant",
+                "dead_time",
+                "inverse_response_severity",
+            ]
             if feature_id in required
         ]
         results.append(
@@ -150,13 +165,22 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
                 estimates=estimates,
                 trace=ExperimentTrace(
                     time_s=t.tolist(),
-                    signals={"input setting": u.tolist(), "measured output": y.tolist()},
+                    signals={
+                        "input setting": u.tolist(),
+                        "measured output": y.tolist(),
+                    },
                 ),
             )
         )
     if "natural_frequency" in required or "damping_ratio" in required:
-        t, y = modal_trace(params.get("natural_frequency", 3.0), params.get("damping_ratio", 0.08))
-        estimates = [feature_id for feature_id in ["natural_frequency", "damping_ratio"] if feature_id in required]
+        t, y = modal_trace(
+            params.get("natural_frequency", 3.0), params.get("damping_ratio", 0.08)
+        )
+        estimates = [
+            feature_id
+            for feature_id in ["natural_frequency", "damping_ratio"]
+            if feature_id in required
+        ]
         results.append(
             SimulationExperimentRecord(
                 primitive="free_decay",
@@ -187,7 +211,10 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
                 estimates=["hover_thrust"],
                 trace=ExperimentTrace(
                     time_s=t.tolist(),
-                    signals={"lift setting": thrust.tolist(), "vertical motion": lift.tolist()},
+                    signals={
+                        "lift setting": thrust.tolist(),
+                        "vertical motion": lift.tolist(),
+                    },
                 ),
             )
         )
@@ -217,7 +244,9 @@ def _extract_required_features(case: BenchmarkCase, required: list[str]) -> list
             )
         )
     if "coupling_gain" in required:
-        t, input_signal, primary, coupled = bounded_scan_trace(params.get("coupling_gain", 0.5))
+        t, input_signal, primary, coupled = bounded_scan_trace(
+            params.get("coupling_gain", 0.5)
+        )
         results.append(
             SimulationExperimentRecord(
                 primitive="bounded_scan",
@@ -344,7 +373,11 @@ def _benchmark_route_ir(case: BenchmarkCase) -> BenchmarkRouteIR:
         dt_s=0.005,
         plant_params=case.params,
         initial_state={"x_m": 0.0, "z_m": 1.0, "theta_rad": 0.0},
-        actuator_limits={"thrust_min_n": 0.0, "thrust_max_n": 18.0, "max_abs_torque_n_m": 0.9},
+        actuator_limits={
+            "thrust_min_n": 0.0,
+            "thrust_max_n": 18.0,
+            "max_abs_torque_n_m": 0.9,
+        },
         state_limits={"max_abs_tilt_rad": 0.70, "max_abs_lateral_position_m": 3.0},
         performance_limits={"max_abs_final_error": 0.18, "max_settling_time_s": 12.0},
     )
@@ -356,10 +389,17 @@ def _run_case_closed_loop(
     features: list[CoreFeatureArtifact],
 ) -> tuple[SimulationPerformanceSummary, str, list[str], ControllerCandidate]:
     if route_ir.plant_family in SCALAR_BENCHMARK_FAMILIES:
-        return run_scalar_closed_loop(route_ir, controller), "cfdc.sim.generic", [], controller
+        return (
+            run_scalar_closed_loop(route_ir, controller),
+            "cfdc.sim.generic",
+            [],
+            controller,
+        )
     if route_ir.plant_family == "cartpole":
         fmap = {feature.feature_id: feature.value for feature in features}
-        search_state, _, search_events = search_cartpole_pd_gains(fmap["natural_frequency"])
+        search_state, _, search_events = search_cartpole_pd_gains(
+            fmap["natural_frequency"]
+        )
         simulation = simulate_cartpole_energy_swingup(
             include_trajectory=False,
             balance_gains=search_state.accepted_gains,
@@ -370,10 +410,18 @@ def _run_case_closed_loop(
             update={
                 "gains": search_state.accepted_gains,
                 "status": "ready_for_conservative_trial",
-                "notes": [*controller.notes, "Nonlinear PD search completed before this benchmark response."],
+                "notes": [
+                    *controller.notes,
+                    "Nonlinear PD search completed before this benchmark response.",
+                ],
             }
         )
-        return simulation.performance, "cfdc.sim.cartpole", ["nonlinear PD search executed"], executed_controller
+        return (
+            simulation.performance,
+            "cfdc.sim.cartpole",
+            ["nonlinear PD search executed"],
+            executed_controller,
+        )
     gains = vtol_operational_gains(features)
     fmap = {feature.feature_id: feature.value for feature in features}
     simulation = run_vtol_simulation(
@@ -387,7 +435,10 @@ def _run_case_closed_loop(
     executed_controller = controller.model_copy(
         update={
             "gains": gains,
-            "notes": [*controller.notes, "Operational gains passed the complete coupled benchmark response."],
+            "notes": [
+                *controller.notes,
+                "Operational gains passed the complete coupled benchmark response.",
+            ],
         }
     )
     return simulation.performance, "cfdc.sim.vtol", [], executed_controller
@@ -398,7 +449,9 @@ def run_benchmark_case(case: BenchmarkCase) -> dict[str, Any]:
     diagnosis = engine.diagnose(case.description)
     classification = engine.classify(diagnosis)
     profile_catalog = default_simulation_profile_catalog()
-    selection = deterministic_profile_selection(case.description, diagnosis, classification, profile_catalog)
+    selection = deterministic_profile_selection(
+        case.description, diagnosis, classification, profile_catalog
+    )
     profile = validate_semantic_selection(selection, classification, profile_catalog)
     classification = apply_profile_to_classification(classification, profile)
     plan = plan_safe_experiments(diagnosis, classification)
@@ -492,7 +545,8 @@ def run_feature_ablation_suite() -> FeatureAblationResult:
     selected = {
         case.case_id: case
         for case in list_benchmark_cases()
-        if case.case_id in {
+        if case.case_id
+        in {
             "first_order_self_regulating_process",
             "double_integrator_low_friction_cart",
         }
@@ -509,13 +563,17 @@ def run_feature_ablation_suite() -> FeatureAblationResult:
             "full_model_reference",
         ]:
             features = _feature_packet(case, classification, variant)
-            controller = synthesize_controller(classification, features, case.safety_limits)
+            controller = synthesize_controller(
+                classification, features, case.safety_limits
+            )
             performance = run_scalar_closed_loop(route_ir, controller)
             trials.append(
                 FeatureAblationTrial(
                     case_id=case.case_id,
                     variant=variant,
-                    feature_values={feature.feature_id: feature.value for feature in features},
+                    feature_values={
+                        feature.feature_id: feature.value for feature in features
+                    },
                     controller=controller,
                     performance=performance,
                     success=performance.success,
@@ -534,9 +592,15 @@ def run_feature_ablation_suite() -> FeatureAblationResult:
         noisy_degraded = (
             not noisy.success
             or noisy.performance.abs_final_error > minimal.performance.abs_final_error
-            or noisy.performance.saturation_fraction > minimal.performance.saturation_fraction
+            or noisy.performance.saturation_fraction
+            > minimal.performance.saturation_fraction
         )
-        comparisons_hold = comparisons_hold and minimal.success and reference.success and noisy_degraded
+        comparisons_hold = (
+            comparisons_hold
+            and minimal.success
+            and reference.success
+            and noisy_degraded
+        )
     return FeatureAblationResult(
         success=comparisons_hold,
         case_count=len(grouped),

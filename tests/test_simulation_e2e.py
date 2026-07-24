@@ -46,13 +46,9 @@ def test_e2e_registered_cartpole_reaches_stability_after_multiple_rounds():
     assert 2 <= len(session.trials) <= 20
     assert all(len(trial.traces) == 5 for trial in session.trials)
     assert all(len(trial.stability.poles) == 4 for trial in session.trials)
+    assert all(len(trial.stability.scenario_evidence) == 5 for trial in session.trials)
     assert all(
-        len(trial.stability.scenario_evidence) == 5
-        for trial in session.trials
-    )
-    assert all(
-        evidence.passed
-        for evidence in session.trials[-1].stability.scenario_evidence
+        evidence.passed for evidence in session.trials[-1].stability.scenario_evidence
     )
     assert session.llm_calls == []
 
@@ -84,9 +80,7 @@ def _unstable_siso_context():
     )
     diagnosis = StructuralDiagnosis.model_validate(payload)
     classification = ArchetypeClassification(
-        primary_class=(
-            ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP
-        ),
+        primary_class=(ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP),
         control_architecture="detuned PI",
         required_core_features=["input_gain"],
         rationale="the supplied local pole is unstable",
@@ -147,9 +141,7 @@ def test_e2e_free_input_model_confirmation_llm_approval_and_scoped_stability():
         tunable_gain_names=["kp", "ki"],
         status="ready_for_conservative_trial",
     )
-    bootstrap = bootstrap_controller_candidate(
-        candidate, session.confirmed_model
-    )
+    bootstrap = bootstrap_controller_candidate(candidate, session.confirmed_model)
     assert bootstrap.status == "ready"
     session = set_initial_controller(
         session,

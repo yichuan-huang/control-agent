@@ -15,9 +15,7 @@ from cfdc.lab.model_contracts import (
 
 
 _CATALOG_PATH = (
-    Path(__file__).resolve().parent
-    / "resources"
-    / "model_question_examples.v1.json"
+    Path(__file__).resolve().parent / "resources" / "model_question_examples.v1.json"
 )
 
 
@@ -71,9 +69,7 @@ def adopt_example_answer(
         example.fact_type != question.fact_type
         or example.unit_family != question.unit_family
     ):
-        raise ValueError(
-            "question fact type or unit family does not match its example"
-        )
+        raise ValueError("question fact type or unit family does not match its example")
     return ModelFactAnswer(
         fact_id=question.fact_id,
         fact_type=question.fact_type,
@@ -83,9 +79,7 @@ def adopt_example_answer(
         source="user_adopted_example",
         example_id=example.example_id,
         example_catalog_version=catalog.catalog_version,
-        example_content_sha256=_canonical_sha256(
-            example.model_dump(mode="json")
-        ),
+        example_content_sha256=_canonical_sha256(example.model_dump(mode="json")),
         adopted_at=adopted_at,
     )
 

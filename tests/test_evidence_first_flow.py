@@ -123,7 +123,11 @@ def test_evidence_requirement_plan_is_specific_to_required_features():
         "structured_mathematical_model",
         "measured_traces_reserved_for_later",
     ]
-    assert plan.experiment_requirements[0].required_signal_ids == ["time", "input", "output"]
+    assert plan.experiment_requirements[0].required_signal_ids == [
+        "time",
+        "input",
+        "output",
+    ]
     assert "safety_bounds" in plan.missing_items
     assert "time_scale_hint_s" in plan.missing_items
 
@@ -338,13 +342,24 @@ def test_two_same_class_models_produce_object_specific_features_and_gains():
     )
 
     assert first.status == second.status == "validation_pending"
-    assert first.controller.release_level == second.controller.release_level == "candidate_unvalidated"
+    assert (
+        first.controller.release_level
+        == second.controller.release_level
+        == "candidate_unvalidated"
+    )
     first_features = {item.feature_id: item.value for item in first.features}
     second_features = {item.feature_id: item.value for item in second.features}
-    assert first_features["static_gain"] != pytest.approx(second_features["static_gain"])
-    assert first_features["time_constant"] != pytest.approx(second_features["time_constant"])
+    assert first_features["static_gain"] != pytest.approx(
+        second_features["static_gain"]
+    )
+    assert first_features["time_constant"] != pytest.approx(
+        second_features["time_constant"]
+    )
     assert first.final_gains != second.final_gains
-    assert all(item.plant_id == first.evidence_requirement_plan.plant_id for item in first.features)
+    assert all(
+        item.plant_id == first.evidence_requirement_plan.plant_id
+        for item in first.features
+    )
     assert first.algorithm1_state is None
 
 
@@ -551,7 +566,10 @@ def test_siso_validation_does_not_ignore_extra_reference_channels():
 
     assert report.status == "rejected"
     assert report.controller_validation.status == "not_supported"
-    assert any("exactly one reference" in item for item in report.controller_validation.violations)
+    assert any(
+        "exactly one reference" in item
+        for item in report.controller_validation.violations
+    )
 
 
 def test_siso_validation_does_not_ignore_unexecutable_initial_state():
@@ -570,7 +588,9 @@ def test_siso_validation_does_not_ignore_unexecutable_initial_state():
 
     assert report.status == "rejected"
     assert report.controller_validation.status == "not_supported"
-    assert any("initial_state" in item for item in report.controller_validation.violations)
+    assert any(
+        "initial_state" in item for item in report.controller_validation.violations
+    )
 
 
 @pytest.mark.parametrize(
@@ -606,9 +626,13 @@ def test_method_profiles_do_not_contain_demo_simulator_parameters():
     methods = default_control_method_profile_catalog()
     fixtures = default_demo_plant_fixture_catalog()
 
-    first_order = next(item for item in methods.profiles if item.profile_id == "first_order_lag")
+    first_order = next(
+        item for item in methods.profiles if item.profile_id == "first_order_lag"
+    )
     first_order_fixture = next(
-        item for item in fixtures.fixtures if item.method_profile_id == "first_order_lag"
+        item
+        for item in fixtures.fixtures
+        if item.method_profile_id == "first_order_lag"
     )
     assert not hasattr(first_order, "simulator_backend")
     assert not hasattr(first_order, "nominal_parameters")
@@ -629,9 +653,9 @@ def test_mimo_local_time_constant_is_estimated_from_transition_data():
     dt = time_s[1] - time_s[0]
     tau = 2.0
     for index in range(1, len(time_s)):
-        outputs[index] = outputs[index - 1] + dt * (
-            target[index - 1] - outputs[index - 1]
-        ) / tau
+        outputs[index] = (
+            outputs[index - 1] + dt * (target[index - 1] - outputs[index - 1]) / tau
+        )
     record = SimulationExperimentRecord(
         primitive="bounded_scan",
         estimates=["local_gain_matrix", "local_time_constant", "pairing_indicator"],

@@ -99,7 +99,9 @@ class AssessedDiagnosticField(DiagnosticField):
         if (self.status == "unknown") != is_unknown:
             raise ValueError("diagnostic status and assessment must resolve together")
         if self.status != "unknown" and (not self.evidence or self.confidence < 0.5):
-            raise ValueError("resolved diagnostic fields require evidence and confidence >= 0.5")
+            raise ValueError(
+                "resolved diagnostic fields require evidence and confidence >= 0.5"
+            )
         return self
 
 
@@ -151,9 +153,13 @@ class StructuralDiagnosis(CFDCModel):
     @model_validator(mode="after")
     def validate_questions(self) -> "StructuralDiagnosis":
         if not self.complete and not (2 <= len(self.clarification_questions) <= 4):
-            raise ValueError("Incomplete diagnosis must include 2-4 clarification questions")
+            raise ValueError(
+                "Incomplete diagnosis must include 2-4 clarification questions"
+            )
         if self.complete and self.clarification_questions:
-            raise ValueError("Complete diagnosis should not include clarification questions")
+            raise ValueError(
+                "Complete diagnosis should not include clarification questions"
+            )
         return self
 
     @property
@@ -420,7 +426,9 @@ class SpecificationAssessment(CFDCModel):
     @model_validator(mode="after")
     def validate_status_consistency(self) -> "SpecificationAssessment":
         if self.status == "ready" and (self.missing_fact_ids or self.conflicts):
-            raise ValueError("a ready specification assessment cannot contain gaps or conflicts")
+            raise ValueError(
+                "a ready specification assessment cannot contain gaps or conflicts"
+            )
         if self.status == "conflict" and not self.conflicts:
             raise ValueError("a conflict assessment must explain at least one conflict")
         return self
@@ -444,9 +452,13 @@ class TransferFunctionModelSpec(CFDCModel):
         if not any(abs(value) > 0.0 for value in self.denominator):
             raise ValueError("denominator must contain a non-zero coefficient")
         if self.time_domain == "discrete" and self.sample_time_s is None:
-            raise ValueError("sample_time_s is required for a discrete transfer function")
+            raise ValueError(
+                "sample_time_s is required for a discrete transfer function"
+            )
         if self.time_domain == "continuous" and self.sample_time_s is not None:
-            raise ValueError("sample_time_s is only valid for a discrete transfer function")
+            raise ValueError(
+                "sample_time_s is only valid for a discrete transfer function"
+            )
         return self
 
 
@@ -483,9 +495,13 @@ class StateSpaceModelSpec(CFDCModel):
         if len(self.initial_state) != n:
             raise ValueError("initial_state must match A dimensions")
         if self.time_domain == "discrete" and self.sample_time_s is None:
-            raise ValueError("sample_time_s is required for a discrete state-space model")
+            raise ValueError(
+                "sample_time_s is required for a discrete state-space model"
+            )
         if self.time_domain == "continuous" and self.sample_time_s is not None:
-            raise ValueError("sample_time_s is only valid for a discrete state-space model")
+            raise ValueError(
+                "sample_time_s is only valid for a discrete state-space model"
+            )
         return self
 
 
@@ -525,11 +541,18 @@ class RegisteredNonlinearModelSpec(CFDCModel):
         }[self.template_id]
         required_initial_state = {
             "underactuated_cartpole": {
-                "position_m", "velocity_m_s", "angle_rad", "angular_rate_rad_s"
+                "position_m",
+                "velocity_m_s",
+                "angle_rad",
+                "angular_rate_rad_s",
             },
             "vtol_cascaded": {
-                "x_m", "z_m", "pitch_rad", "x_velocity_m_s",
-                "z_velocity_m_s", "pitch_rate_rad_s",
+                "x_m",
+                "z_m",
+                "pitch_rad",
+                "x_velocity_m_s",
+                "z_velocity_m_s",
+                "pitch_rate_rad_s",
             },
         }[self.template_id]
         if set(self.parameters) != required_parameters:
@@ -593,9 +616,7 @@ class RegisteredNonlinearModelSpec(CFDCModel):
             and abs(self.initial_state["position_m"])
             > self.parameters["cart_position_limit_m"]
         ):
-            raise ValueError(
-                "initial cart position exceeds cart_position_limit_m"
-            )
+            raise ValueError("initial cart position exceeds cart_position_limit_m")
         return self
 
 
@@ -672,10 +693,14 @@ class PlantEvidencePackage(CFDCModel):
     @model_validator(mode="after")
     def validate_evidence_source(self) -> "PlantEvidencePackage":
         if self.model is None and not self.measured_traces:
-            raise ValueError("evidence package requires a model or measured trace manifest")
+            raise ValueError(
+                "evidence package requires a model or measured trace manifest"
+            )
         if self.evidence_package_id is None:
             payload = self.model_dump_json(exclude={"evidence_package_id"})
-            self.evidence_package_id = f"evidence-{hashlib.sha256(payload.encode()).hexdigest()[:20]}"
+            self.evidence_package_id = (
+                f"evidence-{hashlib.sha256(payload.encode()).hexdigest()[:20]}"
+            )
         return self
 
 
@@ -766,21 +791,27 @@ class ExperimentTrace(CFDCModel):
 
     @field_validator("signals")
     @classmethod
-    def validate_signals(cls, signals: dict[str, list[float]]) -> dict[str, list[float]]:
+    def validate_signals(
+        cls, signals: dict[str, list[float]]
+    ) -> dict[str, list[float]]:
         cleaned: dict[str, list[float]] = {}
         for name, values in signals.items():
             clean_name = name.strip()
             if not clean_name:
                 raise ValueError("signal names must be non-empty")
             if len(values) < 3:
-                raise ValueError(f"signal '{clean_name}' must contain at least three samples")
+                raise ValueError(
+                    f"signal '{clean_name}' must contain at least three samples"
+                )
             cleaned[clean_name] = values
         return cleaned
 
     @model_validator(mode="after")
     def validate_signal_lengths(self) -> "ExperimentTrace":
         expected = len(self.time_s)
-        mismatched = [name for name, values in self.signals.items() if len(values) != expected]
+        mismatched = [
+            name for name, values in self.signals.items() if len(values) != expected
+        ]
         if mismatched:
             names = ", ".join(sorted(mismatched))
             raise ValueError(f"signals must match time_s length: {names}")
@@ -846,16 +877,25 @@ class CoreFeatureArtifact(CFDCModel):
     applicable_plant_families: list[str] = Field(default_factory=list)
     invalidating_conditions: list[str] = Field(default_factory=list)
     data_quality_flags: list[str] = Field(default_factory=list)
+
     @model_validator(mode="after")
     def validate_bounds(self) -> "CoreFeatureArtifact":
         if isinstance(self.value, list):
             if self.feature_id != "local_gain_matrix":
                 raise ValueError("Only local_gain_matrix may carry a matrix value")
             if self.lower_bound is not None or self.upper_bound is not None:
-                raise ValueError("Matrix features use element values instead of scalar bounds")
+                raise ValueError(
+                    "Matrix features use element values instead of scalar bounds"
+                )
             width = len(self.value[0]) if self.value else 0
-            if len(self.value) < 2 or width < 2 or any(len(row) != width for row in self.value):
-                raise ValueError("local_gain_matrix must be a rectangular matrix of at least 2x2")
+            if (
+                len(self.value) < 2
+                or width < 2
+                or any(len(row) != width for row in self.value)
+            ):
+                raise ValueError(
+                    "local_gain_matrix must be a rectangular matrix of at least 2x2"
+                )
         else:
             if self.lower_bound is None or self.upper_bound is None:
                 raise ValueError("Scalar features require lower_bound and upper_bound")
@@ -876,8 +916,11 @@ class CoreFeatureArtifact(CFDCModel):
                     self.trace_sha256 or "no-trace",
                 )
             )
-            self.object_id = f"feature-{hashlib.sha256(identity.encode()).hexdigest()[:20]}"
+            self.object_id = (
+                f"feature-{hashlib.sha256(identity.encode()).hexdigest()[:20]}"
+            )
         return self
+
 
 class FeatureQualityPolicy(CFDCModel):
     minimum_confidence: float = Field(default=0.70, ge=0.0, le=1.0)
@@ -926,7 +969,9 @@ class ControllerCandidate(CFDCModel):
     def validate_tunable_gain_names(self) -> "ControllerCandidate":
         unknown = set(self.tunable_gain_names) - set(self.gains)
         if unknown:
-            raise ValueError(f"tunable gains must exist in gains: {', '.join(sorted(unknown))}")
+            raise ValueError(
+                f"tunable gains must exist in gains: {', '.join(sorted(unknown))}"
+            )
         if len(self.tunable_gain_names) != len(set(self.tunable_gain_names)):
             raise ValueError("tunable_gain_names must not contain duplicates")
         return self
@@ -1162,7 +1207,9 @@ class ClosedLoopBenchmarkCaseResult(CFDCModel):
 
 class FeatureAblationTrial(CFDCModel):
     case_id: str
-    variant: Literal["minimal_core_feature", "wrong_or_noisy_feature", "full_model_reference"]
+    variant: Literal[
+        "minimal_core_feature", "wrong_or_noisy_feature", "full_model_reference"
+    ]
     feature_values: dict[str, float]
     controller: ControllerCandidate
     performance: SimulationPerformanceSummary
@@ -1353,7 +1400,9 @@ class SafeGainSearchState(CFDCModel):
     trial_index: int = Field(default=0, ge=0)
     frozen: bool = False
     freeze_reason: str | None = None
-    status: Literal["ready_for_trial", "trial_pending", "accepted", "frozen"] = "ready_for_trial"
+    status: Literal["ready_for_trial", "trial_pending", "accepted", "frozen"] = (
+        "ready_for_trial"
+    )
     history: list[dict[str, Any]] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -1450,7 +1499,9 @@ class CartpoleSimulationResult(CFDCModel):
     sample_count: int = Field(ge=1)
     performance: SimulationPerformanceSummary
     metrics: dict[str, int | float | str | bool | None] = Field(default_factory=dict)
-    events: list[dict[str, int | float | str | bool | None]] = Field(default_factory=list)
+    events: list[dict[str, int | float | str | bool | None]] = Field(
+        default_factory=list
+    )
     final_gains: dict[str, float] = Field(default_factory=dict)
     trajectory: list[dict[str, float | str]] = Field(default_factory=list)
     evidence_boundary: str = "software_simulation_cartpole"
@@ -1519,7 +1570,9 @@ class VtolSimulationResult(CFDCModel):
     performance: SimulationPerformanceSummary
     metrics: dict[str, int | float | str | bool | None]
     features: list[CoreFeatureArtifact] = Field(default_factory=list)
-    events: list[dict[str, int | float | str | bool | None]] = Field(default_factory=list)
+    events: list[dict[str, int | float | str | bool | None]] = Field(
+        default_factory=list
+    )
     trajectory: list[dict[str, float | str]] = Field(default_factory=list)
     evidence_boundary: str = "software_simulation_vtol"
 

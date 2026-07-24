@@ -184,9 +184,7 @@ def test_valid_registered_cartpole_and_vtol_proposals(case_id, coupling):
         lambda payload: payload["model"].update(
             {"input_signal_id": "different_actuator"}
         ),
-        lambda payload: payload["model"].update(
-            {"denominator": [1.0, -1.0]}
-        ),
+        lambda payload: payload["model"].update({"denominator": [1.0, -1.0]}),
         lambda payload: payload["model"].update({"unknown": 1}),
     ],
 )
@@ -200,9 +198,7 @@ def test_model_safety_rejects_or_keeps_in_model_review(mutation):
 
 
 def test_low_confidence_has_two_to_four_plain_questions():
-    result = validate_model_proposal_payload(
-        tf_payload(confidence=0.2), siso_context()
-    )
+    result = validate_model_proposal_payload(tf_payload(confidence=0.2), siso_context())
     assert result.status == "need_more"
     assert 2 <= len(result.questions) <= 4
 
@@ -254,9 +250,7 @@ def adjustment_session():
 def test_valid_gain_call_registers_pending_and_requires_user_approval():
     session = adjustment_session()
     context = build_gain_proposal_context(session)
-    new = {
-        name: value * 1.05 for name, value in context.current_parameters.items()
-    }
+    new = {name: value * 1.05 for name, value in context.current_parameters.items()}
     adapter = FakeProposalAdapter(
         gain_payload={
             "new_parameters": new,
@@ -288,8 +282,7 @@ def test_unchanged_gain_call_is_rejected_and_explained():
     assert result.proposal is None
     assert result.call_record.validation_status == "rejected"
     assert any(
-        "change at least one" in error
-        for error in result.call_record.validation_errors
+        "change at least one" in error for error in result.call_record.validation_errors
     )
     assert updated.pending_proposal is None
     assert "未通过后端校验" in render_linked_tuning(updated)["status"]
@@ -319,9 +312,7 @@ def test_unchanged_gain_call_is_rejected_and_explained():
 )
 def test_invalid_gain_calls_are_audited_but_never_registered(payload):
     session = adjustment_session()
-    result = request_gain_proposal(
-        session, FakeProposalAdapter(gain_payload=payload)
-    )
+    result = request_gain_proposal(session, FakeProposalAdapter(gain_payload=payload))
     assert result.proposal is None
     assert result.call_record.validation_status in {"rejected", "error"}
 
@@ -332,8 +323,7 @@ def test_sanitizer_redacts_nested_keys_literals_bearer_and_url_credentials():
             "nested": {
                 "Authorization": "Bearer abc.def",
                 "note": (
-                    "key=MYSECRET "
-                    "https://user:pass@example.test/a?api_key=q&ok=1"
+                    "key=MYSECRET https://user:pass@example.test/a?api_key=q&ok=1"
                 ),
             }
         },
@@ -367,9 +357,7 @@ def test_openai_adapter_stage6_methods_use_strict_json_prompts(monkeypatch):
 
     class FakeOpenAI:
         def __init__(self, **kwargs):
-            self.chat = type(
-                "Chat", (), {"completions": FakeCompletions()}
-            )()
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
 
     monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
     adapter = OpenAICompatibleDiagnosticAdapter(
@@ -385,8 +373,7 @@ def test_openai_adapter_stage6_methods_use_strict_json_prompts(monkeypatch):
     assert len(calls) == 2
     assert all(call["response_format"] == {"type": "json_object"} for call in calls)
     assert all(
-        call["extra_body"] == {"thinking": {"type": "disabled"}}
-        for call in calls
+        call["extra_body"] == {"thinking": {"type": "disabled"}} for call in calls
     )
     assert "Never emit Python" in calls[0]["messages"][0]["content"]
     assert "within 10%" in calls[1]["messages"][1]["content"]
@@ -422,9 +409,7 @@ def test_openai_adapter_routes_typed_discovery_context_to_three_state_prompt(
 
     class FakeOpenAI:
         def __init__(self, **kwargs):
-            self.chat = type(
-                "Chat", (), {"completions": FakeCompletions()}
-            )()
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
 
     monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
     adapter = OpenAICompatibleDiagnosticAdapter(

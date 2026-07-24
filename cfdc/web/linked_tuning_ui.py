@@ -89,9 +89,7 @@ def build_linked_tuning_panel() -> LinkedTuningComponents:
             label="本轮控制器参数（仅第 1 轮前可编辑）",
             elem_id="linked-controller-parameters",
         )
-        derived_parameters = gr.Markdown(
-            elem_id="linked-derived-parameters"
-        )
+        derived_parameters = gr.Markdown(elem_id="linked-derived-parameters")
         run_trial = gr.Button(
             "运行初始控制器效果验证",
             variant="primary",
@@ -154,9 +152,7 @@ def build_linked_tuning_panel() -> LinkedTuningComponents:
                 label="AI 参数建议",
                 elem_id="linked-proposal-diff",
             )
-            proposal_rationale = gr.Markdown(
-                elem_id="linked-proposal-rationale"
-            )
+            proposal_rationale = gr.Markdown(elem_id="linked-proposal-rationale")
             with gr.Row():
                 approve_and_run = gr.Button(
                     "批准并运行下一轮",
@@ -249,9 +245,7 @@ def _render_outputs(
 ) -> tuple[Any, ...]:
     controls = view["controls"]
     editable = bool(
-        state
-        and state.get("state") == "trial_pending"
-        and not state.get("trials")
+        state and state.get("state") == "trial_pending" and not state.get("trials")
     )
     has_trials = bool(state and state.get("trials"))
     show_proposal = bool(controls["approve_and_run"])
@@ -274,11 +268,7 @@ def _render_outputs(
         view["iterations"],
         view["llm_audit"],
         gr.update(
-            value=(
-                "运行初始控制器效果验证"
-                if not has_trials
-                else "运行本轮试验"
-            ),
+            value=("运行初始控制器效果验证" if not has_trials else "运行本轮试验"),
             interactive=controls["run_trial"],
         ),
         gr.update(
@@ -311,18 +301,14 @@ def _progress_output(
         "controller",
     }
     progress_payload = {
-        key: value
-        for key, value in report_json.items()
-        if key in progress_fields
+        key: value for key, value in report_json.items() if key in progress_fields
     }
     report = CFDCRunReport.model_validate(progress_payload)
     linked_state = state.get("state") if state else None
     return stage_progress_html(
         report,
         linked_simulation_state=(
-            str(linked_state)
-            if linked_state is not None
-            else None
+            str(linked_state) if linked_state is not None else None
         ),
     )
 

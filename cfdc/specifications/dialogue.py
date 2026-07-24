@@ -32,11 +32,20 @@ class UnitCompatibilityError(ValueError):
 
 def _dynamic_output_names(description: SystemDescription) -> list[str]:
     discrete_markers = (
-        " state", "state ", "status", "switch", "relay", "command",
-        "状态", "开关", "继电器", "命令",
+        " state",
+        "state ",
+        "status",
+        "switch",
+        "relay",
+        "command",
+        "状态",
+        "开关",
+        "继电器",
+        "命令",
     )
     dynamic = [
-        name for name in description.observed_outputs
+        name
+        for name in description.observed_outputs
         if not any(marker in f" {name.casefold()} " for marker in discrete_markers)
     ]
     return dynamic or description.observed_outputs
@@ -167,9 +176,7 @@ def _cross_fact_unit_conflicts(facts: list[SpecificationFact]) -> list[str]:
             continue
         families = {unit_family(item.unit) for item in supplied}
         if len(families) > 1:
-            rendered = ", ".join(
-                f"{item.fact_id}={item.unit}" for item in supplied
-            )
+            rendered = ", ".join(f"{item.fact_id}={item.unit}" for item in supplied)
             conflicts.append(
                 f"The declared {label} specifications use incompatible units: {rendered}. "
                 "Use one unit consistently or provide the conversion relationship."
@@ -190,9 +197,7 @@ def _bound_order_conflicts(facts: list[SpecificationFact]) -> list[str]:
         lower = known[lower_id].value
         upper = known[upper_id].value
         if isinstance(lower, float) and isinstance(upper, float) and lower >= upper:
-            conflicts.append(
-                f"'{lower_id}' must be smaller than '{upper_id}'."
-            )
+            conflicts.append(f"'{lower_id}' must be smaller than '{upper_id}'.")
     return conflicts
 
 
@@ -218,17 +223,11 @@ def _motion_dimension_conflicts(
     if expected_position_dimension is None:
         return []
     output_facts = [
-        known[fact_id]
-        for fact_id in ("output_min", "output_max")
-        if fact_id in known
+        known[fact_id] for fact_id in ("output_min", "output_max") if fact_id in known
     ]
     output_dimensions = {unit_family(item.unit) for item in output_facts}
-    if output_dimensions and output_dimensions != {
-        expected_position_dimension
-    }:
-        rendered = ", ".join(
-            f"{item.fact_id}={item.unit}" for item in output_facts
-        )
+    if output_dimensions and output_dimensions != {expected_position_dimension}:
+        rendered = ", ".join(f"{item.fact_id}={item.unit}" for item in output_facts)
         suffix = (
             " Provide the conversion relationship between the physical motion and "
             "the declared sensor unit."
@@ -328,11 +327,13 @@ def build_initial_specification_assessment(
         item for item in _bound_order_conflicts(facts) if item not in conflicts
     )
     conflicts.extend(
-        item for item in _motion_dimension_conflicts(template, facts)
+        item
+        for item in _motion_dimension_conflicts(template, facts)
         if item not in conflicts
     )
     conflicts.extend(
-        item for item in _physical_motion_conflicts(template, facts)
+        item
+        for item in _physical_motion_conflicts(template, facts)
         if item not in conflicts
     )
     path = _best_completion_path(template, facts)
@@ -340,8 +341,7 @@ def build_initial_specification_assessment(
     missing = [item for item in path.required_fact_ids if item not in known]
     fields = {item.fact_id: item for item in template.fields}
     questions = [
-        _render_question(fields[fact_id], description)
-        for fact_id in missing[:4]
+        _render_question(fields[fact_id], description) for fact_id in missing[:4]
     ]
     status = "conflict" if conflicts else "ready" if not missing else "need_more"
     return SpecificationAssessment(
@@ -403,7 +403,10 @@ def extract_explicit_specification_facts(
     normalized_text = text.replace("−", "-")
     source_type = (
         "manufacturer_document"
-        if any(token in normalized_text.lower() for token in ("manual", "datasheet", "铭牌", "手册"))
+        if any(
+            token in normalized_text.lower()
+            for token in ("manual", "datasheet", "铭牌", "手册")
+        )
         else "user_known_behavior"
     )
     facts: list[SpecificationFact] = []
@@ -454,7 +457,9 @@ def _extract_number_and_source_after_label(
         text,
         flags=re.IGNORECASE,
     )
-    return (float(match.group(1)), match.group(0).strip()) if match is not None else None
+    return (
+        (float(match.group(1)), match.group(0).strip()) if match is not None else None
+    )
 
 
 def derive_thermostat_specification_facts(
@@ -490,12 +495,18 @@ def derive_thermostat_specification_facts(
     )
     heat_transfer_match = _extract_number_and_source_after_label(
         text,
-        [r"传热系数\s*(?:h\s*=\s*)?", r"heat\s+(?:transfer|loss)\s+coefficient\s*(?:h\s*=\s*)?"],
+        [
+            r"传热系数\s*(?:h\s*=\s*)?",
+            r"heat\s+(?:transfer|loss)\s+coefficient\s*(?:h\s*=\s*)?",
+        ],
         rf"btu\s*/\s*\(\s*h\s*(?:\*|\s)\s*{degf}\s*\)",
     )
     furnace_rate_match = _extract_number_and_source_after_label(
         text,
-        [r"炉子供热率\s*(?:q_h\s*=\s*)?", r"furnace\s+(?:heating\s+)?rate\s*(?:q_h\s*=\s*)?"],
+        [
+            r"炉子供热率\s*(?:q_h\s*=\s*)?",
+            r"furnace\s+(?:heating\s+)?rate\s*(?:q_h\s*=\s*)?",
+        ],
         r"btu\s*/\s*h",
     )
     setpoint_match = _extract_number_and_source_after_label(
@@ -533,13 +544,19 @@ def derive_thermostat_specification_facts(
     field_map = {field.fact_id: field for field in template.fields}
     binary_source = next(
         (
-            name for name in [*description.actuators, *description.observed_outputs]
-            if any(token in name.casefold() for token in ("binary", "on/off", "二值", "开关"))
+            name
+            for name in [*description.actuators, *description.observed_outputs]
+            if any(
+                token in name.casefold()
+                for token in ("binary", "on/off", "二值", "开关")
+            )
         ),
         None,
     )
     if binary_source is None:
-        binary_match = re.search(r"binary|on/off|二值|开关", combined, flags=re.IGNORECASE)
+        binary_match = re.search(
+            r"binary|on/off|二值|开关", combined, flags=re.IGNORECASE
+        )
         if binary_match is None:
             return []
         binary_source = binary_match.group(0)
@@ -554,12 +571,16 @@ def derive_thermostat_specification_facts(
         expression="3600 * heat_capacity / heat_transfer_coefficient",
         inputs=[
             SpecificationDerivationInput(
-                name="heat_capacity", value=heat_capacity, unit="Btu/degF",
+                name="heat_capacity",
+                value=heat_capacity,
+                unit="Btu/degF",
                 source_text=heat_capacity_source,
             ),
             SpecificationDerivationInput(
-                name="heat_transfer_coefficient", value=heat_transfer,
-                unit="Btu/(h degF)", source_text=heat_transfer_source,
+                name="heat_transfer_coefficient",
+                value=heat_transfer,
+                unit="Btu/(h degF)",
+                source_text=heat_transfer_source,
             ),
         ],
         source_excerpts=[heat_capacity_source, heat_transfer_source],
@@ -569,12 +590,16 @@ def derive_thermostat_specification_facts(
         expression="furnace_rate / heat_transfer_coefficient",
         inputs=[
             SpecificationDerivationInput(
-                name="furnace_rate", value=furnace_rate, unit="Btu/h",
+                name="furnace_rate",
+                value=furnace_rate,
+                unit="Btu/h",
                 source_text=furnace_rate_source,
             ),
             SpecificationDerivationInput(
-                name="heat_transfer_coefficient", value=heat_transfer,
-                unit="Btu/(h degF)", source_text=heat_transfer_source,
+                name="heat_transfer_coefficient",
+                value=heat_transfer,
+                unit="Btu/(h degF)",
+                source_text=heat_transfer_source,
             ),
         ],
         source_excerpts=[furnace_rate_source, heat_transfer_source],
@@ -584,11 +609,16 @@ def derive_thermostat_specification_facts(
         expression="setpoint +/- hysteresis_half_width",
         inputs=[
             SpecificationDerivationInput(
-                name="setpoint", value=setpoint, unit="degF", source_text=setpoint_source,
+                name="setpoint",
+                value=setpoint,
+                unit="degF",
+                source_text=setpoint_source,
             ),
             SpecificationDerivationInput(
-                name="hysteresis_half_width", value=hysteresis_half_width,
-                unit="degF", source_text=hysteresis_source,
+                name="hysteresis_half_width",
+                value=hysteresis_half_width,
+                unit="degF",
+                source_text=hysteresis_source,
             ),
         ],
         source_excerpts=[setpoint_source, hysteresis_source],
@@ -694,7 +724,9 @@ def _compact_physical_unit(value: str) -> str:
     )
 
 
-def _validate_derivation_sources(fact: SpecificationFact, source_texts: list[str]) -> None:
+def _validate_derivation_sources(
+    fact: SpecificationFact, source_texts: list[str]
+) -> None:
     assert fact.derivation is not None
     joined = "\n".join(source_texts).casefold()
     for excerpt in fact.derivation.source_excerpts:
@@ -707,12 +739,19 @@ def _validate_derivation_sources(fact: SpecificationFact, source_texts: list[str
             raise ValueError(
                 f"derivation input '{item.name}' for '{fact.fact_id}' has no verbatim source"
             )
-        numeric_values = [float(value) for value in re.findall(_NUMBER, item.source_text)]
-        if not any(math.isclose(value, item.value, rel_tol=1e-12, abs_tol=1e-12) for value in numeric_values):
+        numeric_values = [
+            float(value) for value in re.findall(_NUMBER, item.source_text)
+        ]
+        if not any(
+            math.isclose(value, item.value, rel_tol=1e-12, abs_tol=1e-12)
+            for value in numeric_values
+        ):
             raise ValueError(
                 f"derivation input '{item.name}' for '{fact.fact_id}' does not match its source number"
             )
-        if _compact_physical_unit(item.unit) not in _compact_physical_unit(item.source_text):
+        if _compact_physical_unit(item.unit) not in _compact_physical_unit(
+            item.source_text
+        ):
             raise ValueError(
                 f"derivation input '{item.name}' for '{fact.fact_id}' does not match its source unit"
             )
@@ -733,24 +772,32 @@ def _registered_derivation_result(fact: SpecificationFact) -> tuple[float, str, 
         values: dict[str, float] = {}
         for name, expected_unit in expected.items():
             item = inputs[name]
-            if _compact_physical_unit(item.unit) != _compact_physical_unit(expected_unit):
+            if _compact_physical_unit(item.unit) != _compact_physical_unit(
+                expected_unit
+            ):
                 raise ValueError(
                     f"derivation '{rule_id}' input '{name}' requires unit {expected_unit}"
                 )
             if not math.isfinite(item.value):
-                raise ValueError(f"derivation '{rule_id}' input '{name}' must be finite")
+                raise ValueError(
+                    f"derivation '{rule_id}' input '{name}' must be finite"
+                )
             values[name] = item.value
         return values
 
     if rule_id == "thermal_time_constant_c_over_h":
         if fact.fact_id != "response_time_s":
             raise ValueError(f"derivation '{rule_id}' cannot produce '{fact.fact_id}'")
-        values = require({
-            "heat_capacity": "Btu/degF",
-            "heat_transfer_coefficient": "Btu/(h degF)",
-        })
+        values = require(
+            {
+                "heat_capacity": "Btu/degF",
+                "heat_transfer_coefficient": "Btu/(h degF)",
+            }
+        )
         if min(values.values()) <= 0.0:
-            raise ValueError(f"derivation '{rule_id}' requires positive physical inputs")
+            raise ValueError(
+                f"derivation '{rule_id}' requires positive physical inputs"
+            )
         return (
             3600.0 * values["heat_capacity"] / values["heat_transfer_coefficient"],
             "s",
@@ -759,12 +806,16 @@ def _registered_derivation_result(fact: SpecificationFact) -> tuple[float, str, 
     if rule_id == "thermal_steady_rise_q_over_h":
         if fact.fact_id != "steady_output_change":
             raise ValueError(f"derivation '{rule_id}' cannot produce '{fact.fact_id}'")
-        values = require({
-            "furnace_rate": "Btu/h",
-            "heat_transfer_coefficient": "Btu/(h degF)",
-        })
+        values = require(
+            {
+                "furnace_rate": "Btu/h",
+                "heat_transfer_coefficient": "Btu/(h degF)",
+            }
+        )
         if min(values.values()) <= 0.0:
-            raise ValueError(f"derivation '{rule_id}' requires positive physical inputs")
+            raise ValueError(
+                f"derivation '{rule_id}' requires positive physical inputs"
+            )
         return (
             values["furnace_rate"] / values["heat_transfer_coefficient"],
             "degF",
@@ -795,7 +846,9 @@ def _registered_derivation_result(fact: SpecificationFact) -> tuple[float, str, 
             raise ValueError(f"derivation '{rule_id}' cannot produce '{fact.fact_id}'")
         context = " ".join(fact.derivation.source_excerpts).casefold()
         if not any(token in context for token in ("binary", "on/off", "二值", "开关")):
-            raise ValueError(f"derivation '{rule_id}' requires explicit binary-command context")
+            raise ValueError(
+                f"derivation '{rule_id}' requires explicit binary-command context"
+            )
         return expected[fact.fact_id], "binary_command", "binary command domain {0, 1}"
     raise ValueError(f"unregistered specification derivation rule '{rule_id}'")
 
@@ -809,7 +862,9 @@ def _verify_registered_derivation(
         return fact
     _validate_derivation_sources(fact, source_texts)
     expected_value, expected_unit, expression = _registered_derivation_result(fact)
-    normalized_expected, canonical_unit = normalize_scalar_unit(expected_value, expected_unit)
+    normalized_expected, canonical_unit = normalize_scalar_unit(
+        expected_value, expected_unit
+    )
     if not isinstance(fact.value, float):
         raise ValueError(f"derived specification fact '{fact.fact_id}' must be scalar")
     if fact.unit != canonical_unit or not math.isclose(
@@ -855,9 +910,7 @@ def validate_specification_assessment_payload(
             fact_id = raw_fact.get("fact_id")
             field = fields.get(fact_id)
             if field is None:
-                raise ValueError(
-                    f"LLM returned unknown specification fact '{fact_id}'"
-                )
+                raise ValueError(f"LLM returned unknown specification fact '{fact_id}'")
             unit = raw_fact.get("unit")
             if not isinstance(unit, str) or not unit.strip():
                 unit_gaps.append(str(fact_id))
@@ -909,7 +962,9 @@ def validate_specification_assessment_payload(
     for fact in assessment.facts:
         field = fields.get(fact.fact_id)
         if field is None:
-            raise ValueError(f"LLM returned unknown specification fact '{fact.fact_id}'")
+            raise ValueError(
+                f"LLM returned unknown specification fact '{fact.fact_id}'"
+            )
         if (
             fact.source_type != "derived_from_declared_physics"
             and fact.source_text.casefold() not in joined_sources

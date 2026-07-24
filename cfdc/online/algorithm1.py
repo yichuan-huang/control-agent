@@ -50,11 +50,7 @@ def propose_algorithm1_candidate(state: Algorithm1State) -> Algorithm1State:
 
     tunable = set(state.tunable_gain_names)
     candidate = {
-        name: (
-            value * state.policy.step_multiplier
-            if name in tunable
-            else value
-        )
+        name: (value * state.policy.step_multiplier if name in tunable else value)
         for name, value in state.accepted_gains.items()
     }
     return state.model_copy(
@@ -132,9 +128,7 @@ def evaluate_algorithm1_probe(
             "hard_violation_rollback_and_freeze",
         )
 
-    soft_violation = (
-        observation.soft_performance_violation or observation.nmp_violation
-    )
+    soft_violation = observation.soft_performance_violation or observation.nmp_violation
     if soft_violation:
         count = state.consecutive_soft_violations + 1
         soft_reasons = reasons or [
@@ -144,9 +138,7 @@ def evaluate_algorithm1_probe(
         ]
         if count >= state.policy.soft_violation_confirmations:
             return _rollback_and_freeze(
-                state.model_copy(
-                    update={"consecutive_soft_violations": count}
-                ),
+                state.model_copy(update={"consecutive_soft_violations": count}),
                 soft_reasons,
                 "confirmed_soft_violation_rollback_and_freeze",
             )
@@ -175,9 +167,7 @@ def evaluate_algorithm1_probe(
             "iteration_count": state.iteration_count + 1,
             "consecutive_soft_violations": 0,
             "status": "completed" if completed else "ready",
-            "completion_reason": (
-                "performance_target_met" if completed else None
-            ),
+            "completion_reason": ("performance_target_met" if completed else None),
             "history": [
                 *state.history,
                 {

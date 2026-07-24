@@ -133,7 +133,9 @@ def _run_ready_session(
 
     if session.status == "ready_for_experiments":
         if session.current_diagnosis is None or session.semantic_selection is None:
-            raise RuntimeError("ready diagnostic session is missing cached routing evidence")
+            raise RuntimeError(
+                "ready diagnostic session is missing cached routing evidence"
+            )
 
         return run_cfdc_route(
             session.route_id,
@@ -273,7 +275,10 @@ def continue_app_run(
             observed_outputs.append(answer)
         if "physical action or device" in question and answer not in actuators:
             actuators.append(answer)
-    if observed_outputs != session.accumulated_description.observed_outputs or actuators != session.accumulated_description.actuators:
+    if (
+        observed_outputs != session.accumulated_description.observed_outputs
+        or actuators != session.accumulated_description.actuators
+    ):
         session = session.model_copy(
             update={
                 "accumulated_description": session.accumulated_description.model_copy(
@@ -287,7 +292,8 @@ def continue_app_run(
     updated = continue_diagnostic_session(
         session,
         keyed_answers,
-        supplemental_description=_textbox_text(supplemental_description).strip() or None,
+        supplemental_description=_textbox_text(supplemental_description).strip()
+        or None,
         diagnostic_adapter=adapter,
     )
     report = _run_ready_session(
@@ -300,7 +306,8 @@ def continue_app_run(
     next_state = dict(app_state)
     next_state["session"] = (
         updated.model_dump(mode="json")
-        if updated.status in {
+        if updated.status
+        in {
             "collecting_information",
             "awaiting_specifications",
             "need_more_specifications",
@@ -340,9 +347,7 @@ def _record_simulation_boundary_confirmation(
             "该确认不代表真实硬件安全认证，也不授权下发硬件命令。"
         )
     updated_description = description.model_copy(
-        update={
-            "simulation_boundary_confirmation": SimulationBoundaryConfirmation()
-        }
+        update={"simulation_boundary_confirmation": SimulationBoundaryConfirmation()}
     )
     return session.model_copy(update={"accumulated_description": updated_description})
 
@@ -403,8 +408,13 @@ def submit_app_specifications(
     return report, next_state
 
 
-def _read_json_submission_source(uploaded_json, pasted_json: str | None) -> dict[str, Any]:
-    uploaded = uploaded_json is not None and str(getattr(uploaded_json, "name", uploaded_json)).strip() != ""
+def _read_json_submission_source(
+    uploaded_json, pasted_json: str | None
+) -> dict[str, Any]:
+    uploaded = (
+        uploaded_json is not None
+        and str(getattr(uploaded_json, "name", uploaded_json)).strip() != ""
+    )
     pasted = bool(_textbox_text(pasted_json).strip())
     if not uploaded and not pasted:
         raise ValueError("请选择一种 JSON 提交方式：上传 .json 文件或粘贴 JSON 数据。")
@@ -425,7 +435,9 @@ def _read_json_submission_source(uploaded_json, pasted_json: str | None) -> dict
     try:
         payload = json.loads(source)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"JSON 格式无效：第 {exc.lineno} 行第 {exc.colno} 列。") from None
+        raise ValueError(
+            f"JSON 格式无效：第 {exc.lineno} 行第 {exc.colno} 列。"
+        ) from None
     if not isinstance(payload, dict):
         raise ValueError("JSON 顶层必须是对象。")
     return payload
@@ -451,10 +463,16 @@ def _specification_facts_to_text(
         value = item.get("value")
         unit = item.get("unit")
         if not isinstance(fact_id, str) or fact_id not in allowed_ids:
-            raise ValueError(f"specification_facts[{index}] 的 fact_id 不属于当前规格模板。")
+            raise ValueError(
+                f"specification_facts[{index}] 的 fact_id 不属于当前规格模板。"
+            )
         if fact_id in seen:
             raise ValueError(f"specification_facts 中重复定义了 {fact_id!r}。")
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+        ):
             raise ValueError(f"specification_facts[{index}] 的 value 必须是有限数值。")
         if (
             not isinstance(unit, str)
@@ -463,7 +481,9 @@ def _specification_facts_to_text(
             or any(character.isspace() for character in unit.strip())
             or re.search(r"[\x00-\x1f]", unit)
         ):
-            raise ValueError(f"specification_facts[{index}] 的 unit 必须是无空白的单一单位标记。")
+            raise ValueError(
+                f"specification_facts[{index}] 的 unit 必须是无空白的单一单位标记。"
+            )
         seen.add(fact_id)
         rendered.append(f"{fact_id}={float(value):.17g} {unit.strip()};")
     return " ".join(rendered)
@@ -591,9 +611,7 @@ def submit_app_evidence(
         for item in trace_files or []:
             file_paths.append(str(getattr(item, "name", item)))
         if len(file_paths) != len(manifest_payload):
-            raise ValueError(
-                "每个实测 manifest 都必须一一对应界面中上传的 CSV。"
-            )
+            raise ValueError("每个实测 manifest 都必须一一对应界面中上传的 CSV。")
         manifests = []
         for index, item in enumerate(manifest_payload):
             payload = dict(item)

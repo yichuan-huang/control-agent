@@ -151,9 +151,7 @@ def _stability_rows(session: SimulationSession) -> list[list[Any]]:
     return [
         ["判定", decision.status],
         [
-            "最大极点实部"
-            if decision.analysis_domain == "continuous"
-            else "谱半径",
+            "最大极点实部" if decision.analysis_domain == "continuous" else "谱半径",
             dominant_value,
         ],
         ["末段误差收缩", decision.tail_error_envelope_contraction],
@@ -170,8 +168,7 @@ def render_linked_tuning(session: SimulationSession) -> dict[str, Any]:
             session.trial_controller,
             session.tuning_profile,
         )
-        if session.trial_controller is not None
-        and session.tuning_profile is not None
+        if session.trial_controller is not None and session.tuning_profile is not None
         else {}
     )
     derived = ""
@@ -180,9 +177,7 @@ def render_linked_tuning(session: SimulationSession) -> dict[str, Any]:
         and session.trial_controller.kind in {"pi", "filtered_pid"}
         and session.trial_controller.ki != 0.0
     ):
-        integral_time = (
-            session.trial_controller.kp / session.trial_controller.ki
-        )
+        integral_time = session.trial_controller.kp / session.trial_controller.ki
         derived = f"只读派生参数：`integral_time = {integral_time:.9g} s`"
 
     pending = session.pending_proposal
@@ -200,9 +195,7 @@ def render_linked_tuning(session: SimulationSession) -> dict[str, Any]:
         else []
     )
     pending_llm = bool(
-        pending
-        and pending.source == "llm"
-        and pending.approval_state == "pending"
+        pending and pending.source == "llm" and pending.approval_state == "pending"
     )
     terminal = session.state in {
         "stable",
@@ -224,14 +217,11 @@ def render_linked_tuning(session: SimulationSession) -> dict[str, Any]:
         "proposal_diff": proposal_diff,
         "proposal_rationale": pending.rationale if pending else "",
         "iterations": iteration_rows(session),
-        "llm_audit": [
-            record.model_dump(mode="json") for record in session.llm_calls
-        ],
+        "llm_audit": [record.model_dump(mode="json") for record in session.llm_calls],
         "controls": {
             "run_trial": session.state == "trial_pending" and not terminal,
             "request_gain": (
-                session.state in {"needs_adjustment", "rolled_back"}
-                and not pending_llm
+                session.state in {"needs_adjustment", "rolled_back"} and not pending_llm
             ),
             "approve_and_run": pending_llm,
             "reject_gain": pending_llm,

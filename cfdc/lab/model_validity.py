@@ -58,10 +58,7 @@ def _truncate_channels(
     channels: Mapping[str, list[float]],
     stop: int,
 ) -> dict[str, list[float]]:
-    return {
-        name: values[:stop]
-        for name, values in channels.items()
-    }
+    return {name: values[:stop] for name, values in channels.items()}
 
 
 def _guard_trace(

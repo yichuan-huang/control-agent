@@ -52,9 +52,7 @@ SessionState = Literal[
 TERMINAL_STATES = frozenset(
     {"stable", "frozen", "inconclusive", "budget_exhausted", "cancelled"}
 )
-_SENSITIVE_KEYS = frozenset(
-    {"apikey", "authorization", "token", "secret", "password"}
-)
+_SENSITIVE_KEYS = frozenset({"apikey", "authorization", "token", "secret", "password"})
 _CONTROLLER_ADAPTER = TypeAdapter(ControllerRuntimeSpec)
 _MAX_IMPORT_BYTES = 5 * 1024 * 1024
 _MAX_JSON_DEPTH = 64
@@ -121,9 +119,7 @@ def _scan_finite(value: Any, path: str = "$") -> None:
     if isinstance(value, Mapping):
         for key, item in value.items():
             _scan_finite(item, f"{path}.{key}")
-    elif isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         for index, item in enumerate(value):
             _scan_finite(item, f"{path}[{index}]")
 
@@ -139,9 +135,7 @@ def _scan_sensitive_keys(value: Any, path: str = "$") -> None:
             if any(marker in normalized for marker in _SENSITIVE_KEYS):
                 raise ValueError(f"sensitive key rejected at {path}.{key}")
             _scan_sensitive_keys(item, f"{path}.{key}")
-    elif isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         for index, item in enumerate(value):
             _scan_sensitive_keys(item, f"{path}[{index}]")
 
@@ -150,10 +144,7 @@ def _json_depth(value: Any, depth: int = 0) -> int:
     if depth > _MAX_JSON_DEPTH:
         return depth
     if isinstance(value, Mapping):
-        return max(
-            [depth]
-            + [_json_depth(item, depth + 1) for item in value.values()]
-        )
+        return max([depth] + [_json_depth(item, depth + 1) for item in value.values()])
     if isinstance(value, list):
         return max([depth] + [_json_depth(item, depth + 1) for item in value])
     return depth
@@ -210,9 +201,7 @@ class ParameterProposal(CFDCModel):
     relative_change: dict[str, float] = Field(min_length=1)
     rationale: str = Field(min_length=1, max_length=4000)
     checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
-    approval_state: Literal[
-        "not_required", "pending", "approved", "rejected", "stale"
-    ]
+    approval_state: Literal["not_required", "pending", "approved", "rejected", "stale"]
 
     @model_validator(mode="after")
     def validate_keysets(self) -> "ParameterProposal":
@@ -293,9 +282,7 @@ class LLMCallRecord(CFDCModel):
             "operation": self.operation,
             "provider": self.provider,
             "model": self.model,
-            "messages": [
-                message.model_dump(mode="json") for message in self.messages
-            ],
+            "messages": [message.model_dump(mode="json") for message in self.messages],
             "response": response,
             "occurred_at": self.occurred_at,
         }
@@ -311,13 +298,9 @@ class TrialRecord(CFDCModel):
     proposal: ParameterProposal | None = None
     traces: list[SimulationTrace] = Field(min_length=1, max_length=5)
     original_sample_counts: list[int] = Field(min_length=1, max_length=5)
-    trace_storage_policy: Literal[
-        "full", "deterministic_decimation_64"
-    ] = "full"
+    trace_storage_policy: Literal["full", "deterministic_decimation_64"] = "full"
     stability: StabilityDecision
-    creation_source: Literal[
-        "initial", "deterministic", "llm", "manual_restore"
-    ]
+    creation_source: Literal["initial", "deterministic", "llm", "manual_restore"]
     hard_violation: bool = False
     rolled_back: bool = False
     rollback_reason: str | None = Field(default=None, max_length=2000)
@@ -328,25 +311,17 @@ class TrialRecord(CFDCModel):
     @model_validator(mode="after")
     def validate_trial_integrity(self) -> "TrialRecord":
         if len(self.original_sample_counts) != len(self.traces):
-            raise ValueError(
-                "original_sample_counts must align with stored traces"
-            )
+            raise ValueError("original_sample_counts must align with stored traces")
         if any(
             original < len(trace.time_s)
-            for original, trace in zip(
-                self.original_sample_counts, self.traces
-            )
+            for original, trace in zip(self.original_sample_counts, self.traces)
         ):
-            raise ValueError(
-                "stored trace cannot exceed its original sample count"
-            )
+            raise ValueError("stored trace cannot exceed its original sample count")
         expected_policy = (
             "deterministic_decimation_64"
             if any(
                 original > len(trace.time_s)
-                for original, trace in zip(
-                    self.original_sample_counts, self.traces
-                )
+                for original, trace in zip(self.original_sample_counts, self.traces)
             )
             else "full"
         )
@@ -372,9 +347,7 @@ class SimulationRunConfig(CFDCModel):
 
     @model_validator(mode="after")
     def validate_budget_and_bounds(self) -> "SimulationRunConfig":
-        sample_count = math.floor(
-            self.horizon_s / self.sample_time_s + 1e-12
-        ) + 1
+        sample_count = math.floor(self.horizon_s / self.sample_time_s + 1e-12) + 1
         if sample_count > 20_000:
             raise ValueError("simulation configuration exceeds 20,000 samples")
         for group in (
@@ -434,9 +407,7 @@ class SimulationSession(CFDCModel):
     transition_history: list[TransitionRecord] = Field(
         default_factory=list, max_length=1000
     )
-    content_sha256: str | None = Field(
-        default=None, pattern=r"^[0-9a-f]{64}$"
-    )
+    content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def validate_session_integrity(self) -> "SimulationSession":
@@ -446,9 +417,7 @@ class SimulationSession(CFDCModel):
             else self.origin
         )
         if self.evidence_boundary != expected_boundary:
-            raise ValueError(
-                "origin and evidence boundary are inconsistent"
-            )
+            raise ValueError("origin and evidence boundary are inconsistent")
         stage5_metadata = (
             self.source_run_id,
             self.source_plant_id,
@@ -460,22 +429,22 @@ class SimulationSession(CFDCModel):
             "stage5_candidate_llm_model",
         }:
             if any(value is None for value in stage5_metadata):
-                raise ValueError(
-                    "stage5 sessions require complete source metadata"
-                )
+                raise ValueError("stage5 sessions require complete source metadata")
         elif any(value is not None for value in stage5_metadata):
-            raise ValueError(
-                "only stage5 sessions carry source metadata"
-            )
+            raise ValueError("only stage5 sessions carry source metadata")
         if self.model_confirmed != (self.confirmed_model is not None):
             raise ValueError("model confirmation flag/model are inconsistent")
         if self.model_confirmed and self.pending_model != self.confirmed_model:
             raise ValueError("confirmed model must equal the reviewed model")
-        if self.state not in {
-            "model_review",
-            "cancelled",
-            "inconclusive",
-        } and not self.model_confirmed:
+        if (
+            self.state
+            not in {
+                "model_review",
+                "cancelled",
+                "inconclusive",
+            }
+            and not self.model_confirmed
+        ):
             raise ValueError("no state may pass model review without confirmation")
         if self.state in {
             "trial_pending",
@@ -492,14 +461,12 @@ class SimulationSession(CFDCModel):
             or self.tuning_profile is None
         ):
             raise ValueError("controller-loop states require complete snapshots")
-        if self.trials and [
-            trial.iteration for trial in self.trials
-        ] != list(range(1, len(self.trials) + 1)):
+        if self.trials and [trial.iteration for trial in self.trials] != list(
+            range(1, len(self.trials) + 1)
+        ):
             raise ValueError("trial iterations must be contiguous and monotonic")
         if len(self.trials) == 20 and self.state not in TERMINAL_STATES:
-            raise ValueError(
-                "a 20-trial session must be in a terminal state"
-            )
+            raise ValueError("a 20-trial session must be in a terminal state")
         if self.transition_history:
             last = self.transition_history[-1]
             if last.revision_after != self.revision or last.to_state != self.state:
@@ -661,23 +628,17 @@ def rebuild_controller(
             )
         value = parameters[rule.name]
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ProposalValidationError(
-                f"gain {rule.name} must be a finite number"
-            )
+            raise ProposalValidationError(f"gain {rule.name} must be a finite number")
         numeric = float(value)
         if not math.isfinite(numeric):
-            raise ProposalValidationError(
-                f"gain {rule.name} must be finite"
-            )
+            raise ProposalValidationError(f"gain {rule.name} must be finite")
         if numeric < rule.lower_bound or numeric > rule.upper_bound:
             raise ProposalValidationError(
                 f"gain {rule.name} is outside its declared bounds"
             )
         _write_binding(payload, rule.binding, numeric)
     rebuilt = _CONTROLLER_ADAPTER.validate_python(payload)
-    if _architecture_hash(rebuilt, profile) != _architecture_hash(
-        controller, profile
-    ):
+    if _architecture_hash(rebuilt, profile) != _architecture_hash(controller, profile):
         raise ProposalValidationError("controller architecture changed")
     return rebuilt
 
@@ -704,9 +665,7 @@ def controller_architecture_hash(
     return _architecture_hash(controller, profile)
 
 
-def _relative_change(
-    old: float, new: float, rule: TuningParameterRule
-) -> float:
+def _relative_change(old: float, new: float, rule: TuningParameterRule) -> float:
     if old != 0.0:
         return abs(new - old) / abs(old)
     if new == 0.0:
@@ -796,14 +755,10 @@ def build_parameter_proposal(
             raise ProposalValidationError(f"gain {name} must be finite")
         rule = rules[name]
         if not rule.lower_bound <= value <= rule.upper_bound:
-            raise ProposalValidationError(
-                f"gain {name} is outside its declared bounds"
-            )
+            raise ProposalValidationError(f"gain {name} is outside its declared bounds")
         relative = _relative_change(old[name], value, rule)
         if relative > 0.10 + 1e-12:
-            raise ProposalValidationError(
-                f"gain {name} changes by more than 10%"
-            )
+            raise ProposalValidationError(f"gain {name} changes by more than 10%")
         new[name] = value
         changes[name] = relative
     if not any(change > 1e-12 for change in changes.values()):
@@ -850,14 +805,10 @@ def _rehash_session(payload: Mapping[str, Any]) -> SimulationSession:
 
 
 def _copy_session(session: SimulationSession) -> SimulationSession:
-    return SimulationSession.model_validate(
-        session.model_dump(mode="python")
-    )
+    return SimulationSession.model_validate(session.model_dump(mode="python"))
 
 
-def _expect_revision(
-    session: SimulationSession, expected_revision: int | None
-) -> int:
+def _expect_revision(session: SimulationSession, expected_revision: int | None) -> int:
     expected = session.revision if expected_revision is None else expected_revision
     if expected != session.revision:
         raise StaleRevisionError(
@@ -895,13 +846,9 @@ def _transition(
     return _rehash_session(payload)
 
 
-def _require_state(
-    session: SimulationSession, action: str, allowed: set[str]
-) -> None:
+def _require_state(session: SimulationSession, action: str, allowed: set[str]) -> None:
     if session.state not in allowed:
-        raise SessionActionError(
-            f"{action} is not legal from state {session.state}"
-        )
+        raise SessionActionError(f"{action} is not legal from state {session.state}")
 
 
 def _session_id() -> str:
@@ -948,9 +895,7 @@ def make_tuning_profile(
             else (-1 if value < 0.0 else 1)
         )
         zero_scale = (
-            zero_step_scales.get(name)
-            if zero_step_scales is not None
-            else None
+            zero_step_scales.get(name) if zero_step_scales is not None else None
         )
         rules.append(
             TuningParameterRule(
@@ -1076,9 +1021,7 @@ def set_pending_model(
     _expect_revision(session, expected_revision)
     _require_state(session, "set_pending_model", {"model_review"})
     if session.origin != "llm_proposed_model_hypothesis":
-        raise SessionActionError(
-            "only LLM-proposed model hypotheses can be replaced"
-        )
+        raise SessionActionError("only LLM-proposed model hypotheses can be replaced")
     return _transition(
         session,
         to_state="model_review",
@@ -1287,9 +1230,7 @@ def _normalize_runner_result(
         raise ValueError("runner must return one to five traces")
     traces = [
         SimulationTrace.model_validate(
-            item.model_dump(mode="python")
-            if hasattr(item, "model_dump")
-            else item
+            item.model_dump(mode="python") if hasattr(item, "model_dump") else item
         )
         for item in trace_values
     ]
@@ -1321,8 +1262,7 @@ def _runner_failure_decision(
     reason = reason[:1000] or "runner validation failed"
     is_hard = status == "unstable"
     is_discrete = (
-        model.kind != "registered_nonlinear"
-        and model.time_domain == "discrete"
+        model.kind != "registered_nonlinear" and model.time_domain == "discrete"
     )
     if model.kind == "registered_nonlinear":
         scenario_ids = (
@@ -1357,9 +1297,7 @@ def _runner_failure_decision(
             )
             for scenario_id in scenario_ids
         ]
-        pole_count = (
-            4 if model.template_id == "underactuated_cartpole" else 6
-        )
+        pole_count = 4 if model.template_id == "underactuated_cartpole" else 6
         return StabilityDecision(
             status=status,
             analysis_domain="continuous",
@@ -1405,20 +1343,12 @@ def stability_only_score(decision: StabilityDecision) -> float:
             margin = -1.0
     else:
         radius = (
-            decision.spectral_radius
-            if decision.spectral_radius is not None
-            else 2.0
+            decision.spectral_radius if decision.spectral_radius is not None else 2.0
         )
         margin = 1.0 - 1e-6 - radius
     normalized_margin = margin / (1.0 + abs(margin))
-    contraction = min(
-        1.0, max(-1.0, decision.tail_error_envelope_contraction)
-    )
-    return (
-        normalized_margin
-        + 0.25 * contraction
-        - 0.25 * decision.saturation_fraction
-    )
+    contraction = min(1.0, max(-1.0, decision.tail_error_envelope_contraction))
+    return normalized_margin + 0.25 * contraction - 0.25 * decision.saturation_fraction
 
 
 def _hard_violation(
@@ -1430,11 +1360,7 @@ def _hard_violation(
         for event in trace.events
         if event.kind in {"non_finite", "hard_bound_violation"}
     ]
-    hard = (
-        decision.hard_failure
-        or not decision.trajectory_finite
-        or bool(hard_events)
-    )
+    hard = decision.hard_failure or not decision.trajectory_finite or bool(hard_events)
     if not hard:
         return False, None
     reasons = list(decision.violations)
@@ -1450,9 +1376,7 @@ def _make_trial(
     traces: list[SimulationTrace],
     original_sample_counts: list[int],
     decision: StabilityDecision,
-    creation_source: Literal[
-        "initial", "deterministic", "llm", "manual_restore"
-    ],
+    creation_source: Literal["initial", "deterministic", "llm", "manual_restore"],
     hard_violation: bool,
     rolled_back: bool,
     rollback_reason: str | None,
@@ -1469,9 +1393,7 @@ def _make_trial(
             "deterministic_decimation_64"
             if any(
                 original > len(trace.time_s)
-                for original, trace in zip(
-                    original_sample_counts, traces
-                )
+                for original, trace in zip(original_sample_counts, traces)
             )
             else "full"
         ),
@@ -1652,10 +1574,11 @@ def run_next_trial(
         else:
             outcome = "needs_adjustment"
 
-    if (
-        len(trials) >= evaluating.tuning_profile.max_trials
-        and outcome not in {"stable", "inconclusive", "frozen"}
-    ):
+    if len(trials) >= evaluating.tuning_profile.max_trials and outcome not in {
+        "stable",
+        "inconclusive",
+        "frozen",
+    }:
         outcome = "budget_exhausted"
         termination_reason = "20-trial stability budget exhausted"
 
@@ -1705,16 +1628,10 @@ def _proposal_matches_current(
         session.tuning_profile,
         proposal.new_parameters,
     )
-    rebuilt_parameters = extract_tunable_parameters(
-        rebuilt, session.tuning_profile
-    )
-    rules = {
-        item.name: item for item in session.tuning_profile.parameters
-    }
+    rebuilt_parameters = extract_tunable_parameters(rebuilt, session.tuning_profile)
+    rules = {item.name: item for item in session.tuning_profile.parameters}
     for name, new_value in rebuilt_parameters.items():
-        relative = _relative_change(
-            current[name], new_value, rules[name]
-        )
+        relative = _relative_change(current[name], new_value, rules[name])
         if relative > 0.10 + 1e-12 or not math.isclose(
             relative,
             proposal.relative_change[name],
@@ -1763,15 +1680,9 @@ def propose_deterministic_update(
     profile = session.tuning_profile
     current = extract_tunable_parameters(session.trial_controller, profile)
     latest = session.trials[-1] if session.trials else None
-    reduce_magnitude = (
-        profile.open_loop_behavior == "stable"
-        or (
-            latest is not None
-            and (
-                latest.hard_violation
-                or latest.stability.saturation_fraction > 0.10
-            )
-        )
+    reduce_magnitude = profile.open_loop_behavior == "stable" or (
+        latest is not None
+        and (latest.hard_violation or latest.stability.saturation_fraction > 0.10)
     )
     proposed: dict[str, float] = {}
     for rule in profile.parameters:
@@ -1789,9 +1700,7 @@ def propose_deterministic_update(
                 )
         else:
             value = old + (
-                rule.stabilizing_direction
-                * abs(old)
-                * profile.step_fraction
+                rule.stabilizing_direction * abs(old) * profile.step_fraction
             )
         value = 0.0 if value == 0.0 else value
         if not rule.lower_bound <= value <= rule.upper_bound:
@@ -1855,10 +1764,7 @@ def register_llm_proposal(
         and session.pending_proposal.approval_state == "pending"
     ):
         raise SessionActionError("one LLM proposal is already pending")
-    if (
-        llm_call_record is not None
-        and llm_call_record.operation != "gain_proposal"
-    ):
+    if llm_call_record is not None and llm_call_record.operation != "gain_proposal":
         raise SessionActionError(
             "registered gain proposal requires a gain-proposal audit record"
         )
@@ -1960,9 +1866,7 @@ def reject_llm_proposal(
         session,
         to_state="needs_adjustment",
         action="reject_llm_proposal",
-        updates={
-            "pending_proposal": _proposal_with_state(proposal, "rejected")
-        },
+        updates={"pending_proposal": _proposal_with_state(proposal, "rejected")},
     )
 
 
@@ -2111,9 +2015,7 @@ def run_deterministic_auto(
 def _validate_session_derived_integrity(session: SimulationSession) -> None:
     profile = session.tuning_profile
     if profile is not None and session.initial_controller is not None:
-        initial_architecture = _architecture_hash(
-            session.initial_controller, profile
-        )
+        initial_architecture = _architecture_hash(session.initial_controller, profile)
         extract_tunable_parameters(session.initial_controller, profile)
         for label, controller in (
             ("current_safe_controller", session.current_safe_controller),
@@ -2154,15 +2056,11 @@ def _validate_session_derived_integrity(session: SimulationSession) -> None:
                 "approved",
                 "not_required",
             }:
-                applied = extract_tunable_parameters(
-                    session.trial_controller, profile
-                )
+                applied = extract_tunable_parameters(session.trial_controller, profile)
                 if _canonical_json(applied) != _canonical_json(
                     session.pending_proposal.new_parameters
                 ):
-                    raise ValueError(
-                        "applied pending proposal/controller mismatch"
-                    )
+                    raise ValueError("applied pending proposal/controller mismatch")
     previous_controller = session.initial_controller
     for trial in session.trials:
         if trial.proposal is not None:
@@ -2173,14 +2071,10 @@ def _validate_session_derived_integrity(session: SimulationSession) -> None:
                 raise ValueError("an executed LLM proposal must be approved")
         if profile is not None:
             # This also validates registered gain paths and matrix dimensions.
-            trial_parameters = extract_tunable_parameters(
-                trial.controller, profile
-            )
+            trial_parameters = extract_tunable_parameters(trial.controller, profile)
             if session.initial_controller is not None and _architecture_hash(
                 trial.controller, profile
-            ) != _architecture_hash(
-                session.initial_controller, profile
-            ):
+            ) != _architecture_hash(session.initial_controller, profile):
                 raise ValueError("trial controller architecture changed")
             if trial.proposal is not None:
                 if _canonical_json(trial_parameters) != _canonical_json(
@@ -2188,9 +2082,7 @@ def _validate_session_derived_integrity(session: SimulationSession) -> None:
                 ):
                     raise ValueError("trial/proposal parameters mismatch")
                 if previous_controller is not None:
-                    previous = extract_tunable_parameters(
-                        previous_controller, profile
-                    )
+                    previous = extract_tunable_parameters(previous_controller, profile)
                     if _canonical_json(previous) != _canonical_json(
                         trial.proposal.old_parameters
                     ):
@@ -2202,9 +2094,7 @@ def _validate_session_derived_integrity(session: SimulationSession) -> None:
 def export_session(session: SimulationSession) -> str:
     """Export only the typed session envelope and its content checksum."""
 
-    validated = SimulationSession.model_validate(
-        session.model_dump(mode="python")
-    )
+    validated = SimulationSession.model_validate(session.model_dump(mode="python"))
     _validate_session_derived_integrity(validated)
     payload = validated.model_dump(mode="json")
     _scan_finite(payload)
@@ -2292,9 +2182,7 @@ def import_session(payload: str | bytes | bytearray) -> SimulationSession:
         history = data.get("transition_history")
         if not isinstance(before, int) or not isinstance(history, list):
             raise SessionImportError("invalid in-flight session history")
-        to_state: SessionState = (
-            "trial_pending" if complete else "inconclusive"
-        )
+        to_state: SessionState = "trial_pending" if complete else "inconclusive"
         history.append(
             TransitionRecord(
                 action="recover_inflight_import",
@@ -2358,9 +2246,7 @@ def make_llm_call_record(
     messages: Sequence[LLMMessageRecord | Mapping[str, str]],
     structured_response: Mapping[str, Any] | None = None,
     invalid_raw_text: str | None = None,
-    validation_status: Literal[
-        "accepted", "rejected", "need_more", "error"
-    ],
+    validation_status: Literal["accepted", "rejected", "need_more", "error"],
     validation_errors: Sequence[str] = (),
 ) -> LLMCallRecord:
     """Construct a hash-bound record from data that has already been sanitized."""
@@ -2380,9 +2266,7 @@ def make_llm_call_record(
         "operation": operation,
         "provider": provider,
         "model": model,
-        "messages": [
-            item.model_dump(mode="json") for item in typed_messages
-        ],
+        "messages": [item.model_dump(mode="json") for item in typed_messages],
         "response": response,
         "occurred_at": _utc_now(),
     }
@@ -2394,9 +2278,7 @@ def make_llm_call_record(
         model=model,
         messages=typed_messages,
         structured_response=(
-            dict(structured_response)
-            if structured_response is not None
-            else None
+            dict(structured_response) if structured_response is not None else None
         ),
         invalid_raw_text=invalid_raw_text,
         validation_status=validation_status,

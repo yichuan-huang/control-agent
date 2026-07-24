@@ -30,9 +30,7 @@ def _read_measured_manifest(
     manifest: MeasuredTraceManifest,
 ) -> SimulationExperimentRecord:
     if "time" not in manifest.signal_units:
-        raise ValueError(
-            f"trial '{manifest.trial_id}' must declare the time unit"
-        )
+        raise ValueError(f"trial '{manifest.trial_id}' must declare the time unit")
     time_scale = time_unit_scale_seconds(manifest.signal_units["time"])
     with open(manifest.csv_path, newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -102,7 +100,9 @@ def _instruction_time(
     model: TransferFunctionModelSpec | StateSpaceModelSpec | None = None,
 ) -> tuple[np.ndarray, float]:
     if instruction.duration_s is None or instruction.sample_rate_hz is None:
-        raise ValueError("model experiments require object-specific duration and sample rate")
+        raise ValueError(
+            "model experiments require object-specific duration and sample rate"
+        )
     if model is not None and model.time_domain == "discrete":
         assert model.sample_time_s is not None
         sample_count = int(np.floor(instruction.duration_s / model.sample_time_s)) + 1
@@ -115,7 +115,9 @@ def _instruction_time(
             np.arange(sample_count, dtype=float) * model.sample_time_s,
             float(instruction.input_amplitude or 0.0),
         )
-    sample_count = max(101, int(instruction.duration_s * instruction.sample_rate_hz) + 1)
+    sample_count = max(
+        101, int(instruction.duration_s * instruction.sample_rate_hz) + 1
+    )
     return np.linspace(0.0, instruction.duration_s, sample_count), float(
         instruction.input_amplitude or 0.0
     )
@@ -273,7 +275,9 @@ def _run_registered_experiments(
                 params.free_cart_natural_frequency_down_rad_s,
                 0.08,
                 duration_s=instruction.duration_s,
-                sample_count=max(101, int(instruction.duration_s * instruction.sample_rate_hz)),
+                sample_count=max(
+                    101, int(instruction.duration_s * instruction.sample_rate_hz)
+                ),
             )
             records.append(
                 _model_record(package, instruction, time_s, {"free_response": response})
@@ -361,7 +365,8 @@ def _model_record(
         instruction_title=instruction.title,
         repeat_index=1,
         experiment_protocol_version="user-model-v1",
-        operating_region=instruction.operating_region or "declared_model_operating_region",
+        operating_region=instruction.operating_region
+        or "declared_model_operating_region",
         evidence_boundary="user_object_model_simulation",
         trace=ExperimentTrace(
             time_s=np.asarray(time_s, dtype=float).tolist(),
@@ -390,7 +395,11 @@ def run_model_experiments(
     for instruction in plan.instructions:
         time_s, amplitude = _instruction_time(instruction, model)
         primitive = str(instruction.primitive)
-        input_count = 1 if isinstance(model, TransferFunctionModelSpec) else len(model.input_signal_ids)
+        input_count = (
+            1
+            if isinstance(model, TransferFunctionModelSpec)
+            else len(model.input_signal_ids)
+        )
         inputs = np.zeros((len(time_s), input_count), dtype=float)
         start = max(1, len(time_s) // 10)
         if primitive == ExperimentPrimitive.RAMP_STEP.value:

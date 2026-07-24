@@ -102,9 +102,9 @@ class ModelProposal(CFDCModel):
     evidence: list[str] = Field(default_factory=list, max_length=40)
     validation_errors: list[str] = Field(default_factory=list, max_length=40)
     questions: list[str] = Field(default_factory=list, max_length=4)
-    evidence_boundary: Literal[
+    evidence_boundary: Literal["llm_proposed_model_hypothesis"] = (
         "llm_proposed_model_hypothesis"
-    ] = "llm_proposed_model_hypothesis"
+    )
 
     @model_validator(mode="after")
     def validate_status(self) -> "ModelProposal":
@@ -235,9 +235,7 @@ def _sanitize_url(url: str) -> str:
 
 def _sanitize_string(text: str, secrets: Sequence[str]) -> str:
     clean = text
-    for secret in sorted(
-        {item for item in secrets if item}, key=len, reverse=True
-    ):
+    for secret in sorted({item for item in secrets if item}, key=len, reverse=True):
         clean = clean.replace(secret, "[REDACTED]")
     clean = re.sub(
         r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+",
@@ -254,9 +252,7 @@ def _sanitize_string(text: str, secrets: Sequence[str]) -> str:
     return clean[:50_000]
 
 
-def sanitize_for_audit(
-    value: Any, *, secret_literals: Sequence[str] = ()
-) -> Any:
+def sanitize_for_audit(value: Any, *, secret_literals: Sequence[str] = ()) -> Any:
     """Recursively redact credentials and URL secrets before hashing/logging."""
 
     if isinstance(value, Mapping):
@@ -264,8 +260,7 @@ def sanitize_for_audit(
         redacted_index = 0
         for key, item in value.items():
             if any(
-                marker in _normalized_key(str(key))
-                for marker in _SENSITIVE_MARKERS
+                marker in _normalized_key(str(key)) for marker in _SENSITIVE_MARKERS
             ):
                 redacted_index += 1
                 result[f"redacted_{redacted_index}"] = "[REDACTED]"
@@ -280,8 +275,7 @@ def sanitize_for_audit(
         return result
     if isinstance(value, (list, tuple)):
         return [
-            sanitize_for_audit(item, secret_literals=secret_literals)
-            for item in value
+            sanitize_for_audit(item, secret_literals=secret_literals) for item in value
         ]
     if isinstance(value, str):
         return _sanitize_string(value, secret_literals)
@@ -350,9 +344,7 @@ def build_gain_proposal_messages(
     ]
 
 
-def _unsafe_payload_findings(
-    value: Any, path: str = "$"
-) -> list[str]:
+def _unsafe_payload_findings(value: Any, path: str = "$") -> list[str]:
     findings: list[str] = []
     if isinstance(value, Mapping):
         for key, item in value.items():
@@ -365,9 +357,7 @@ def _unsafe_payload_findings(
             findings.extend(_unsafe_payload_findings(item, f"{path}.{key}"))
     elif isinstance(value, list):
         for index, item in enumerate(value):
-            findings.extend(
-                _unsafe_payload_findings(item, f"{path}[{index}]")
-            )
+            findings.extend(_unsafe_payload_findings(item, f"{path}[{index}]"))
     elif isinstance(value, str) and _FORBIDDEN_TEXT.search(value):
         findings.append(f"forbidden executable text at {path}")
     elif isinstance(value, bool):
@@ -394,9 +384,7 @@ def _unit_errors(model: ExecutableModelSpec) -> list[str]:
 
     if isinstance(model, TransferFunctionModelSpec):
         if placeholder(model.input_units) or placeholder(model.output_units):
-            errors.append(
-                "transfer-function input/output units must be explicit"
-            )
+            errors.append("transfer-function input/output units must be explicit")
         return errors
     if isinstance(model, StateSpaceModelSpec):
         if any(
@@ -414,11 +402,9 @@ def _unit_errors(model: ExecutableModelSpec) -> list[str]:
             | set(model.output_signal_ids)
         )
     else:
-        if (
-            len(model.input_signal_ids) != len(set(model.input_signal_ids))
-            or len(model.output_signal_ids)
-            != len(set(model.output_signal_ids))
-        ):
+        if len(model.input_signal_ids) != len(set(model.input_signal_ids)) or len(
+            model.output_signal_ids
+        ) != len(set(model.output_signal_ids)):
             errors.append("registered input/output signal IDs must be unique")
         names = (
             set(model.initial_state)
@@ -508,9 +494,7 @@ def _structure_errors(
         not isinstance(model, RegisteredNonlinearModelSpec)
         or model.template_id != "vtol_cascaded"
     ):
-        errors.append(
-            "cascaded diagnosis requires the registered VTOL template"
-        )
+        errors.append("cascaded diagnosis requires the registered VTOL template")
     if isinstance(model, RegisteredNonlinearModelSpec):
         expected = (
             "underactuated"
@@ -528,9 +512,7 @@ def _structure_errors(
         poles = np.roots(np.asarray(model.denominator, dtype=float))
         if model.time_domain == "continuous":
             model_stability = (
-                "stable"
-                if all(pole.real < -1e-6 for pole in poles)
-                else "unstable"
+                "stable" if all(pole.real < -1e-6 for pole in poles) else "unstable"
             )
         else:
             model_stability = (
@@ -542,9 +524,7 @@ def _structure_errors(
         poles = np.linalg.eigvals(np.asarray(model.a, dtype=float))
         if model.time_domain == "continuous":
             model_stability = (
-                "stable"
-                if all(pole.real < -1e-6 for pole in poles)
-                else "unstable"
+                "stable" if all(pole.real < -1e-6 for pole in poles) else "unstable"
             )
         else:
             model_stability = (
@@ -553,9 +533,7 @@ def _structure_errors(
                 else "unstable"
             )
     if stability in {"stable", "unstable"} and stability != model_stability:
-        errors.append(
-            "typed model open-loop stability conflicts with the diagnosis"
-        )
+        errors.append("typed model open-loop stability conflicts with the diagnosis")
     return errors
 
 
@@ -615,8 +593,7 @@ def validate_model_proposal_payload(
             errors.append("model kind is not allowlisted")
         if (
             isinstance(raw.model, RegisteredNonlinearModelSpec)
-            and raw.model.template_id
-            not in context.allowed_registered_templates
+            and raw.model.template_id not in context.allowed_registered_templates
         ):
             errors.append("registered model template is not allowlisted")
         errors.extend(_unit_errors(raw.model))
@@ -664,9 +641,7 @@ def build_gain_proposal_context(
         or session.trial_controller is None
         or session.tuning_profile is None
     ):
-        raise ProposalValidationError(
-            "session lacks a completed trial/tuning profile"
-        )
+        raise ProposalValidationError("session lacks a completed trial/tuning profile")
     if (
         session.pending_proposal is not None
         and session.pending_proposal.approval_state == "pending"
@@ -676,18 +651,12 @@ def build_gain_proposal_context(
         )
     latest = session.trials[-1].stability
     if latest.analysis_domain == "continuous":
-        margin = -(
-            max((pole.real for pole in latest.poles), default=1.0) + 1e-6
-        )
+        margin = -(max((pole.real for pole in latest.poles), default=1.0) + 1e-6)
     else:
         margin = (
             1.0
             - 1e-6
-            - (
-                latest.spectral_radius
-                if latest.spectral_radius is not None
-                else 2.0
-            )
+            - (latest.spectral_radius if latest.spectral_radius is not None else 2.0)
         )
     profile = session.tuning_profile
     controller = session.trial_controller
@@ -701,9 +670,7 @@ def build_gain_proposal_context(
             if controller.kind == "registered_controller"
             else None
         ),
-        architecture_sha256=controller_architecture_hash(
-            controller, profile
-        ),
+        architecture_sha256=controller_architecture_hash(controller, profile),
         current_parameters=extract_tunable_parameters(controller, profile),
         tunable_whitelist=profile.whitelist,
         parameter_bounds={
@@ -714,9 +681,7 @@ def build_gain_proposal_context(
             status=latest.status,
             analysis_domain=latest.analysis_domain,
             normalized_margin=margin / (1.0 + abs(margin)),
-            tail_error_envelope_contraction=(
-                latest.tail_error_envelope_contraction
-            ),
+            tail_error_envelope_contraction=(latest.tail_error_envelope_contraction),
             saturation_fraction=latest.saturation_fraction,
             hard_failure=latest.hard_failure,
             violations=list(latest.violations),
@@ -724,18 +689,14 @@ def build_gain_proposal_context(
     )
 
 
-def _adapter_identity(
-    adapter: Any, secrets: Sequence[str] = ()
-) -> tuple[str, str]:
+def _adapter_identity(adapter: Any, secrets: Sequence[str] = ()) -> tuple[str, str]:
     base_url = str(getattr(adapter, "base_url", "custom-adapter"))
     try:
         provider = urlsplit(base_url).hostname or base_url
     except ValueError:
         provider = "custom-adapter"
     model = str(getattr(adapter, "model", type(adapter).__name__))
-    safe_provider = str(
-        sanitize_for_audit(provider, secret_literals=secrets)
-    )
+    safe_provider = str(sanitize_for_audit(provider, secret_literals=secrets))
     safe_model = str(sanitize_for_audit(model, secret_literals=secrets))
     return (
         safe_provider[:200] or "custom-adapter",
@@ -743,9 +704,7 @@ def _adapter_identity(
     )
 
 
-def _secret_literals(
-    adapter: Any, additional: Sequence[str]
-) -> list[str]:
+def _secret_literals(adapter: Any, additional: Sequence[str]) -> list[str]:
     values = list(additional)
     candidate = getattr(adapter, "api_key", None)
     if isinstance(candidate, str) and candidate:
@@ -775,9 +734,7 @@ def request_model_proposal(
     try:
         raw = adapter.propose_model(context)
         proposal = validate_model_proposal_payload(raw, context)
-        sanitized_response = sanitize_for_audit(
-            raw, secret_literals=secrets
-        )
+        sanitized_response = sanitize_for_audit(raw, secret_literals=secrets)
         status: Literal["accepted", "rejected", "need_more", "error"] = (
             "accepted" if proposal.status == "ready" else proposal.status
         )
@@ -835,9 +792,7 @@ def request_model_for_session(
         from cfdc.lab.session import StaleRevisionError
 
         raise StaleRevisionError("stale model-proposal session revision")
-    result = request_model_proposal(
-        adapter, context, secret_literals=secret_literals
-    )
+    result = request_model_proposal(adapter, context, secret_literals=secret_literals)
     updated = append_llm_call(
         session, result.call_record, expected_revision=session.revision
     )
@@ -878,9 +833,7 @@ def request_gain_proposal(
             new_parameters=typed.new_parameters,
             rationale=typed.rationale,
         )
-        sanitized_response = sanitize_for_audit(
-            raw, secret_literals=secrets
-        )
+        sanitized_response = sanitize_for_audit(raw, secret_literals=secrets)
         record = make_llm_call_record(
             operation="gain_proposal",
             provider=provider,
@@ -895,9 +848,7 @@ def request_gain_proposal(
             f"{type(exc).__name__}: {exc}", secret_literals=secrets
         )
         raw_response = locals().get("raw")
-        sanitized_response = sanitize_for_audit(
-            raw_response, secret_literals=secrets
-        )
+        sanitized_response = sanitize_for_audit(raw_response, secret_literals=secrets)
         if isinstance(sanitized_response, Mapping):
             record = make_llm_call_record(
                 operation="gain_proposal",
@@ -933,9 +884,7 @@ def request_gain_for_session(
         from cfdc.lab.session import StaleRevisionError
 
         raise StaleRevisionError("stale gain-proposal session revision")
-    result = request_gain_proposal(
-        session, adapter, secret_literals=secret_literals
-    )
+    result = request_gain_proposal(session, adapter, secret_literals=secret_literals)
     proposal = result.proposal
     if isinstance(proposal, ParameterProposal):
         updated = register_llm_proposal(

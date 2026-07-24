@@ -51,12 +51,8 @@ def build_model_discovery_messages(
         if isinstance(catalog, ModelQuestionExampleCatalog)
         else ModelQuestionExampleCatalog.model_validate(catalog)
     )
-    validate_non_executable_content(
-        typed_context.model_dump(mode="json")
-    )
-    validate_non_executable_content(
-        typed_catalog.model_dump(mode="json")
-    )
+    validate_non_executable_content(typed_context.model_dump(mode="json"))
+    validate_non_executable_content(typed_catalog.model_dump(mode="json"))
     examples = [
         {
             "example_id": example.example_id,
@@ -141,9 +137,7 @@ def build_model_discovery_messages(
     ]
 
 
-def _secret_literals(
-    adapter: Any, additional: Sequence[str]
-) -> list[str]:
+def _secret_literals(adapter: Any, additional: Sequence[str]) -> list[str]:
     secrets = [secret for secret in additional if secret]
     api_key = getattr(adapter, "api_key", None)
     if isinstance(api_key, str) and api_key:
@@ -151,21 +145,15 @@ def _secret_literals(
     return secrets
 
 
-def _adapter_identity(
-    adapter: Any, secrets: Sequence[str]
-) -> tuple[str, str]:
+def _adapter_identity(adapter: Any, secrets: Sequence[str]) -> tuple[str, str]:
     base_url = str(getattr(adapter, "base_url", "custom-adapter"))
     try:
         provider = urlsplit(base_url).hostname or base_url
     except ValueError:
         provider = "custom-adapter"
     model = str(getattr(adapter, "model", type(adapter).__name__))
-    safe_provider = str(
-        sanitize_for_audit(provider, secret_literals=secrets)
-    )[:200]
-    safe_model = str(
-        sanitize_for_audit(model, secret_literals=secrets)
-    )[:300]
+    safe_provider = str(sanitize_for_audit(provider, secret_literals=secrets))[:200]
+    safe_model = str(sanitize_for_audit(model, secret_literals=secrets))[:300]
     return safe_provider or "custom-adapter", safe_model or "unknown-model"
 
 
@@ -191,9 +179,7 @@ def request_model_discovery(
         context.model_dump(mode="python"), secret_literals=secrets
     )
     try:
-        safe_context = ModelDiscoveryContext.model_validate(
-            safe_context_payload
-        )
+        safe_context = ModelDiscoveryContext.model_validate(safe_context_payload)
         messages = build_model_discovery_messages(safe_context, catalog)
     except Exception as exc:
         audit_messages = _audit_messages(
@@ -226,29 +212,20 @@ def request_model_discovery(
         return ModelDiscoveryCallResult(call_record=record)
 
     audit_messages = _audit_messages(messages, secrets)
-    provider_messages = [
-        message.model_dump(mode="json") for message in audit_messages
-    ]
+    provider_messages = [message.model_dump(mode="json") for message in audit_messages]
     try:
-        propose_with_messages = getattr(
-            adapter, "propose_model_with_messages", None
-        )
+        propose_with_messages = getattr(adapter, "propose_model_with_messages", None)
         if not callable(propose_with_messages):
             raise ValueError(
-                "model-discovery adapter cannot send the exact audited "
-                "message list"
+                "model-discovery adapter cannot send the exact audited message list"
             )
         raw = propose_with_messages(safe_context, provider_messages)
-        result = validate_generated_model_payload(
-            raw, safe_context, catalog
-        )
+        result = validate_generated_model_payload(raw, safe_context, catalog)
         safe_raw = sanitize_for_audit(raw, secret_literals=secrets)
         safe_validated = sanitize_for_audit(
             result.model_dump(mode="json"), secret_literals=secrets
         )
-        result = TypeAdapter(GeneratedModelResult).validate_python(
-            safe_validated
-        )
+        result = TypeAdapter(GeneratedModelResult).validate_python(safe_validated)
         structured_response = {
             "raw": (
                 dict(safe_raw)
@@ -264,11 +241,7 @@ def request_model_discovery(
             []
             if result.status != "rejected"
             else [
-                str(
-                    sanitize_for_audit(
-                        result.reason, secret_literals=secrets
-                    )
-                )[:2000]
+                str(sanitize_for_audit(result.reason, secret_literals=secrets))[:2000]
             ]
         )
         record = make_llm_call_record(

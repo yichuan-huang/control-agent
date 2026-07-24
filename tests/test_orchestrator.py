@@ -1,4 +1,9 @@
-from cfdc.models import CFDCRunReport, CoreFeatureArtifact, ExperimentPrimitive, SystemDescription
+from cfdc.models import (
+    CFDCRunReport,
+    CoreFeatureArtifact,
+    ExperimentPrimitive,
+    SystemDescription,
+)
 from cfdc.runtime import run_cfdc_route
 from main import compact_route_report
 
@@ -18,7 +23,9 @@ def feature(fid, value):
 
 
 def test_cartpole_route_runs_complete_cfdc_report():
-    report = run_cfdc_route("cartpole", include_trajectory=False, run_id="cartpole-test")
+    report = run_cfdc_route(
+        "cartpole", include_trajectory=False, run_id="cartpole-test"
+    )
 
     assert report.status == "demo_completed"
     assert report.route_id == "cartpole"
@@ -36,7 +43,9 @@ def test_cartpole_route_runs_complete_cfdc_report():
     assert report.cartpole_boundary.rollback_trial is not None
     assert report.cartpole_boundary.rollback_trial.accepted
     assert report.cartpole_boundary.rejected_outer_gains
-    assert any(not trial.accepted for trial in report.cartpole_boundary.candidate_trials)
+    assert any(
+        not trial.accepted for trial in report.cartpole_boundary.candidate_trials
+    )
     assert report.baseline_comparison is not None
     assert report.baseline_comparison.cfdc_performance.success
     assert report.baseline_comparison.baseline_performance.success
@@ -55,8 +64,14 @@ def test_cartpole_route_runs_complete_cfdc_report():
         report.final_gains[name] == value
         for name, value in report.safe_gain_search_state.accepted_gains.items()
     )
-    assert report.final_gains["kp_y"] == report.cartpole_boundary.accepted_outer_gains["kp_y"]
-    assert report.final_gains["kd_y"] == report.cartpole_boundary.accepted_outer_gains["kd_y"]
+    assert (
+        report.final_gains["kp_y"]
+        == report.cartpole_boundary.accepted_outer_gains["kp_y"]
+    )
+    assert (
+        report.final_gains["kd_y"]
+        == report.cartpole_boundary.accepted_outer_gains["kd_y"]
+    )
     assert report.cartpole_simulation.final_gains == report.final_gains
     assert report.cartpole_simulation.events
     assert report.cartpole_simulation.metrics["upright_dwell_time_s"] >= 0.4
@@ -69,7 +84,9 @@ def test_cartpole_route_runs_complete_cfdc_report():
 
 
 def test_cartpole_final_simulation_uses_cfdc_online_gains():
-    report = run_cfdc_route("cartpole", include_trajectory=True, run_id="cartpole-controller-source-test")
+    report = run_cfdc_route(
+        "cartpole", include_trajectory=True, run_id="cartpole-controller-source-test"
+    )
 
     assert report.cartpole_simulation is not None
     phases = {row["phase"] for row in report.cartpole_simulation.trajectory}
@@ -78,7 +95,9 @@ def test_cartpole_final_simulation_uses_cfdc_online_gains():
 
 
 def test_vtol_position_route_runs_validated_gain_update_and_simulation():
-    report = run_cfdc_route("vtol-position", include_trajectory=False, run_id="vtol-position-test")
+    report = run_cfdc_route(
+        "vtol-position", include_trajectory=False, run_id="vtol-position-test"
+    )
 
     assert report.status == "demo_completed"
     assert report.route_id == "vtol-position"
@@ -92,7 +111,10 @@ def test_vtol_position_route_runs_validated_gain_update_and_simulation():
     assert len(report.trial_reports) == 2
     assert all(trial.accepted for trial in report.trial_reports)
     assert report.vtol_simulation.metrics["controller_source"] == "cfdc_orchestrator"
-    assert report.vtol_simulation.metrics["hover_feedforward_n"] == report.final_feedforward["hover_thrust"]
+    assert (
+        report.vtol_simulation.metrics["hover_feedforward_n"]
+        == report.final_feedforward["hover_thrust"]
+    )
     assert {feature.feature_id for feature in report.features} >= {
         "hover_thrust",
         "angular_acceleration_gain",
@@ -112,7 +134,10 @@ def test_vtol_position_route_runs_validated_gain_update_and_simulation():
     )
     assert not report.vtol_simulation.performance.violations
     assert report.baseline_comparison is not None
-    assert report.baseline_comparison.cfdc_performance == report.vtol_simulation.performance
+    assert (
+        report.baseline_comparison.cfdc_performance
+        == report.vtol_simulation.performance
+    )
     assert report.baseline_comparison.baseline_performance.success
     assert report.baseline_comparison.same_plant
     assert report.baseline_comparison.same_initial_state
@@ -123,7 +148,9 @@ def test_vtol_position_route_runs_validated_gain_update_and_simulation():
 
 
 def test_vtol_boundary_route_records_boundary_result():
-    report = run_cfdc_route("vtol-boundary", include_trajectory=False, run_id="vtol-boundary-test")
+    report = run_cfdc_route(
+        "vtol-boundary", include_trajectory=False, run_id="vtol-boundary-test"
+    )
 
     assert report.status == "demo_completed"
     assert report.vtol_simulation is not None
@@ -140,8 +167,14 @@ def test_vtol_boundary_route_records_boundary_result():
         for channel in ["lateral_position", "altitude", "attitude"]
     )
     assert not report.vtol_simulation.performance.violations
-    assert report.final_gains["kp_y"] == report.vtol_simulation.metrics["accepted_lateral_kp"]
-    assert report.final_gains["kd_y"] == report.vtol_simulation.metrics["accepted_lateral_kd"]
+    assert (
+        report.final_gains["kp_y"]
+        == report.vtol_simulation.metrics["accepted_lateral_kp"]
+    )
+    assert (
+        report.final_gains["kd_y"]
+        == report.vtol_simulation.metrics["accepted_lateral_kd"]
+    )
     assert report.vtol_simulation.metrics["controller_source"] == "cfdc_orchestrator"
     assert any(
         event.get("action") == "boundary_rollback_validated"
@@ -150,7 +183,9 @@ def test_vtol_boundary_route_records_boundary_result():
 
 
 def test_vtol_variation_route_records_six_stale_updated_scenarios():
-    report = run_cfdc_route("vtol-variation", include_trajectory=False, run_id="vtol-variation-test")
+    report = run_cfdc_route(
+        "vtol-variation", include_trajectory=False, run_id="vtol-variation-test"
+    )
 
     assert report.status == "demo_completed"
     assert report.vtol_variation is not None
@@ -159,10 +194,18 @@ def test_vtol_variation_route_records_six_stale_updated_scenarios():
     assert report.vtol_variation.updated_scenario_count == 4
     assert report.vtol_variation.stale_scenario_count == 2
     assert all(scenario.expectation_met for scenario in report.vtol_variation.scenarios)
-    scenarios = {scenario.scenario_id: scenario for scenario in report.vtol_variation.scenarios}
+    scenarios = {
+        scenario.scenario_id: scenario for scenario in report.vtol_variation.scenarios
+    }
     assert not scenarios["mass_plus_25_percent_stale_features"].simulation.success
-    assert report.stale_controller_performance == scenarios["mass_plus_25_percent_stale_features"].simulation.performance
-    assert report.adapted_controller_performance == scenarios["mass_plus_25_percent_updated_features"].simulation.performance
+    assert (
+        report.stale_controller_performance
+        == scenarios["mass_plus_25_percent_stale_features"].simulation.performance
+    )
+    assert (
+        report.adapted_controller_performance
+        == scenarios["mass_plus_25_percent_updated_features"].simulation.performance
+    )
     assert not report.stale_controller_performance.success
     assert report.adapted_controller_performance.success
     for scenario in report.vtol_variation.scenarios:
@@ -175,7 +218,9 @@ def test_vtol_variation_route_records_six_stale_updated_scenarios():
 
 
 def test_cfdc_run_report_json_round_trip():
-    report = run_cfdc_route("cartpole", include_trajectory=False, run_id="round-trip-test")
+    report = run_cfdc_route(
+        "cartpole", include_trajectory=False, run_id="round-trip-test"
+    )
     restored = CFDCRunReport.model_validate_json(report.model_dump_json())
     assert restored == report
     assert restored.cartpole_boundary is not None
@@ -183,7 +228,9 @@ def test_cfdc_run_report_json_round_trip():
 
 
 def test_compact_report_removes_nested_cartpole_trial_samples():
-    report = run_cfdc_route("cartpole", include_trajectory=False, run_id="compact-report-test")
+    report = run_cfdc_route(
+        "cartpole", include_trajectory=False, run_id="compact-report-test"
+    )
     payload = compact_route_report(report)
     boundary = payload["cartpole_boundary"]
 
@@ -200,7 +247,9 @@ def test_compact_report_removes_nested_cartpole_trial_samples():
 def test_orchestrator_stops_for_incomplete_description():
     report = run_cfdc_route(
         "generic",
-        description=SystemDescription(text="I have a machine and want it to behave better."),
+        description=SystemDescription(
+            text="I have a machine and want it to behave better."
+        ),
         run_id="clarify-test",
     )
     assert report.status == "need_more_information"
@@ -247,5 +296,6 @@ def test_generic_route_waits_for_specifications_before_numeric_features():
 
 def test_route_api_does_not_accept_user_feature_packets():
     import pytest
+
     with pytest.raises(TypeError, match="features"):
         run_cfdc_route("generic", features=[feature("static_gain", 2.0)])

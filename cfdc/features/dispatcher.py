@@ -16,7 +16,12 @@ from cfdc.features.extractors import (
     estimate_signal_ratio_feature,
     estimate_step_features,
 )
-from cfdc.models import CoreFeatureArtifact, ExperimentPrimitive, SimulationExperimentRecord, ExperimentTrace
+from cfdc.models import (
+    CoreFeatureArtifact,
+    ExperimentPrimitive,
+    SimulationExperimentRecord,
+    ExperimentTrace,
+)
 
 
 _SIGNAL_ALIASES: dict[str, tuple[str, ...]] = {
@@ -129,17 +134,23 @@ def _normalized(name: str) -> str:
     return " ".join(name.replace("_", " ").replace("-", " ").lower().split())
 
 
-def _signal(trace: ExperimentTrace, canonical_name: str, required: bool = True) -> list[float] | None:
+def _signal(
+    trace: ExperimentTrace, canonical_name: str, required: bool = True
+) -> list[float] | None:
     values = _lookup_signal(trace, _SIGNAL_ALIASES[canonical_name])
     if values is not None:
         return values
     if required:
         aliases = ", ".join(_SIGNAL_ALIASES[canonical_name][:4])
-        raise ValueError(f"missing signal for '{canonical_name}' (accepted aliases include: {aliases})")
+        raise ValueError(
+            f"missing signal for '{canonical_name}' (accepted aliases include: {aliases})"
+        )
     return None
 
 
-def _lookup_signal(trace: ExperimentTrace, aliases: tuple[str, ...]) -> list[float] | None:
+def _lookup_signal(
+    trace: ExperimentTrace, aliases: tuple[str, ...]
+) -> list[float] | None:
     lookup = {_normalized(name): values for name, values in trace.signals.items()}
     for alias in aliases:
         values = lookup.get(_normalized(alias))
@@ -170,7 +181,10 @@ def _input_gain_units(
     fallback: str = "acceleration/input",
 ) -> str:
     acceleration_unit = _signal_unit(trace, acceleration_name)
-    if acceleration_unit is None and _signal(trace, rate_name, required=False) is not None:
+    if (
+        acceleration_unit is None
+        and _signal(trace, rate_name, required=False) is not None
+    ):
         rate_unit = _signal_unit(trace, rate_name)
         acceleration_unit = f"{rate_unit}/s" if rate_unit else None
     if (
@@ -226,8 +240,7 @@ def _estimate_mimo_local_time_constant(
             int(index + 1)
             for input_signal in inputs
             for index in np.where(
-                np.diff(input_signal)
-                > max(1e-12, 0.10 * float(np.ptp(input_signal)))
+                np.diff(input_signal) > max(1e-12, 0.10 * float(np.ptp(input_signal)))
             )[0]
         }
     )
@@ -268,7 +281,9 @@ def _estimate_mimo_local_time_constant(
                 if estimate >= sample_dt:
                     estimates.append(estimate)
     if not estimates:
-        raise ValueError("MIMO scan does not contain a resolvable 63-percent transition")
+        raise ValueError(
+            "MIMO scan does not contain a resolvable 63-percent transition"
+        )
     value = float(np.median(estimates))
     spread = float(np.std(estimates, ddof=1)) if len(estimates) > 1 else 0.0
     half_width = max(2.0 * sample_dt, 0.10 * value, spread)
@@ -293,7 +308,9 @@ def _estimate_mimo_gain_matrix(
     """Estimate one-at-a-time steady gains without treating transients as static data."""
 
     if time_constant_s <= 0.0:
-        raise ValueError("MIMO steady-gain estimation requires a positive time constant")
+        raise ValueError(
+            "MIMO steady-gain estimation requires a positive time constant"
+        )
     input_stack = np.column_stack(inputs)
     inactive = np.all(
         np.abs(input_stack) <= max(1e-9, 0.01 * float(np.max(np.abs(input_stack)))),
@@ -309,7 +326,9 @@ def _estimate_mimo_gain_matrix(
         threshold = max(1e-9, 0.05 * float(np.max(np.abs(input_signal))))
         active_indices = np.flatnonzero(np.abs(input_signal) > threshold)
         if active_indices.size < 3:
-            raise ValueError("each MIMO scan input requires a bounded non-zero interval")
+            raise ValueError(
+                "each MIMO scan input requires a bounded non-zero interval"
+            )
         splits = np.split(active_indices, np.where(np.diff(active_indices) > 1)[0] + 1)
         segment = max(splits, key=len)
         start = int(segment[0])
@@ -334,7 +353,9 @@ def _estimate_mimo_gain_matrix(
     return np.column_stack(columns)
 
 
-def extract_features_from_result(result: SimulationExperimentRecord) -> list[CoreFeatureArtifact]:
+def extract_features_from_result(
+    result: SimulationExperimentRecord,
+) -> list[CoreFeatureArtifact]:
     """Dispatch one structured experiment result to deterministic CFDC extractors."""
 
     requested = set(result.estimates)
@@ -353,16 +374,27 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
         input_signal = _signal(trace, "input")
         output_signal = _signal(trace, "output")
         if {"static_gain", "time_constant"} & requested:
-            features.extend(_filter_requested(estimate_step_features(trace.time_s, input_signal, output_signal), requested))
+            features.extend(
+                _filter_requested(
+                    estimate_step_features(trace.time_s, input_signal, output_signal),
+                    requested,
+                )
+            )
         if "dead_time" in requested:
-            features.append(estimate_dead_time(trace.time_s, input_signal, output_signal))
+            features.append(
+                estimate_dead_time(trace.time_s, input_signal, output_signal)
+            )
         if "inverse_response_severity" in requested:
-            features.append(estimate_inverse_response_severity(trace.time_s, output_signal))
+            features.append(
+                estimate_inverse_response_severity(trace.time_s, output_signal)
+            )
 
     elif primitive == ExperimentPrimitive.PULSE.value:
         input_signal = _signal(trace, "input")
         if "input_gain" in requested:
-            acceleration = _acceleration_response(trace, "acceleration", "motion_rate", "motion_position")
+            acceleration = _acceleration_response(
+                trace, "acceleration", "motion_rate", "motion_position"
+            )
             features.append(
                 estimate_pulse_input_gain(
                     trace.time_s,
@@ -377,7 +409,9 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
                 )
             )
         if "angular_acceleration_gain" in requested:
-            angular_acceleration = _acceleration_response(trace, "angular_acceleration", "angle_rate", "tilt")
+            angular_acceleration = _acceleration_response(
+                trace, "angular_acceleration", "angle_rate", "tilt"
+            )
             features.append(
                 estimate_pulse_input_gain(
                     trace.time_s,
@@ -418,7 +452,9 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
 
     elif primitive == ExperimentPrimitive.BOUNDED_SCAN.value:
         if "local_gain_matrix" in requested:
-            lookup = {_normalized(name): values for name, values in trace.signals.items()}
+            lookup = {
+                _normalized(name): values for name, values in trace.signals.items()
+            }
             u1 = np.asarray(lookup["input 1"], dtype=float)
             u2 = np.asarray(lookup["input 2"], dtype=float)
             y1 = np.asarray(lookup["output 1"], dtype=float)
@@ -436,16 +472,36 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
             diagonal = min(abs(matrix[0, 0]), abs(matrix[1, 1]))
             off_diagonal = max(abs(matrix[0, 1]), abs(matrix[1, 0]))
             pairing = diagonal / max(diagonal + off_diagonal, 1e-9)
-            features.extend([
-                CoreFeatureArtifact(feature_id="local_gain_matrix", value=matrix.tolist(), confidence=0.92, units="output/input", method="2x2_one_at_a_time_steady_state_extrapolation", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
-                time_constant,
-                CoreFeatureArtifact(feature_id="pairing_indicator", value=float(pairing), lower_bound=max(0.0, float(pairing)-0.03), upper_bound=min(1.0, float(pairing)+0.03), confidence=0.9, units="ratio", method="matrix_diagonal_dominance", source_experiment=ExperimentPrimitive.BOUNDED_SCAN),
-            ])
+            features.extend(
+                [
+                    CoreFeatureArtifact(
+                        feature_id="local_gain_matrix",
+                        value=matrix.tolist(),
+                        confidence=0.92,
+                        units="output/input",
+                        method="2x2_one_at_a_time_steady_state_extrapolation",
+                        source_experiment=ExperimentPrimitive.BOUNDED_SCAN,
+                    ),
+                    time_constant,
+                    CoreFeatureArtifact(
+                        feature_id="pairing_indicator",
+                        value=float(pairing),
+                        lower_bound=max(0.0, float(pairing) - 0.03),
+                        upper_bound=min(1.0, float(pairing) + 0.03),
+                        confidence=0.9,
+                        units="ratio",
+                        method="matrix_diagonal_dominance",
+                        source_experiment=ExperimentPrimitive.BOUNDED_SCAN,
+                    ),
+                ]
+            )
         if "coupling_gain" in requested:
             input_signal = _signal(trace, "input")
             primary = _signal(trace, "primary_output")
             coupled = _signal(trace, "coupled_output", required=False)
-            features.append(estimate_coupling_gain(trace.time_s, input_signal, primary, coupled))
+            features.append(
+                estimate_coupling_gain(trace.time_s, input_signal, primary, coupled)
+            )
 
     else:
         raise ValueError(f"unsupported experiment primitive: {result.primitive}")
@@ -454,7 +510,9 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
     missing = requested - produced
     if missing:
         missing_list = ", ".join(sorted(missing))
-        raise ValueError(f"no extractor available for requested feature(s): {missing_list}")
+        raise ValueError(
+            f"no extractor available for requested feature(s): {missing_list}"
+        )
     trace_sha256 = hashlib.sha256(result.trace.model_dump_json().encode()).hexdigest()
     propagated: list[CoreFeatureArtifact] = []
     for feature in features:
@@ -481,7 +539,9 @@ def extract_features_from_result(result: SimulationExperimentRecord) -> list[Cor
     return propagated
 
 
-def extract_features_from_results(results: list[SimulationExperimentRecord]) -> list[CoreFeatureArtifact]:
+def extract_features_from_results(
+    results: list[SimulationExperimentRecord],
+) -> list[CoreFeatureArtifact]:
     """Dispatch complementary results without silently discarding duplicate estimates."""
 
     features: list[CoreFeatureArtifact] = []
@@ -554,36 +614,59 @@ def extract_features_from_repeated_results(
                     "review trial identity, operating region, and excitation quality"
                 )
             exemplar = samples[0]
-            digest = hashlib.sha256("".join(sample.trace_sha256 or "" for sample in samples).encode()).hexdigest()
+            digest = hashlib.sha256(
+                "".join(sample.trace_sha256 or "" for sample in samples).encode()
+            ).hexdigest()
             payload = exemplar.model_dump()
-            payload.update({
-                "object_id": None,
-                "value": mean_matrix.tolist(),
-                "confidence": min(0.99, max(sample.confidence for sample in samples) + 0.03 * (len(samples) - 1)),
-                "method": f"{exemplar.method}+repeat_matrix_mean_n{len(samples)}",
-                "trace_sha256": digest,
-            })
+            payload.update(
+                {
+                    "object_id": None,
+                    "value": mean_matrix.tolist(),
+                    "confidence": min(
+                        0.99,
+                        max(sample.confidence for sample in samples)
+                        + 0.03 * (len(samples) - 1),
+                    ),
+                    "method": f"{exemplar.method}+repeat_matrix_mean_n{len(samples)}",
+                    "trace_sha256": digest,
+                }
+            )
             aggregated.append(CoreFeatureArtifact.model_validate(payload))
             continue
         values = np.asarray([sample.value for sample in samples], dtype=float)
         mean = float(np.mean(values))
         between = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
         estimator_half_width = max(
-            max(abs(sample.upper_bound - sample.value), abs(sample.value - sample.lower_bound))
+            max(
+                abs(sample.upper_bound - sample.value),
+                abs(sample.value - sample.lower_bound),
+            )
             for sample in samples
         )
-        half_width = max(estimator_half_width / max(len(samples) ** 0.5, 1.0), 1.96 * between / max(len(samples) ** 0.5, 1.0), 1e-9)
+        half_width = max(
+            estimator_half_width / max(len(samples) ** 0.5, 1.0),
+            1.96 * between / max(len(samples) ** 0.5, 1.0),
+            1e-9,
+        )
         exemplar = samples[0]
-        digest = hashlib.sha256("".join(sample.trace_sha256 or "" for sample in samples).encode()).hexdigest()
+        digest = hashlib.sha256(
+            "".join(sample.trace_sha256 or "" for sample in samples).encode()
+        ).hexdigest()
         payload = exemplar.model_dump()
-        payload.update({
-            "object_id": None,
-            "value": mean,
-            "lower_bound": mean - half_width,
-            "upper_bound": mean + half_width,
-            "confidence": min(0.99, max(sample.confidence for sample in samples) + 0.03 * (len(samples) - 1)),
-            "method": f"{exemplar.method}+repeat_mean_n{len(samples)}",
-            "trace_sha256": digest,
-        })
+        payload.update(
+            {
+                "object_id": None,
+                "value": mean,
+                "lower_bound": mean - half_width,
+                "upper_bound": mean + half_width,
+                "confidence": min(
+                    0.99,
+                    max(sample.confidence for sample in samples)
+                    + 0.03 * (len(samples) - 1),
+                ),
+                "method": f"{exemplar.method}+repeat_mean_n{len(samples)}",
+                "trace_sha256": digest,
+            }
+        )
         aggregated.append(CoreFeatureArtifact.model_validate(payload))
     return aggregated

@@ -73,9 +73,7 @@ class RegisteredNonlinearValidationResult(CFDCModel):
     def validate_aggregate_identity(
         self,
     ) -> "RegisteredNonlinearValidationResult":
-        evidence_ids = {
-            item.scenario_id for item in self.stability.scenario_evidence
-        }
+        evidence_ids = {item.scenario_id for item in self.stability.scenario_evidence}
         if set(self.traces) != evidence_ids:
             raise ValueError(
                 "registered trace keys must match nonlinear scenario evidence"
@@ -85,9 +83,7 @@ class RegisteredNonlinearValidationResult(CFDCModel):
                 "equilibrium and aggregate stability template IDs must match"
             )
         if self.stability.poles != self.equilibrium.poles:
-            raise ValueError(
-                "aggregate local poles must match equilibrium validation"
-            )
+            raise ValueError("aggregate local poles must match equilibrium validation")
         return self
 
 
@@ -236,10 +232,7 @@ def list_registered_controllers(
     if template_id is not None:
         entry = _entry_for_template(template_id)
         return [entry.controller_id]
-    return {
-        name: [entry.controller_id]
-        for name, entry in _REGISTRY.items()
-    }
+    return {name: [entry.controller_id] for name, entry in _REGISTRY.items()}
 
 
 def _entry_for_template(template_id: str) -> _RegistryEntry:
@@ -249,9 +242,7 @@ def _entry_for_template(template_id: str) -> _RegistryEntry:
         raise ValueError(f"unknown registered template: {template_id}") from exc
 
 
-def _require_exact_keys(
-    actual: set[str], expected: frozenset[str], label: str
-) -> None:
+def _require_exact_keys(actual: set[str], expected: frozenset[str], label: str) -> None:
     if actual != expected:
         raise ValueError(
             f"{label} must use the exact parameter keys; "
@@ -304,9 +295,7 @@ def _resolve(
     if any(value <= 0.0 for value in controller.configuration.values()):
         raise ValueError("controller configuration limits must be positive")
     if tuple(model.input_signal_ids) != entry.input_names:
-        raise ValueError(
-            f"input_signal_ids must be exactly {list(entry.input_names)}"
-        )
+        raise ValueError(f"input_signal_ids must be exactly {list(entry.input_names)}")
     if tuple(model.output_signal_ids) != entry.output_names:
         raise ValueError(
             f"output_signal_ids must be exactly {list(entry.output_names)}"
@@ -369,9 +358,7 @@ def _validate_state_vector(
 ) -> np.ndarray:
     vector = np.asarray(state, dtype=float)
     if vector.shape != (len(entry.state_names),):
-        raise ValueError(
-            f"{label} must have dimension {len(entry.state_names)}"
-        )
+        raise ValueError(f"{label} must have dimension {len(entry.state_names)}")
     if not np.all(np.isfinite(vector)):
         raise ValueError(f"{label} must contain only finite values")
     return vector
@@ -392,8 +379,7 @@ def _controller_command(
             * controller.reference["position_m"]
         )
         theta_reference = (
-            gains["kp_y"] * (filtered_reference - x)
-            - gains["kd_y"] * x_dot
+            gains["kp_y"] * (filtered_reference - x) - gains["kd_y"] * x_dot
         )
         theta_reference = float(
             np.clip(
@@ -403,8 +389,7 @@ def _controller_command(
             )
         )
         requested_force = (
-            gains["kp"] * (theta - theta_reference)
-            + gains["kd"] * theta_dot
+            gains["kp"] * (theta - theta_reference) + gains["kd"] * theta_dot
         )
         applied_force = float(
             np.clip(requested_force, -params.force_limit_n, params.force_limit_n)
@@ -415,12 +400,9 @@ def _controller_command(
         )
 
     params = _vtol_params(model)
-    x, z, theta, x_dot, z_dot, theta_dot = [
-        float(value) for value in state
-    ]
+    x, z, theta, x_dot, z_dot, theta_dot = [float(value) for value in state]
     desired_lateral_acceleration = (
-        gains["kp_y"] * (controller.reference["x_m"] - x)
-        - gains["kd_y"] * x_dot
+        gains["kp_y"] * (controller.reference["x_m"] - x) - gains["kd_y"] * x_dot
     )
     lateral_tilt_gain = -params.gravity_m_s2
     theta_reference = float(
@@ -431,14 +413,12 @@ def _controller_command(
         )
     )
     requested_thrust = (
-        controller.feedforward["hover_thrust_n"]
-        / max(0.20, math.cos(theta))
+        controller.feedforward["hover_thrust_n"] / max(0.20, math.cos(theta))
         + gains["kp_z"] * (controller.reference["z_m"] - z)
         - gains["kd_z"] * z_dot
     )
     requested_torque = (
-        gains["kp_theta"] * (theta_reference - theta)
-        - gains["kd_theta"] * theta_dot
+        gains["kp_theta"] * (theta_reference - theta) - gains["kd_theta"] * theta_dot
     )
     applied_thrust = float(
         np.clip(
@@ -506,21 +486,15 @@ def linearize_registered_closed_loop(
         "equilibrium_state",
     )
     if return_derivative_only:
-        return _closed_loop_derivative(
-            entry, model, controller, state
-        ).tolist()
+        return _closed_loop_derivative(entry, model, controller, state).tolist()
     state_count = len(state)
     jacobian = np.zeros((state_count, state_count), dtype=float)
     for column in range(state_count):
         step = 1e-6 * max(1.0, abs(float(state[column])))
         delta = np.zeros(state_count, dtype=float)
         delta[column] = step
-        plus = _closed_loop_derivative(
-            entry, model, controller, state + delta
-        )
-        minus = _closed_loop_derivative(
-            entry, model, controller, state - delta
-        )
+        plus = _closed_loop_derivative(entry, model, controller, state + delta)
+        minus = _closed_loop_derivative(entry, model, controller, state - delta)
         jacobian[:, column] = (plus - minus) / (2.0 * step)
     if not np.all(np.isfinite(jacobian)):
         raise ValueError("registered closed-loop Jacobian is non-finite")
@@ -593,9 +567,7 @@ def validate_registered_equilibrium(
     )
 
 
-def evaluate_tail_contraction(
-    early_envelope: float, tail_envelope: float
-) -> float:
+def evaluate_tail_contraction(early_envelope: float, tail_envelope: float) -> float:
     """Return fractional envelope reduction without tiny-denominator artifacts."""
 
     early = abs(float(early_envelope))
@@ -650,16 +622,12 @@ def registered_run_envelope(
 
     entry = _entry_for_template(model.template_id)
     if tuple(model.input_signal_ids) != entry.input_names:
-        raise ValueError(
-            f"input_signal_ids must be exactly {list(entry.input_names)}"
-        )
+        raise ValueError(f"input_signal_ids must be exactly {list(entry.input_names)}")
     if tuple(model.output_signal_ids) != entry.output_names:
         raise ValueError(
             f"output_signal_ids must be exactly {list(entry.output_names)}"
         )
-    state_bounds = dict(
-        zip(entry.state_names, _state_bounds(entry, model))
-    )
+    state_bounds = dict(zip(entry.state_names, _state_bounds(entry, model)))
     supplied = dict(declared_bounds or {})
     if entry.template_id == "vtol_cascaded":
         for name, declared_name in (
@@ -688,14 +656,10 @@ def registered_run_envelope(
     else:
         force_limit = model.parameters["force_limit_n"]
         actuator_bounds = {"force_n": (-force_limit, force_limit)}
-    output_bounds = {
-        name: state_bounds[name] for name in entry.output_names
-    }
+    output_bounds = {name: state_bounds[name] for name in entry.output_names}
     return {
         "reference": {
-            name: 0.0
-            for name in entry.output_names
-            if name in entry.reference_names
+            name: 0.0 for name in entry.output_names if name in entry.reference_names
         },
         "horizon_s": entry.horizon_s,
         "sample_time_s": entry.sample_time_s,
@@ -738,8 +702,7 @@ def run_registered_scenario(
     )
     if scenario is None:
         raise ValueError(
-            f"unknown scenario {scenario_id!r} for template "
-            f"{entry.template_id!r}"
+            f"unknown scenario {scenario_id!r} for template {entry.template_id!r}"
         )
     equilibrium_state = np.asarray(equilibrium.equilibrium_state, dtype=float)
     state = equilibrium_state + np.asarray(scenario.perturbation, dtype=float)
@@ -804,9 +767,7 @@ def run_registered_scenario(
             )
             break
         try:
-            requested, applied = _controller_command(
-                entry, model, controller, state
-            )
+            requested, applied = _controller_command(entry, model, controller, state)
         except (OverflowError, ValueError, FloatingPointError) as exc:
             finite = False
             hard_failure = True
@@ -865,9 +826,7 @@ def run_registered_scenario(
                         )
                     )
         saturated_samples += int(sample_saturated)
-        error_norms.append(
-            float(np.linalg.norm((state - equilibrium_state) / scales))
-        )
+        error_norms.append(float(np.linalg.norm((state - equilibrium_state) / scales)))
 
         if sample_index == step_count:
             break
@@ -921,14 +880,10 @@ def run_registered_scenario(
     if error_norms:
         early_envelope = max(error_norms[:window])
         tail_envelope = max(error_norms[-window:])
-        contraction = evaluate_tail_contraction(
-            early_envelope, tail_envelope
-        )
+        contraction = evaluate_tail_contraction(early_envelope, tail_envelope)
     else:
         contraction = 0.0
-    saturation_fraction = (
-        saturated_samples / sample_count if sample_count else 0.0
-    )
+    saturation_fraction = saturated_samples / sample_count if sample_count else 0.0
     violations: list[str] = []
     if not finite:
         violations.append("non_finite_trajectory")
@@ -1001,11 +956,7 @@ def run_registered_validation(
     else:
         status = "stable"
     violations = sorted(
-        {
-            violation
-            for item in evidence
-            for violation in item.violations
-        }
+        {violation for item in evidence for violation in item.violations}
     )
     if equilibrium.status == "unstable":
         violations.append("local_closed_loop_pole_unstable")
@@ -1016,18 +967,12 @@ def run_registered_validation(
         registered_template_id=entry.template_id,
         poles=equilibrium.poles,
         spectral_radius=None,
-        trajectory_finite=all(
-            item.trajectory_finite for item in evidence
-        ),
-        trajectory_bounded=all(
-            item.trajectory_bounded for item in evidence
-        ),
+        trajectory_finite=all(item.trajectory_finite for item in evidence),
+        trajectory_bounded=all(item.trajectory_bounded for item in evidence),
         tail_error_envelope_contraction=min(
             item.tail_error_envelope_contraction for item in evidence
         ),
-        saturation_fraction=max(
-            item.saturation_fraction for item in evidence
-        ),
+        saturation_fraction=max(item.saturation_fraction for item in evidence),
         hard_failure=hard_failure,
         violations=violations,
         evidence=[
@@ -1040,8 +985,7 @@ def run_registered_validation(
     return RegisteredNonlinearValidationResult(
         equilibrium=equilibrium,
         traces={
-            result.evidence.scenario_id: result.trace
-            for result in scenario_results
+            result.evidence.scenario_id: result.trace for result in scenario_results
         },
         stability=decision,
     )

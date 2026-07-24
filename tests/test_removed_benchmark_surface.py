@@ -15,12 +15,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 def test_only_raw_control_problem_dataset_remains() -> None:
     assert not (REPOSITORY_ROOT / "cfdc" / "cases").exists()
     assert (REPOSITORY_ROOT / "dataset" / "control_problems.md").is_file()
-    assert (
-        REPOSITORY_ROOT / "dataset" / "control_problem_prompts.md"
-    ).is_file()
-    assert (
-        REPOSITORY_ROOT / "dataset" / "control_problem_prompts_cn.md"
-    ).is_file()
+    assert (REPOSITORY_ROOT / "dataset" / "control_problem_prompts.md").is_file()
+    assert (REPOSITORY_ROOT / "dataset" / "control_problem_prompts_cn.md").is_file()
 
 
 def test_question_examples_are_a_generic_lab_resource() -> None:

@@ -24,8 +24,7 @@ PROMPT_VERSION = "cfdc-stage0-v5-negation-and-order-bounds"
 class DiagnosticAdapter(Protocol):
     """LLM-facing adapter: implementations must return structured data only."""
 
-    def diagnose(self, description: SystemDescription) -> dict[str, Any]:
-        ...
+    def diagnose(self, description: SystemDescription) -> dict[str, Any]: ...
 
     def select_profile(
         self,
@@ -33,8 +32,7 @@ class DiagnosticAdapter(Protocol):
         diagnosis: StructuralDiagnosis,
         classification: ArchetypeClassification,
         catalog: ControlMethodProfileCatalog,
-    ) -> dict[str, Any]:
-        ...
+    ) -> dict[str, Any]: ...
 
     def assess_specifications(
         self,
@@ -45,23 +43,19 @@ class DiagnosticAdapter(Protocol):
         allowed_specification_templates: list[SpecificationTemplate],
         accumulated_specification_answers: list[str],
         previous_assessment: SpecificationAssessment | None,
-    ) -> dict[str, Any]:
-        ...
+    ) -> dict[str, Any]: ...
 
 
 class SimulationProposalAdapter(Protocol):
     """Separate Stage-6 proposal surface; legacy diagnostic fakes need not implement it."""
 
-    def propose_model(self, context: Any) -> dict[str, Any]:
-        ...
+    def propose_model(self, context: Any) -> dict[str, Any]: ...
 
     def propose_model_with_messages(
         self, context: Any, messages: list[dict[str, str]]
-    ) -> dict[str, Any]:
-        ...
+    ) -> dict[str, Any]: ...
 
-    def propose_gain_update(self, context: Any) -> dict[str, Any]:
-        ...
+    def propose_gain_update(self, context: Any) -> dict[str, Any]: ...
 
 
 def parse_json_content(content: str) -> dict[str, Any]:
@@ -177,7 +171,9 @@ def validate_agent_payload(payload: Any) -> StructuralDiagnosis:
     """Reject free text and parse only dictionary-like diagnostic payloads."""
 
     if isinstance(payload, str):
-        raise ValueError("Agent output must be a dictionary or JSON object, not free text")
+        raise ValueError(
+            "Agent output must be a dictionary or JSON object, not free text"
+        )
     if not isinstance(payload, dict):
         raise ValueError("Agent output must be a dictionary")
     return StructuralDiagnosis.model_validate(payload)
@@ -197,7 +193,10 @@ class DeterministicDiagnosticAdapter:
 
     def select_profile(self, description, diagnosis, classification, catalog):
         from cfdc.workflow.profiles import deterministic_profile_selection
-        return deterministic_profile_selection(description, diagnosis, classification, catalog).model_dump()
+
+        return deterministic_profile_selection(
+            description, diagnosis, classification, catalog
+        ).model_dump()
 
 
 class OpenAICompatibleDiagnosticAdapter:
@@ -261,7 +260,10 @@ class OpenAICompatibleDiagnosticAdapter:
         self.max_tokens = max_tokens
         client_base_url = self.base_url.rstrip("/").removesuffix("/chat/completions")
         parsed_base_url = urlparse(client_base_url)
-        if parsed_base_url.scheme not in {"http", "https"} or not parsed_base_url.netloc:
+        if (
+            parsed_base_url.scheme not in {"http", "https"}
+            or not parsed_base_url.netloc
+        ):
             raise ValueError(
                 "LLM base URL must be an absolute http(s) OpenAI-compatible API root."
             )
@@ -304,9 +306,7 @@ class OpenAICompatibleDiagnosticAdapter:
         from cfdc.lab.llm import build_model_proposal_messages
 
         messages = (
-            build_model_discovery_messages(
-                context, load_model_question_examples()
-            )
+            build_model_discovery_messages(context, load_model_question_examples())
             if isinstance(context, ModelDiscoveryContext)
             else build_model_proposal_messages(context)
         )
@@ -429,7 +429,9 @@ class OpenAICompatibleDiagnosticAdapter:
         content = response.choices[0].message.content
         if not isinstance(content, str) or not content.strip():
             raise ValueError("semantic profile selection returned empty content")
-        return SemanticRouteSelection.model_validate(parse_json_content(content)).model_dump()
+        return SemanticRouteSelection.model_validate(
+            parse_json_content(content)
+        ).model_dump()
 
     def assess_specifications(
         self,

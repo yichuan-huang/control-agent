@@ -317,7 +317,9 @@ def enforce_shared_diagnostic_safety_rules(
             0.18,
             "the description explicitly says first-motion timing has not been observed",
         )
-        if not _contains_any(text, ["payload", "wear", "operating condition", "varies"]):
+        if not _contains_any(
+            text, ["payload", "wear", "operating condition", "varies"]
+        ):
             updates["uncertainty_magnitude"] = _field(
                 "inferred",
                 "moderate uncertainty",
@@ -361,11 +363,17 @@ def validate_diagnostic_controller_release(
 
     reasons: list[str] = []
     if not diagnosis.complete or classification is None:
-        reasons.append("Stage 0 diagnosis is incomplete; clarification is required before controller release.")
+        reasons.append(
+            "Stage 0 diagnosis is incomplete; clarification is required before controller release."
+        )
     if diagnosis.significant_delay.assessment == DelayAssessment.UNKNOWN.value:
-        reasons.append("First-motion delay is explicitly unresolved; measure or clarify dead time before PI release.")
+        reasons.append(
+            "First-motion delay is explicitly unresolved; measure or clarify dead time before PI release."
+        )
     if diagnosis.controllability_observability.assessment == "inadequate":
-        reasons.append("The normalized diagnosis reports inadequate controllability or observability.")
+        reasons.append(
+            "The normalized diagnosis reports inadequate controllability or observability."
+        )
     unsupported: list[str] = []
     missing_features: list[str] = []
     if classification is not None:
@@ -381,8 +389,7 @@ def validate_diagnostic_controller_release(
                 + "."
             )
         if (
-            diagnosis.significant_delay.assessment
-            == DelayAssessment.SIGNIFICANT.value
+            diagnosis.significant_delay.assessment == DelayAssessment.SIGNIFICANT.value
             and "dead_time" not in classification.required_core_features
         ):
             reasons.append(

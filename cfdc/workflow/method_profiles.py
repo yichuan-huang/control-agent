@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from cfdc.models import ArchetypeClass, ControlMethodProfile, ControlMethodProfileCatalog
+from cfdc.models import (
+    ArchetypeClass,
+    ControlMethodProfile,
+    ControlMethodProfileCatalog,
+)
 
 
 def _method(

@@ -158,8 +158,7 @@ def _example_ready_payload():
                 ),
                 *[
                     _evidence(
-                        "experiment_proposal.actuator_bounds."
-                        f"heater_power[{index}]",
+                        f"experiment_proposal.actuator_bounds.heater_power[{index}]",
                         value,
                         "W",
                         ["input_step", "actuator_bounds"],
@@ -172,25 +171,18 @@ def _example_ready_payload():
                 ],
                 *[
                     _evidence(
-                        "experiment_proposal.output_bounds."
-                        f"temperature[{index}]",
+                        f"experiment_proposal.output_bounds.temperature[{index}]",
                         value,
                         "degC",
                         ["output_step", "output_bounds"],
                         source="deterministic_derivation",
-                        derivation_rule_id=(
-                            "center_output_bounds_at_output_before/v1"
-                        ),
+                        derivation_rule_id=("center_output_bounds_at_output_before/v1"),
                     )
                     for index, value in enumerate((-5.0, 60.0))
                 ],
             ],
-            "assumptions": [
-                "输入和输出都以采用示例时的初始值作为零偏差工作点。"
-            ],
-            "limitations": [
-                "该模型全部使用固定示例值，只能用于可重复软件演示。"
-            ],
+            "assumptions": ["输入和输出都以采用示例时的初始值作为零偏差工作点。"],
+            "limitations": ["该模型全部使用固定示例值，只能用于可重复软件演示。"],
             "plain_language_summary": (
                 "示例加热功率增加 100 W 后，温度最终增加 4 degC，"
                 "并按约 5 s 的时间尺度逐渐接近新值。"
@@ -201,9 +193,7 @@ def _example_ready_payload():
                 "reference": {"temperature": 4.0},
                 "horizon_s": 30.0,
                 "sample_time_s": 0.1,
-                "actuator_bounds": {
-                    "heater_power": [-500.0, 500.0]
-                },
+                "actuator_bounds": {"heater_power": [-500.0, 500.0]},
                 "state_bounds": {},
                 "output_bounds": {"temperature": [-5.0, 60.0]},
                 "signal_units": {
@@ -234,9 +224,7 @@ class ExampleJourneyAdapter:
     def propose_model_with_messages(self, context, messages):
         del messages
         existing = {fact.fact_id for fact in context.facts}
-        missing = [
-            item for item in _EXAMPLE_QUESTIONS if item[0] not in existing
-        ]
+        missing = [item for item in _EXAMPLE_QUESTIONS if item[0] not in existing]
         if missing:
             batch = missing[:4]
             return {
@@ -294,12 +282,8 @@ def _delayed_heater_facts():
             "signal",
             "Input heater_power is W and output temperature is degC.",
             {
-                "inputs": [
-                    {"signal_id": "heater_power", "unit": "W"}
-                ],
-                "outputs": [
-                    {"signal_id": "temperature", "unit": "degC"}
-                ],
+                "inputs": [{"signal_id": "heater_power", "unit": "W"}],
+                "outputs": [{"signal_id": "temperature", "unit": "degC"}],
             },
         ),
         _user_fact(
@@ -372,9 +356,7 @@ class DelayedHeaterAdapter:
             source="deterministic_derivation",
             derivation_rule_id="response_delay/v1",
         )
-        envelope["experiment_proposal"]["evidence_fact_ids"].append(
-            "response_delay"
-        )
+        envelope["experiment_proposal"]["evidence_fact_ids"].append("response_delay")
         envelope["limitations"] = [
             "The conclusion is limited to this user-supplied software model."
         ]
@@ -406,9 +388,7 @@ def test_all_explicit_examples_reach_confirmed_simulation_without_initial_bound_
     assert session.state == "model_review"
     assert session.current_questions == []
     assert session.pending_envelope.model_role == "example_hypothesis"
-    assert {answer.source for answer in session.answers} == {
-        "user_adopted_example"
-    }
+    assert {answer.source for answer in session.answers} == {"user_adopted_example"}
     model_card = render_model_discovery(session)["model_card_markdown"]
     assert "偏差坐标" in model_card
     assert "相对起始值的目标变化 temperature" in model_card
@@ -427,13 +407,10 @@ def test_all_explicit_examples_reach_confirmed_simulation_without_initial_bound_
     completed = run_next_trial(simulation)
 
     assert completed.trials
-    assert completed.evidence_boundary == (
-        "llm_proposed_model_hypothesis"
-    )
+    assert completed.evidence_boundary == ("llm_proposed_model_hypothesis")
     assert completed.model_assumptions
     assert not any(
-        event.kind == "declared_hard_bound_violation"
-        and event.time_s == 0.0
+        event.kind == "declared_hard_bound_violation" and event.time_s == 0.0
         for event in completed.trials[-1].traces[0].events
     )
 

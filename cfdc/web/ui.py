@@ -108,7 +108,9 @@ def _question_updates(items: list[tuple[str, str]]):
     for index in range(4):
         if index < len(items):
             question_id, question = items[index]
-            updates.append(gr.update(label=f"{question_id} · {question}", visible=True, value=""))
+            updates.append(
+                gr.update(label=f"{question_id} · {question}", visible=True, value="")
+            )
         else:
             updates.append(gr.update(visible=False, value=""))
     return updates
@@ -286,7 +288,9 @@ def build_app() -> gr.Blocks:
                 )
                 with gr.Row():
                     observed_outputs = gr.Textbox(
-                        label="可观察输出", value="", placeholder="temperature, position"
+                        label="可观察输出",
+                        value="",
+                        placeholder="temperature, position",
                     )
                     actuators = gr.Textbox(
                         label="执行器", value="", placeholder="heater, motor force"
@@ -311,7 +315,9 @@ def build_app() -> gr.Blocks:
                     )
                     include_trajectory = gr.Checkbox(label="保留完整轨迹", value=False)
                 with gr.Accordion("LLM Provider", open=False):
-                    use_llm = gr.Checkbox(label="启用 LLM 诊断、语义路由与规格整理", value=False)
+                    use_llm = gr.Checkbox(
+                        label="启用 LLM 诊断、语义路由与规格整理", value=False
+                    )
                     base_url = gr.Textbox(
                         label="Base URL",
                         value=os.getenv("CFDC_LLM_BASE_URL", ""),
@@ -324,7 +330,12 @@ def build_app() -> gr.Blocks:
                     )
                     api_key = gr.Textbox(label="API Key", value="", type="password")
                 with gr.Row():
-                    run_button = gr.Button("开始诊断", variant="primary", elem_classes="primary-run", scale=4)
+                    run_button = gr.Button(
+                        "开始诊断",
+                        variant="primary",
+                        elem_classes="primary-run",
+                        scale=4,
+                    )
                     clear_button = gr.Button("清空", scale=1)
                 gr.Examples(
                     examples=EXAMPLES,
@@ -382,13 +393,27 @@ def build_app() -> gr.Blocks:
                     with gr.Tab("模型响应"):
                         experiments = gr.Dataframe(
                             headers=["#", "实验", "重复", "提取目标", "采样数", "信号"],
-                            datatype=["number", "str", "number", "str", "number", "str"],
+                            datatype=[
+                                "number",
+                                "str",
+                                "number",
+                                "str",
+                                "number",
+                                "str",
+                            ],
                             interactive=False,
                             elem_classes="stage-table",
                         )
                     with gr.Tab("核心特征"):
                         features = gr.Dataframe(
-                            headers=["特征", "值", "单位", "置信区间", "置信度", "方法"],
+                            headers=[
+                                "特征",
+                                "值",
+                                "单位",
+                                "置信区间",
+                                "置信度",
+                                "方法",
+                            ],
                             datatype=["str", "str", "str", "str", "str", "str"],
                             interactive=False,
                             elem_classes="stage-table",
@@ -408,7 +433,14 @@ def build_app() -> gr.Blocks:
                             elem_classes="stage-table",
                         )
                         performance = gr.Dataframe(
-                            headers=["场景", "安全性", "最终误差", "稳定时间/s", "饱和率", "违规"],
+                            headers=[
+                                "场景",
+                                "安全性",
+                                "最终误差",
+                                "稳定时间/s",
+                                "饱和率",
+                                "违规",
+                            ],
                             datatype=["str", "str", "str", "str", "str", "str"],
                             interactive=False,
                             elem_classes="stage-table",

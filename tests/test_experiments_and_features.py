@@ -14,9 +14,20 @@ from cfdc.features import (
     estimate_pulse_input_gain,
     estimate_step_features,
 )
-from cfdc.models import CoreFeatureArtifact, ExperimentPrimitive, SimulationExperimentRecord, ExperimentTrace, SystemDescription
+from cfdc.models import (
+    CoreFeatureArtifact,
+    ExperimentPrimitive,
+    SimulationExperimentRecord,
+    ExperimentTrace,
+    SystemDescription,
+)
 from cfdc.pipeline import run_cfdc_pipeline
-from cfdc.workflow import apply_profile_to_classification, default_simulation_profile_catalog, deterministic_profile_selection, validate_semantic_selection
+from cfdc.workflow import (
+    apply_profile_to_classification,
+    default_simulation_profile_catalog,
+    deterministic_profile_selection,
+    validate_semantic_selection,
+)
 
 
 def feature(fid, value):
@@ -44,12 +55,24 @@ def test_experiment_steps_are_operator_facing():
     )
     classification = engine.classify(diagnosis)
     catalog = default_simulation_profile_catalog()
-    selection = deterministic_profile_selection(SystemDescription(text="unused"), diagnosis, classification, catalog)
+    selection = deterministic_profile_selection(
+        SystemDescription(text="unused"), diagnosis, classification, catalog
+    )
     profile = validate_semantic_selection(selection, classification, catalog)
     classification = apply_profile_to_classification(classification, profile)
     plan = plan_safe_experiments(diagnosis, classification)
-    forbidden = {"controller", "gain", "feedback", "pole", "zero", "bandwidth", "relative degree"}
-    step_text = " ".join(step for item in plan.instructions for step in item.operator_steps).lower()
+    forbidden = {
+        "controller",
+        "gain",
+        "feedback",
+        "pole",
+        "zero",
+        "bandwidth",
+        "relative degree",
+    }
+    step_text = " ".join(
+        step for item in plan.instructions for step in item.operator_steps
+    ).lower()
     assert not (forbidden & set(step_text.replace("-", " ").split()))
 
 
@@ -64,11 +87,17 @@ def test_inverse_response_class_iv_plan_covers_required_features():
     )
     classification = engine.classify(diagnosis)
     catalog = default_simulation_profile_catalog()
-    selection = deterministic_profile_selection(SystemDescription(text="unused"), diagnosis, classification, catalog)
+    selection = deterministic_profile_selection(
+        SystemDescription(text="unused"), diagnosis, classification, catalog
+    )
     profile = validate_semantic_selection(selection, classification, catalog)
     classification = apply_profile_to_classification(classification, profile)
     plan = plan_safe_experiments(diagnosis, classification)
-    estimates = {feature for instruction in plan.instructions for feature in instruction.estimates}
+    estimates = {
+        feature
+        for instruction in plan.instructions
+        for feature in instruction.estimates
+    }
     assert set(classification.required_core_features).issubset(estimates)
     assert estimates == {"static_gain", "time_constant", "inverse_response_severity"}
     assert plan.instructions[0].primitive == "ramp_step"
@@ -106,7 +135,9 @@ def test_step_feature_estimator_gain_and_time_constant():
     u = np.zeros_like(t)
     u[t >= 1.0] = 0.5
     y = gain * 0.5 * (1.0 - np.exp(-np.maximum(0.0, t - 1.0) / tau))
-    features = {feature.feature_id: feature for feature in estimate_step_features(t, u, y)}
+    features = {
+        feature.feature_id: feature for feature in estimate_step_features(t, u, y)
+    }
     assert math.isclose(features["static_gain"].value, gain, rel_tol=0.05)
     assert math.isclose(features["time_constant"].value, tau, rel_tol=0.08)
 
@@ -188,9 +219,13 @@ def test_free_decay_dispatcher_returns_frequency_and_damping():
     result = SimulationExperimentRecord(
         primitive="free_decay",
         estimates=["natural_frequency", "damping_ratio"],
-        trace=ExperimentTrace(time_s=t.tolist(), signals={"measured position or angle": y.tolist()}),
+        trace=ExperimentTrace(
+            time_s=t.tolist(), signals={"measured position or angle": y.tolist()}
+        ),
     )
-    features = {feature.feature_id: feature for feature in extract_features_from_result(result)}
+    features = {
+        feature.feature_id: feature for feature in extract_features_from_result(result)
+    }
     assert math.isclose(features["natural_frequency"].value, omega, rel_tol=0.04)
     assert math.isclose(features["damping_ratio"].value, damping, rel_tol=0.25)
 
@@ -207,10 +242,19 @@ def test_ramp_step_dispatcher_returns_requested_features():
     result = SimulationExperimentRecord(
         primitive="ramp_step",
         estimates=["static_gain", "time_constant", "inverse_response_severity"],
-        trace=ExperimentTrace(time_s=t.tolist(), signals={"input setting": u.tolist(), "measured output": y.tolist()}),
+        trace=ExperimentTrace(
+            time_s=t.tolist(),
+            signals={"input setting": u.tolist(), "measured output": y.tolist()},
+        ),
     )
-    features = {feature.feature_id: feature for feature in extract_features_from_result(result)}
-    assert set(features) == {"static_gain", "time_constant", "inverse_response_severity"}
+    features = {
+        feature.feature_id: feature for feature in extract_features_from_result(result)
+    }
+    assert set(features) == {
+        "static_gain",
+        "time_constant",
+        "inverse_response_severity",
+    }
     assert math.isclose(features["static_gain"].value, gain, rel_tol=0.08)
     assert math.isclose(features["time_constant"].value, tau, rel_tol=0.12)
     assert features["inverse_response_severity"].value > 0.05
@@ -238,7 +282,10 @@ def test_pulse_dispatcher_returns_input_and_vtol_coupling_features():
             },
         ),
     )
-    features = {feature.feature_id: feature for feature in extract_features_from_result(angular_result)}
+    features = {
+        feature.feature_id: feature
+        for feature in extract_features_from_result(angular_result)
+    }
     assert math.isclose(features["angular_acceleration_gain"].value, 20.0, rel_tol=0.02)
     assert math.isclose(features["lateral_coupling_gain"].value, -9.81, rel_tol=0.02)
 
@@ -251,7 +298,10 @@ def test_hover_and_bounded_scan_dispatchers_return_scalar_features():
     hover_result = SimulationExperimentRecord(
         primitive="hover_thrust",
         estimates=["hover_thrust"],
-        trace=ExperimentTrace(time_s=t.tolist(), signals={"lift setting": thrust.tolist(), "vertical motion": lift.tolist()}),
+        trace=ExperimentTrace(
+            time_s=t.tolist(),
+            signals={"lift setting": thrust.tolist(), "vertical motion": lift.tolist()},
+        ),
     )
     hover_feature = extract_features_from_result(hover_result)[0]
     assert math.isclose(hover_feature.value, hover, rel_tol=0.03)
@@ -265,7 +315,11 @@ def test_hover_and_bounded_scan_dispatchers_return_scalar_features():
         estimates=["coupling_gain"],
         trace=ExperimentTrace(
             time_s=t.tolist(),
-            signals={"input setting": scan_input.tolist(), "primary output": primary.tolist(), "coupled output": coupled.tolist()},
+            signals={
+                "input setting": scan_input.tolist(),
+                "primary output": primary.tolist(),
+                "coupled output": coupled.tolist(),
+            },
         ),
     )
     coupling_feature = extract_features_from_result(scan_result)[0]
@@ -294,7 +348,10 @@ def test_pipeline_reports_required_features_without_fabricating_them():
             actuators=["heater"],
         ),
     )
-    assert result["classification"]["required_core_features"] == ["static_gain", "time_constant"]
+    assert result["classification"]["required_core_features"] == [
+        "static_gain",
+        "time_constant",
+    ]
     assert result["features"] == []
     assert result["go_no_go"] is None
 
@@ -309,9 +366,14 @@ def test_significant_delay_pipeline_requests_specs_before_measuring_dead_time():
     result = run_cfdc_pipeline(
         description,
     )
-    assert result["semantic_selection"]["simulation_profile_id"] == "first_order_lag_with_delay"
+    assert (
+        result["semantic_selection"]["simulation_profile_id"]
+        == "first_order_lag_with_delay"
+    )
     assert set(result["classification"]["required_core_features"]) == {
-        "static_gain", "time_constant", "dead_time"
+        "static_gain",
+        "time_constant",
+        "dead_time",
     }
     assert result["features"] == []
 
@@ -324,5 +386,6 @@ def test_pipeline_does_not_accept_user_supplied_feature_packets():
     )
 
     import pytest
+
     with pytest.raises(TypeError, match="features"):
         run_cfdc_pipeline(description, features=[feature("static_gain", 2.0)])

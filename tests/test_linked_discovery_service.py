@@ -226,10 +226,7 @@ def test_unstable_direct_trial_requests_approved_gain_then_runs_next_round(
             session.trial_controller,
             session.tuning_profile,
         )
-        proposed = {
-            name: value * 0.95
-            for name, value in current.items()
-        }
+        proposed = {name: value * 0.95 for name, value in current.items()}
         record = make_llm_call_record(
             operation="gain_proposal",
             provider="test-provider",

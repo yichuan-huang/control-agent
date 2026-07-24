@@ -186,10 +186,7 @@ def test_replacement_requires_matching_hash_then_creates_simulation():
     assert ready.selected_controller == checked.recommended_controller
     assert simulation.state == "trial_pending"
     assert simulation.confirmed_model == ready.confirmed_envelope.model
-    assert (
-        simulation.source_plant_id
-        == ready.confirmed_envelope_sha256
-    )
+    assert simulation.source_plant_id == ready.confirmed_envelope_sha256
 
 
 @pytest.mark.parametrize(
@@ -255,9 +252,7 @@ def test_stage5_bootstrap_covers_all_declared_scalar_runtime_types(
     assert result.controller.kind == expected_kind
     if any(value == 0.0 for value in gains.values()):
         zero_rule = next(
-            rule
-            for rule in result.tuning_profile.parameters
-            if gains[rule.name] == 0.0
+            rule for rule in result.tuning_profile.parameters if gains[rule.name] == 0.0
         )
         assert zero_rule.zero_step_scale is not None
 
@@ -274,9 +269,7 @@ def registered_envelope(model) -> GeneratedModelEnvelopeV1:
         model=model,
         parameter_evidence=[
             {
-                "parameter_path": (
-                    f"model.parameters.{next(iter(model.parameters))}"
-                ),
+                "parameter_path": (f"model.parameters.{next(iter(model.parameters))}"),
                 "value": next(iter(model.parameters.values())),
                 "unit": "registered_unit",
                 "source": "user_supplied",
@@ -339,10 +332,7 @@ def test_registered_nonlinear_model_recommends_only_matching_policy(
     )
 
     assert checked.state == "controller_replacement_review"
-    assert (
-        checked.recommended_controller.controller_id
-        == expected_controller_id
-    )
+    assert checked.recommended_controller.controller_id == expected_controller_id
     assert checked.compatibility_result.replacement_policy_id.endswith("/v1")
 
 

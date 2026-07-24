@@ -304,9 +304,10 @@ def test_hard_unstable_trial_rolls_back_then_accepts_bounded_llm_proposal():
     )
 
     assert rolled_back.state == "rolled_back"
-    assert build_gain_proposal_context(
-        rolled_back
-    ).current_parameters == {"kp": 0.1, "ki": 0.02}
+    assert build_gain_proposal_context(rolled_back).current_parameters == {
+        "kp": 0.1,
+        "ki": 0.02,
+    }
     assert render_linked_tuning(rolled_back)["controls"]["request_gain"] is True
 
     proposed = register_llm_proposal(

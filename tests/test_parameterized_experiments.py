@@ -13,16 +13,28 @@ def _diagnosis_and_classification(description):
 
 
 def test_step_parameters_scale_with_declared_bounds_and_time_scale():
-    description = SystemDescription(text="A first order temperature process settles after a heater change.", observed_outputs=["temperature"], actuators=["heater"], safety_bounds={"max_abs_control": 20.0}, time_scale_hint_s=2.0)
+    description = SystemDescription(
+        text="A first order temperature process settles after a heater change.",
+        observed_outputs=["temperature"],
+        actuators=["heater"],
+        safety_bounds={"max_abs_control": 20.0},
+        time_scale_hint_s=2.0,
+    )
     diagnosis, classification = _diagnosis_and_classification(description)
-    instruction = plan_safe_experiments(diagnosis, classification, description).instructions[0]
+    instruction = plan_safe_experiments(
+        diagnosis, classification, description
+    ).instructions[0]
     assert math.isclose(instruction.input_amplitude, 2.0)
     assert math.isclose(instruction.duration_s, 16.0)
     assert math.isclose(instruction.sample_rate_hz, 25.0)
 
 
 def test_missing_bounds_block_user_object_experiment_parameterization():
-    description = SystemDescription(text="A first order temperature process settles after a heater change.", observed_outputs=["temperature"], actuators=["heater"])
+    description = SystemDescription(
+        text="A first order temperature process settles after a heater change.",
+        observed_outputs=["temperature"],
+        actuators=["heater"],
+    )
     diagnosis, classification = _diagnosis_and_classification(description)
     plan = plan_safe_experiments(diagnosis, classification, description)
     assert plan.parameterization_status == "blocked"
@@ -31,7 +43,12 @@ def test_missing_bounds_block_user_object_experiment_parameterization():
 
 
 def test_forbidden_actions_block_automatic_experiment_plan():
-    description = SystemDescription(text="A measured spring oscillator returns with a decaying vibration.", observed_outputs=["position"], actuators=["force"], forbidden_actions=["free release", "pulse"])
+    description = SystemDescription(
+        text="A measured spring oscillator returns with a decaying vibration.",
+        observed_outputs=["position"],
+        actuators=["force"],
+        forbidden_actions=["free release", "pulse"],
+    )
     diagnosis, classification = _diagnosis_and_classification(description)
     plan = plan_safe_experiments(diagnosis, classification, description)
     assert plan.parameterization_status == "blocked"

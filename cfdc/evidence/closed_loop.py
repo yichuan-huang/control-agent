@@ -30,7 +30,10 @@ def validate_controller_on_model(
     model = package.model
     if spec is None:
         raise ValueError("closed-loop validation requirements are missing")
-    if not isinstance(model, TransferFunctionModelSpec) or model.time_domain != "continuous":
+    if (
+        not isinstance(model, TransferFunctionModelSpec)
+        or model.time_domain != "continuous"
+    ):
         return ControllerValidationResult(
             status="not_supported",
             violations=[
@@ -145,7 +148,9 @@ def validate_controller_on_model(
         violations=violations,
         success=not violations,
     )
-    digest_payload = np.column_stack((time_s, reference_signal, output, control)).tobytes()
+    digest_payload = np.column_stack(
+        (time_s, reference_signal, output, control)
+    ).tobytes()
     return ControllerValidationResult(
         status="passed" if not violations else "failed",
         performance=performance,

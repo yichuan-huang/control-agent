@@ -216,9 +216,7 @@ def _parameterize_plan(
             operating_region = "declared_safe_operating_region"
 
         duration_s = (
-            _duration_for(primitive, time_scale_s)
-            if time_scale_s is not None
-            else None
+            _duration_for(primitive, time_scale_s) if time_scale_s is not None else None
         )
         if time_scale_s is None:
             gaps.append(
@@ -318,7 +316,10 @@ def plan_safe_experiments(
                 ],
                 ["time", "input setting", "measured output"],
                 estimates,
-                ["stop if the output crosses a safety limit", "stop if the actuator sounds or feels abnormal"],
+                [
+                    "stop if the output crosses a safety limit",
+                    "stop if the actuator sounds or feels abnormal",
+                ],
                 "Use the smallest change that gives a clearly visible response.",
             )
         )
@@ -334,7 +335,10 @@ def plan_safe_experiments(
                 ],
                 ["time", "measured position or angle"],
                 ["natural_frequency", "damping_ratio"],
-                ["stop if the motion grows instead of shrinking", "stop if the object approaches a travel limit"],
+                [
+                    "stop if the motion grows instead of shrinking",
+                    "stop if the object approaches a travel limit",
+                ],
                 "Keep the starting displacement small enough that the motion stays in the normal operating region.",
             )
         )
@@ -349,7 +353,10 @@ def plan_safe_experiments(
                 ],
                 ["time", "input setting", "acceleration"],
                 ["input_gain"],
-                ["stop if displacement approaches its bound", "stop if the actuator saturates"],
+                [
+                    "stop if displacement approaches its bound",
+                    "stop if the actuator saturates",
+                ],
                 "Keep the pulse short relative to the measured oscillation period.",
             )
         )
@@ -365,12 +372,22 @@ def plan_safe_experiments(
                 ],
                 ["time", "input setting", "measured position or speed"],
                 ["input_gain"],
-                ["stop if the object moves more than one quarter of the allowed travel", "stop if it does not slow down after the nudge"],
+                [
+                    "stop if the object moves more than one quarter of the allowed travel",
+                    "stop if it does not slow down after the nudge",
+                ],
                 "Use alternating directions to cancel offsets in the measurement.",
             )
         )
-    elif archetype == ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP.value:
-        if {"local_static_gain", "local_time_constant", "gain_variation_ratio"} & required_features:
+    elif (
+        archetype
+        == ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP.value
+    ):
+        if {
+            "local_static_gain",
+            "local_time_constant",
+            "gain_variation_ratio",
+        } & required_features:
             instructions.append(
                 _instruction(
                     ExperimentPrimitive.RAMP_STEP,
@@ -381,8 +398,17 @@ def plan_safe_experiments(
                         "Repeat the same small input change at the second point.",
                         "Return immediately to the safer point after recording.",
                     ],
-                    ["time", "input setting", "measured outputs", "operating-point label"],
-                    ["local_static_gain", "local_time_constant", "gain_variation_ratio"],
+                    [
+                        "time",
+                        "input setting",
+                        "measured outputs",
+                        "operating-point label",
+                    ],
+                    [
+                        "local_static_gain",
+                        "local_time_constant",
+                        "gain_variation_ratio",
+                    ],
                     [
                         "stop if temperature or conversion leaves its declared local band",
                         "stop if either local response fails to settle",
@@ -390,9 +416,18 @@ def plan_safe_experiments(
                     "Do not extrapolate either local response beyond the two tested safe regions.",
                 )
             )
-        elif {"static_gain", "time_constant", "inverse_response_severity"} & required_features:
+        elif {
+            "static_gain",
+            "time_constant",
+            "inverse_response_severity",
+        } & required_features:
             estimates = []
-            for feature_id in ["static_gain", "time_constant", "dead_time", "inverse_response_severity"]:
+            for feature_id in [
+                "static_gain",
+                "time_constant",
+                "dead_time",
+                "inverse_response_severity",
+            ]:
                 if feature_id in required_features:
                     estimates.append(feature_id)
             instructions.append(
@@ -407,7 +442,10 @@ def plan_safe_experiments(
                     ],
                     ["time", "input setting", "measured output"],
                     estimates,
-                    ["stop if the output crosses a safety limit", "stop if the first opposite motion is larger than the agreed safe amount"],
+                    [
+                        "stop if the output crosses a safety limit",
+                        "stop if the first opposite motion is larger than the agreed safe amount",
+                    ],
                     "Use a small change only; this recording is meant to reveal the first motion and final settled value.",
                 )
             )
@@ -424,7 +462,10 @@ def plan_safe_experiments(
                     ],
                     ["time", "lift setting", "vertical motion or support-light signal"],
                     ["hover_thrust"],
-                    ["stop if the vehicle leaves the supports", "stop if any tilt becomes visible"],
+                    [
+                        "stop if the vehicle leaves the supports",
+                        "stop if any tilt becomes visible",
+                    ],
                     "This is a ground test; do not allow free flight during this recording.",
                 )
             )
@@ -439,7 +480,10 @@ def plan_safe_experiments(
                     ],
                     ["time", "twist command", "angle rate"],
                     ["angular_acceleration_gain", "lateral_coupling_gain"],
-                    ["stop if the angle nears the marked limit", "stop if the mount shifts"],
+                    [
+                        "stop if the angle nears the marked limit",
+                        "stop if the mount shifts",
+                    ],
                     "The vehicle must remain restrained for this recording.",
                 )
             )
@@ -456,7 +500,10 @@ def plan_safe_experiments(
                         ],
                         ["time", "measured angle or position"],
                         ["natural_frequency"],
-                        ["stop if the motion grows", "stop if a marked boundary is approached"],
+                        [
+                            "stop if the motion grows",
+                            "stop if a marked boundary is approached",
+                        ],
                         "Use only the stable resting position, not the unsafe target position.",
                     )
                 )
@@ -472,7 +519,10 @@ def plan_safe_experiments(
                         ],
                         ["time", "input setting", "measured motion"],
                         ["input_gain"],
-                        ["stop if motion exceeds the safe region", "stop if the actuator saturates"],
+                        [
+                            "stop if motion exceeds the safe region",
+                            "stop if the actuator saturates",
+                        ],
                         "Keep the push small enough that a person could safely stop the device.",
                     )
                 )
@@ -486,9 +536,17 @@ def plan_safe_experiments(
                             "Apply one short low-amplitude torque pulse to the actuated joint.",
                             "Repeat once in the opposite direction after all motion settles.",
                         ],
-                        ["time", "joint torque", "actuated-joint motion", "unactuated-joint motion"],
+                        [
+                            "time",
+                            "joint torque",
+                            "actuated-joint motion",
+                            "unactuated-joint motion",
+                        ],
                         ["input_to_unactuated_coupling_gain"],
-                        ["stop if either joint approaches its limit", "stop if the mechanism enters the upright capture region"],
+                        [
+                            "stop if either joint approaches its limit",
+                            "stop if the mechanism enters the upright capture region",
+                        ],
                         "This probe establishes only local coupling direction and scale; it does not authorize swing-up.",
                     )
                 )
@@ -510,16 +568,23 @@ def plan_safe_experiments(
                 ],
                 ["time", "each input setting", "all measured outputs"],
                 estimates,
-                ["stop if any output crosses its safe band", "stop if one input causes an unexpectedly large motion"],
+                [
+                    "stop if any output crosses its safe band",
+                    "stop if one input causes an unexpectedly large motion",
+                ],
                 "This check is only for deciding safe input-output pairing.",
             )
-            )
+        )
 
-    covered_features = {feature for instruction in instructions for feature in instruction.estimates}
+    covered_features = {
+        feature for instruction in instructions for feature in instruction.estimates
+    }
     missing_features = required_features - covered_features
     if missing_features:
         missing = ", ".join(sorted(missing_features))
-        raise ValueError(f"Experiment plan does not cover required core features: {missing}")
+        raise ValueError(
+            f"Experiment plan does not cover required core features: {missing}"
+        )
 
     plan = ExperimentPlan(
         archetype=classification.primary_class,

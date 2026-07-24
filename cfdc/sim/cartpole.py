@@ -51,7 +51,9 @@ class CartpoleParams:
         denominator = self.effective_inertia_kg_m2 - (
             self.pole_mass_kg * self.com_length_m
         ) ** 2 / (self.cart_mass_kg + self.pole_mass_kg)
-        return math.sqrt(self.pole_mass_kg * self.gravity_m_s2 * self.com_length_m / denominator)
+        return math.sqrt(
+            self.pole_mass_kg * self.gravity_m_s2 * self.com_length_m / denominator
+        )
 
 
 @dataclass(frozen=True)
@@ -115,8 +117,14 @@ def _dynamics(state: np.ndarray, force_n: float, params: CartpoleParams) -> np.n
     sin_theta = math.sin(theta)
     mass_matrix = np.array(
         [
-            [params.cart_mass_kg + params.pole_mass_kg, params.pole_mass_kg * params.com_length_m * cos_theta],
-            [params.pole_mass_kg * params.com_length_m * cos_theta, params.effective_inertia_kg_m2],
+            [
+                params.cart_mass_kg + params.pole_mass_kg,
+                params.pole_mass_kg * params.com_length_m * cos_theta,
+            ],
+            [
+                params.pole_mass_kg * params.com_length_m * cos_theta,
+                params.effective_inertia_kg_m2,
+            ],
         ],
         dtype=float,
     )
@@ -133,17 +141,24 @@ def _dynamics(state: np.ndarray, force_n: float, params: CartpoleParams) -> np.n
     return np.array([x_dot, x_ddot, theta_dot, theta_ddot], dtype=float)
 
 
-def _rk4_step(state: np.ndarray, force_n: float, dt_s: float, params: CartpoleParams) -> np.ndarray:
+def _rk4_step(
+    state: np.ndarray, force_n: float, dt_s: float, params: CartpoleParams
+) -> np.ndarray:
     next_state = rk4_step(_dynamics, state, dt_s, force_n, params)
     next_state[2] = _wrap_angle(float(next_state[2]))
     return next_state
 
 
-def cartpole_energy_relative_to_upright(state: np.ndarray, params: CartpoleParams) -> float:
+def cartpole_energy_relative_to_upright(
+    state: np.ndarray, params: CartpoleParams
+) -> float:
     theta = float(state[2])
     theta_dot = float(state[3])
     return 0.5 * params.effective_inertia_kg_m2 * theta_dot**2 + (
-        params.pole_mass_kg * params.gravity_m_s2 * params.com_length_m * (math.cos(theta) - 1.0)
+        params.pole_mass_kg
+        * params.gravity_m_s2
+        * params.com_length_m
+        * (math.cos(theta) - 1.0)
     )
 
 
@@ -167,7 +182,9 @@ def _linearize_upright(params: CartpoleParams) -> tuple[np.ndarray, np.ndarray]:
     return a_mat, b_mat
 
 
-def _continuous_lqr(a_mat: np.ndarray, b_mat: np.ndarray, q_mat: np.ndarray, r_mat: np.ndarray) -> np.ndarray:
+def _continuous_lqr(
+    a_mat: np.ndarray, b_mat: np.ndarray, q_mat: np.ndarray, r_mat: np.ndarray
+) -> np.ndarray:
     riccati = solve_continuous_are(a_mat, b_mat, q_mat, r_mat)
     return np.linalg.solve(r_mat, b_mat.T @ riccati)
 
@@ -184,20 +201,29 @@ class _HybridEnergyLQRController:
     def command(self, state: np.ndarray) -> tuple[float, str]:
         x, x_dot, theta, theta_dot = [float(value) for value in state]
         theta = _wrap_angle(theta)
-        if abs(theta) < self.config.capture_angle_rad and abs(theta_dot) < self.config.capture_rate_rad_s:
-            local_state = np.array([x - self.config.outer_reference_m, x_dot, theta, theta_dot], dtype=float)
+        if (
+            abs(theta) < self.config.capture_angle_rad
+            and abs(theta_dot) < self.config.capture_rate_rad_s
+        ):
+            local_state = np.array(
+                [x - self.config.outer_reference_m, x_dot, theta, theta_dot],
+                dtype=float,
+            )
             force = -float((self.lqr_gain @ local_state).item())
             mode = "balance_lqr"
         else:
             energy_error = cartpole_energy_relative_to_upright(state, self.params)
             desired_cart_accel = 30.0 * theta_dot * math.cos(theta) * energy_error
             force = (
-                (self.params.cart_mass_kg + self.params.pole_mass_kg) * desired_cart_accel
+                (self.params.cart_mass_kg + self.params.pole_mass_kg)
+                * desired_cart_accel
                 - self.config.swing_cart_position_gain * x
                 - self.config.swing_cart_velocity_gain * x_dot
             )
             mode = "energy_swingup"
-        return float(np.clip(force, -self.params.force_limit_n, self.params.force_limit_n)), mode
+        return float(
+            np.clip(force, -self.params.force_limit_n, self.params.force_limit_n)
+        ), mode
 
 
 class _ExternalCFDCEnergyPDController:
@@ -216,7 +242,9 @@ class _ExternalCFDCEnergyPDController:
 
     def _swingup_force(self, state: np.ndarray) -> float:
         x, x_dot, theta, theta_dot = [float(value) for value in state]
-        energy_error = 0.5 * theta_dot**2 + self.natural_frequency_rad_s**2 * (math.cos(theta) - 1.0)
+        energy_error = 0.5 * theta_dot**2 + self.natural_frequency_rad_s**2 * (
+            math.cos(theta) - 1.0
+        )
         return (
             self.config.normalized_energy_gain
             * theta_dot
@@ -231,9 +259,21 @@ class _ExternalCFDCEnergyPDController:
         x_dot = float(state[1])
         theta = _wrap_angle(float(state[2]))
         theta_dot = float(state[3])
-        if abs(theta) < self.config.capture_angle_rad and abs(theta_dot) < self.config.capture_rate_rad_s:
-            theta_ref = self.config.outer_kpy_initial * (self.config.outer_reference_m - x) - self.config.outer_kdy_initial * x_dot
-            theta_ref = float(np.clip(theta_ref, -self.config.outer_theta_ref_limit_rad, self.config.outer_theta_ref_limit_rad))
+        if (
+            abs(theta) < self.config.capture_angle_rad
+            and abs(theta_dot) < self.config.capture_rate_rad_s
+        ):
+            theta_ref = (
+                self.config.outer_kpy_initial * (self.config.outer_reference_m - x)
+                - self.config.outer_kdy_initial * x_dot
+            )
+            theta_ref = float(
+                np.clip(
+                    theta_ref,
+                    -self.config.outer_theta_ref_limit_rad,
+                    self.config.outer_theta_ref_limit_rad,
+                )
+            )
             force = self.kp * (theta - theta_ref) + self.kd * theta_dot
             mode = "balance_cfdc_pd"
         else:
@@ -260,7 +300,10 @@ def _capture_state_for_search(
     for step in range(int(config.duration_s / config.dt_s) + 1):
         time_s = step * config.dt_s
         theta = _wrap_angle(float(state[2]))
-        if abs(theta) < config.capture_angle_rad and abs(float(state[3])) < config.capture_rate_rad_s:
+        if (
+            abs(theta) < config.capture_angle_rad
+            and abs(float(state[3])) < config.capture_rate_rad_s
+        ):
             return state, time_s
         force = controller._swingup_force(state)
         force = float(np.clip(force, -params.force_limit_n, params.force_limit_n))
@@ -290,8 +333,17 @@ def _run_balance_candidate(
         x, x_dot = float(state[0]), float(state[1])
         theta = _wrap_angle(float(state[2]))
         theta_dot = float(state[3])
-        theta_ref = config.outer_kpy_initial * (config.outer_reference_m - x) - config.outer_kdy_initial * x_dot
-        theta_ref = float(np.clip(theta_ref, -config.outer_theta_ref_limit_rad, config.outer_theta_ref_limit_rad))
+        theta_ref = (
+            config.outer_kpy_initial * (config.outer_reference_m - x)
+            - config.outer_kdy_initial * x_dot
+        )
+        theta_ref = float(
+            np.clip(
+                theta_ref,
+                -config.outer_theta_ref_limit_rad,
+                config.outer_theta_ref_limit_rad,
+            )
+        )
         raw_force = gains["kp"] * (theta - theta_ref) + gains["kd"] * theta_dot
         force = float(np.clip(raw_force, -params.force_limit_n, params.force_limit_n))
         saturation_count += abs(raw_force) >= 0.98 * params.force_limit_n
@@ -321,7 +373,8 @@ def _run_balance_candidate(
         "max_abs_angle_rad": max_abs_angle,
         "max_abs_rate_rad_s": max_abs_rate,
         "max_abs_position_m": max_abs_position,
-        "saturation_fraction": saturation_count / max(1, int(round(duration_s / config.dt_s))),
+        "saturation_fraction": saturation_count
+        / max(1, int(round(duration_s / config.dt_s))),
     }
 
 
@@ -351,9 +404,7 @@ def search_cartpole_pd_gains(
         config,
         duration_s=1.5,
     )
-    seed_accepted = bool(seed_outcome["safe"]) and bool(
-        seed_outcome["dwell_passed"]
-    )
+    seed_accepted = bool(seed_outcome["safe"]) and bool(seed_outcome["dwell_passed"])
     if not seed_accepted:
         raise RuntimeError("feature-derived CartPole seed failed bounded validation")
 
@@ -399,7 +450,9 @@ def search_cartpole_pd_gains(
         ),
     )
     if algorithm_state.status != "completed":
-        raise RuntimeError("CartPole Algorithm 1 candidate did not meet the dwell target")
+        raise RuntimeError(
+            "CartPole Algorithm 1 candidate did not meet the dwell target"
+        )
 
     accepted_gains = dict(algorithm_state.accepted_gains)
     events: list[dict[str, float | str | bool]] = [
@@ -509,7 +562,9 @@ class _FeatureEnergyPDController:
 
     def _swingup_force(self, state: np.ndarray) -> float:
         x, x_dot, theta, theta_dot = [float(value) for value in state]
-        energy_error = 0.5 * theta_dot**2 + self.swingup_omega_rad_s**2 * (math.cos(theta) - 1.0)
+        energy_error = 0.5 * theta_dot**2 + self.swingup_omega_rad_s**2 * (
+            math.cos(theta) - 1.0
+        )
         return (
             self.config.normalized_energy_gain
             * theta_dot
@@ -526,8 +581,17 @@ class _FeatureEnergyPDController:
         if self.phase == "stable_pd_outer":
             x = float(state[0])
             x_dot = float(state[1])
-            theta_ref = self.config.outer_kpy_initial * (self.config.outer_reference_m - x) - self.config.outer_kdy_initial * x_dot
-            theta_ref = float(np.clip(theta_ref, -self.config.outer_theta_ref_limit_rad, self.config.outer_theta_ref_limit_rad))
+            theta_ref = (
+                self.config.outer_kpy_initial * (self.config.outer_reference_m - x)
+                - self.config.outer_kdy_initial * x_dot
+            )
+            theta_ref = float(
+                np.clip(
+                    theta_ref,
+                    -self.config.outer_theta_ref_limit_rad,
+                    self.config.outer_theta_ref_limit_rad,
+                )
+            )
         return self.kp * (theta - theta_ref) + self.kd * theta_dot
 
     def _update_search(self, time_s: float, state: np.ndarray) -> None:
@@ -536,7 +600,10 @@ class _FeatureEnergyPDController:
         if self.phase == "search_kp":
             if time_s - self.last_update_s < self.config.pd_kp_update_period_s:
                 return
-            if self.kp >= self.config.pd_min_kp_before_damping and abs(theta) < self.config.capture_angle_rad:
+            if (
+                self.kp >= self.config.pd_min_kp_before_damping
+                and abs(theta) < self.config.capture_angle_rad
+            ):
                 self.phase = "search_kd"
                 self.phase_start_s = time_s
                 self.kd_search_start_rate = abs(theta_dot)
@@ -551,7 +618,11 @@ class _FeatureEnergyPDController:
                 self.phase = "failed"
                 self._event(time_s, "fail_kp_limit", state)
         elif self.phase == "search_kd":
-            if self.kd >= self.config.pd_min_kd_before_hold and abs(theta_dot) < self.config.pd_kd_hold_improvement_ratio * self.kd_search_start_rate:
+            if (
+                self.kd >= self.config.pd_min_kd_before_hold
+                and abs(theta_dot)
+                < self.config.pd_kd_hold_improvement_ratio * self.kd_search_start_rate
+            ):
                 self.phase = "test_kd"
                 self.phase_start_s = time_s
                 self.settle_start_s = None
@@ -567,7 +638,10 @@ class _FeatureEnergyPDController:
                 self.phase = "failed"
                 self._event(time_s, "fail_kd_limit", state)
         elif self.phase == "test_kd":
-            if abs(theta) < self.config.pd_target_angle_rad and abs(theta_dot) < self.config.pd_target_rate_rad_s:
+            if (
+                abs(theta) < self.config.pd_target_angle_rad
+                and abs(theta_dot) < self.config.pd_target_rate_rad_s
+            ):
                 if self.settle_start_s is None:
                     self.settle_start_s = time_s
                     self._event(time_s, "settle_window_started", state)
@@ -587,14 +661,21 @@ class _FeatureEnergyPDController:
         theta = _wrap_angle(float(state[2]))
         theta_dot = float(state[3])
         if self.phase == "swingup":
-            if abs(theta) < self.config.capture_angle_rad and abs(theta_dot) < self.config.capture_rate_rad_s:
+            if (
+                abs(theta) < self.config.capture_angle_rad
+                and abs(theta_dot) < self.config.capture_rate_rad_s
+            ):
                 self.phase = "search_kp"
                 self.phase_start_s = time_s
                 self.last_update_s = time_s
                 self._event(time_s, "capture_start_pd_search", state)
             else:
                 force = self._swingup_force(state)
-                return float(np.clip(force, -self.params.force_limit_n, self.params.force_limit_n)), "feature_energy_swingup"
+                return float(
+                    np.clip(
+                        force, -self.params.force_limit_n, self.params.force_limit_n
+                    )
+                ), "feature_energy_swingup"
 
         if self.phase in {"search_kp", "search_kd", "test_kd", "stable_pd_outer"}:
             self._update_search(time_s, state)
@@ -603,7 +684,9 @@ class _FeatureEnergyPDController:
         else:
             mode = "pd_failed"
             force = 0.0
-        return float(np.clip(force, -self.params.force_limit_n, self.params.force_limit_n)), mode
+        return float(
+            np.clip(force, -self.params.force_limit_n, self.params.force_limit_n)
+        ), mode
 
 
 def cartpole_swingup_force(
@@ -611,7 +694,9 @@ def cartpole_swingup_force(
     params: CartpoleParams | None = None,
     config: CartpoleSwingupConfig | None = None,
 ) -> tuple[float, str]:
-    controller = _FeatureEnergyPDController(params or CartpoleParams(), config or CartpoleSwingupConfig())
+    controller = _FeatureEnergyPDController(
+        params or CartpoleParams(), config or CartpoleSwingupConfig()
+    )
     return controller.command(state, 0.0)
 
 
@@ -644,7 +729,12 @@ def simulate_cartpole_energy_swingup(
         pole_angular_velocity_rad_s=0.0,
     )
     state = np.array(
-        [start.cart_position_m, start.cart_velocity_m_s, _wrap_angle(start.pole_angle_rad), start.pole_angular_velocity_rad_s],
+        [
+            start.cart_position_m,
+            start.cart_velocity_m_s,
+            _wrap_angle(start.pole_angle_rad),
+            start.pole_angular_velocity_rad_s,
+        ],
         dtype=float,
     )
     records: list[dict[str, float | str]] = []
@@ -684,7 +774,11 @@ def simulate_cartpole_energy_swingup(
             balance_start_s = time_s if balance_start_s is None else balance_start_s
             balance_max_angle = max(balance_max_angle, abs(theta))
             balance_max_rate = max(balance_max_rate, abs(float(state[3])))
-        stable_window = phase in {"balance_lqr", "balance_cfdc_pd"} and abs(theta) < 0.12 and abs(float(state[3])) < 1.0
+        stable_window = (
+            phase in {"balance_lqr", "balance_cfdc_pd"}
+            and abs(theta) < 0.12
+            and abs(float(state[3])) < 1.0
+        )
         balance_hold_samples = balance_hold_samples + 1 if stable_window else 0
         if handoff_time is None and balance_hold_samples >= required_balance_samples:
             handoff_time = time_s - (required_balance_samples - 1) * config.dt_s
@@ -696,7 +790,11 @@ def simulate_cartpole_energy_swingup(
             max_abs_x = max(max_abs_x, abs(float(state[0])))
     if handoff_time is None and balance_gains is not None:
         stop_reason = "cfdc_final_gains_failed_handoff"
-    elif handoff_time is not None and not stop_after_handoff and stop_reason == "upright_handoff_window_reached":
+    elif (
+        handoff_time is not None
+        and not stop_after_handoff
+        and stop_reason == "upright_handoff_window_reached"
+    ):
         stop_reason = "duration_elapsed_after_upright_handoff"
 
     final_state = CartpoleState(
@@ -792,7 +890,9 @@ def simulate_cartpole_energy_swingup(
             "success": performance.success,
             "capture_success": capture_success,
             "capture_time_s": handoff_time,
-            "balance_start_time_s": balance_start_s if balance_start_s is not None else -1.0,
+            "balance_start_time_s": balance_start_s
+            if balance_start_s is not None
+            else -1.0,
             "upright_dwell_time_s": 0.4 if handoff_time is not None else 0.0,
             "balance_max_abs_angle_rad": balance_max_angle,
             "balance_max_abs_rate_rad_s": balance_max_rate,
@@ -840,7 +940,9 @@ def _cartpole_outer_trial(
         x, x_dot = float(state[0]), float(state[1])
         theta = _wrap_angle(float(state[2]))
         theta_dot = float(state[3])
-        theta_ref = outer_gains["kp_y"] * (target_position_m - x) - outer_gains["kd_y"] * x_dot
+        theta_ref = (
+            outer_gains["kp_y"] * (target_position_m - x) - outer_gains["kd_y"] * x_dot
+        )
         theta_ref = float(
             np.clip(
                 theta_ref,
@@ -848,7 +950,9 @@ def _cartpole_outer_trial(
                 swingup_config.outer_theta_ref_limit_rad,
             )
         )
-        raw_force = balance_gains["kp"] * (theta - theta_ref) + balance_gains["kd"] * theta_dot
+        raw_force = (
+            balance_gains["kp"] * (theta - theta_ref) + balance_gains["kd"] * theta_dot
+        )
         force = float(np.clip(raw_force, -params.force_limit_n, params.force_limit_n))
         sample = TrialSample(
             time_s=time_s,
@@ -913,7 +1017,8 @@ def _cartpole_outer_trial(
         position_values,
         force_values,
         saturation_limit=params.force_limit_n,
-        settling_band=nmp_config.final_position_tolerance_m / max(nmp_config.position_step_m, 1e-9),
+        settling_band=nmp_config.final_position_tolerance_m
+        / max(nmp_config.position_step_m, 1e-9),
     )
     cart_channel = calculate_channel_performance(
         time_values,
@@ -958,7 +1063,11 @@ def _cartpole_outer_trial(
                 message="rollback cart response did not settle inside the final position band",
             )
         )
-    if require_settled and cart_channel.settling_time_s is not None and cart_channel.settling_time_s > final_time - 1.0:
+    if (
+        require_settled
+        and cart_channel.settling_time_s is not None
+        and cart_channel.settling_time_s > final_time - 1.0
+    ):
         violations.append(
             SafetyViolation(
                 constraint="cart_position_settling_dwell",
@@ -1016,7 +1125,12 @@ def _cartpole_outer_trial(
         pole_angle_rad=_wrap_angle(float(state[2])),
         pole_angular_velocity_rad_s=float(state[3]),
     )
-    return report, final_state, {"cart_position": cart_channel, "pole_angle": pole_channel}, trajectory
+    return (
+        report,
+        final_state,
+        {"cart_position": cart_channel, "pole_angle": pole_channel},
+        trajectory,
+    )
 
 
 def run_cartpole_nmp_boundary_scan(
@@ -1038,7 +1152,8 @@ def run_cartpole_nmp_boundary_scan(
         swing_cart_velocity_gain=3.2,
         outer_reference_m=0.2,
         outer_kpy_initial=nmp_config.candidate_kpy_initial,
-        outer_kdy_initial=nmp_config.candidate_kdy_ratio * nmp_config.candidate_kpy_initial,
+        outer_kdy_initial=nmp_config.candidate_kdy_ratio
+        * nmp_config.candidate_kpy_initial,
         outer_theta_ref_limit_rad=nmp_config.theta_reference_limit_rad,
         max_force_saturation_fraction=max(
             swingup_config.max_force_saturation_fraction,
@@ -1113,7 +1228,9 @@ def run_cartpole_nmp_boundary_scan(
                 "trial_index": trial_index,
                 "candidate_outer_gains": outer_gains,
                 "accepted": report.accepted,
-                "nmp_undershoot": report.metrics.nmp_undershoot if report.metrics else None,
+                "nmp_undershoot": report.metrics.nmp_undershoot
+                if report.metrics
+                else None,
                 "stop_reason": report.stop_reason,
             }
         )
@@ -1142,8 +1259,7 @@ def run_cartpole_nmp_boundary_scan(
                 ]
                 nmp_violation = bool(
                     report.metrics
-                    and report.metrics.nmp_undershoot
-                    >= nmp_config.max_nmp_undershoot
+                    and report.metrics.nmp_undershoot >= nmp_config.max_nmp_undershoot
                 )
                 boundary_state = evaluate_algorithm1_probe(
                     proposal,
@@ -1217,18 +1333,22 @@ def run_cartpole_nmp_boundary_scan(
     rollback_channels: dict[str, object] = {}
     rollback_trajectory: list[dict[str, float | str]] = []
     if rollback_applied:
-        for rollback_index, rollback_gains in enumerate(reversed(accepted_history), start=1):
-            candidate_rollback_report, _, candidate_channels, candidate_trajectory = _cartpole_outer_trial(
-                trial_id=f"cartpole_nmp_rollback_validation_{rollback_index:03d}",
-                start_state=start_state,
-                target_position_m=target_position_m,
-                balance_gains=balance_gains,
-                outer_gains=rollback_gains,
-                params=params,
-                swingup_config=prepare_config,
-                nmp_config=nmp_config,
-                duration_s=nmp_config.rollback_validation_duration_s,
-                require_settled=True,
+        for rollback_index, rollback_gains in enumerate(
+            reversed(accepted_history), start=1
+        ):
+            candidate_rollback_report, _, candidate_channels, candidate_trajectory = (
+                _cartpole_outer_trial(
+                    trial_id=f"cartpole_nmp_rollback_validation_{rollback_index:03d}",
+                    start_state=start_state,
+                    target_position_m=target_position_m,
+                    balance_gains=balance_gains,
+                    outer_gains=rollback_gains,
+                    params=params,
+                    swingup_config=prepare_config,
+                    nmp_config=nmp_config,
+                    duration_s=nmp_config.rollback_validation_duration_s,
+                    require_settled=True,
+                )
             )
             events.append(
                 {
@@ -1261,16 +1381,30 @@ def run_cartpole_nmp_boundary_scan(
     if not rollback_verified:
         performance_violations.append("nmp_rollback_not_verified")
 
-    if rollback_report is not None and rollback_report.metrics is not None and rollback_channels:
+    if (
+        rollback_report is not None
+        and rollback_report.metrics is not None
+        and rollback_channels
+    ):
         cart_channel = rollback_channels["cart_position"]
         pole_channel = rollback_channels["pole_angle"]
-        max_abs_position = max(abs(sample.state["position"]) for sample in rollback_report.samples)
-        max_abs_angle = max(abs(sample.state["angle"]) for sample in rollback_report.samples)
-        max_abs_force = max(abs(sample.control["input"]) for sample in rollback_report.samples)
+        max_abs_position = max(
+            abs(sample.state["position"]) for sample in rollback_report.samples
+        )
+        max_abs_angle = max(
+            abs(sample.state["angle"]) for sample in rollback_report.samples
+        )
+        max_abs_force = max(
+            abs(sample.control["input"]) for sample in rollback_report.samples
+        )
         saturation_fraction = rollback_report.metrics.actuator_saturation_fraction
     else:
-        cart_channel = calculate_channel_performance([0.0, 1.0], target_position_m, [start_state.cart_position_m] * 2)
-        pole_channel = calculate_channel_performance([0.0, 1.0], 0.0, [start_state.pole_angle_rad] * 2)
+        cart_channel = calculate_channel_performance(
+            [0.0, 1.0], target_position_m, [start_state.cart_position_m] * 2
+        )
+        pole_channel = calculate_channel_performance(
+            [0.0, 1.0], 0.0, [start_state.pole_angle_rad] * 2
+        )
         max_abs_position = abs(start_state.cart_position_m)
         max_abs_angle = abs(start_state.pole_angle_rad)
         max_abs_force = 0.0
@@ -1301,14 +1435,18 @@ def run_cartpole_nmp_boundary_scan(
         capture_success=preparation.performance.capture_success,
         capture_time_s=preparation.performance.capture_time_s,
         boundary_triggered=bool(first_rejected),
-        boundary_reason=(candidate_trials[-1].stop_reason if first_rejected else "not_triggered"),
+        boundary_reason=(
+            candidate_trials[-1].stop_reason if first_rejected else "not_triggered"
+        ),
     )
     trajectory = []
     if include_trajectory:
         trajectory = [*preparation.trajectory, *rollback_trajectory]
     return CartpoleBoundaryResult(
         success=success,
-        stop_reason="boundary_triggered_and_rollback_verified" if success else performance_violations[0],
+        stop_reason="boundary_triggered_and_rollback_verified"
+        if success
+        else performance_violations[0],
         start_state=start_state,
         target_position_m=target_position_m,
         candidate_trials=candidate_trials,

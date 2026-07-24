@@ -77,7 +77,9 @@ def vtol_model(**changes: float) -> RegisteredNonlinearModelSpec:
     )
 
 
-def cartpole_controller(kp: float = 18.15, kd: float = 8.47) -> RegisteredControllerSpec:
+def cartpole_controller(
+    kp: float = 18.15, kd: float = 8.47
+) -> RegisteredControllerSpec:
     return RegisteredControllerSpec(
         controller_id="cartpole_cascaded",
         parameters={"kp": kp, "kd": kd, "kp_y": 0.02, "kd_y": 0.05},
@@ -316,9 +318,7 @@ def test_exact_local_pole_boundary_is_inconclusive(monkeypatch):
         "linearize_registered_closed_loop",
         lambda *args, **kwargs: np.diag([-1e-6, -2.0, -3.0, -4.0]).tolist(),
     )
-    result = validate_registered_equilibrium(
-        cartpole_model(), cartpole_controller()
-    )
+    result = validate_registered_equilibrium(cartpole_model(), cartpole_controller())
     assert result.status == "inconclusive"
 
 
@@ -347,9 +347,9 @@ def test_registered_stability_contract_requires_all_poles_and_unique_scenarios()
         StabilityDecision.model_validate(payload)
 
     payload = result.stability.model_dump()
-    payload["scenario_evidence"][-1]["scenario_id"] = payload[
-        "scenario_evidence"
-    ][0]["scenario_id"]
+    payload["scenario_evidence"][-1]["scenario_id"] = payload["scenario_evidence"][0][
+        "scenario_id"
+    ]
     with pytest.raises(ValidationError, match="exact unique"):
         StabilityDecision.model_validate(payload)
 
@@ -377,7 +377,9 @@ def test_registered_aggregate_rejects_mismatched_trace_and_equilibrium_identity(
 def test_cartpole_audited_gain_sequence_first_passes_at_third_seed():
     first = run_registered_validation(cartpole_model(), cartpole_controller(15.0, 7.0))
     second = run_registered_validation(cartpole_model(), cartpole_controller(16.5, 7.7))
-    third = run_registered_validation(cartpole_model(), cartpole_controller(18.15, 8.47))
+    third = run_registered_validation(
+        cartpole_model(), cartpole_controller(18.15, 8.47)
+    )
     assert first.stability.status != "stable"
     assert second.stability.status != "stable"
     assert third.stability.status == "stable"
@@ -387,7 +389,9 @@ def test_cartpole_audited_gain_sequence_first_passes_at_third_seed():
 
 def test_zero_and_sign_flipped_gains_are_not_declared_stable():
     zero = run_registered_validation(cartpole_model(), cartpole_controller(0.0, 0.0))
-    flipped = run_registered_validation(cartpole_model(), cartpole_controller(-18.15, -8.47))
+    flipped = run_registered_validation(
+        cartpole_model(), cartpole_controller(-18.15, -8.47)
+    )
     assert zero.stability.status in {"unstable", "inconclusive"}
     assert flipped.stability.status == "unstable"
 
@@ -420,7 +424,11 @@ def test_hard_bound_failure_stops_early_and_retains_finite_samples():
     assert result.evidence.trajectory_finite
     assert len(result.trace.time_s) < 20_000
     assert any(event.kind == "hard_bound_violation" for event in result.trace.events)
-    assert all(np.isfinite(value) for values in result.trace.states.values() for value in values)
+    assert all(
+        np.isfinite(value)
+        for values in result.trace.states.values()
+        for value in values
+    )
 
 
 def test_initial_hard_bound_is_checked_before_controller_execution(monkeypatch):
@@ -478,7 +486,9 @@ def test_tail_contraction_threshold_is_inclusive_without_division_artifacts():
 
 
 def test_scenario_trace_records_requested_and_applied_actuators_and_boundary():
-    result = run_registered_scenario(vtol_model(), vtol_controller(), "combined_positive")
+    result = run_registered_scenario(
+        vtol_model(), vtol_controller(), "combined_positive"
+    )
     assert set(result.trace.requested_controls) == {"thrust_n", "torque_n_m"}
     assert set(result.trace.applied_controls) == {"thrust_n", "torque_n_m"}
     assert result.evidence.tail_error_envelope_contraction >= 0.1

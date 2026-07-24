@@ -33,9 +33,7 @@ from cfdc.models.schemas import (
 )
 
 
-ModelKind = Literal[
-    "transfer_function", "state_space", "registered_nonlinear"
-]
+ModelKind = Literal["transfer_function", "state_space", "registered_nonlinear"]
 RegisteredTemplate = Literal["underactuated_cartpole", "vtol_cascaded"]
 
 _FORBIDDEN_KEYS = frozenset(
@@ -122,9 +120,7 @@ _REGISTERED_PARAMETER_UNITS = {
     "thrust_max_n": "N",
     "torque_limit_n_m": "N*m",
 }
-_REGISTERED_UNIT_CONVERSIONS: dict[
-    str, tuple[str, str, float, float]
-] = {
+_REGISTERED_UNIT_CONVERSIONS: dict[str, tuple[str, str, float, float]] = {
     "milliseconds_to_seconds/v1": ("ms", "s", 0.001, 0.0),
     "seconds_to_milliseconds/v1": ("s", "ms", 1000.0, 0.0),
     "kilowatts_to_watts/v1": ("kW", "W", 1000.0, 0.0),
@@ -166,9 +162,7 @@ _NUMBER_LITERAL = re.compile(
     r"(?<![A-Za-z0-9_.])[-+]?(?:\d+(?:\.\d*)?|\.\d+)"
     r"(?:[eE][-+]?\d+)?(?![A-Za-z0-9_.])"
 )
-_VERSIONED_IDENTIFIER = re.compile(
-    r"^[a-z0-9][a-z0-9_.-]{0,190}\.v[0-9]{1,6}$"
-)
+_VERSIONED_IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,190}\.v[0-9]{1,6}$")
 _PARAMETER_PATH = re.compile(
     r"^[A-Za-z][A-Za-z0-9_]*"
     r"(?:\.[A-Za-z][A-Za-z0-9_]*|\[\d{1,6}\]){1,30}$"
@@ -248,20 +242,14 @@ class ModelValidationContext(CFDCModel):
         fact_ids = [fact.fact_id for fact in self.facts]
         if len(fact_ids) != len(set(fact_ids)):
             raise ValueError("model validation fact IDs must be unique")
-        answer_fact_ids = [
-            answer.fact_id for answer in self.natural_language_answers
-        ]
+        answer_fact_ids = [answer.fact_id for answer in self.natural_language_answers]
         if len(answer_fact_ids) != len(set(answer_fact_ids)):
-            raise ValueError(
-                "natural-language model answer fact IDs must be unique"
-            )
+            raise ValueError("natural-language model answer fact IDs must be unique")
         if set(fact_ids) & set(answer_fact_ids):
             raise ValueError(
                 "typed facts and untyped answer texts cannot share fact IDs"
             )
-        if len(self.allowed_model_kinds) != len(
-            set(self.allowed_model_kinds)
-        ):
+        if len(self.allowed_model_kinds) != len(set(self.allowed_model_kinds)):
             raise ValueError("allowed model kinds must be unique")
         if len(self.allowed_registered_templates) != len(
             set(self.allowed_registered_templates)
@@ -272,9 +260,7 @@ class ModelValidationContext(CFDCModel):
 
 def _normalized_key(value: Any) -> str:
     return "".join(
-        character
-        for character in str(value).casefold()
-        if character.isalnum()
+        character for character in str(value).casefold() if character.isalnum()
     )
 
 
@@ -292,8 +278,7 @@ def _unsafe_findings(
             if not isinstance(key, str) or _UNSAFE_MAPPING_KEY.search(str(key)):
                 findings.append(f"forbidden mapping key at {path}")
             if identifier_map and (
-                not isinstance(key, str)
-                or _SIMPLE_IDENTIFIER.fullmatch(key) is None
+                not isinstance(key, str) or _SIMPLE_IDENTIFIER.fullmatch(key) is None
             ):
                 findings.append(f"invalid identifier mapping key at {path}")
             normalized = _normalized_key(key)
@@ -331,9 +316,7 @@ def _unsafe_findings(
                     ),
                 )
             )
-    elif isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         for index, item in enumerate(value):
             findings.extend(
                 _unsafe_findings(
@@ -346,13 +329,9 @@ def _unsafe_findings(
             )
     elif isinstance(value, str):
         if identifier_kind is not None:
-            findings.extend(
-                _identifier_findings(identifier_kind, value, path)
-            )
+            findings.extend(_identifier_findings(identifier_kind, value, path))
         else:
-            pattern = (
-                _FORBIDDEN_LATEX_TEXT if display_latex else _FORBIDDEN_TEXT
-            )
+            pattern = _FORBIDDEN_LATEX_TEXT if display_latex else _FORBIDDEN_TEXT
             if pattern.search(value):
                 findings.append(f"forbidden executable text at {path}")
     elif isinstance(value, float) and not math.isfinite(value):
@@ -360,9 +339,7 @@ def _unsafe_findings(
     return findings
 
 
-def _identifier_findings(
-    kind: str, value: str, path: str
-) -> list[str]:
+def _identifier_findings(kind: str, value: str, path: str) -> list[str]:
     if _DANGEROUS_IDENTIFIER.search(value):
         return [f"forbidden identifier content at {path}"]
     valid = False
@@ -385,10 +362,7 @@ def _identifier_findings(
             and _VERSIONED_IDENTIFIER.fullmatch(value) is not None
         )
     elif kind == "parameter_path":
-        valid = (
-            len(value) <= 500
-            and _PARAMETER_PATH.fullmatch(value) is not None
-        )
+        valid = len(value) <= 500 and _PARAMETER_PATH.fullmatch(value) is not None
     elif kind == "derivation_rule_id":
         valid = value in _REGISTERED_DERIVATION_RULES
     elif kind == "unit_conversion":
@@ -458,17 +432,15 @@ def _validate_model_shape(
             raise ValueError(
                 "transfer-function coefficient count exceeds the safety limit"
             )
-        if _effective_polynomial_length(
-            model.numerator
-        ) > _effective_polynomial_length(model.denominator):
+        if _effective_polynomial_length(model.numerator) > _effective_polynomial_length(
+            model.denominator
+        ):
             raise ValueError("transfer function must be proper")
         if model.time_domain == "continuous" and model.sample_time_s is not None:
             raise ValueError("continuous transfer function cannot set sample time")
         if model.time_domain == "discrete":
             if model.sample_time_s is None:
-                raise ValueError(
-                    "discrete transfer function requires sample time"
-                )
+                raise ValueError("discrete transfer function requires sample time")
             if not math.isclose(
                 envelope.experiment_proposal.sample_time_s,
                 model.sample_time_s,
@@ -515,9 +487,7 @@ def _validate_model_shape(
         if model.template_id not in context.allowed_registered_templates:
             raise ValueError("registered template is not allowlisted")
         if set(model.parameters) != _REGISTERED_PARAMETERS[model.template_id]:
-            raise ValueError(
-                "registered template parameters must use the exact set"
-            )
+            raise ValueError("registered template parameters must use the exact set")
         if envelope.model_role != "registered_nonlinear_model":
             raise ValueError(
                 "registered runtime requires registered_nonlinear_model role"
@@ -551,9 +521,7 @@ def _validate_signal_and_structure(
         not isinstance(model, RegisteredNonlinearModelSpec)
         or model.template_id != expected_template
     ):
-        raise ValueError(
-            "coupling diagnosis requires its exact registered template"
-        )
+        raise ValueError("coupling diagnosis requires its exact registered template")
     if isinstance(model, RegisteredNonlinearModelSpec):
         expected_coupling = (
             "underactuated"
@@ -561,9 +529,7 @@ def _validate_signal_and_structure(
             else "cascaded"
         )
         if coupling not in {expected_coupling, "unknown"}:
-            raise ValueError(
-                "registered model conflicts with coupling diagnosis"
-            )
+            raise ValueError("registered model conflicts with coupling diagnosis")
 
     if isinstance(model, RegisteredNonlinearModelSpec):
         poles = np.asarray([], dtype=complex)
@@ -581,9 +547,7 @@ def _validate_signal_and_structure(
             else np.asarray([], dtype=complex)
         )
         model_order = _effective_polynomial_length(model.denominator) - 1
-        numerator_order = (
-            _effective_polynomial_length(model.numerator) - 1
-        )
+        numerator_order = _effective_polynomial_length(model.numerator) - 1
         relative_degree = model_order - numerator_order
         model_stability = (
             "stable"
@@ -648,16 +612,12 @@ def _validate_signal_and_structure(
             else any(abs(pole - 1.0) <= 1e-6 for pole in poles)
         )
 
-    diagnosed_stability = str(
-        context.diagnosis.open_loop_stability.assessment
-    )
+    diagnosed_stability = str(context.diagnosis.open_loop_stability.assessment)
     if (
         diagnosed_stability in {"stable", "unstable"}
         and diagnosed_stability != model_stability
     ):
-        raise ValueError(
-            "generated model stability conflicts with the diagnosis"
-        )
+        raise ValueError("generated model stability conflicts with the diagnosis")
 
     primary_class = str(context.classification.primary_class)
     if primary_class == "class_i_first_order_lag":
@@ -668,9 +628,7 @@ def _validate_signal_and_structure(
             or input_count != 1
             or output_count != 1
         ):
-            raise ValueError(
-                "generated model conflicts with Class I first-order lag"
-            )
+            raise ValueError("generated model conflicts with Class I first-order lag")
     elif primary_class == "class_ii_second_order_oscillator":
         if model_order != 2 or not oscillatory:
             raise ValueError(
@@ -678,19 +636,12 @@ def _validate_signal_and_structure(
             )
     elif primary_class == "class_iii_double_or_pure_integrator":
         if not integrator:
-            raise ValueError(
-                "generated model lacks a Class III integrator pole"
-            )
-    elif (
-        primary_class
-        == "class_iv_higher_order_unstable_nonlinear_or_nmp"
-    ):
+            raise ValueError("generated model lacks a Class III integrator pole")
+    elif primary_class == "class_iv_higher_order_unstable_nonlinear_or_nmp":
         local_nonlinear = (
             envelope.model_role == "local_linear_hypothesis"
             and envelope.validity_region is not None
-            and str(
-                context.diagnosis.nonlinearity_strength.assessment
-            )
+            and str(context.diagnosis.nonlinearity_strength.assessment)
             == "strong_dynamic"
         )
         if not (
@@ -700,9 +651,7 @@ def _validate_signal_and_structure(
             or nonminimum_phase is True
             or local_nonlinear
         ):
-            raise ValueError(
-                "generated model lacks any inspectable Class IV property"
-            )
+            raise ValueError("generated model lacks any inspectable Class IV property")
     elif primary_class == "class_v_multivariable_significant_coupling":
         if input_count < 2 or output_count < 2:
             raise ValueError(
@@ -744,21 +693,13 @@ def _validate_signal_and_structure(
             degree_field.estimated_order is not None
             and relative_degree != degree_field.estimated_order
         ):
-            raise ValueError(
-                "model relative degree conflicts with diagnosed order"
-            )
+            raise ValueError("model relative degree conflicts with diagnosed order")
         if degree_assessment == "low" and relative_degree > 2:
-            raise ValueError(
-                "high relative-degree model conflicts with low diagnosis"
-            )
+            raise ValueError("high relative-degree model conflicts with low diagnosis")
         if degree_assessment == "high" and relative_degree <= 2:
-            raise ValueError(
-                "low relative-degree model conflicts with high diagnosis"
-            )
+            raise ValueError("low relative-degree model conflicts with high diagnosis")
 
-    nonlinearity = str(
-        context.diagnosis.nonlinearity_strength.assessment
-    )
+    nonlinearity = str(context.diagnosis.nonlinearity_strength.assessment)
     if nonlinearity == "strong_dynamic" and not (
         isinstance(model, RegisteredNonlinearModelSpec)
         or (
@@ -803,9 +744,7 @@ def _validate_runtime_signals(envelope: GeneratedModelEnvelopeV1) -> None:
                 f"experiment {field_name} must exactly cover model signals"
             )
     if not set(experiment.reference) <= outputs:
-        raise ValueError(
-            "experiment reference must use only generated-model outputs"
-        )
+        raise ValueError("experiment reference must use only generated-model outputs")
     if experiment.signal_units != model_units:
         raise ValueError(
             "experiment units must exactly match the generated model units"
@@ -823,9 +762,7 @@ def _validate_runtime_signals(envelope: GeneratedModelEnvelopeV1) -> None:
                     f"operating point {field_name} must exactly cover model signals"
                 )
         if operating_point.signal_units != model_units:
-            raise ValueError(
-                "operating-point units must exactly match model units"
-            )
+            raise ValueError("operating-point units must exactly match model units")
 
     if envelope.validity_region is not None:
         region = envelope.validity_region
@@ -839,9 +776,7 @@ def _validate_runtime_signals(envelope: GeneratedModelEnvelopeV1) -> None:
                     f"validity region {field_name} must exactly cover model signals"
                 )
         if region.signal_units != model_units:
-            raise ValueError(
-                "validity-region units must exactly match model units"
-            )
+            raise ValueError("validity-region units must exactly match model units")
 
 
 def _add_matrix_paths(
@@ -884,22 +819,14 @@ def _numeric_paths(envelope: GeneratedModelEnvelopeV1) -> dict[str, float]:
     for name, value in experiment.reference.items():
         result[f"experiment_proposal.reference.{name}"] = float(value)
     result["experiment_proposal.horizon_s"] = float(experiment.horizon_s)
-    result["experiment_proposal.sample_time_s"] = float(
-        experiment.sample_time_s
-    )
+    result["experiment_proposal.sample_time_s"] = float(experiment.sample_time_s)
     for group_name in ("actuator_bounds", "state_bounds", "output_bounds"):
         for name, bounds in getattr(experiment, group_name).items():
-            result[f"experiment_proposal.{group_name}.{name}[0]"] = float(
-                bounds[0]
-            )
-            result[f"experiment_proposal.{group_name}.{name}[1]"] = float(
-                bounds[1]
-            )
+            result[f"experiment_proposal.{group_name}.{name}[0]"] = float(bounds[0])
+            result[f"experiment_proposal.{group_name}.{name}[1]"] = float(bounds[1])
     if envelope.operating_point is not None:
         for group_name in ("states", "inputs", "outputs"):
-            for name, value in getattr(
-                envelope.operating_point, group_name
-            ).items():
+            for name, value in getattr(envelope.operating_point, group_name).items():
                 result[f"operating_point.{group_name}.{name}"] = float(value)
     if envelope.validity_region is not None:
         for group_name in (
@@ -907,15 +834,9 @@ def _numeric_paths(envelope: GeneratedModelEnvelopeV1) -> dict[str, float]:
             "output_ranges",
             "state_ranges",
         ):
-            for name, bounds in getattr(
-                envelope.validity_region, group_name
-            ).items():
-                result[f"validity_region.{group_name}.{name}[0]"] = float(
-                    bounds[0]
-                )
-                result[f"validity_region.{group_name}.{name}[1]"] = float(
-                    bounds[1]
-                )
+            for name, bounds in getattr(envelope.validity_region, group_name).items():
+                result[f"validity_region.{group_name}.{name}[0]"] = float(bounds[0])
+                result[f"validity_region.{group_name}.{name}[1]"] = float(bounds[1])
     return result
 
 
@@ -924,9 +845,7 @@ def _single_fact_scalar(
 ) -> tuple[float, str]:
     matches = [fact for fact in facts if fact.fact_type == fact_type]
     if len(matches) != 1:
-        raise ValueError(
-            f"derivation requires exactly one {fact_type} fact"
-        )
+        raise ValueError(f"derivation requires exactly one {fact_type} fact")
     return (
         float(matches[0].value_payload["value"]),
         str(matches[0].value_payload["unit"]),
@@ -938,9 +857,7 @@ def _single_seconds_fact(
 ) -> tuple[float, str]:
     value, unit = _single_fact_scalar(facts, fact_type)
     if unit != "s":
-        raise ValueError(
-            f"{fact_type} derivation requires target unit s"
-        )
+        raise ValueError(f"{fact_type} derivation requires target unit s")
     return value, unit
 
 
@@ -953,9 +870,7 @@ def _continuous_first_order_step_form(
         and model.sample_time_s is None
         and len(model.numerator) == 1
         and len(model.denominator) == 2
-        and math.isclose(
-            model.denominator[1], 1.0, rel_tol=0.0, abs_tol=1e-12
-        )
+        and math.isclose(model.denominator[1], 1.0, rel_tol=0.0, abs_tol=1e-12)
     )
 
 
@@ -980,20 +895,16 @@ def _derive_value(
                 "function numerator gain path"
             )
         input_facts = [fact for fact in facts if fact.fact_type == "input_step"]
-        output_facts = [
-            fact for fact in facts if fact.fact_type == "output_step"
-        ]
+        output_facts = [fact for fact in facts if fact.fact_type == "output_step"]
         if len(input_facts) != 1 or len(output_facts) != 1:
             raise ValueError(
                 "step-gain derivation requires one input and one output step"
             )
-        input_delta = (
-            float(input_facts[0].value_payload["after"])
-            - float(input_facts[0].value_payload["before"])
+        input_delta = float(input_facts[0].value_payload["after"]) - float(
+            input_facts[0].value_payload["before"]
         )
-        output_delta = (
-            float(output_facts[0].value_payload["after"])
-            - float(output_facts[0].value_payload["before"])
+        output_delta = float(output_facts[0].value_payload["after"]) - float(
+            output_facts[0].value_payload["before"]
         )
         if abs(input_delta) <= 1e-15:
             raise ValueError("step-gain derivation has zero input change")
@@ -1041,9 +952,7 @@ def _derive_value(
         ):
             allowed_paths.add("model.sample_time_s")
         if parameter_path not in allowed_paths:
-            raise ValueError(
-                "sample-time derivation is not valid for this path"
-            )
+            raise ValueError("sample-time derivation is not valid for this path")
         return _single_seconds_fact(facts, "sample_time")
     if rule_id in {"normalized_one/v1", "constant_one/v1"}:
         if not (
@@ -1060,9 +969,7 @@ def _derive_value(
             _continuous_first_order_step_form(model)
             and parameter_path == "model.input_delay_s"
         ):
-            raise ValueError(
-                "normalized-zero derivation is not valid for this path"
-            )
+            raise ValueError("normalized-zero derivation is not valid for this path")
         return 0.0, "s"
     if rule_id == "six_time_constants_horizon/v1":
         if parameter_path != "experiment_proposal.horizon_s":
@@ -1071,9 +978,7 @@ def _derive_value(
         return 6.0 * value, unit
     if rule_id == "time_constant_div_50_sample/v1":
         if parameter_path != "experiment_proposal.sample_time_s":
-            raise ValueError(
-                "sample-interval derivation is not valid for this path"
-            )
+            raise ValueError("sample-interval derivation is not valid for this path")
         value, unit = _single_seconds_fact(facts, "response_time_63")
         return value / 50.0, unit
     if rule_id == "output_step_delta_reference/v1":
@@ -1081,17 +986,12 @@ def _derive_value(
             raise ValueError(
                 "output-step reference derivation requires a transfer function"
             )
-        expected_path = (
-            "experiment_proposal.reference."
-            f"{model.output_signal_id}"
-        )
+        expected_path = f"experiment_proposal.reference.{model.output_signal_id}"
         if parameter_path != expected_path:
             raise ValueError(
                 "output-step reference derivation targets only the model output"
             )
-        output_facts = [
-            fact for fact in facts if fact.fact_type == "output_step"
-        ]
+        output_facts = [fact for fact in facts if fact.fact_type == "output_step"]
         if len(output_facts) != 1:
             raise ValueError(
                 "output-step reference derivation requires one output step"
@@ -1103,24 +1003,16 @@ def _derive_value(
         )
     if rule_id == "center_actuator_bounds_at_input_before/v1":
         if not isinstance(model, TransferFunctionModelSpec):
-            raise ValueError(
-                "centered actuator bounds require a transfer function"
-            )
+            raise ValueError("centered actuator bounds require a transfer function")
         match = re.fullmatch(
             r"experiment_proposal\.actuator_bounds\."
             r"([A-Za-z0-9_]+)\[([01])\]",
             parameter_path,
         )
         if match is None or match.group(1) != model.input_signal_id:
-            raise ValueError(
-                "centered actuator bounds target only the model input"
-            )
-        input_facts = [
-            fact for fact in facts if fact.fact_type == "input_step"
-        ]
-        bound_facts = [
-            fact for fact in facts if fact.fact_type == "actuator_bounds"
-        ]
+            raise ValueError("centered actuator bounds target only the model input")
+        input_facts = [fact for fact in facts if fact.fact_type == "input_step"]
+        bound_facts = [fact for fact in facts if fact.fact_type == "actuator_bounds"]
         if len(input_facts) != 1 or len(bound_facts) != 1:
             raise ValueError(
                 "centered actuator bounds require one input step and one "
@@ -1139,30 +1031,21 @@ def _derive_value(
             )
         index = int(match.group(2))
         return (
-            float(bounds["ranges"][signal][index])
-            - float(step["before"]),
+            float(bounds["ranges"][signal][index]) - float(step["before"]),
             model.input_units,
         )
     if rule_id == "center_output_bounds_at_output_before/v1":
         if not isinstance(model, TransferFunctionModelSpec):
-            raise ValueError(
-                "centered output bounds require a transfer function"
-            )
+            raise ValueError("centered output bounds require a transfer function")
         match = re.fullmatch(
             r"experiment_proposal\.output_bounds\."
             r"([A-Za-z0-9_]+)\[([01])\]",
             parameter_path,
         )
         if match is None or match.group(1) != model.output_signal_id:
-            raise ValueError(
-                "centered output bounds target only the model output"
-            )
-        output_facts = [
-            fact for fact in facts if fact.fact_type == "output_step"
-        ]
-        bound_facts = [
-            fact for fact in facts if fact.fact_type == "output_bounds"
-        ]
+            raise ValueError("centered output bounds target only the model output")
+        output_facts = [fact for fact in facts if fact.fact_type == "output_step"]
+        bound_facts = [fact for fact in facts if fact.fact_type == "output_bounds"]
         if len(output_facts) != 1 or len(bound_facts) != 1:
             raise ValueError(
                 "centered output bounds require one output step and one "
@@ -1181,8 +1064,7 @@ def _derive_value(
             )
         index = int(match.group(2))
         return (
-            float(bounds["ranges"][signal][index])
-            - float(step["before"]),
+            float(bounds["ranges"][signal][index]) - float(step["before"]),
             model.output_units,
         )
     raise ValueError("unregistered deterministic derivation rule")
@@ -1200,9 +1082,7 @@ def _matrix_fact_leaves(
     for row_index, (value_row, unit_row) in enumerate(zip(values, units)):
         if not isinstance(value_row, list) or not isinstance(unit_row, list):
             return []
-        for column_index, (value, unit) in enumerate(
-            zip(value_row, unit_row)
-        ):
+        for column_index, (value, unit) in enumerate(zip(value_row, unit_row)):
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 leaves.append(
                     _NumericFactLeaf(
@@ -1220,12 +1100,8 @@ def _fact_numeric_leaves(fact: ModelFactAnswer) -> list[_NumericFactLeaf]:
     if fact.fact_type in {"input_step", "output_step"}:
         unit = str(payload["unit"])
         return [
-            _NumericFactLeaf(
-                fact.fact_type, "before", float(payload["before"]), unit
-            ),
-            _NumericFactLeaf(
-                fact.fact_type, "after", float(payload["after"]), unit
-            ),
+            _NumericFactLeaf(fact.fact_type, "before", float(payload["before"]), unit),
+            _NumericFactLeaf(fact.fact_type, "after", float(payload["after"]), unit),
         ]
     if fact.fact_type in {
         "response_delay",
@@ -1343,9 +1219,7 @@ def _fact_numeric_leaves(fact: ModelFactAnswer) -> list[_NumericFactLeaf]:
 
 
 def _unit_dimensions(unit: str) -> dict[str, int]:
-    token_pattern = re.compile(
-        r"\s*([A-Za-z%][A-Za-z0-9_%]*|1|-?\d+|[*/^()])"
-    )
+    token_pattern = re.compile(r"\s*([A-Za-z%][A-Za-z0-9_%]*|1|-?\d+|[*/^()])")
     tokens: list[str] = []
     position = 0
     while position < len(unit):
@@ -1389,10 +1263,7 @@ def _unit_dimensions(unit: str) -> dict[str, int]:
             raise ValueError("invalid unit factor")
         if cursor < len(tokens) and tokens[cursor] == "^":
             cursor += 1
-            if (
-                cursor >= len(tokens)
-                or re.fullmatch(r"-?\d+", tokens[cursor]) is None
-            ):
+            if cursor >= len(tokens) or re.fullmatch(r"-?\d+", tokens[cursor]) is None:
                 raise ValueError("unit exponent must be an integer")
             exponent = int(tokens[cursor])
             cursor += 1
@@ -1442,9 +1313,7 @@ def _matrix_expected_dimensions(
     def dimensions(name: str) -> dict[str, int]:
         return _unit_dimensions(model.signal_units[name])
 
-    def ratio(
-        numerator: dict[str, int], denominator: dict[str, int]
-    ) -> dict[str, int]:
+    def ratio(numerator: dict[str, int], denominator: dict[str, int]) -> dict[str, int]:
         result = dict(numerator)
         for symbol, exponent in denominator.items():
             result[symbol] = result.get(symbol, 0) - exponent
@@ -1484,9 +1353,7 @@ def _direct_evidence_matches(
     facts: Sequence[ModelFactAnswer],
     envelope: GeneratedModelEnvelopeV1,
 ) -> bool:
-    allowed = _allowed_fact_leaf_keys(
-        evidence.parameter_path, envelope
-    )
+    allowed = _allowed_fact_leaf_keys(evidence.parameter_path, envelope)
     leaves = [
         leaf
         for fact in facts
@@ -1504,9 +1371,7 @@ def _direct_evidence_matches(
             )
             for leaf in leaves
         )
-    conversion = _REGISTERED_UNIT_CONVERSIONS.get(
-        evidence.unit_conversion
-    )
+    conversion = _REGISTERED_UNIT_CONVERSIONS.get(evidence.unit_conversion)
     if conversion is None:
         raise ValueError("unregistered unit conversion")
     source_unit, target_unit, scale, offset = conversion
@@ -1553,13 +1418,9 @@ def _allowed_fact_leaf_keys(
     if match and isinstance(envelope.model, StateSpaceModelSpec):
         index = int(match.group(1))
         if index < len(envelope.model.state_names):
-            keys.add(
-                ("operating_point", f"states.{envelope.model.state_names[index]}")
-            )
+            keys.add(("operating_point", f"states.{envelope.model.state_names[index]}"))
         return keys
-    match = re.fullmatch(
-        r"model\.initial_state\.([A-Za-z0-9_]+)", parameter_path
-    )
+    match = re.fullmatch(r"model\.initial_state\.([A-Za-z0-9_]+)", parameter_path)
     if match:
         keys.add(("operating_point", f"states.{match.group(1)}"))
         return keys
@@ -1607,9 +1468,7 @@ def _allowed_fact_leaf_keys(
         parameter_path,
     )
     if match:
-        keys.add(
-            ("operating_point", f"{match.group(1)}.{match.group(2)}")
-        )
+        keys.add(("operating_point", f"{match.group(1)}.{match.group(2)}"))
         return keys
     match = re.fullmatch(
         r"validity_region\."
@@ -1675,17 +1534,13 @@ def _registry_policy_paths(
     for group_name in ("actuator_bounds", "state_bounds", "output_bounds"):
         for name, bounds in registered[group_name].items():
             unit = envelope.model.signal_units[name]
-            result[
-                f"experiment_proposal.{group_name}.{name}[0]"
-            ] = _NumericFactLeaf(
+            result[f"experiment_proposal.{group_name}.{name}[0]"] = _NumericFactLeaf(
                 "registry_policy",
                 f"{group_name}.{name}[0]",
                 float(bounds[0]),
                 unit,
             )
-            result[
-                f"experiment_proposal.{group_name}.{name}[1]"
-            ] = _NumericFactLeaf(
+            result[f"experiment_proposal.{group_name}.{name}[1]"] = _NumericFactLeaf(
                 "registry_policy",
                 f"{group_name}.{name}[1]",
                 float(bounds[1]),
@@ -1712,9 +1567,7 @@ def _validate_evidence(
         missing_fact_ids = set(evidence.source_fact_ids) - set(facts_by_id)
         if missing_fact_ids:
             raise ValueError("parameter evidence references unknown facts")
-        source_facts = [
-            facts_by_id[fact_id] for fact_id in evidence.source_fact_ids
-        ]
+        source_facts = [facts_by_id[fact_id] for fact_id in evidence.source_fact_ids]
         referenced_fact_ids.update(evidence.source_fact_ids)
         matrix_dimensions = _matrix_expected_dimensions(
             envelope, evidence.parameter_path
@@ -1728,18 +1581,14 @@ def _validate_evidence(
                 "signal dimensions"
             )
         if evidence.source == "user_adopted_example":
-            if any(
-                fact.source != "user_adopted_example" for fact in source_facts
-            ):
+            if any(fact.source != "user_adopted_example" for fact in source_facts):
                 raise ValueError(
                     "adopted-example evidence requires explicit adopted facts"
                 )
         elif evidence.source not in {
             "deterministic_derivation",
             "registry_policy",
-        } and any(
-            fact.source != evidence.source for fact in source_facts
-        ):
+        } and any(fact.source != evidence.source for fact in source_facts):
             raise ValueError(
                 "parameter evidence source conflicts with referenced facts"
             )
@@ -1772,25 +1621,17 @@ def _validate_evidence(
                 evidence.parameter_path,
                 envelope,
             )
-            if not math.isclose(
-                evidence.value, derived, rel_tol=1e-9, abs_tol=1e-12
-            ):
-                raise ValueError(
-                    "deterministic derivation value does not recompute"
-                )
+            if not math.isclose(evidence.value, derived, rel_tol=1e-9, abs_tol=1e-12):
+                raise ValueError("deterministic derivation value does not recompute")
             if evidence.unit != derived_unit:
-                raise ValueError(
-                    "deterministic derivation unit does not recompute"
-                )
+                raise ValueError("deterministic derivation unit does not recompute")
         else:
             if _requires_derivation(evidence.parameter_path):
                 raise ValueError(
                     "computed model and timing fields require a registered "
                     "deterministic derivation"
                 )
-            if not _direct_evidence_matches(
-                evidence, source_facts, envelope
-            ):
+            if not _direct_evidence_matches(evidence, source_facts, envelope):
                 raise ValueError(
                     "direct evidence value/unit is not a referenced fact leaf"
                 )
@@ -1805,14 +1646,10 @@ def _validate_evidence(
             )
     missing_paths = set(expected) - set(evidence_by_path)
     if missing_paths:
-        raise ValueError(
-            "generated envelope lacks evidence for every numeric path"
-        )
+        raise ValueError("generated envelope lacks evidence for every numeric path")
     if set(envelope.experiment_proposal.evidence_fact_ids) - set(facts_by_id):
         raise ValueError("experiment references unknown evidence facts")
-    referenced_fact_ids.update(
-        envelope.experiment_proposal.evidence_fact_ids
-    )
+    referenced_fact_ids.update(envelope.experiment_proposal.evidence_fact_ids)
     uses_adopted_example = any(
         facts_by_id[fact_id].source == "user_adopted_example"
         for fact_id in referenced_fact_ids
@@ -1822,13 +1659,9 @@ def _validate_evidence(
             "a model derived from adopted example facts must use "
             "model_role=example_hypothesis"
         )
-    if (
-        envelope.model_role == "example_hypothesis"
-        and not uses_adopted_example
-    ):
+    if envelope.model_role == "example_hypothesis" and not uses_adopted_example:
         raise ValueError(
-            "example_hypothesis requires a referenced explicitly adopted "
-            "example fact"
+            "example_hypothesis requires a referenced explicitly adopted example fact"
         )
 
 
@@ -1879,9 +1712,7 @@ def _validate_adopted_facts(
             raise ValueError("adopted model fact content hash mismatch")
 
 
-def _validate_questions(
-    result: Any, catalog: ModelQuestionExampleCatalog
-) -> None:
+def _validate_questions(result: Any, catalog: ModelQuestionExampleCatalog) -> None:
     examples = {example.example_id: example for example in catalog.examples}
     if len(result.missing_fact_ids) != len(set(result.missing_fact_ids)):
         raise ValueError("missing fact IDs must be unique")
@@ -1897,9 +1728,7 @@ def _validate_questions(
                 "discovery question and fixed example metadata do not match"
             )
         if question.fact_id not in result.missing_fact_ids:
-            raise ValueError(
-                "every discovery question must reference a missing fact"
-            )
+            raise ValueError("every discovery question must reference a missing fact")
 
 
 def _numeric_values(value: Any) -> list[float]:
@@ -1912,9 +1741,7 @@ def _numeric_values(value: Any) -> list[float]:
         for item in value.values():
             result.extend(_numeric_values(item))
         return result
-    if isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         result = []
         for item in value:
             result.extend(_numeric_values(item))
@@ -1947,14 +1774,10 @@ def _unit_values(
                 )
             )
         return result
-    if isinstance(value, Sequence) and not isinstance(
-        value, (str, bytes, bytearray)
-    ):
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         result = []
         for item in value:
-            result.extend(
-                _unit_values(item, in_unit_field=in_unit_field)
-            )
+            result.extend(_unit_values(item, in_unit_field=in_unit_field))
         return result
     if in_unit_field and isinstance(value, str):
         return [value]
@@ -1969,8 +1792,7 @@ def _validate_recognized_facts(
     if not recognized:
         return []
     answer_by_fact_id = {
-        answer.fact_id: answer
-        for answer in context.natural_language_answers
+        answer.fact_id: answer for answer in context.natural_language_answers
     }
     known_ids = {fact.fact_id for fact in context.facts}
     seen: set[str] = set()
@@ -1982,9 +1804,7 @@ def _validate_recognized_facts(
         seen.add(fact.fact_id)
         answer = answer_by_fact_id.get(fact.fact_id)
         if answer is None:
-            raise ValueError(
-                "recognized model fact has no matching verbatim answer"
-            )
+            raise ValueError("recognized model fact has no matching verbatim answer")
         if (
             fact.source != "user_supplied"
             or fact.fact_type != answer.fact_type
@@ -2008,15 +1828,11 @@ def _validate_recognized_facts(
                 )
                 for written in written_numbers
             ):
-                raise ValueError(
-                    "recognized model fact introduced an unwritten number"
-                )
+                raise ValueError("recognized model fact introduced an unwritten number")
         answer_casefold = answer.answer_text.casefold()
         for unit in set(_unit_values(fact.value_payload)):
             if unit.casefold() not in answer_casefold:
-                raise ValueError(
-                    "recognized model fact introduced an unwritten unit"
-                )
+                raise ValueError("recognized model fact introduced an unwritten unit")
     return recognized
 
 

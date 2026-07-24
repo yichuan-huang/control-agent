@@ -20,7 +20,9 @@ from cfdc.models import (
 from cfdc.evidence.units import time_unit_scale_seconds
 
 
-def _gap(code: str, capability_id: str, explanation: str, next_action: str) -> CapabilityGap:
+def _gap(
+    code: str, capability_id: str, explanation: str, next_action: str
+) -> CapabilityGap:
     return CapabilityGap(
         code=code,
         stage="object_evidence",
@@ -82,7 +84,9 @@ def _missing_model_signal_units(model) -> list[str]:
     ]
 
 
-def _model_profile_conflicts(package: PlantEvidencePackage, profile_id: str) -> list[str]:
+def _model_profile_conflicts(
+    package: PlantEvidencePackage, profile_id: str
+) -> list[str]:
     if package.model is None or isinstance(package.model, RegisteredNonlinearModelSpec):
         return []
     modes = _linear_model_modes(package.model)
@@ -130,8 +134,10 @@ def _model_profile_conflicts(package: PlantEvidencePackage, profile_id: str) -> 
             )
     elif profile_id == "double_integrator":
         integrator_pole = 1.0 if is_discrete else 0.0
-        if order not in {1, 2} or poles.size != order or not np.all(
-            np.abs(poles - integrator_pole) <= 1e-8
+        if (
+            order not in {1, 2}
+            or poles.size != order
+            or not np.all(np.abs(poles - integrator_pole) <= 1e-8)
         ):
             conflicts.append(
                 "The supplied model does not contain the pure or double integrator mode selected by the diagnosis."
@@ -232,8 +238,7 @@ def validate_evidence_package(
         unmatched_inputs = [
             value
             for value in model_inputs
-            if described_inputs
-            and _normalized_signal_id(value) not in described_inputs
+            if described_inputs and _normalized_signal_id(value) not in described_inputs
         ]
         unmatched_outputs = [
             value

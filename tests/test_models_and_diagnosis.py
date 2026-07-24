@@ -45,7 +45,10 @@ def test_experiment_result_json_roundtrip():
         estimates=["static_gain", "time_constant"],
         trace=ExperimentTrace(
             time_s=[0.0, 1.0, 2.0],
-            signals={"input setting": [0.0, 0.5, 0.5], "measured output": [0.0, 0.4, 0.8]},
+            signals={
+                "input setting": [0.0, 0.5, 0.5],
+                "measured output": [0.0, 0.4, 0.8],
+            },
         ),
     )
     payload = result.model_dump_json()
@@ -107,7 +110,9 @@ def test_agent_output_rejects_free_text():
 
 def test_incomplete_description_gets_two_to_four_questions():
     engine = DiagnosticEngine()
-    diagnosis = engine.diagnose(SystemDescription(text="I have a machine and want it to behave better."))
+    diagnosis = engine.diagnose(
+        SystemDescription(text="I have a machine and want it to behave better.")
+    )
     assert not diagnosis.complete
     assert 2 <= len(diagnosis.clarification_questions) <= 4
 
@@ -123,7 +128,10 @@ def test_complete_cartpole_description_classifies_as_class_iv():
     )
     classification = engine.classify(diagnosis)
     assert diagnosis.complete
-    assert classification.primary_class == ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP.value
+    assert (
+        classification.primary_class
+        == ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP.value
+    )
     assert "natural_frequency" in classification.required_core_features
 
 
@@ -138,7 +146,11 @@ def test_first_order_delay_keeps_dead_time_feature():
     )
     classification = engine.classify(diagnosis)
     assert classification.primary_class == ArchetypeClass.CLASS_I_FIRST_ORDER_LAG.value
-    assert classification.required_core_features == ["static_gain", "time_constant", "dead_time"]
+    assert classification.required_core_features == [
+        "static_gain",
+        "time_constant",
+        "dead_time",
+    ]
 
 
 def test_first_order_without_reported_delay_does_not_request_dead_time():
@@ -255,7 +267,9 @@ def test_engine_reconciles_llm_misreadings_against_explicit_thermostat_negations
             assert supplied_description == description
             return poisoned.model_dump(mode="json")
 
-    diagnosis, classification = DiagnosticEngine(adapter=MisreadingAdapter()).run(description)
+    diagnosis, classification = DiagnosticEngine(adapter=MisreadingAdapter()).run(
+        description
+    )
 
     assert diagnosis.minimum_phase.assessment == "minimum_phase"
     assert diagnosis.significant_delay.assessment == "not_significant"
@@ -265,7 +279,7 @@ def test_engine_reconciles_llm_misreadings_against_explicit_thermostat_negations
 
 
 def test_parse_json_content():
-    assert parse_json_content("{\"complete\": true}") == {"complete": True}
+    assert parse_json_content('{"complete": true}') == {"complete": True}
 
 
 def test_openai_compatible_adapter_uses_sdk(monkeypatch):
@@ -274,7 +288,7 @@ def test_openai_compatible_adapter_uses_sdk(monkeypatch):
     class FakeCompletions:
         def create(self, **kwargs):
             calls["completion"] = kwargs
-            message = type("Message", (), {"content": "{\"complete\": true}"})()
+            message = type("Message", (), {"content": '{"complete": true}'})()
             choice = type("Choice", (), {"message": message})()
             return type("Response", (), {"choices": [choice]})()
 
@@ -293,7 +307,9 @@ def test_openai_compatible_adapter_uses_sdk(monkeypatch):
         max_tokens=321,
     )
 
-    result = adapter.diagnose(SystemDescription(text="A simple heater process settles."))
+    result = adapter.diagnose(
+        SystemDescription(text="A simple heater process settles.")
+    )
 
     assert result == {"complete": True}
     assert calls["client"] == {
@@ -358,7 +374,9 @@ def test_profile_selection_prompt_declares_exact_json_field_types(monkeypatch):
     assert "Do not add any other keys" in user_prompt
 
 
-def test_openai_compatible_adapter_requires_explicit_provider_configuration(monkeypatch):
+def test_openai_compatible_adapter_requires_explicit_provider_configuration(
+    monkeypatch,
+):
     for name in [
         "CFDC_LLM_BASE_URL",
         "CONTROL_PROJECT_LLM_BASE_URL",
@@ -405,7 +423,7 @@ def test_deepseek_adapter_disables_thinking_for_strict_json(monkeypatch):
     class FakeCompletions:
         def create(self, **kwargs):
             calls["completion"] = kwargs
-            message = type("Message", (), {"content": "{\"complete\": true}"})()
+            message = type("Message", (), {"content": '{"complete": true}'})()
             choice = type("Choice", (), {"message": message, "finish_reason": "stop"})()
             return type("Response", (), {"choices": [choice]})()
 
@@ -421,12 +439,12 @@ def test_deepseek_adapter_disables_thinking_for_strict_json(monkeypatch):
         api_key="test-key",
     )
 
-    result = adapter.diagnose(SystemDescription(text="A simple heater process settles."))
+    result = adapter.diagnose(
+        SystemDescription(text="A simple heater process settles.")
+    )
 
     assert result == {"complete": True}
-    assert calls["completion"]["extra_body"] == {
-        "thinking": {"type": "disabled"}
-    }
+    assert calls["completion"]["extra_body"] == {"thinking": {"type": "disabled"}}
 
 
 def test_openai_compatible_adapter_explains_empty_content(monkeypatch):
@@ -461,7 +479,9 @@ def test_openai_compatible_adapter_explains_empty_content(monkeypatch):
 
 
 def test_diagnostic_prompt_contains_required_fields():
-    prompt = build_diagnostic_prompt(SystemDescription(text="A simple heater process settles."))
+    prompt = build_diagnostic_prompt(
+        SystemDescription(text="A simple heater process settles.")
+    )
     for field in [
         "open_loop_stability",
         "minimum_phase",

@@ -155,7 +155,10 @@ def test_fixed_lead_lag_poles_match_independent_polynomial_interconnection():
     plant_denominator = np.array([1.0, 1.0, 0.0])
     controller_denominator = np.polymul([1.0, 8.0], [1.0, 0.05])
     controller_numerator = 0.5 * np.polymul([1.0, 2.0], [1.0, 0.1])
-    size = max(len(np.polymul(plant_denominator, controller_denominator)), len(controller_numerator))
+    size = max(
+        len(np.polymul(plant_denominator, controller_denominator)),
+        len(controller_numerator),
+    )
     open_denominator = np.pad(
         np.polymul(plant_denominator, controller_denominator),
         (size - len(np.polymul(plant_denominator, controller_denominator)), 0),
@@ -164,7 +167,9 @@ def test_fixed_lead_lag_poles_match_independent_polynomial_interconnection():
         controller_numerator,
         (size - len(controller_numerator), 0),
     )
-    expected = sorted(np.roots(open_denominator + loop_numerator), key=lambda p: (p.real, p.imag))
+    expected = sorted(
+        np.roots(open_denominator + loop_numerator), key=lambda p: (p.real, p.imag)
+    )
 
     result = run_linear_closed_loop(
         TransferFunctionModelSpec(

@@ -37,9 +37,9 @@ if TYPE_CHECKING:
 
 
 class ControllerCompatibilityResult(CFDCModel):
-    schema_version: Literal[
+    schema_version: Literal["controller_compatibility/v1"] = (
         "controller_compatibility/v1"
-    ] = "controller_compatibility/v1"
+    )
     status: Literal["compatible", "replacement_required", "blocked"]
     reasons: list[str] = Field(min_length=1, max_length=20)
     bound_model_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -48,9 +48,7 @@ class ControllerCompatibilityResult(CFDCModel):
     selected_tuning_profile: TuningProfile | None = None
     recommended_controller: ControllerRuntimeSpec | None = None
     recommended_tuning_profile: TuningProfile | None = None
-    replacement_sha256: str | None = Field(
-        default=None, pattern=r"^[0-9a-f]{64}$"
-    )
+    replacement_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     replacement_policy_id: str | None = Field(
         default=None, min_length=1, max_length=200
     )
@@ -69,9 +67,7 @@ class ControllerCompatibilityResult(CFDCModel):
         if (selected_pair[0] is None) != (selected_pair[1] is None):
             raise ValueError("selected controller/profile must resolve together")
         if (recommended_pair[0] is None) != (recommended_pair[1] is None):
-            raise ValueError(
-                "recommended controller/profile must resolve together"
-            )
+            raise ValueError("recommended controller/profile must resolve together")
         if self.status == "compatible":
             if selected_pair[0] is None or any(
                 value is not None
@@ -86,9 +82,7 @@ class ControllerCompatibilityResult(CFDCModel):
                 )
         elif self.status == "replacement_required":
             if selected_pair[0] is not None:
-                raise ValueError(
-                    "replacement decisions cannot preselect a controller"
-                )
+                raise ValueError("replacement decisions cannot preselect a controller")
             if recommended_pair[0] is None:
                 if (
                     self.replacement_sha256 is not None
@@ -97,10 +91,7 @@ class ControllerCompatibilityResult(CFDCModel):
                     raise ValueError(
                         "a blocked replacement cannot carry approval metadata"
                     )
-            elif (
-                self.replacement_sha256 is None
-                or self.replacement_policy_id is None
-            ):
+            elif self.replacement_sha256 is None or self.replacement_policy_id is None:
                 raise ValueError(
                     "a recommended replacement requires hash and policy ID"
                 )
@@ -142,16 +133,8 @@ def _open_loop_behavior(
     else:
         poles = np.linalg.eigvals(np.asarray(model.a, dtype=float))
     if model.time_domain == "continuous":
-        return (
-            "stable"
-            if all(pole.real < -1e-6 for pole in poles)
-            else "unstable"
-        )
-    return (
-        "stable"
-        if all(abs(pole) < 1.0 - 1e-6 for pole in poles)
-        else "unstable"
-    )
+        return "stable" if all(pole.real < -1e-6 for pole in poles) else "unstable"
+    return "stable" if all(abs(pole) < 1.0 - 1e-6 for pole in poles) else "unstable"
 
 
 def _profile_for_controller(
@@ -173,10 +156,7 @@ def _profile_for_controller(
             for name, binding in bindings.items()
         }
     elif isinstance(controller, RegisteredControllerSpec):
-        bindings = {
-            name: f"parameters.{name}"
-            for name in controller.parameters
-        }
+        bindings = {name: f"parameters.{name}" for name in controller.parameters}
         values = dict(controller.parameters)
     elif isinstance(controller, PControllerSpec):
         bindings = {"kp": "kp"}
@@ -185,9 +165,7 @@ def _profile_for_controller(
         raise ValueError(
             "replacement policy produced an unsupported tunable controller"
         )
-    scale = max(
-        [abs(value) for value in values.values()] + [1.0]
-    )
+    scale = max([abs(value) for value in values.values()] + [1.0])
     return make_tuning_profile(
         controller,
         tunable_parameters=list(bindings),
@@ -195,9 +173,7 @@ def _profile_for_controller(
         open_loop_behavior=_open_loop_behavior(model),
         step_fraction=0.05,
         zero_step_scales={
-            name: scale
-            for name, value in values.items()
-            if value == 0.0
+            name: scale for name, value in values.items() if value == 0.0
         },
         profile_id=policy_id,
     )
@@ -219,13 +195,9 @@ def _state_feedback_replacement(
         blocks.append(power @ b)
     controllability = np.concatenate(blocks, axis=1)
     if np.linalg.matrix_rank(controllability) != n:
-        raise ValueError(
-            "状态空间模型不可控，无法确定性生成状态反馈替代控制器。"
-        )
+        raise ValueError("状态空间模型不可控，无法确定性生成状态反馈替代控制器。")
     if not np.allclose(d, 0.0, rtol=0.0, atol=1e-12):
-        raise ValueError(
-            "普通 MIMO 自动状态反馈要求 D=0，以避免未审计的直接通道。"
-        )
+        raise ValueError("普通 MIMO 自动状态反馈要求 D=0，以避免未审计的直接通道。")
     time_scale = max(
         run_config.horizon_s / 6.0,
         run_config.sample_time_s,
@@ -310,8 +282,7 @@ def _registered_replacement(
             reference={"x_m": 0.0, "z_m": 0.0},
             feedforward={
                 "hover_thrust_n": (
-                    model.parameters["mass_kg"]
-                    * model.parameters["gravity_m_s2"]
+                    model.parameters["mass_kg"] * model.parameters["gravity_m_s2"]
                 )
             },
             configuration={"tilt_reference_limit_rad": 0.48},
@@ -411,9 +382,7 @@ def _decision(
             elif isinstance(controller, StateFeedbackControllerSpec):
                 compatible = isinstance(model, StateSpaceModelSpec)
                 if not compatible:
-                    incompatibility.append(
-                        "状态反馈要求显式状态空间模型。"
-                    )
+                    incompatibility.append("状态反馈要求显式状态空间模型。")
     else:
         incompatibility.append(
             boot.lock_reason or "第五步控制器无法转换为类型化运行时。"
@@ -421,9 +390,7 @@ def _decision(
     if compatible:
         return ControllerCompatibilityResult(
             status="compatible",
-            reasons=[
-                "第五步控制器的结构、信号维度和运行域与已确认模型兼容。"
-            ],
+            reasons=["第五步控制器的结构、信号维度和运行域与已确认模型兼容。"],
             bound_model_sha256=session.confirmed_envelope_sha256,
             original_architecture=candidate.architecture,
             selected_controller=boot.controller,
@@ -436,12 +403,9 @@ def _decision(
     policy_id: str | None = None
     try:
         if isinstance(model, RegisteredNonlinearModelSpec):
-            recommendation, profile, policy_id = _registered_replacement(
-                model
-            )
+            recommendation, profile, policy_id = _registered_replacement(model)
         elif isinstance(model, StateSpaceModelSpec) and (
-            len(model.input_signal_ids) > 1
-            or len(model.output_signal_ids) > 1
+            len(model.input_signal_ids) > 1 or len(model.output_signal_ids) > 1
         ):
             if not all_states_available:
                 incompatibility.append(
@@ -496,9 +460,7 @@ def evaluate_controller_compatibility(
 
     _expect_revision(
         session,
-        session.revision
-        if expected_revision is None
-        else expected_revision,
+        session.revision if expected_revision is None else expected_revision,
     )
     if session.state != "controller_compatibility_check":
         raise SessionActionError(
@@ -516,9 +478,7 @@ def evaluate_controller_compatibility(
             updates={
                 "compatibility_result": result,
                 "selected_controller": result.selected_controller,
-                "selected_tuning_profile": (
-                    result.selected_tuning_profile
-                ),
+                "selected_tuning_profile": (result.selected_tuning_profile),
                 "recommended_controller": None,
                 "recommended_tuning_profile": None,
                 "replacement_sha256": None,
@@ -536,9 +496,7 @@ def evaluate_controller_compatibility(
             "selected_controller": None,
             "selected_tuning_profile": None,
             "recommended_controller": result.recommended_controller,
-            "recommended_tuning_profile": (
-                result.recommended_tuning_profile
-            ),
+            "recommended_tuning_profile": (result.recommended_tuning_profile),
             "replacement_sha256": result.replacement_sha256,
             "bound_model_sha256": result.bound_model_sha256,
             "run_config": result.run_config,
@@ -576,9 +534,7 @@ def confirm_recommended_controller(
         to_state="simulation_ready",
         updates={
             "selected_controller": session.recommended_controller,
-            "selected_tuning_profile": (
-                session.recommended_tuning_profile
-            ),
+            "selected_tuning_profile": (session.recommended_tuning_profile),
         },
         reason="The user explicitly approved the hashed replacement controller.",
     )
@@ -598,17 +554,14 @@ def create_simulation_from_discovery(
             if session.state == "controller_replacement_review"
             else "model and controller confirmation"
         )
-        raise SessionActionError(
-            f"simulation requires {qualifier} before it can run"
-        )
+        raise SessionActionError(f"simulation requires {qualifier} before it can run")
     if (
         session.confirmed_envelope is None
         or session.confirmed_envelope_sha256 is None
         or session.selected_controller is None
         or session.selected_tuning_profile is None
         or session.run_config is None
-        or session.bound_model_sha256
-        != session.confirmed_envelope_sha256
+        or session.bound_model_sha256 != session.confirmed_envelope_sha256
     ):
         raise SessionActionError(
             "simulation-ready discovery state is incomplete or unbound"
@@ -639,10 +592,7 @@ def create_simulation_from_discovery(
         model_assumptions=[
             *session.confirmed_envelope.assumptions,
             *session.confirmed_envelope.limitations,
-            (
-                "Stability conclusions apply only to the user-confirmed "
-                "software model."
-            ),
+            ("Stability conclusions apply only to the user-confirmed software model."),
         ][:20],
     )
 

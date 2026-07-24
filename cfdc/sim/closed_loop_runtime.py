@@ -145,9 +145,7 @@ def _sample_state_space(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     if a.shape[0] == 0:
         return a.copy(), b.copy(), c.copy(), d.copy()
-    ad, bd, cd, dd, _ = signal.cont2discrete(
-        (a, b, c, d), sample_time_s, method=method
-    )
+    ad, bd, cd, dd, _ = signal.cont2discrete((a, b, c, d), sample_time_s, method=method)
     return (
         np.asarray(ad, dtype=float),
         np.asarray(bd, dtype=float),
@@ -161,7 +159,7 @@ def _third_order_pade(delay_s: float) -> tuple[np.ndarray, np.ndarray]:
 
     delay = float(delay_s)
     numerator = np.asarray(
-        [-delay**3, 12.0 * delay**2, -60.0 * delay, 120.0],
+        [-(delay**3), 12.0 * delay**2, -60.0 * delay, 120.0],
         dtype=float,
     )
     denominator = np.asarray(
@@ -256,9 +254,7 @@ def _normalize_plant(
     c = _as_matrix(model.c)
     d = _as_matrix(model.d)
     if model.time_domain == "continuous":
-        ad, bd, cd, dd = _sample_state_space(
-            a, b, c, d, sample_time_s, method="zoh"
-        )
+        ad, bd, cd, dd = _sample_state_space(a, b, c, d, sample_time_s, method="zoh")
         pole_method = "exact_continuous_interconnection"
     else:
         assert model.sample_time_s is not None
@@ -326,9 +322,7 @@ def _augment_discrete_input_delay(
     for queue_index in range(delay_samples - 1):
         row = state_count + queue_index * input_count
         column = row + input_count
-        aa[row : row + input_count, column : column + input_count] = np.eye(
-            input_count
-        )
+        aa[row : row + input_count, column : column + input_count] = np.eye(input_count)
     last = state_count + (delay_samples - 1) * input_count
     ba[last : last + input_count, :] = np.eye(input_count)
     return aa, ba, ca, da
@@ -385,8 +379,7 @@ def _controller_continuous_realization(
     if isinstance(controller, RegisteredControllerSpec):
         if controller.controller_id != _FIXED_LEAD_LAG_CONTROLLER_ID:
             raise ValueError(
-                "this registered controller has no continuous linear "
-                "realization"
+                "this registered controller has no continuous linear realization"
             )
         gain = 0.5 * controller.parameters["gain_scale"]
         numerator = gain * np.polymul([1.0, 2.0], [1.0, 0.1])
@@ -408,10 +401,7 @@ def _compensator_transfer_function(
     return (
         [
             controller.gain,
-            2.0
-            * controller.gain
-            * controller.zero_damping_ratio
-            * frequency,
+            2.0 * controller.gain * controller.zero_damping_ratio * frequency,
             controller.gain * frequency**2,
         ],
         [
@@ -487,13 +477,10 @@ def _controller_discrete_realization(
             )
         if controller.controller_id != _FIXED_LEAD_LAG_CONTROLLER_ID:
             raise ValueError(
-                "this registered controller has no discrete linear "
-                "realization"
+                "this registered controller has no discrete linear realization"
             )
     ac, bc, cc, dc = _controller_continuous_realization(controller)
-    return _sample_state_space(
-        ac, bc, cc, dc, sample_time_s, method="bilinear"
-    )
+    return _sample_state_space(ac, bc, cc, dc, sample_time_s, method="bilinear")
 
 
 def _closed_loop_matrix(
@@ -535,14 +522,10 @@ def _validate_runtime_compatibility(
     if isinstance(controller, RegisteredControllerSpec):
         if controller.controller_id == _FIXED_LEAD_LAG_CONTROLLER_ID:
             if plant.domain != "continuous":
-                raise ValueError(
-                    "fixed lead-lag cascade requires a continuous plant"
-                )
+                raise ValueError("fixed lead-lag cascade requires a continuous plant")
         elif controller.controller_id == _FIXED_DISCRETE_LEAD_CONTROLLER_ID:
             if plant.domain != "discrete":
-                raise ValueError(
-                    "fixed discrete lead requires a discrete plant"
-                )
+                raise ValueError("fixed discrete lead requires a discrete plant")
         else:
             raise ValueError(
                 "registered nonlinear/demo controllers are executed only by "
@@ -550,9 +533,7 @@ def _validate_runtime_compatibility(
             )
     if isinstance(controller, StateFeedbackControllerSpec):
         if not isinstance(model, StateSpaceModelSpec):
-            raise ValueError(
-                "state feedback requires an explicit state-space model"
-            )
+            raise ValueError("state feedback requires an explicit state-space model")
         k = np.asarray(controller.gain_matrix, dtype=float)
         n = plant.simulation_a.shape[0]
         m = plant.simulation_b.shape[1]
@@ -576,10 +557,7 @@ def _validate_runtime_compatibility(
                 "state-feedback equilibrium input dimensions must match plant"
             )
         return
-    if (
-        plant.simulation_b.shape[1] != 1
-        or plant.simulation_c.shape[0] != 1
-    ):
+    if plant.simulation_b.shape[1] != 1 or plant.simulation_c.shape[0] != 1:
         raise ValueError(
             "P/PI/filtered PD/PID/lead/lag/notch require a SISO plant; "
             "use explicit state_feedback for MIMO"
@@ -605,9 +583,7 @@ def _normalize_reference(
     else:
         values = list(reference)
         if len(values) != len(output_names):
-            raise ValueError(
-                "reference vector dimensions must match output_count"
-            )
+            raise ValueError("reference vector dimensions must match output_count")
     result = np.asarray(values, dtype=float)
     if not np.all(np.isfinite(result)):
         raise ValueError("reference values must be finite")
@@ -655,9 +631,7 @@ def _initialize_controller_state(
         isinstance(controller, RegisteredControllerSpec)
         and controller.controller_id == _FIXED_DISCRETE_LEAD_CONTROLLER_ID
     ):
-        ad, bd, cd, dd = _controller_discrete_realization(
-            controller, sample_time_s
-        )
+        ad, bd, cd, dd = _controller_discrete_realization(controller, sample_time_s)
     else:
         ac, bc, cc, dc = _controller_continuous_realization(controller)
         ad, bd, cd, dd = _sample_state_space(
@@ -696,8 +670,7 @@ def _siso_affine_control(
     elif isinstance(controller, FilteredPIDControllerSpec):
         cutoff = controller.filter_cutoff_rad_s
         base = (
-            controller.ki * state.values[0]
-            + controller.kd * cutoff * state.values[1]
+            controller.ki * state.values[0] + controller.kd * cutoff * state.values[1]
         )
         reference_gain = controller.kp
         feedback_gain = controller.kp + controller.kd * cutoff
@@ -758,9 +731,7 @@ def _resolve_saturated_siso_algebraic_loop(
     lower, upper = actuator_bound
     request_candidates = [unsaturated_request]
     for applied_boundary in (lower, upper):
-        measured_output = (
-            state_projection + direct_feedthrough * applied_boundary
-        )
+        measured_output = state_projection + direct_feedthrough * applied_boundary
         boundary_request, _ = _siso_affine_control(
             controller,
             state,
@@ -816,9 +787,9 @@ def _update_controller_state(
     saturated_high = applied < requested
     saturated_low = applied > requested
     if isinstance(controller, PIControllerSpec):
-        drives_further = (
-            saturated_high and controller.ki * error > 0.0
-        ) or (saturated_low and controller.ki * error < 0.0)
+        drives_further = (saturated_high and controller.ki * error > 0.0) or (
+            saturated_low and controller.ki * error < 0.0
+        )
         if not drives_further:
             state.values[0] += sample_time_s * error
         if controller.integrator_limit is not None:
@@ -835,9 +806,9 @@ def _update_controller_state(
         state.values[0] = alpha * state.values[0] + (1.0 - alpha) * output
         return
     if isinstance(controller, FilteredPIDControllerSpec):
-        drives_further = (
-            saturated_high and controller.ki * error > 0.0
-        ) or (saturated_low and controller.ki * error < 0.0)
+        drives_further = (saturated_high and controller.ki * error > 0.0) or (
+            saturated_low and controller.ki * error < 0.0
+        )
         if not drives_further:
             state.values[0] += sample_time_s * error
         if controller.integrator_limit is not None:
@@ -854,10 +825,7 @@ def _update_controller_state(
     if isinstance(controller, (PControllerSpec, StateFeedbackControllerSpec)):
         return
     assert state.digital_a is not None and state.digital_b is not None
-    state.values = (
-        state.digital_a @ state.values
-        + state.digital_b[:, 0] * error
-    )
+    state.values = state.digital_a @ state.values + state.digital_b[:, 0] * error
 
 
 def _history_command(
@@ -892,9 +860,7 @@ def _instantaneous_delayed_command(
         # comparison tolerances.
         if 0.0 < delay_ratio < 1.0:
             history_index = sample_index - 1
-            return _history_command(
-                command_history, history_index, input_count
-            )
+            return _history_command(command_history, history_index, input_count)
         nearest_integer = round(delay_ratio)
         if nearest_integer >= 1 and math.isclose(
             delay_ratio,
@@ -903,9 +869,7 @@ def _instantaneous_delayed_command(
             abs_tol=1e-12,
         ):
             history_index = sample_index - nearest_integer
-            return _history_command(
-                command_history, history_index, input_count
-            )
+            return _history_command(command_history, history_index, input_count)
         source_position = sample_index - delay_ratio
         if source_position < -1e-12:
             return np.zeros(input_count)
@@ -990,13 +954,8 @@ def _advance_continuous_delayed_state(
         sample_index - fractional.whole_samples,
         input_count,
     )
-    intermediate = (
-        fractional.first_a @ state + fractional.first_b @ first_input
-    )
-    return (
-        fractional.second_a @ intermediate
-        + fractional.second_b @ second_input
-    )
+    intermediate = fractional.first_a @ state + fractional.first_b @ first_input
+    return fractional.second_a @ intermediate + fractional.second_b @ second_input
 
 
 def _first_bound_violation(
@@ -1045,9 +1004,7 @@ def _simulate(
     events: list[SimulationEvent] = []
     command_history: list[np.ndarray] = []
     first_saturation_recorded = False
-    fractional_delay = _fractional_delay_propagation(
-        plant, sample_time_s
-    )
+    fractional_delay = _fractional_delay_propagation(plant, sample_time_s)
 
     if plant.delay_s > 0.0:
         events.append(
@@ -1085,21 +1042,13 @@ def _simulate(
             nr = np.asarray(controller.reference_gain_matrix, dtype=float)
             xeq = np.asarray(controller.equilibrium_state, dtype=float)
             ueq = np.asarray(controller.equilibrium_input, dtype=float)
-            equilibrium_output = (
-                plant.simulation_c @ xeq + plant.simulation_d @ ueq
-            )
-            requested = (
-                ueq
-                - k @ (x - xeq)
-                + nr @ (reference - equilibrium_output)
-            )
+            equilibrium_output = plant.simulation_c @ xeq + plant.simulation_d @ ueq
+            requested = ueq - k @ (x - xeq) + nr @ (reference - equilibrium_output)
             applied = requested.copy()
             for input_index, input_name in enumerate(plant.input_names):
                 if input_name in actuator_bounds:
                     lower, upper = actuator_bounds[input_name]
-                    applied[input_index] = np.clip(
-                        applied[input_index], lower, upper
-                    )
+                    applied[input_index] = np.clip(applied[input_index], lower, upper)
             plant_input = applied
             y = plant.simulation_c @ x + plant.simulation_d @ plant_input
         else:
@@ -1115,10 +1064,7 @@ def _simulate(
                     len(plant.input_names),
                     discrete_delay_samples=plant.delay_samples,
                 )
-                y = (
-                    plant.simulation_c @ x
-                    + plant.simulation_d @ plant_input
-                )
+                y = plant.simulation_c @ x + plant.simulation_d @ plant_input
                 request, _ = _siso_affine_control(
                     controller,
                     controller_state,
@@ -1149,10 +1095,7 @@ def _simulate(
                 applied[0] = np.clip(applied[0], lower, upper)
             if plant.delay_s <= 0.0:
                 plant_input = applied
-                y = (
-                    plant.simulation_c @ x
-                    + plant.simulation_d @ plant_input
-                )
+                y = plant.simulation_c @ x + plant.simulation_d @ plant_input
             command_history.append(applied.copy())
             if plant.delay_s > 0.0:
                 plant_input = _instantaneous_delayed_command(
@@ -1163,10 +1106,7 @@ def _simulate(
                     len(plant.input_names),
                     discrete_delay_samples=plant.delay_samples,
                 )
-                y = (
-                    plant.simulation_c @ x
-                    + plant.simulation_d @ plant_input
-                )
+                y = plant.simulation_c @ x + plant.simulation_d @ plant_input
 
         if not (
             np.all(np.isfinite(requested))
@@ -1195,21 +1135,14 @@ def _simulate(
         for index, name in enumerate(plant.input_names):
             requested_controls[name].append(float(requested[index]))
             applied_controls[name].append(float(applied[index]))
-            if (
-                not first_saturation_recorded
-                and not math.isclose(
-                    float(requested[index]),
-                    float(applied[index]),
-                    rel_tol=0.0,
-                    abs_tol=_FLOAT_TOLERANCE,
-                )
+            if not first_saturation_recorded and not math.isclose(
+                float(requested[index]),
+                float(applied[index]),
+                rel_tol=0.0,
+                abs_tol=_FLOAT_TOLERANCE,
             ):
                 lower, upper = actuator_bounds[name]
-                limit = (
-                    upper
-                    if requested[index] > applied[index]
-                    else lower
-                )
+                limit = upper if requested[index] > applied[index] else lower
                 events.append(
                     SimulationEvent(
                         kind="saturation",
@@ -1223,13 +1156,9 @@ def _simulate(
                 )
                 first_saturation_recorded = True
 
-        violation = _first_bound_violation(
-            x, plant.state_names, state_bounds
-        )
+        violation = _first_bound_violation(x, plant.state_names, state_bounds)
         if violation is None:
-            violation = _first_bound_violation(
-                y, plant.output_names, output_bounds
-            )
+            violation = _first_bound_violation(y, plant.output_names, output_bounds)
         if violation is not None:
             name, value, limit = violation
             events.append(
@@ -1269,10 +1198,7 @@ def _simulate(
                     fractional_delay,
                 )
             else:
-                x = (
-                    plant.simulation_a @ x
-                    + plant.simulation_b @ plant_input
-                )
+                x = plant.simulation_a @ x + plant.simulation_b @ plant_input
 
     return SimulationTrace(
         time_s=times,
@@ -1296,9 +1222,7 @@ def _closed_loop_poles(
     if plant.domain == "continuous":
         ac, bc, cc, dc = _controller_continuous_realization(controller)
     else:
-        ac, bc, cc, dc = _controller_discrete_realization(
-            controller, sample_time_s
-        )
+        ac, bc, cc, dc = _controller_discrete_realization(controller, sample_time_s)
     closed_loop = _closed_loop_matrix(
         plant.analysis_a,
         plant.analysis_b,
@@ -1333,22 +1257,14 @@ def _continuous_delayed_sampled_plant(
     input_count = plant.simulation_b.shape[1]
     queue_stages = fractional.whole_samples + 1
     queue_count = queue_stages * input_count
-    augmented_a = np.zeros(
-        (state_count + queue_count, state_count + queue_count)
-    )
+    augmented_a = np.zeros((state_count + queue_count, state_count + queue_count))
     augmented_b = np.zeros((state_count + queue_count, input_count))
-    augmented_c = np.zeros(
-        (plant.simulation_c.shape[0], state_count + queue_count)
-    )
-    augmented_d = np.zeros(
-        (plant.simulation_c.shape[0], input_count)
-    )
+    augmented_c = np.zeros((plant.simulation_c.shape[0], state_count + queue_count))
+    augmented_d = np.zeros((plant.simulation_c.shape[0], input_count))
 
     # During each sample interval, the old delayed command acts for f*dt and
     # the next delayed command for (1-f)*dt.
-    augmented_a[:state_count, :state_count] = (
-        fractional.second_a @ fractional.first_a
-    )
+    augmented_a[:state_count, :state_count] = fractional.second_a @ fractional.first_a
     augmented_a[
         :state_count,
         state_count : state_count + input_count,
@@ -1362,16 +1278,13 @@ def _continuous_delayed_sampled_plant(
         second_interval_queue_start = state_count + input_count
         augmented_a[
             :state_count,
-            second_interval_queue_start : second_interval_queue_start
-            + input_count,
+            second_interval_queue_start : second_interval_queue_start + input_count,
         ] = fractional.second_b
 
     # At the sampled output instant, the fractional delay still selects the
     # older command u[k-q-1], including through direct feedthrough.
     augmented_c[:, :state_count] = plant.simulation_c
-    augmented_c[
-        :, state_count : state_count + input_count
-    ] = plant.simulation_d
+    augmented_c[:, state_count : state_count + input_count] = plant.simulation_d
 
     for queue_index in range(queue_stages - 1):
         row = state_count + queue_index * input_count
@@ -1380,12 +1293,10 @@ def _continuous_delayed_sampled_plant(
             row : row + input_count,
             column : column + input_count,
         ] = np.eye(input_count)
-    newest_queue_start = (
-        state_count + (queue_stages - 1) * input_count
+    newest_queue_start = state_count + (queue_stages - 1) * input_count
+    augmented_b[newest_queue_start : newest_queue_start + input_count, :] = np.eye(
+        input_count
     )
-    augmented_b[
-        newest_queue_start : newest_queue_start + input_count, :
-    ] = np.eye(input_count)
     return augmented_a, augmented_b, augmented_c, augmented_d
 
 
@@ -1397,8 +1308,8 @@ def _sampled_implementation_spectral_radius(
     """Analyze the actual sampled map used by the rollout."""
 
     if plant.domain == "continuous" and plant.delay_s > 0.0:
-        sampled_a, sampled_b, sampled_c, sampled_d = (
-            _continuous_delayed_sampled_plant(plant, sample_time_s)
+        sampled_a, sampled_b, sampled_c, sampled_d = _continuous_delayed_sampled_plant(
+            plant, sample_time_s
         )
     else:
         sampled_a = plant.simulation_a
@@ -1414,9 +1325,7 @@ def _sampled_implementation_spectral_radius(
             )
         sampled_map = sampled_a - sampled_b @ k
     else:
-        ac, bc, cc, dc = _controller_discrete_realization(
-            controller, sample_time_s
-        )
+        ac, bc, cc, dc = _controller_discrete_realization(controller, sample_time_s)
         sampled_map = _closed_loop_matrix(
             sampled_a,
             sampled_b,
@@ -1431,9 +1340,7 @@ def _sampled_implementation_spectral_radius(
     if not np.all(np.isfinite(sampled_poles)):
         raise ValueError("sampled rollout pole analysis was non-finite")
     return (
-        float(max(abs(pole) for pole in sampled_poles))
-        if sampled_poles.size
-        else 0.0
+        float(max(abs(pole) for pole in sampled_poles)) if sampled_poles.size else 0.0
     )
 
 
@@ -1504,7 +1411,9 @@ def _evaluate_stability(
         poles = np.asarray([], dtype=complex)
     pole_values = [
         ComplexValue(real=float(value.real), imaginary=float(value.imag))
-        for value in sorted(poles, key=lambda item: (float(item.real), float(item.imag)))
+        for value in sorted(
+            poles, key=lambda item: (float(item.real), float(item.imag))
+        )
     ]
     event_kinds = {event.kind for event in trace.events}
     trajectory_finite = "non_finite" not in event_kinds
@@ -1544,9 +1453,7 @@ def _evaluate_stability(
     if plant.domain == "continuous":
         spectral_radius = None
         largest_real_part = (
-            max(float(pole.real) for pole in poles)
-            if poles.size
-            else -math.inf
+            max(float(pole.real) for pole in poles) if poles.size else -math.inf
         )
         if not pole_analysis_valid:
             pole_status = "unstable"
@@ -1579,9 +1486,7 @@ def _evaluate_stability(
             )
         )
     else:
-        spectral_radius = (
-            float(max(abs(pole) for pole in poles)) if poles.size else 0.0
-        )
+        spectral_radius = float(max(abs(pole) for pole in poles)) if poles.size else 0.0
         if not pole_analysis_valid:
             pole_status = "unstable"
             violations.append("non_finite_pole_analysis")
@@ -1711,12 +1616,8 @@ def run_linear_closed_loop(
     actuator_limits = _normalize_bounds(
         actuator_bounds, plant.input_names, label="actuator"
     )
-    state_limits = _normalize_bounds(
-        state_bounds, plant.state_names, label="state"
-    )
-    output_limits = _normalize_bounds(
-        output_bounds, plant.output_names, label="output"
-    )
+    state_limits = _normalize_bounds(state_bounds, plant.state_names, label="state")
+    output_limits = _normalize_bounds(output_bounds, plant.output_names, label="output")
     trace = _simulate(
         plant,
         controller,
@@ -1727,9 +1628,7 @@ def run_linear_closed_loop(
         horizon_s=horizon_s,
         sample_time_s=sample_time_s,
     )
-    stability = _evaluate_stability(
-        plant, controller, trace, sample_time_s
-    )
+    stability = _evaluate_stability(plant, controller, trace, sample_time_s)
     return LinearSimulationResult(trace=trace, stability=stability)
 
 

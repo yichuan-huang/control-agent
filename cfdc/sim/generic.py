@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from collections import deque
 
-from cfdc.models import BenchmarkRouteIR, ControllerCandidate, SimulationPerformanceSummary
+from cfdc.models import (
+    BenchmarkRouteIR,
+    ControllerCandidate,
+    SimulationPerformanceSummary,
+)
 from cfdc.performance import build_performance_summary, calculate_channel_performance
 
 
@@ -59,10 +63,16 @@ def run_scalar_closed_loop(
 
         error = reference - y
         integral_candidate = integral + error * dt_s
-        if route.plant_family in {"double_integrator", "second_order_oscillator", "unstable_second_order"}:
+        if route.plant_family in {
+            "double_integrator",
+            "second_order_oscillator",
+            "unstable_second_order",
+        }:
             raw_input = gains.get("kp", 0.0) * error - gains.get("kd", 0.0) * velocity
         else:
-            raw_input = gains.get("kp", 0.0) * error + gains.get("ki", 0.0) * integral_candidate
+            raw_input = (
+                gains.get("kp", 0.0) * error + gains.get("ki", 0.0) * integral_candidate
+            )
         control = _clamp(raw_input, input_min, input_max)
         saturated = abs(control - raw_input) > 1e-12
         saturated_count += int(saturated)
@@ -79,7 +89,9 @@ def run_scalar_closed_loop(
         if route.plant_family in {"first_order_lag", "first_order_plus_dead_time"}:
             delay_buffer.append(control)
             applied_input = delay_buffer.popleft()
-            y += dt_s * ((-y + params["static_gain"] * applied_input) / params["time_constant"])
+            y += dt_s * (
+                (-y + params["static_gain"] * applied_input) / params["time_constant"]
+            )
         elif route.plant_family == "double_integrator":
             acceleration = params["input_gain"] * control
             velocity += dt_s * acceleration
@@ -101,7 +113,8 @@ def run_scalar_closed_loop(
             y += dt_s * velocity
         else:
             slow_state += dt_s * (
-                (-slow_state + params["static_gain"] * control) / params["time_constant"]
+                (-slow_state + params["static_gain"] * control)
+                / params["time_constant"]
             )
             inverse_state += params["static_gain"] * (control - previous_input)
             inverse_state += dt_s * (-inverse_state / params["inverse_time_constant"])
@@ -111,7 +124,9 @@ def run_scalar_closed_loop(
         time_values,
         reference,
         output_values,
-        settling_band_absolute=route.performance_limits.get("settling_band_absolute", 0.02),
+        settling_band_absolute=route.performance_limits.get(
+            "settling_band_absolute", 0.02
+        ),
     )
     saturation_fraction = saturated_count / max(1, len(time_values))
     state_boundaries = {
@@ -133,7 +148,9 @@ def run_scalar_closed_loop(
         **route.actuator_limits,
     }
     violations: list[str] = []
-    if channel.abs_final_error > route.performance_limits.get("max_abs_final_error", float("inf")):
+    if channel.abs_final_error > route.performance_limits.get(
+        "max_abs_final_error", float("inf")
+    ):
         violations.append("final_error_limit")
     if channel.overshoot > route.performance_limits.get("max_overshoot", float("inf")):
         violations.append("overshoot_limit")
@@ -145,9 +162,15 @@ def run_scalar_closed_loop(
         > route.performance_limits.get("max_settling_time_s", float("inf"))
     ):
         violations.append("settling_time_limit")
-    if saturation_fraction > route.performance_limits.get("max_saturation_fraction", float("inf")):
+    if saturation_fraction > route.performance_limits.get(
+        "max_saturation_fraction", float("inf")
+    ):
         violations.append("saturation_fraction_limit")
-    for boundary_name in ["max_abs_output", "max_abs_velocity", "max_abs_output_after_4s"]:
+    for boundary_name in [
+        "max_abs_output",
+        "max_abs_velocity",
+        "max_abs_output_after_4s",
+    ]:
         if (
             boundary_name in route.state_limits
             and state_boundaries[boundary_name] > route.state_limits[boundary_name]
