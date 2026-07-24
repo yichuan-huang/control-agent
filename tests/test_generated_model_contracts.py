@@ -17,8 +17,7 @@ from cfdc.lab.model_contracts import (
     RejectedModelResult,
     ValidityRegion,
 )
-from cfdc.models import TransferFunctionModelSpec
-from cfdc.models import RegisteredNonlinearModelSpec
+from cfdc.models import RegisteredNonlinearModelSpec, TransferFunctionModelSpec
 from cfdc.sim.registered_runtime import registered_run_envelope
 
 

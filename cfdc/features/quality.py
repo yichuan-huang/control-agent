@@ -11,7 +11,6 @@ from cfdc.models import (
     FeatureQualityPolicy,
 )
 
-
 _STRICTLY_POSITIVE = {
     "natural_frequency",
     "time_constant",

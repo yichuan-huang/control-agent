@@ -13,7 +13,6 @@ from cfdc.lab.model_contracts import (
     ModelQuestionExampleCatalog,
 )
 
-
 _CATALOG_PATH = (
     Path(__file__).resolve().parent / "resources" / "model_question_examples.v1.json"
 )

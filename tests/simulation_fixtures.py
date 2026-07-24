@@ -16,7 +16,6 @@ from cfdc.models import (
 )
 from cfdc.sim import registered_run_envelope
 
-
 CARTPOLE_PARAMETERS = {
     "cart_mass_kg": 0.5,
     "pole_mass_kg": 0.2,

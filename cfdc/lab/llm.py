@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Any, Literal, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import numpy as np
@@ -12,12 +13,12 @@ from pydantic import Field, model_validator
 
 from cfdc.diagnosis.llm import SimulationProposalAdapter
 from cfdc.lab.session import (
+    TERMINAL_STATES,
     LLMCallRecord,
     LLMMessageRecord,
     ParameterProposal,
     ProposalValidationError,
     SimulationSession,
-    TERMINAL_STATES,
     append_llm_call,
     build_parameter_proposal,
     controller_architecture_hash,
@@ -36,7 +37,6 @@ from cfdc.models.schemas import (
     SystemDescription,
     TransferFunctionModelSpec,
 )
-
 
 _PLACEHOLDER_UNITS = frozenset(
     {"", "unspecified", "unknown", "n/a", "na", "none", "tbd", "-", "?"}
@@ -83,7 +83,7 @@ class ModelProposalContext(CFDCModel):
     clarification_answers: list[str] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
-    def validate_closed_sets(self) -> "ModelProposalContext":
+    def validate_closed_sets(self) -> ModelProposalContext:
         if len(self.allowed_model_kinds) != len(set(self.allowed_model_kinds)):
             raise ValueError("allowed model kinds must be unique")
         if len(self.allowed_registered_templates) != len(
@@ -107,7 +107,7 @@ class ModelProposal(CFDCModel):
     )
 
     @model_validator(mode="after")
-    def validate_status(self) -> "ModelProposal":
+    def validate_status(self) -> ModelProposal:
         if any(
             len(item) > 4000
             for item in (
@@ -150,7 +150,7 @@ class _RawModelProposal(CFDCModel):
     questions: list[str] = Field(default_factory=list, max_length=4)
 
     @model_validator(mode="after")
-    def validate_text_limits(self) -> "_RawModelProposal":
+    def validate_text_limits(self) -> _RawModelProposal:
         if any(
             len(item) > 4000
             for item in self.assumptions + self.evidence + self.questions
@@ -183,7 +183,7 @@ class GainProposalContext(CFDCModel):
     last_stability_evidence: MinimalStabilityEvidence
 
     @model_validator(mode="after")
-    def validate_exact_whitelist(self) -> "GainProposalContext":
+    def validate_exact_whitelist(self) -> GainProposalContext:
         expected = set(self.tunable_whitelist)
         if (
             len(expected) != len(self.tunable_whitelist)
@@ -425,13 +425,12 @@ def _model_size_errors(model: ExecutableModelSpec) -> list[str]:
         if len(model.numerator) > 128 or len(model.denominator) > 128:
             return ["transfer-function coefficient count exceeds the safety limit"]
         return []
-    if isinstance(model, StateSpaceModelSpec):
-        if (
-            len(model.state_names) > 32
-            or len(model.input_signal_ids) > 8
-            or len(model.output_signal_ids) > 8
-        ):
-            return ["state-space dimensions exceed the Stage-6 safety limit"]
+    if isinstance(model, StateSpaceModelSpec) and (
+        len(model.state_names) > 32
+        or len(model.input_signal_ids) > 8
+        or len(model.output_signal_ids) > 8
+    ):
+        return ["state-space dimensions exceed the Stage-6 safety limit"]
     return []
 
 
@@ -755,7 +754,7 @@ def request_model_proposal(
             validation_errors=proposal.validation_errors,
         )
         return ProposalCallResult(proposal=proposal, call_record=record)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - audit arbitrary adapter failures
         safe_error = sanitize_for_audit(
             f"{type(exc).__name__}: {exc}", secret_literals=secrets
         )
@@ -843,7 +842,7 @@ def request_gain_proposal(
             validation_status="accepted",
         )
         return ProposalCallResult(proposal=proposal, call_record=record)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - audit arbitrary adapter failures
         safe_error = sanitize_for_audit(
             f"{type(exc).__name__}: {exc}", secret_literals=secrets
         )

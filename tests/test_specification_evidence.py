@@ -807,8 +807,10 @@ def test_all_registered_thermostat_derivation_rules_are_backend_verified():
         payload,
         template=template,
         source_texts=[
-            f"{binary_source}; {rate_source}; {transfer_source}; "
-            f"{setpoint_source}; {band_source}."
+            (
+                f"{binary_source}; {rate_source}; {transfer_source}; "
+                f"{setpoint_source}; {band_source}."
+            )
         ],
     )
 

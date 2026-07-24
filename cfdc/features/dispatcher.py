@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 import hashlib
+from collections.abc import Iterable
 
 import numpy as np
 
@@ -19,10 +19,9 @@ from cfdc.features.extractors import (
 from cfdc.models import (
     CoreFeatureArtifact,
     ExperimentPrimitive,
-    SimulationExperimentRecord,
     ExperimentTrace,
+    SimulationExperimentRecord,
 )
-
 
 _SIGNAL_ALIASES: dict[str, tuple[str, ...]] = {
     "free_response": (
@@ -332,7 +331,7 @@ def _estimate_mimo_gain_matrix(
         splits = np.split(active_indices, np.where(np.diff(active_indices) > 1)[0] + 1)
         segment = max(splits, key=len)
         start = int(segment[0])
-        stop = int(segment[-1])
+        int(segment[-1])
         amplitude = float(np.median(input_signal[segment]))
         if abs(amplitude) <= 1e-12:
             raise ValueError("MIMO scan input amplitude must be non-zero")
@@ -549,7 +548,7 @@ def extract_features_from_results(
     for result in results:
         duplicates = seen.intersection(result.estimates)
         if duplicates:
-            duplicate = sorted(duplicates)[0]
+            duplicate = min(duplicates)
             raise ValueError(f"duplicate experiment estimate '{duplicate}'")
         for feature in extract_features_from_result(result):
             features.append(feature)

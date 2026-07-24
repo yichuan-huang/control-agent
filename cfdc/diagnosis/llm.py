@@ -17,7 +17,6 @@ from cfdc.models import (
     SystemDescription,
 )
 
-
 PROMPT_VERSION = "cfdc-stage0-v5-negation-and-order-bounds"
 
 
@@ -282,13 +281,13 @@ class OpenAICompatibleDiagnosticAdapter:
         messages: list[dict[str, str]],
         max_tokens: int,
     ) -> dict[str, Any]:
-        options: dict[str, Any] = dict(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-            max_tokens=max_tokens,
-            response_format={"type": "json_object"},
-        )
+        options: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+        }
         if self._disable_thinking:
             options["extra_body"] = {"thinking": {"type": "disabled"}}
         response = self.client.chat.completions.create(**options)
@@ -298,12 +297,12 @@ class OpenAICompatibleDiagnosticAdapter:
         return parse_json_content(content)
 
     def propose_model(self, context: Any) -> dict[str, Any]:
+        from cfdc.lab.llm import build_model_proposal_messages
         from cfdc.lab.model_discovery_llm import (
             ModelDiscoveryContext,
             build_model_discovery_messages,
         )
         from cfdc.lab.model_questions import load_model_question_examples
-        from cfdc.lab.llm import build_model_proposal_messages
 
         messages = (
             build_model_discovery_messages(context, load_model_question_examples())
@@ -344,9 +343,9 @@ class OpenAICompatibleDiagnosticAdapter:
         )
 
     def diagnose(self, description: SystemDescription) -> dict[str, Any]:
-        request_options: dict[str, Any] = dict(
-            model=self.model,
-            messages=[
+        request_options: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
                 {
                     "role": "system",
                     "content": (
@@ -356,10 +355,10 @@ class OpenAICompatibleDiagnosticAdapter:
                 },
                 {"role": "user", "content": build_diagnostic_prompt(description)},
             ],
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            response_format={"type": "json_object"},
-        )
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "response_format": {"type": "json_object"},
+        }
         if self._disable_thinking:
             request_options["extra_body"] = {"thinking": {"type": "disabled"}}
         response = self.client.chat.completions.create(**request_options)
@@ -406,9 +405,9 @@ class OpenAICompatibleDiagnosticAdapter:
             f"classification={classification.model_dump_json()}\n"
             f"compatible_profiles={json.dumps(compatible)}"
         )
-        options: dict[str, Any] = dict(
-            model=self.model,
-            messages=[
+        options: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
                 {
                     "role": "system",
                     "content": (
@@ -419,10 +418,10 @@ class OpenAICompatibleDiagnosticAdapter:
                 },
                 {"role": "user", "content": prompt},
             ],
-            temperature=self.temperature,
-            max_tokens=min(self.max_tokens, 800),
-            response_format={"type": "json_object"},
-        )
+            "temperature": self.temperature,
+            "max_tokens": min(self.max_tokens, 800),
+            "response_format": {"type": "json_object"},
+        }
         if self._disable_thinking:
             options["extra_body"] = {"thinking": {"type": "disabled"}}
         response = self.client.chat.completions.create(**options)
@@ -452,9 +451,9 @@ class OpenAICompatibleDiagnosticAdapter:
             accumulated_specification_answers,
             previous_assessment,
         )
-        options: dict[str, Any] = dict(
-            model=self.model,
-            messages=[
+        options: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
                 {
                     "role": "system",
                     "content": (
@@ -464,10 +463,10 @@ class OpenAICompatibleDiagnosticAdapter:
                 },
                 {"role": "user", "content": prompt},
             ],
-            temperature=self.temperature,
-            max_tokens=min(max(self.max_tokens, 1400), 2400),
-            response_format={"type": "json_object"},
-        )
+            "temperature": self.temperature,
+            "max_tokens": min(max(self.max_tokens, 1400), 2400),
+            "response_format": {"type": "json_object"},
+        }
         if self._disable_thinking:
             options["extra_body"] = {"thinking": {"type": "disabled"}}
         response = self.client.chat.completions.create(**options)

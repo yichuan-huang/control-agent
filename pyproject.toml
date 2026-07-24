@@ -25,6 +25,7 @@ Repository = "https://github.com/yichuan-huang/control-agent"
 [project.optional-dependencies]
 test = [
   "pytest>=8.0,<10",
+  "ruff>=0.16,<0.17",
 ]
 
 [tool.setuptools.packages.find]
@@ -37,3 +38,24 @@ cfdc = ["diagnosis/*.json", "lab/resources/*.json"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# These input-validation boundaries intentionally expose malformed payloads as
+# ValueError for a stable public/API and Pydantic validation contract.
+[tool.ruff.lint.per-file-ignores]
+"cfdc/controllers/synthesis.py" = ["TRY004"]
+"cfdc/diagnosis/llm.py" = ["TRY004"]
+"cfdc/diagnosis/mechanism_cards.py" = ["TRY004"]
+"cfdc/lab/controller_compatibility.py" = ["TRY004"]
+"cfdc/lab/model_contracts.py" = ["TRY004"]
+"cfdc/lab/model_discovery_llm.py" = ["TRY004"]
+"cfdc/sim/closed_loop_runtime.py" = ["TRY004"]
+"cfdc/sim/profile_runtime.py" = ["TRY004"]
+"cfdc/specifications/compiler.py" = ["TRY004"]
+"cfdc/specifications/dialogue.py" = ["TRY004"]
+"cfdc/web/linked_tuning_service.py" = ["TRY004"]
+"cfdc/web/linked_tuning_ui.py" = ["TRY004"]
+"cfdc/web/service.py" = ["TRY004"]

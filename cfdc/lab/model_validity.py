@@ -12,7 +12,6 @@ from cfdc.lab.contracts import (
 )
 from cfdc.lab.model_contracts import ValidityRegion
 
-
 SimulationResultGuard: TypeAlias = Callable[
     [list[SimulationTrace], StabilityDecision],
     tuple[list[SimulationTrace], StabilityDecision],

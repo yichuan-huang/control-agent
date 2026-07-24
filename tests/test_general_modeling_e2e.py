@@ -14,9 +14,8 @@ from cfdc.lab import (
 )
 from cfdc.models import SystemDescription
 from cfdc.web.model_discovery_presentation import render_model_discovery
-from tests.test_model_discovery_session import stage5_snapshot
 from tests.test_model_discovery_llm import _evidence
-
+from tests.test_model_discovery_session import stage5_snapshot
 
 _EXAMPLE_QUESTIONS = [
     (

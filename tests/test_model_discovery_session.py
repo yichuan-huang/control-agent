@@ -4,8 +4,8 @@ import pytest
 
 from cfdc.diagnosis import DiagnosticEngine
 from cfdc.lab import (
-    StaleRevisionError,
     Stage5DiscoverySnapshot,
+    StaleRevisionError,
     adopt_model_question_example,
     confirm_generated_model,
     create_model_discovery_session,

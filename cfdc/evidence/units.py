@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 _TIME_UNIT_SCALE_SECONDS = {
     "s": 1.0,
     "sec": 1.0,

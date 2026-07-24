@@ -10,9 +10,9 @@ only as auxiliary continuous pole evidence.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 import numpy as np
 from scipy import signal
@@ -30,12 +30,11 @@ from cfdc.lab import (
     RegisteredControllerSpec,
     SimulationEvent,
     SimulationTrace,
-    StateFeedbackControllerSpec,
     StabilityDecision,
+    StateFeedbackControllerSpec,
 )
 from cfdc.models import StateSpaceModelSpec, TransferFunctionModelSpec
 from cfdc.models.schemas import CFDCModel
-
 
 _POLE_TOLERANCE = 1e-6
 _SATURATION_LIMIT = 0.10
@@ -938,7 +937,7 @@ def _advance_continuous_delayed_state(
 ) -> np.ndarray:
     input_count = len(plant.input_names)
     if fractional is None:
-        delay_samples = int(round(plant.delay_s / sample_time_s))
+        delay_samples = round(plant.delay_s / sample_time_s)
         delayed = _history_command(
             command_history, sample_index - delay_samples, input_count
         )
@@ -986,7 +985,7 @@ def _simulate(
     horizon_s: float,
     sample_time_s: float,
 ) -> SimulationTrace:
-    sample_count = int(math.floor(horizon_s / sample_time_s + 1e-12)) + 1
+    sample_count = math.floor(horizon_s / sample_time_s + 1e-12) + 1
     if sample_count > _MAX_SAMPLES:
         raise ValueError("a simulation trial cannot exceed 20,000 samples")
 
@@ -1244,7 +1243,7 @@ def _continuous_delayed_sampled_plant(
 
     fractional = _fractional_delay_propagation(plant, sample_time_s)
     if fractional is None:
-        delay_samples = int(round(plant.delay_s / sample_time_s))
+        delay_samples = round(plant.delay_s / sample_time_s)
         return _augment_discrete_input_delay(
             plant.simulation_a,
             plant.simulation_b,

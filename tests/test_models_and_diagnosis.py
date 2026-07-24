@@ -12,9 +12,9 @@ from cfdc.models import (
     CoreFeatureArtifact,
     DelayAssessment,
     ExperimentPrimitive,
-    SimulationExperimentRecord,
     ExperimentTrace,
     SignificantDelayField,
+    SimulationExperimentRecord,
     SystemDescription,
 )
 from cfdc.workflow import (

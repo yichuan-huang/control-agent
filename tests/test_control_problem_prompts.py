@@ -1,16 +1,15 @@
-from pathlib import Path
-from collections import Counter
 import json
 import math
 import re
+from collections import Counter
+from pathlib import Path
 
 import pytest
 from pydantic import TypeAdapter
 
-from cfdc.models.schemas import ExecutableModelSpec
 from cfdc.diagnosis import DiagnosticEngine
 from cfdc.models import SystemDescription
-
+from cfdc.models.schemas import ExecutableModelSpec
 
 TECHNICAL_PATH = Path("dataset/control_problems.md")
 ENGLISH_PATH = Path("dataset/control_problem_prompts.md")

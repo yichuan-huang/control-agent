@@ -3,13 +3,13 @@ from __future__ import annotations
 import hashlib
 from uuid import uuid4
 
+from cfdc.diagnosis.engine import DiagnosticEngine
+from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.evidence import (
     build_evidence_requirement_plan,
     plant_id_for_description,
     validate_evidence_package,
 )
-from cfdc.diagnosis.engine import DiagnosticEngine
-from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.experiments import plan_safe_experiments
 from cfdc.models import (
     DiagnosticSessionState,

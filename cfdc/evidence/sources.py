@@ -8,6 +8,7 @@ from dataclasses import MISSING, fields
 import numpy as np
 from scipy import signal
 
+from cfdc.evidence.units import time_unit_scale_seconds
 from cfdc.models import (
     ExperimentPlan,
     ExperimentPrimitive,
@@ -19,7 +20,6 @@ from cfdc.models import (
     StateSpaceModelSpec,
     TransferFunctionModelSpec,
 )
-from cfdc.evidence.units import time_unit_scale_seconds
 from cfdc.sim.cartpole import CartpoleParams
 from cfdc.sim.traces import hover_trace, modal_trace, vtol_pulse_trace
 from cfdc.sim.vtol import VtolParams

@@ -10,7 +10,6 @@ from cfdc.models import (
 )
 from cfdc.sim.cartpole import CartpoleParams
 from cfdc.sim.traces import (
-    bounded_scan_trace,
     hover_trace,
     modal_trace,
     pulse_trace,

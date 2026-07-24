@@ -19,8 +19,8 @@ from cfdc.lab import (
     RegisteredControllerSpec,
     SimulationEvent,
     SimulationTrace,
-    StateFeedbackControllerSpec,
     StabilityDecision,
+    StateFeedbackControllerSpec,
 )
 from cfdc.models import StateSpaceModelSpec, TransferFunctionModelSpec
 from cfdc.sim.closed_loop_runtime import run_linear_closed_loop

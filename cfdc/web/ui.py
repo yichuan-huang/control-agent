@@ -4,17 +4,16 @@ import os
 
 import gradio as gr
 
-from cfdc.web.presentation import render_report
 from cfdc.web.linked_tuning_ui import (
     bind_linked_tuning_events,
     build_linked_tuning_panel,
 )
+from cfdc.web.presentation import render_report
 from cfdc.web.service import (
     continue_app_run,
     start_app_run,
     submit_app_specifications,
 )
-
 
 NATURAL_LANGUAGE_MODE = "自然语言自动分析（主流程）"
 

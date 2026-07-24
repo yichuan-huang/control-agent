@@ -13,7 +13,6 @@ from cfdc.models import (
     SystemDescription,
 )
 
-
 DIAGNOSTIC_FIELD_NAMES = (
     "open_loop_stability",
     "minimum_phase",

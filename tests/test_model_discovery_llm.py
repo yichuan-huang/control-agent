@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import json
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
@@ -15,21 +15,19 @@ from cfdc.lab.model_contracts import (
     ModelQuestionExampleCatalog,
     NaturalLanguageModelAnswer,
 )
-from cfdc.lab.model_questions import adopt_example_answer
 from cfdc.lab.model_discovery_llm import (
     ModelDiscoveryCallResult,
     ModelDiscoveryContext,
     build_model_discovery_messages,
     request_model_discovery,
 )
-from cfdc.lab.model_questions import load_model_question_examples
+from cfdc.lab.model_questions import adopt_example_answer, load_model_question_examples
 from cfdc.lab.model_validation import (
     ModelValidationContext,
     validate_generated_model_envelope,
     validate_generated_model_payload,
 )
-from cfdc.models import ArchetypeClassification, StructuralDiagnosis
-from cfdc.models import SystemDescription
+from cfdc.models import ArchetypeClassification, StructuralDiagnosis, SystemDescription
 from cfdc.sim.registered_runtime import registered_run_envelope
 from tests.simulation_fixtures import cartpole_model
 

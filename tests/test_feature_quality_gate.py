@@ -1,4 +1,5 @@
 import math
+
 import numpy as np
 
 from cfdc.controllers import synthesize_controller

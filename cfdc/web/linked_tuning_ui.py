@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 import gradio as gr
 
 from cfdc.models import CFDCRunReport
 from cfdc.web.linked_tuning_presentation import empty_linked_tuning_view
-from cfdc.web.presentation import stage_progress_html
 from cfdc.web.linked_tuning_service import (
     approve_and_run_linked_gain,
     link_stage5_report,
@@ -18,7 +18,7 @@ from cfdc.web.linked_tuning_service import (
     restore_linked_initial,
     run_linked_trial,
 )
-
+from cfdc.web.presentation import stage_progress_html
 
 _MUTATION_OPTIONS = {
     "api_visibility": "private",

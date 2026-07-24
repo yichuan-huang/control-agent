@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import math
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -13,7 +13,6 @@ from cfdc.diagnosis import (
     continue_diagnostic_session,
     start_diagnostic_session,
     submit_evidence_to_session,
-    submit_specifications_to_session,
 )
 from cfdc.models import (
     CFDCRunReport,
@@ -25,7 +24,6 @@ from cfdc.models import (
     SystemDescription,
 )
 from cfdc.runtime import run_cfdc_route
-
 
 ROUTE_CHOICES = {
     "自然语言自动分析（主流程）": "generic",

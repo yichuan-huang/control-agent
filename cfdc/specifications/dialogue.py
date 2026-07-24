@@ -22,7 +22,6 @@ from cfdc.specifications.units import (
     unit_is_compatible_with_examples,
 )
 
-
 _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 
 
@@ -235,8 +234,10 @@ def _motion_dimension_conflicts(
             else ""
         )
         return [
-            "The declared acceleration and position units describe different motion "
-            f"dimensions: acceleration_change={acceleration.unit}; {rendered}.{suffix}"
+            (
+                "The declared acceleration and position units describe different motion "
+                f"dimensions: acceleration_change={acceleration.unit}; {rendered}.{suffix}"
+            )
         ]
     return []
 
@@ -993,14 +994,7 @@ def validate_specification_assessment_payload(
         "三次",
     }
     for question in assessment.questions:
-        rendered = " ".join(
-            (
-                question.prompt,
-                question.why_needed,
-                question.where_to_find,
-                question.example,
-            )
-        ).lower()
+        rendered = f"{question.prompt} {question.why_needed} {question.where_to_find} {question.example}".lower()
         if any(term in rendered for term in forbidden_user_facing_terms):
             raise ValueError(
                 "LLM user-facing specification question exposed an internal field or forbidden test protocol"

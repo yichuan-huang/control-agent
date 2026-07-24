@@ -11,7 +11,6 @@ from cfdc.models import (
     SystemDescription,
 )
 
-
 _EXPERIMENT_SPECS = (
     (
         "ramp_step",

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import json
 import math
-from typing import Any, Mapping
+from collections.abc import Mapping
+from copy import deepcopy
+from typing import Any
 
 import pandas as pd
 
@@ -87,8 +88,10 @@ def _run_config(
             SimulationRunConfig.model_validate(envelope),
             [
                 *compiled.assumptions,
-                "The registered nonlinear runtime uses its fixed five-scenario "
-                "validation envelope.",
+                (
+                    "The registered nonlinear runtime uses its fixed five-scenario "
+                    "validation envelope."
+                ),
             ],
         )
     bounds = compiled.safety_bounds
@@ -282,12 +285,12 @@ def _parameter_mapping(rows: object) -> dict[str, float]:
         name, raw_value = row[0], row[1]
         if not isinstance(name, str) or not name:
             raise ValueError("控制器参数名称无效")
-        if isinstance(raw_value, bool) or not isinstance(
-            raw_value,
-            (int, float),
-        ):
+        if isinstance(raw_value, bool):
             raise ValueError(f"控制器参数 {name} 必须是数值")
-        value = float(raw_value)
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            raise ValueError(f"控制器参数 {name} 必须是数值") from None
         if not math.isfinite(value):
             raise ValueError(f"控制器参数 {name} 必须是有限值")
         if name in result:
@@ -350,7 +353,7 @@ def request_linked_gain(
             expected_revision=expected_revision,
             secret_literals=[api_key],
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - sanitize provider errors at UI boundary
         safe = sanitize_for_audit(
             str(exc),
             secret_literals=[api_key],

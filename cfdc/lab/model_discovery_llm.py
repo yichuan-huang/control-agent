@@ -181,7 +181,7 @@ def request_model_discovery(
     try:
         safe_context = ModelDiscoveryContext.model_validate(safe_context_payload)
         messages = build_model_discovery_messages(safe_context, catalog)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - audit context validation failures
         audit_messages = _audit_messages(
             [
                 {
@@ -254,7 +254,7 @@ def request_model_discovery(
             validation_errors=errors,
         )
         return ModelDiscoveryCallResult(result=result, call_record=record)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - audit arbitrary adapter failures
         safe_error = str(
             sanitize_for_audit(
                 f"{type(exc).__name__}: {exc}",

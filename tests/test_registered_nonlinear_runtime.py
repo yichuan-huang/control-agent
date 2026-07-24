@@ -20,7 +20,6 @@ from cfdc.sim.registered_runtime import (
     validate_registered_equilibrium,
 )
 
-
 CARTPOLE_PARAMETERS = {
     "cart_mass_kg": 0.5,
     "pole_mass_kg": 0.2,

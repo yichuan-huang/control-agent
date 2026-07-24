@@ -8,7 +8,7 @@ runtime architectures represented below.
 from __future__ import annotations
 
 import math
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_serializer, model_validator
 
@@ -74,7 +74,7 @@ class LeadControllerSpec(CFDCModel):
     pole_rad_s: float = Field(gt=0.0)
 
     @model_validator(mode="after")
-    def validate_lead_architecture(self) -> "LeadControllerSpec":
+    def validate_lead_architecture(self) -> LeadControllerSpec:
         if self.pole_rad_s <= self.zero_rad_s:
             raise ValueError(
                 "invalid lead architecture: pole_rad_s must exceed zero_rad_s"
@@ -89,7 +89,7 @@ class LagControllerSpec(CFDCModel):
     pole_rad_s: float = Field(gt=0.0)
 
     @model_validator(mode="after")
-    def validate_lag_architecture(self) -> "LagControllerSpec":
+    def validate_lag_architecture(self) -> LagControllerSpec:
         if self.zero_rad_s <= self.pole_rad_s:
             raise ValueError(
                 "invalid lag architecture: zero_rad_s must exceed pole_rad_s"
@@ -105,7 +105,7 @@ class NotchControllerSpec(CFDCModel):
     pole_damping_ratio: float = Field(gt=0.0)
 
     @model_validator(mode="after")
-    def validate_notch_architecture(self) -> "NotchControllerSpec":
+    def validate_notch_architecture(self) -> NotchControllerSpec:
         if self.zero_damping_ratio >= self.pole_damping_ratio:
             raise ValueError(
                 "invalid notch architecture: zero_damping_ratio must be "
@@ -122,7 +122,7 @@ class StateFeedbackControllerSpec(CFDCModel):
     equilibrium_input: list[float] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_complete_dimensions(self) -> "StateFeedbackControllerSpec":
+    def validate_complete_dimensions(self) -> StateFeedbackControllerSpec:
         state_count = len(self.equilibrium_state)
         input_count = len(self.equilibrium_input)
         if len(self.gain_matrix) != input_count or any(
@@ -169,7 +169,7 @@ class RegisteredControllerSpec(CFDCModel):
         return _FrozenFloatDict(values)
 
     @model_validator(mode="after")
-    def validate_registered_snapshot(self) -> "RegisteredControllerSpec":
+    def validate_registered_snapshot(self) -> RegisteredControllerSpec:
         mappings = (
             self.parameters,
             self.reference,
@@ -249,17 +249,15 @@ class RegisteredControllerSpec(CFDCModel):
 
 
 ControllerRuntimeSpec = Annotated[
-    Union[
-        PControllerSpec,
-        PIControllerSpec,
-        FilteredPDControllerSpec,
-        FilteredPIDControllerSpec,
-        LeadControllerSpec,
-        LagControllerSpec,
-        NotchControllerSpec,
-        StateFeedbackControllerSpec,
-        RegisteredControllerSpec,
-    ],
+    PControllerSpec
+    | PIControllerSpec
+    | FilteredPDControllerSpec
+    | FilteredPIDControllerSpec
+    | LeadControllerSpec
+    | LagControllerSpec
+    | NotchControllerSpec
+    | StateFeedbackControllerSpec
+    | RegisteredControllerSpec,
     Field(discriminator="kind"),
 ]
 
@@ -306,7 +304,7 @@ class SimulationTrace(CFDCModel):
     events: list[SimulationEvent] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_channel_lengths_and_time(self) -> "SimulationTrace":
+    def validate_channel_lengths_and_time(self) -> SimulationTrace:
         sample_count = len(self.time_s)
         if sample_count > 20_000:
             # Pydantic's max_length error is technically enough, but this
@@ -352,7 +350,7 @@ class NonlinearScenarioEvidence(CFDCModel):
     evidence: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_passed_scenario(self) -> "NonlinearScenarioEvidence":
+    def validate_passed_scenario(self) -> NonlinearScenarioEvidence:
         if self.hard_failure and self.passed:
             raise ValueError("a hard-failed nonlinear scenario cannot pass")
         if self.passed and (
@@ -399,7 +397,7 @@ class StabilityDecision(CFDCModel):
     scenario_evidence: list[NonlinearScenarioEvidence] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_domain_evidence(self) -> "StabilityDecision":
+    def validate_domain_evidence(self) -> StabilityDecision:
         if self.analysis_domain == "continuous" and self.spectral_radius is not None:
             raise ValueError("spectral_radius is only defined for discrete analysis")
         if self.analysis_domain == "discrete" and self.spectral_radius is None:
@@ -528,13 +526,13 @@ __all__ = [
     "FilteredPIDControllerSpec",
     "LagControllerSpec",
     "LeadControllerSpec",
-    "NotchControllerSpec",
     "NonlinearScenarioEvidence",
+    "NotchControllerSpec",
     "PControllerSpec",
     "PIControllerSpec",
     "RegisteredControllerSpec",
     "SimulationEvent",
     "SimulationTrace",
-    "StateFeedbackControllerSpec",
     "StabilityDecision",
+    "StateFeedbackControllerSpec",
 ]

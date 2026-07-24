@@ -6,21 +6,19 @@ import math
 from pathlib import Path
 from uuid import uuid4
 
+from cfdc.demo import run_demo_validation
 from cfdc.diagnosis import (
     OpenAICompatibleDiagnosticAdapter,
-    start_diagnostic_session,
     migrate_diagnostic_session_payload,
-)
-from cfdc.diagnosis import (
     run_diagnostic_evaluation,
     run_live_llm_diagnostic_comparison,
     run_saved_llm_diagnostic_comparison,
+    start_diagnostic_session,
 )
-from cfdc.demo import run_demo_validation
 from cfdc.evidence import plant_id_for_description
 from cfdc.models import (
-    ClosedLoopValidationSpec,
     CFDCRunReport,
+    ClosedLoopValidationSpec,
     DiagnosticSessionState,
     MeasuredTraceManifest,
     PlantEvidencePackage,

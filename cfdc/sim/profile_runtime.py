@@ -224,7 +224,7 @@ def run_mimo_closed_loop(
     times: list[float] = []
     outputs = [[], []]
     saturated = np.zeros(2, dtype=int)
-    steps = int(round(horizon_s / dt_s))
+    steps = round(horizon_s / dt_s)
     for step in range(steps + 1):
         error = references - output
         integral += error * dt_s

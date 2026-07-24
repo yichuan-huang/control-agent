@@ -56,13 +56,17 @@ def route_compatibility_reasons(
             != ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP.value
         ):
             return [
-                "cartpole route requires Class IV unstable/nonlinear handling, "
-                f"but Stage 1 classified the system as {primary}.",
+                (
+                    "cartpole route requires Class IV unstable/nonlinear handling, "
+                    f"but Stage 1 classified the system as {primary}."
+                ),
             ]
         if "natural_frequency" not in required:
             return [
-                "cartpole route requires the Class IV natural_frequency feature, "
-                f"but Stage 1 requested {sorted(required)}.",
+                (
+                    "cartpole route requires the Class IV natural_frequency feature, "
+                    f"but Stage 1 requested {sorted(required)}."
+                ),
             ]
         return []
 
@@ -77,13 +81,17 @@ def route_compatibility_reasons(
             != ArchetypeClass.CLASS_IV_HIGHER_ORDER_UNSTABLE_NONLINEAR_OR_NMP.value
         ):
             return [
-                "VTOL route requires Class IV cascaded/NMP handling, "
-                f"but Stage 1 classified the system as {primary}.",
+                (
+                    "VTOL route requires Class IV cascaded/NMP handling, "
+                    f"but Stage 1 classified the system as {primary}."
+                ),
             ]
         if not vtol_features.issubset(required):
             return [
-                "VTOL route requires hover_thrust, angular_acceleration_gain, and lateral_coupling_gain, "
-                f"but Stage 1 requested {sorted(required)}.",
+                (
+                    "VTOL route requires hover_thrust, angular_acceleration_gain, and lateral_coupling_gain, "
+                    f"but Stage 1 requested {sorted(required)}."
+                ),
             ]
         return []
 

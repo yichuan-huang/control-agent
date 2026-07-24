@@ -6,8 +6,8 @@ import numpy as np
 
 from cfdc.models import (
     ControllerCandidate,
-    FLLTrackerState,
     FeatureTrackingUpdate,
+    FLLTrackerState,
     HoverAverageTrackerState,
     ScalarRLSTrackerState,
     TrackingObservation,

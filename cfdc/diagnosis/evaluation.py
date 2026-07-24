@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import hashlib
 import json
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
 from cfdc.controllers import synthesize_controller
 from cfdc.diagnosis.engine import DiagnosticEngine
 from cfdc.diagnosis.llm import (
+    PROMPT_VERSION,
     DiagnosticAdapter,
     OpenAICompatibleDiagnosticAdapter,
-    PROMPT_VERSION,
 )
 from cfdc.diagnosis.safety import (
     CONTROLLER_SYNTHESIS_FEATURES,
@@ -39,7 +39,6 @@ from cfdc.workflow import (
     deterministic_profile_selection,
     validate_semantic_selection,
 )
-
 
 DIAGNOSTIC_FIELD_NAMES = (
     "open_loop_stability",
@@ -1007,8 +1006,7 @@ def _looks_like_constraint_feature(
     normalized = _normalize_identifier(feature_id)
     return bool(
         normalized in declared_constraints
-        or normalized.endswith("_limit")
-        or normalized.endswith("_boundary")
+        or normalized.endswith(("_limit", "_boundary"))
         or normalized.startswith("max_")
         or "saturation" in normalized
         or normalized

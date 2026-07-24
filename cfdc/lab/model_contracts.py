@@ -23,7 +23,6 @@ from cfdc.models.schemas import (
     TransferFunctionModelSpec,
 )
 
-
 MODEL_QUESTION_CATALOG_VERSION = "v1"
 _PLACEHOLDER_UNITS = frozenset(
     {
@@ -486,7 +485,7 @@ class ModelQuestionExampleCatalog(CFDCModel):
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
-    def validate_identity_and_hash(self) -> "ModelQuestionExampleCatalog":
+    def validate_identity_and_hash(self) -> ModelQuestionExampleCatalog:
         example_ids = [item.example_id for item in self.examples]
         if len(example_ids) != len(set(example_ids)):
             raise ValueError("catalog example IDs must be unique")
@@ -565,7 +564,7 @@ class ModelFactAnswer(CFDCModel):
         )
 
     @model_validator(mode="after")
-    def validate_example_provenance(self) -> "ModelFactAnswer":
+    def validate_example_provenance(self) -> ModelFactAnswer:
         provenance = (
             self.example_id,
             self.example_catalog_version,
@@ -605,7 +604,7 @@ class ParameterEvidence(CFDCModel):
         return _validate_unit(unit)
 
     @model_validator(mode="after")
-    def validate_derivation_metadata(self) -> "ParameterEvidence":
+    def validate_derivation_metadata(self) -> ParameterEvidence:
         if (
             self.source == "deterministic_derivation"
             and self.derivation_rule_id is None
@@ -638,7 +637,7 @@ class OperatingPoint(CFDCModel):
         return signal_units
 
     @model_validator(mode="after")
-    def validate_signal_coverage(self) -> "OperatingPoint":
+    def validate_signal_coverage(self) -> OperatingPoint:
         signals = set(self.states) | set(self.inputs) | set(self.outputs)
         if not signals:
             raise ValueError("operating point requires at least one signal value")
@@ -666,7 +665,7 @@ class ValidityRegion(CFDCModel):
         return signal_units
 
     @model_validator(mode="after")
-    def validate_region(self) -> "ValidityRegion":
+    def validate_region(self) -> ValidityRegion:
         groups = (self.input_ranges, self.output_ranges, self.state_ranges)
         _validate_bounds(groups)
         signals = set().union(*(set(group) for group in groups))
@@ -699,7 +698,7 @@ class ExperimentProposal(CFDCModel):
         return signal_units
 
     @model_validator(mode="after")
-    def validate_experiment(self) -> "ExperimentProposal":
+    def validate_experiment(self) -> ExperimentProposal:
         _validate_bounds((self.actuator_bounds, self.state_bounds, self.output_bounds))
         sample_count = math.floor(self.horizon_s / self.sample_time_s + 1e-12) + 1
         if sample_count > 20_000:
@@ -805,7 +804,7 @@ class GeneratedModelEnvelopeV1(CFDCModel):
     experiment_proposal: ExperimentProposal
 
     @model_validator(mode="after")
-    def validate_envelope_boundary(self) -> "GeneratedModelEnvelopeV1":
+    def validate_envelope_boundary(self) -> GeneratedModelEnvelopeV1:
         if self.model_role == "local_linear_hypothesis" and (
             self.operating_point is None or self.validity_region is None
         ):
@@ -894,15 +893,15 @@ GeneratedModelResult = Annotated[
 
 
 __all__ = [
+    "MODEL_QUESTION_CATALOG_VERSION",
     "DiscoveryQuestion",
     "ExperimentProposal",
     "GeneratedModelEnvelopeV1",
     "GeneratedModelResult",
-    "MODEL_QUESTION_CATALOG_VERSION",
     "ModelFactAnswer",
-    "NaturalLanguageModelAnswer",
     "ModelQuestionExample",
     "ModelQuestionExampleCatalog",
+    "NaturalLanguageModelAnswer",
     "NeedMoreModelResult",
     "OperatingPoint",
     "ParameterEvidence",

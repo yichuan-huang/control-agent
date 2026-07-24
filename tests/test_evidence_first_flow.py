@@ -1,25 +1,26 @@
+import numpy as np
 import pytest
 from pydantic import ValidationError
-import numpy as np
 
+from cfdc.diagnosis import start_diagnostic_session, submit_evidence_to_session
 from cfdc.evidence import (
     build_evidence_requirement_plan,
     load_measured_experiments,
     validate_evidence_package,
 )
-from cfdc.diagnosis import start_diagnostic_session, submit_evidence_to_session
+from cfdc.features import extract_features_from_result
 from cfdc.models import (
     ClosedLoopValidationSpec,
+    ExperimentTrace,
     MeasuredTraceManifest,
     PlantEvidencePackage,
     RegisteredNonlinearModelSpec,
+    SimulationExperimentRecord,
     StateSpaceModelSpec,
     SystemDescription,
     TransferFunctionModelSpec,
 )
 from cfdc.runtime import run_cfdc_route
-from cfdc.features import extract_features_from_result
-from cfdc.models import ExperimentTrace, SimulationExperimentRecord
 from cfdc.workflow import (
     default_control_method_profile_catalog,
     default_demo_plant_fixture_catalog,

@@ -10,21 +10,17 @@ from cfdc.lab import (
     ModelProposalContext,
     approve_llm_proposal,
     build_gain_proposal_context,
-    confirm_model,
     create_free_input_session,
     export_session,
     request_gain_for_session,
     request_gain_proposal,
     request_model_for_session,
-    request_model_proposal,
     run_next_trial,
     sanitize_for_audit,
-    set_initial_controller,
     validate_model_proposal_payload,
 )
 from cfdc.lab.model_discovery_llm import ModelDiscoveryContext
 from cfdc.models import (
-    ArchetypeClassification,
     StructuralDiagnosis,
     SystemDescription,
 )
@@ -257,7 +253,7 @@ def test_valid_gain_call_registers_pending_and_requires_user_approval():
             "rationale": "increase registered stabilizing gains by five percent",
         }
     )
-    pending, result = request_gain_for_session(session, adapter)
+    pending, _result = request_gain_for_session(session, adapter)
     assert pending.state == "needs_adjustment"
     assert pending.pending_proposal.approval_state == "pending"
     assert pending.trial_controller == session.trial_controller

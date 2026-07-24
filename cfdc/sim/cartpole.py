@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from functools import lru_cache
-import math
 
 import numpy as np
 from scipy.linalg import solve_continuous_are
@@ -325,11 +325,11 @@ def _run_balance_candidate(
     max_abs_rate = abs(float(state[3]))
     max_abs_position = abs(float(state[0]))
     saturation_count = 0
-    dwell_samples = max(1, int(round(0.4 / config.dt_s)))
+    dwell_samples = max(1, round(0.4 / config.dt_s))
     dwell: list[tuple[float, float]] = []
     safe = True
 
-    for _ in range(max(1, int(round(duration_s / config.dt_s)))):
+    for _ in range(max(1, round(duration_s / config.dt_s))):
         x, x_dot = float(state[0]), float(state[1])
         theta = _wrap_angle(float(state[2]))
         theta_dot = float(state[3])
@@ -374,7 +374,7 @@ def _run_balance_candidate(
         "max_abs_rate_rad_s": max_abs_rate,
         "max_abs_position_m": max_abs_position,
         "saturation_fraction": saturation_count
-        / max(1, int(round(duration_s / config.dt_s))),
+        / max(1, round(duration_s / config.dt_s)),
     }
 
 
@@ -747,7 +747,7 @@ def simulate_cartpole_energy_swingup(
     balance_max_angle = 0.0
     balance_max_rate = 0.0
     saturated_samples = 0
-    required_balance_samples = max(1, int(round(0.4 / config.dt_s)))
+    required_balance_samples = max(1, round(0.4 / config.dt_s))
     steps = int(config.duration_s / config.dt_s)
 
     for step in range(steps + 1):
@@ -933,7 +933,7 @@ def _cartpole_outer_trial(
     samples: list[TrialSample] = []
     trajectory: list[dict[str, float | str]] = []
     violations: list[SafetyViolation] = []
-    steps = max(1, int(round(duration_s / swingup_config.dt_s)))
+    steps = max(1, round(duration_s / swingup_config.dt_s))
 
     for step in range(steps + 1):
         time_s = step * swingup_config.dt_s

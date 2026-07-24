@@ -3,14 +3,21 @@ from pathlib import Path
 
 import pytest
 
-from cfdc.web.presentation import render_report, stage_progress_html
-from cfdc.web import service as web_service
+from cfdc.diagnosis import (
+    DeterministicDiagnosticAdapter,
+    submit_specifications_to_session,
+)
+from cfdc.diagnosis.engine import infer_structural_diagnosis
+from cfdc.models import DiagnosticSessionState, SystemDescription
+from cfdc.runtime import run_cfdc_route
 from cfdc.web import linked_tuning_service as linked_service
 from cfdc.web import linked_tuning_ui as linked_ui
+from cfdc.web import service as web_service
 from cfdc.web.linked_tuning_service import (
     decode_lab_state,
     link_stage5_report,
 )
+from cfdc.web.presentation import render_report, stage_progress_html
 from cfdc.web.service import (
     ROUTE_CHOICES,
     continue_app_run,
@@ -22,13 +29,6 @@ from cfdc.web.service import (
     submit_app_specifications,
 )
 from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, build_app, reset_ui
-from cfdc.diagnosis import (
-    DeterministicDiagnosticAdapter,
-    submit_specifications_to_session,
-)
-from cfdc.diagnosis.engine import infer_structural_diagnosis
-from cfdc.models import DiagnosticSessionState, SystemDescription
-from cfdc.runtime import run_cfdc_route
 
 
 def test_root_app_is_a_thin_launcher_and_legacy_package_app_is_removed():
@@ -374,7 +374,7 @@ def test_app_can_submit_dataset_json_wrapper_from_pasted_text():
 
 
 def test_app_can_submit_dataset_json_wrapper_from_uploaded_file(tmp_path):
-    report, state = start_app_run(
+    _report, state = start_app_run(
         "A measured first order heater settles after a small power change.",
         "temperature",
         "heater",
@@ -898,7 +898,7 @@ def test_gradio_missing_unit_returns_to_specification_questions_instead_of_error
 
 
 def test_repeated_specification_gap_is_rendered_as_no_progress_not_full_question_loop():
-    report, state = start_app_run(
+    _report, state = start_app_run(
         "A measured first order heater settles after a small power change.",
         "temperature",
         "heater power",

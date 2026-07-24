@@ -14,7 +14,6 @@ from cfdc.models import (
 from cfdc.online import compute_performance_metrics
 from cfdc.runtime.safety import check_sample_safety
 
-
 StateDict = dict[str, float]
 ControlDict = dict[str, float]
 ReferenceDict = dict[str, float]

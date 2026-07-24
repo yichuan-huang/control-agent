@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import json
+from copy import deepcopy
 
 import pytest
 
@@ -12,6 +12,8 @@ from cfdc.lab import (
     extract_tunable_parameters,
     make_llm_call_record,
     register_llm_proposal,
+)
+from cfdc.lab import (
     run_next_trial as run_simulation_trial,
 )
 from cfdc.models import CompiledSpecificationModel, TransferFunctionModelSpec
@@ -153,6 +155,34 @@ def test_same_report_keeps_existing_trial_history():
 
     assert repeated == state
     assert len(repeated["trials"]) == 1
+
+
+def test_first_trial_accepts_edited_numeric_strings_from_gradio():
+    state, _ = link_stage5_report(problem2_report())
+
+    updated, _ = run_linked_trial(
+        state,
+        [["kp", "0.00015"], ["ki", "0.000006"]],
+        expected_revision=state["revision"],
+    )
+
+    controller = updated["trials"][0]["controller"]
+    assert controller["kp"] == pytest.approx(0.00015)
+    assert controller["ki"] == pytest.approx(0.000006)
+
+
+@pytest.mark.parametrize("value", ["", "not-a-number", "nan", "inf", "-inf"])
+def test_first_trial_rejects_invalid_numeric_strings_from_gradio(value):
+    state, view = link_stage5_report(problem2_report())
+    rows = deepcopy(view["parameter_rows"])
+    rows[0][1] = value
+
+    with pytest.raises(ValueError, match="控制器参数 kp 必须是"):
+        run_linked_trial(
+            state,
+            rows,
+            expected_revision=state["revision"],
+        )
 
 
 def test_changed_compiled_model_creates_a_new_linked_session():

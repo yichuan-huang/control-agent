@@ -9,9 +9,9 @@ from cfdc.models import (
     CandidateRouteIR,
     ExperimentPlan,
     ExperimentPrimitive,
+    SimulationProfile,
     StructuralDiagnosis,
     SystemDescription,
-    SimulationProfile,
 )
 
 
@@ -125,7 +125,7 @@ def build_candidate_route(
             )
         )
 
-    template_id, gain_names, refinement_id = _controller_route(classification)
+    _template_id, gain_names, refinement_id = _controller_route(classification)
     safety_constraints = list(classification.safety_constraints)
     safety_constraints.extend(
         f"declared_bound:{name}" for name in sorted(description.safety_bounds)

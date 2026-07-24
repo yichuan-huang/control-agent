@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-from collections.abc import Mapping
-from datetime import datetime, timezone
 import hashlib
 import json
 import math
+from collections.abc import Mapping
+from copy import deepcopy
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import Field, model_validator
 
+from cfdc.diagnosis.llm import SimulationProposalAdapter
+from cfdc.lab.contracts import ControllerRuntimeSpec
+from cfdc.lab.controller_compatibility import ControllerCompatibilityResult
 from cfdc.lab.model_contracts import (
     DiscoveryQuestion,
     GeneratedModelEnvelopeV1,
@@ -24,10 +27,7 @@ from cfdc.lab.model_discovery_llm import (
     ModelDiscoveryContext,
     request_model_discovery,
 )
-from cfdc.lab.model_questions import load_model_question_examples
-from cfdc.lab.model_questions import adopt_example_answer
-from cfdc.lab.controller_compatibility import ControllerCompatibilityResult
-from cfdc.lab.contracts import ControllerRuntimeSpec
+from cfdc.lab.model_questions import adopt_example_answer, load_model_question_examples
 from cfdc.lab.session import (
     LLMCallRecord,
     SessionActionError,
@@ -35,7 +35,6 @@ from cfdc.lab.session import (
     StaleRevisionError,
     TuningProfile,
 )
-from cfdc.diagnosis.llm import SimulationProposalAdapter
 from cfdc.models.schemas import (
     ArchetypeClassification,
     CFDCModel,
@@ -43,7 +42,6 @@ from cfdc.models.schemas import (
     StructuralDiagnosis,
     SystemDescription,
 )
-
 
 DiscoveryState = Literal[
     "collecting_model_information",
@@ -56,7 +54,7 @@ DiscoveryState = Literal[
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _normalize_for_hash(value: Any) -> Any:
@@ -98,7 +96,7 @@ class Stage5DiscoverySnapshot(CFDCModel):
     initial_controller_candidate: ControllerCandidate
 
     @model_validator(mode="after")
-    def validate_candidate_boundary(self) -> "Stage5DiscoverySnapshot":
+    def validate_candidate_boundary(self) -> Stage5DiscoverySnapshot:
         if self.initial_controller_candidate.release_level != "candidate_unvalidated":
             raise ValueError(
                 "model discovery requires an unvalidated Stage-5 controller candidate"
@@ -118,7 +116,7 @@ class DiscoveryTransitionRecord(CFDCModel):
     reason: str | None = Field(default=None, max_length=8000)
 
     @model_validator(mode="after")
-    def validate_revision_step(self) -> "DiscoveryTransitionRecord":
+    def validate_revision_step(self) -> DiscoveryTransitionRecord:
         if self.revision_after != self.revision_before + 1:
             raise ValueError("each discovery transition increments revision once")
         return self
@@ -136,7 +134,7 @@ class ModelAnswerRecord(CFDCModel):
     recorded_at: str = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_provenance(self) -> "ModelAnswerRecord":
+    def validate_provenance(self) -> ModelAnswerRecord:
         if self.source == "user_adopted_example":
             if (
                 self.typed_fact is None
@@ -198,7 +196,7 @@ class ModelDiscoverySession(CFDCModel):
     content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
-    def validate_hashes(self) -> "ModelDiscoverySession":
+    def validate_hashes(self) -> ModelDiscoverySession:
         if self.stage5_sha256 != _sha256(self.stage5):
             raise ValueError("Stage-5 snapshot hash mismatch")
         if (self.pending_envelope is None) != (self.pending_envelope_sha256 is None):

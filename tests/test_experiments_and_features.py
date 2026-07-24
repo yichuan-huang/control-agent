@@ -6,19 +6,19 @@ import pytest
 from cfdc.diagnosis import DiagnosticEngine
 from cfdc.experiments import plan_safe_experiments
 from cfdc.features import (
-    extract_features_from_result,
-    extract_features_from_repeated_results,
     estimate_damping_ratio,
     estimate_hover_thrust,
     estimate_natural_frequency,
     estimate_pulse_input_gain,
     estimate_step_features,
+    extract_features_from_repeated_results,
+    extract_features_from_result,
 )
 from cfdc.models import (
     CoreFeatureArtifact,
     ExperimentPrimitive,
-    SimulationExperimentRecord,
     ExperimentTrace,
+    SimulationExperimentRecord,
     SystemDescription,
 )
 from cfdc.pipeline import run_cfdc_pipeline

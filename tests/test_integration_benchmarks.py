@@ -8,10 +8,10 @@ from cfdc.sim import (
     list_benchmark_cases,
     run_benchmark_suite,
     run_cartpole_nmp_boundary_scan,
+    run_feature_ablation_suite,
     run_vtol_lqr_baseline,
     run_vtol_simulation,
     run_vtol_variation,
-    run_feature_ablation_suite,
     search_cartpole_pd_gains,
     simulate_cartpole_energy_swingup,
 )

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 import re
+from collections.abc import Iterable
 
 from cfdc.diagnosis.llm import (
-    DiagnosticAdapter,
     DeterministicDiagnosticAdapter,
+    DiagnosticAdapter,
     validate_agent_payload,
 )
 from cfdc.models import (
@@ -40,8 +40,10 @@ def _has_nonminimum_phase_evidence(text: str) -> bool:
     """Require positive inverse-response evidence instead of matching negated words."""
 
     negated = (
-        r"(?:does not|doesn't|never|without|no)\s+(?:\w+\s+){0,7}"
-        r"(?:opposite|reverse|undershoot|unfavorable)",
+        (
+            r"(?:does not|doesn't|never|without|no)\s+(?:\w+\s+){0,7}"
+            r"(?:opposite|reverse|undershoot|unfavorable)"
+        ),
         r"(?:不会|没有|并非|不是)[^。；，,.]{0,28}(?:相反|反向|不利)",
     )
     if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in negated):
@@ -60,8 +62,10 @@ def _has_nonminimum_phase_evidence(text: str) -> bool:
 
 def _has_significant_dead_time_evidence(text: str) -> bool:
     negated = (
-        r"(?:no|without|does not have|is not)\s+(?:\w+\s+){0,6}"
-        r"(?:dead time|pure delay|pause|silent interval|transport delay)",
+        (
+            r"(?:no|without|does not have|is not)\s+(?:\w+\s+){0,6}"
+            r"(?:dead time|pure delay|pause|silent interval|transport delay)"
+        ),
         r"(?:没有|不会出现|无|并无)[^。；，,.]{0,30}(?:停顿|静默|纯时延|纯等待|输运时延)",
     )
     if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in negated):
@@ -78,8 +82,10 @@ def _has_significant_dead_time_evidence(text: str) -> bool:
 
 def _has_explicit_oscillation_evidence(text: str) -> bool:
     negated = (
-        r"(?:does not|doesn't|never|without|no)\s+(?:\w+\s+){0,6}"
-        r"(?:ring|oscillat|vibrat|repeated peaks)",
+        (
+            r"(?:does not|doesn't|never|without|no)\s+(?:\w+\s+){0,6}"
+            r"(?:ring|oscillat|vibrat|repeated peaks)"
+        ),
         r"(?:不会|没有|无)[^。；，,.]{0,24}(?:振荡|振动|重复峰值|往复)",
     )
     if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in negated):
@@ -117,8 +123,10 @@ def _has_explicit_oscillation_evidence(text: str) -> bool:
 
 def _has_explicit_minimum_phase_direction(text: str) -> bool:
     patterns = (
-        r"(?:does not|doesn't|never|without|no)\s+(?:\w+\s+){0,7}"
-        r"(?:opposite|reverse|undershoot|unfavorable)",
+        (
+            r"(?:does not|doesn't|never|without|no)\s+(?:\w+\s+){0,7}"
+            r"(?:opposite|reverse|undershoot|unfavorable)"
+        ),
         r"(?:first|initial)\s+(?:\w+\s+){0,8}(?:final|expected)\s+direction",
         r"(?:不会|没有|并非|不是)[^。；，,.]{0,28}(?:相反|反向|不利)",
         r"首次有效变化[^。；]{0,24}(?:最终方向一致|预期方向一致)",
@@ -128,8 +136,10 @@ def _has_explicit_minimum_phase_direction(text: str) -> bool:
 
 def _has_explicit_no_dead_time(text: str) -> bool:
     patterns = (
-        r"(?:no|without|does not have|is not)\s+(?:\w+\s+){0,6}"
-        r"(?:dead time|pure delay|pause|silent interval|transport delay)",
+        (
+            r"(?:no|without|does not have|is not)\s+(?:\w+\s+){0,6}"
+            r"(?:dead time|pure delay|pause|silent interval|transport delay)"
+        ),
         r"(?:没有|不会出现|无|并无)[^。；，,.]{0,30}(?:停顿|静默|纯时延|纯等待|输运时延)",
         r"(?:starts|begins)\s+promptly",
         r"及时开始",

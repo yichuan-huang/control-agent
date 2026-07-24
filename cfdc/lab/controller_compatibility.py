@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -55,7 +54,7 @@ class ControllerCompatibilityResult(CFDCModel):
     run_config: SimulationRunConfig
 
     @model_validator(mode="after")
-    def validate_decision(self) -> "ControllerCompatibilityResult":
+    def validate_decision(self) -> ControllerCompatibilityResult:
         selected_pair = (
             self.selected_controller,
             self.selected_tuning_profile,
@@ -109,7 +108,7 @@ class ControllerCompatibilityResult(CFDCModel):
 
 
 def _experiment_run_config(
-    session: "ModelDiscoverySession",
+    session: ModelDiscoverySession,
 ) -> SimulationRunConfig:
     assert session.confirmed_envelope is not None
     experiment = session.confirmed_envelope.experiment_proposal
@@ -336,7 +335,7 @@ def _replacement_hash(
 
 
 def _decision(
-    session: "ModelDiscoverySession",
+    session: ModelDiscoverySession,
     *,
     all_states_available: bool,
 ) -> ControllerCompatibilityResult:
@@ -451,11 +450,11 @@ def _decision(
 
 
 def evaluate_controller_compatibility(
-    session: "ModelDiscoverySession",
+    session: ModelDiscoverySession,
     *,
     all_states_available: bool = False,
     expected_revision: int | None = None,
-) -> "ModelDiscoverySession":
+) -> ModelDiscoverySession:
     from cfdc.lab.model_discovery import _expect_revision, _transition
 
     _expect_revision(
@@ -506,11 +505,11 @@ def evaluate_controller_compatibility(
 
 
 def confirm_recommended_controller(
-    session: "ModelDiscoverySession",
+    session: ModelDiscoverySession,
     *,
     replacement_sha256: str,
     expected_revision: int,
-) -> "ModelDiscoverySession":
+) -> ModelDiscoverySession:
     from cfdc.lab.model_discovery import _expect_revision, _transition
 
     _expect_revision(session, expected_revision)
@@ -541,7 +540,7 @@ def confirm_recommended_controller(
 
 
 def create_simulation_from_discovery(
-    session: "ModelDiscoverySession",
+    session: ModelDiscoverySession,
     *,
     expected_revision: int,
 ) -> SimulationSession:

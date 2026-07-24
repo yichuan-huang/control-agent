@@ -1,3 +1,5 @@
+import itertools
+
 import pytest
 
 from cfdc.models import Algorithm1Observation, OnlineRefinementPolicy
@@ -161,7 +163,7 @@ def test_nmp_boundary_candidates_use_multiplicative_algorithm1_steps():
     ]
     assert all(
         current == pytest.approx(1.10 * previous)
-        for previous, current in zip(cartpole_candidates, cartpole_candidates[1:])
+        for previous, current in itertools.pairwise(cartpole_candidates)
     )
 
     vtol = run_cfdc_route("vtol-boundary", include_trajectory=False)
@@ -172,5 +174,5 @@ def test_nmp_boundary_candidates_use_multiplicative_algorithm1_steps():
     ]
     assert all(
         current == pytest.approx(1.10 * previous)
-        for previous, current in zip(vtol_candidates, vtol_candidates[1:])
+        for previous, current in itertools.pairwise(vtol_candidates)
     )

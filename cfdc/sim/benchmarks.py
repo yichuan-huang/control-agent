@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from cfdc.controllers import synthesize_controller
 from cfdc.diagnosis import DiagnosticEngine
 from cfdc.experiments import plan_safe_experiments
 from cfdc.features import extract_features_from_results
@@ -11,20 +12,12 @@ from cfdc.models import (
     ClosedLoopBenchmarkCaseResult,
     ControllerCandidate,
     CoreFeatureArtifact,
-    ExperimentPrimitive,
-    SimulationExperimentRecord,
     ExperimentTrace,
     FeatureAblationResult,
     FeatureAblationTrial,
+    SimulationExperimentRecord,
     SimulationPerformanceSummary,
     SystemDescription,
-)
-from cfdc.controllers import synthesize_controller
-from cfdc.workflow import (
-    apply_profile_to_classification,
-    default_simulation_profile_catalog,
-    deterministic_profile_selection,
-    validate_semantic_selection,
 )
 from cfdc.sim.cartpole import search_cartpole_pd_gains, simulate_cartpole_energy_swingup
 from cfdc.sim.generic import SCALAR_BENCHMARK_FAMILIES, run_scalar_closed_loop
@@ -37,6 +30,12 @@ from cfdc.sim.traces import (
     vtol_pulse_trace,
 )
 from cfdc.sim.vtol import VtolConfig, run_vtol_simulation, vtol_operational_gains
+from cfdc.workflow import (
+    apply_profile_to_classification,
+    default_simulation_profile_catalog,
+    deterministic_profile_selection,
+    validate_semantic_selection,
+)
 
 
 @dataclass(frozen=True)
@@ -266,81 +265,81 @@ def _extract_required_features(
 
 def _benchmark_route_ir(case: BenchmarkCase) -> BenchmarkRouteIR:
     scalar_routes = {
-        "first_order_self_regulating_process": dict(
-            plant_family="first_order_lag",
-            reference={"output": 1.0},
-            horizon_s=1500.0,
-            dt_s=0.2,
-            actuator_limits={"input_min": 0.0, "input_max": 1.0},
-            state_limits={"max_abs_output": 1.4},
-            performance_limits={
+        "first_order_self_regulating_process": {
+            "plant_family": "first_order_lag",
+            "reference": {"output": 1.0},
+            "horizon_s": 1500.0,
+            "dt_s": 0.2,
+            "actuator_limits": {"input_min": 0.0, "input_max": 1.0},
+            "state_limits": {"max_abs_output": 1.4},
+            "performance_limits": {
                 "max_abs_final_error": 0.08,
                 "max_overshoot": 0.25,
                 "max_settling_time_s": 1400.0,
                 "max_saturation_fraction": 0.50,
                 "settling_band_absolute": 0.02,
             },
-        ),
-        "first_order_plus_dead_time_process": dict(
-            plant_family="first_order_plus_dead_time",
-            reference={"output": 0.8},
-            horizon_s=5000.0,
-            dt_s=0.5,
-            actuator_limits={"input_min": 0.0, "input_max": 1.0},
-            state_limits={"max_abs_output": 1.4},
-            performance_limits={
+        },
+        "first_order_plus_dead_time_process": {
+            "plant_family": "first_order_plus_dead_time",
+            "reference": {"output": 0.8},
+            "horizon_s": 5000.0,
+            "dt_s": 0.5,
+            "actuator_limits": {"input_min": 0.0, "input_max": 1.0},
+            "state_limits": {"max_abs_output": 1.4},
+            "performance_limits": {
                 "max_abs_final_error": 0.08,
                 "max_overshoot": 0.20,
                 "max_settling_time_s": 4800.0,
                 "max_saturation_fraction": 0.50,
                 "settling_band_absolute": 0.02,
             },
-        ),
-        "double_integrator_low_friction_cart": dict(
-            plant_family="double_integrator",
-            reference={"output": 1.0},
-            horizon_s=14.0,
-            dt_s=0.01,
-            actuator_limits={"input_min": -1.0, "input_max": 1.0},
-            state_limits={"max_abs_output": 1.4, "max_abs_velocity": 1.2},
-            performance_limits={
+        },
+        "double_integrator_low_friction_cart": {
+            "plant_family": "double_integrator",
+            "reference": {"output": 1.0},
+            "horizon_s": 14.0,
+            "dt_s": 0.01,
+            "actuator_limits": {"input_min": -1.0, "input_max": 1.0},
+            "state_limits": {"max_abs_output": 1.4, "max_abs_velocity": 1.2},
+            "performance_limits": {
                 "max_abs_final_error": 0.05,
                 "max_overshoot": 0.15,
                 "max_settling_time_s": 10.0,
                 "max_saturation_fraction": 0.40,
                 "settling_band_absolute": 0.02,
             },
-        ),
-        "second_order_oscillatory_process": dict(
-            plant_family="second_order_oscillator",
-            reference={"output": 0.0},
-            horizon_s=12.0,
-            dt_s=0.005,
-            initial_state={"output": 1.0, "velocity": 0.0},
-            actuator_limits={"input_min": -8.0, "input_max": 8.0},
-            state_limits={"max_abs_output": 1.2, "max_abs_output_after_4s": 0.12},
-            performance_limits={
+        },
+        "second_order_oscillatory_process": {
+            "plant_family": "second_order_oscillator",
+            "reference": {"output": 0.0},
+            "horizon_s": 12.0,
+            "dt_s": 0.005,
+            "initial_state": {"output": 1.0, "velocity": 0.0},
+            "actuator_limits": {"input_min": -8.0, "input_max": 8.0},
+            "state_limits": {"max_abs_output": 1.2, "max_abs_output_after_4s": 0.12},
+            "performance_limits": {
                 "max_abs_final_error": 0.05,
                 "max_settling_time_s": 8.0,
                 "max_saturation_fraction": 0.20,
                 "settling_band_absolute": 0.02,
             },
-        ),
-        "simple_inverse_response_process": dict(
-            plant_family="inverse_response",
-            reference={"output": 0.7},
-            horizon_s=7000.0,
-            dt_s=0.5,
-            actuator_limits={"input_min": 0.0, "input_max": 1.0},
-            state_limits={"max_abs_output": 1.2},
-            performance_limits={
+        },
+        "simple_inverse_response_process": {
+            "plant_family": "inverse_response",
+            "reference": {"output": 0.7},
+            "horizon_s": 7000.0,
+            "dt_s": 0.5,
+            "actuator_limits": {"input_min": 0.0, "input_max": 1.0},
+            "state_limits": {"max_abs_output": 1.2},
+            "performance_limits": {
                 "max_abs_final_error": 0.10,
                 "max_overshoot": 0.10,
                 "max_settling_time_s": 6800.0,
                 "max_saturation_fraction": 0.50,
                 "settling_band_absolute": 0.02,
             },
-        ),
+        },
     }
     if case.case_id in scalar_routes:
         values = scalar_routes[case.case_id]

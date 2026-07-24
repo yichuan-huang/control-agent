@@ -11,7 +11,6 @@ from cfdc.pipeline import run_cfdc_pipeline
 from cfdc.runtime import run_cfdc_route
 from main import parse_args
 
-
 EXPECTED_CARD_IDS = [
     "self_regulating_process",
     "integrating_or_drifting",

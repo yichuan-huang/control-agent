@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Iterable
 from copy import deepcopy
 from functools import lru_cache
 from importlib import resources
-import json
-from typing import Any, Iterable
+from typing import Any
 
 from cfdc.models import (
     ArchetypeClass,
@@ -13,7 +14,6 @@ from cfdc.models import (
     StructuralDiagnosis,
     SystemDescription,
 )
-
 
 CATALOG_RESOURCE = "control_mechanism_card_catalog.json"
 EXPECTED_LAYER_IDS = (
@@ -150,7 +150,6 @@ def select_supplemental_mechanism_cards(
     selected: set[str] = set()
 
     stability = diagnosis.open_loop_stability.assessment
-    relative_degree = diagnosis.relative_degree.assessment
     coupling = diagnosis.coupling_severity.assessment
     phase = diagnosis.minimum_phase.assessment
     primary_class = str(classification.primary_class)

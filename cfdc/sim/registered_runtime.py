@@ -7,9 +7,10 @@ boundary.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
-from typing import Literal, Mapping
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -26,12 +27,16 @@ from cfdc.models import RegisteredNonlinearModelSpec
 from cfdc.models.schemas import CFDCModel
 from cfdc.sim.cartpole import (
     CartpoleParams,
+)
+from cfdc.sim.cartpole import (
     _dynamics as _cartpole_dynamics,
+)
+from cfdc.sim.cartpole import (
     _rk4_step as _cartpole_rk4_step,
 )
 from cfdc.sim.integrators import rk4_step
-from cfdc.sim.vtol import VtolParams, _dynamics as _vtol_dynamics
-
+from cfdc.sim.vtol import VtolParams
+from cfdc.sim.vtol import _dynamics as _vtol_dynamics
 
 NONLINEAR_SOFTWARE_MODEL_BOUNDARY = (
     "Local stability evidence applies only to the registered software model "
@@ -72,7 +77,7 @@ class RegisteredNonlinearValidationResult(CFDCModel):
     @model_validator(mode="after")
     def validate_aggregate_identity(
         self,
-    ) -> "RegisteredNonlinearValidationResult":
+    ) -> RegisteredNonlinearValidationResult:
         evidence_ids = {item.scenario_id for item in self.stability.scenario_evidence}
         if set(self.traces) != evidence_ids:
             raise ValueError(
@@ -560,8 +565,10 @@ def validate_registered_equilibrium(
         status=status,
         evidence=[
             NONLINEAR_SOFTWARE_MODEL_BOUNDARY,
-            "The Jacobian uses central finite differences with "
-            "h=1e-6*max(1,abs(component)).",
+            (
+                "The Jacobian uses central finite differences with "
+                "h=1e-6*max(1,abs(component))."
+            ),
             "Every local continuous-time pole must have real part below -1e-6.",
         ],
     )
@@ -706,7 +713,7 @@ def run_registered_scenario(
         )
     equilibrium_state = np.asarray(equilibrium.equilibrium_state, dtype=float)
     state = equilibrium_state + np.asarray(scenario.perturbation, dtype=float)
-    step_count = int(round(entry.horizon_s / entry.sample_time_s))
+    step_count = round(entry.horizon_s / entry.sample_time_s)
     if step_count + 1 > _MAX_SAMPLES:
         raise ValueError("registered scenario would exceed 20,000 samples")
 
@@ -790,8 +797,8 @@ def run_registered_scenario(
             break
 
         time_values.append(float(time_s))
-        for name in references:
-            references[name].append(float(controller.reference[name]))
+        for name, values in references.items():
+            values.append(float(controller.reference[name]))
         for index, name in enumerate(entry.state_names):
             states[name].append(float(state[index]))
         for name in entry.output_names:
@@ -920,8 +927,10 @@ def run_registered_scenario(
         violations=violations,
         evidence=[
             NONLINEAR_SOFTWARE_MODEL_BOUNDARY,
-            "The final 5% error envelope must be at least 10% smaller "
-            "than the early 5% envelope.",
+            (
+                "The final 5% error envelope must be at least 10% smaller "
+                "than the early 5% envelope."
+            ),
         ],
     )
     return RegisteredScenarioResult(trace=trace, evidence=evidence)
@@ -977,8 +986,10 @@ def run_registered_validation(
         violations=violations,
         evidence=[
             NONLINEAR_SOFTWARE_MODEL_BOUNDARY,
-            "Aggregate stability requires passing local poles and all five "
-            "registered deterministic perturbation rollouts.",
+            (
+                "Aggregate stability requires passing local poles and all five "
+                "registered deterministic perturbation rollouts."
+            ),
         ],
         scenario_evidence=evidence,
     )

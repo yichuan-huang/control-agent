@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 from enum import Enum
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -93,7 +94,7 @@ class UncertaintyAssessment(str, Enum):
 
 class AssessedDiagnosticField(DiagnosticField):
     @model_validator(mode="after")
-    def validate_unknown_consistency(self) -> "AssessedDiagnosticField":
+    def validate_unknown_consistency(self) -> AssessedDiagnosticField:
         assessment = getattr(self, "assessment", None)
         is_unknown = str(assessment) == "unknown"
         if (self.status == "unknown") != is_unknown:
@@ -151,7 +152,7 @@ class StructuralDiagnosis(CFDCModel):
     complete: bool
 
     @model_validator(mode="after")
-    def validate_questions(self) -> "StructuralDiagnosis":
+    def validate_questions(self) -> StructuralDiagnosis:
         if not self.complete and not (2 <= len(self.clarification_questions) <= 4):
             raise ValueError(
                 "Incomplete diagnosis must include 2-4 clarification questions"
@@ -322,7 +323,7 @@ class SpecificationTemplate(CFDCModel):
     compiler_id: str = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_completion_paths(self) -> "SpecificationTemplate":
+    def validate_completion_paths(self) -> SpecificationTemplate:
         known = {item.fact_id for item in self.fields}
         referenced = {
             fact_id
@@ -342,7 +343,7 @@ class SpecificationTemplateCatalog(CFDCModel):
     templates: list[SpecificationTemplate] = Field(min_length=1)
 
 
-SpecificationValue = Union[float, list[float], list[list[float]]]
+SpecificationValue = float | list[float] | list[list[float]]
 
 
 class SpecificationDerivationInput(CFDCModel):
@@ -375,7 +376,7 @@ class SpecificationFact(CFDCModel):
     upper_bound: float | None = None
 
     @model_validator(mode="after")
-    def validate_uncertainty_bounds(self) -> "SpecificationFact":
+    def validate_uncertainty_bounds(self) -> SpecificationFact:
         is_derived = self.source_type == "derived_from_declared_physics"
         if is_derived != (self.derivation is not None):
             raise ValueError(
@@ -424,7 +425,7 @@ class SpecificationAssessment(CFDCModel):
     no_progress: bool = False
 
     @model_validator(mode="after")
-    def validate_status_consistency(self) -> "SpecificationAssessment":
+    def validate_status_consistency(self) -> SpecificationAssessment:
         if self.status == "ready" and (self.missing_fact_ids or self.conflicts):
             raise ValueError(
                 "a ready specification assessment cannot contain gaps or conflicts"
@@ -448,7 +449,7 @@ class TransferFunctionModelSpec(CFDCModel):
     parameter_uncertainty: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_transfer_function(self) -> "TransferFunctionModelSpec":
+    def validate_transfer_function(self) -> TransferFunctionModelSpec:
         if not any(abs(value) > 0.0 for value in self.denominator):
             raise ValueError("denominator must contain a non-zero coefficient")
         if self.time_domain == "discrete" and self.sample_time_s is None:
@@ -478,7 +479,7 @@ class StateSpaceModelSpec(CFDCModel):
     parameter_uncertainty: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_state_space_dimensions(self) -> "StateSpaceModelSpec":
+    def validate_state_space_dimensions(self) -> StateSpaceModelSpec:
         n = len(self.a)
         m = len(self.input_signal_ids)
         p = len(self.output_signal_ids)
@@ -516,7 +517,7 @@ class RegisteredNonlinearModelSpec(CFDCModel):
     parameter_uncertainty: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_registered_model_is_complete(self) -> "RegisteredNonlinearModelSpec":
+    def validate_registered_model_is_complete(self) -> RegisteredNonlinearModelSpec:
         required_parameters = {
             "underactuated_cartpole": {
                 "cart_mass_kg",
@@ -621,11 +622,7 @@ class RegisteredNonlinearModelSpec(CFDCModel):
 
 
 ExecutableModelSpec = Annotated[
-    Union[
-        TransferFunctionModelSpec,
-        StateSpaceModelSpec,
-        RegisteredNonlinearModelSpec,
-    ],
+    TransferFunctionModelSpec | StateSpaceModelSpec | RegisteredNonlinearModelSpec,
     Field(discriminator="kind"),
 ]
 
@@ -653,7 +650,7 @@ class ClosedLoopValidationSpec(CFDCModel):
     initial_state: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_required_limits(self) -> "ClosedLoopValidationSpec":
+    def validate_required_limits(self) -> ClosedLoopValidationSpec:
         required = {
             "actuator_limits": {"input_min", "input_max"},
             "state_limits": {"output_min", "output_max"},
@@ -691,7 +688,7 @@ class PlantEvidencePackage(CFDCModel):
     provenance: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_evidence_source(self) -> "PlantEvidencePackage":
+    def validate_evidence_source(self) -> PlantEvidencePackage:
         if self.model is None and not self.measured_traces:
             raise ValueError(
                 "evidence package requires a model or measured trace manifest"
@@ -725,7 +722,7 @@ class CompiledSpecificationModel(CFDCModel):
     evidence_boundary: str = "declared_specification_model_only"
 
     @model_validator(mode="after")
-    def populate_model_hash(self) -> "CompiledSpecificationModel":
+    def populate_model_hash(self) -> CompiledSpecificationModel:
         if self.model_sha256 is None:
             payload = self.model.model_dump_json()
             self.model_sha256 = hashlib.sha256(payload.encode()).hexdigest()
@@ -785,7 +782,7 @@ class ExperimentTrace(CFDCModel):
     @field_validator("time_s")
     @classmethod
     def validate_time(cls, values: list[float]) -> list[float]:
-        if any(curr <= prev for prev, curr in zip(values, values[1:])):
+        if any(curr <= prev for prev, curr in itertools.pairwise(values)):
             raise ValueError("time_s must be strictly increasing")
         return values
 
@@ -807,7 +804,7 @@ class ExperimentTrace(CFDCModel):
         return cleaned
 
     @model_validator(mode="after")
-    def validate_signal_lengths(self) -> "ExperimentTrace":
+    def validate_signal_lengths(self) -> ExperimentTrace:
         expected = len(self.time_s)
         mismatched = [
             name for name, values in self.signals.items() if len(values) != expected
@@ -879,7 +876,7 @@ class CoreFeatureArtifact(CFDCModel):
     data_quality_flags: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_bounds(self) -> "CoreFeatureArtifact":
+    def validate_bounds(self) -> CoreFeatureArtifact:
         if isinstance(self.value, list):
             if self.feature_id != "local_gain_matrix":
                 raise ValueError("Only local_gain_matrix may carry a matrix value")
@@ -966,7 +963,7 @@ class ControllerCandidate(CFDCModel):
     notes: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_tunable_gain_names(self) -> "ControllerCandidate":
+    def validate_tunable_gain_names(self) -> ControllerCandidate:
         unknown = set(self.tunable_gain_names) - set(self.gains)
         if unknown:
             raise ValueError(
@@ -1383,7 +1380,7 @@ class Algorithm1State(CFDCModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_tunable_gains(self) -> "Algorithm1State":
+    def validate_tunable_gains(self) -> Algorithm1State:
         unknown = set(self.tunable_gain_names) - set(self.accepted_gains)
         if unknown:
             raise ValueError(
@@ -1406,7 +1403,7 @@ class SafeGainSearchState(CFDCModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_candidate_when_pending(self) -> "SafeGainSearchState":
+    def validate_candidate_when_pending(self) -> SafeGainSearchState:
         if self.status == "trial_pending" and not self.candidate_gains:
             raise ValueError("trial_pending state requires candidate_gains")
         if self.frozen and self.status != "frozen":

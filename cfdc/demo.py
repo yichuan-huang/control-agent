@@ -4,7 +4,6 @@ from typing import Any
 
 from cfdc.runtime import run_cfdc_route
 
-
 STABLE_DEMO_ROUTES = ("cartpole", "vtol-position", "vtol-boundary", "vtol-variation")
 
 

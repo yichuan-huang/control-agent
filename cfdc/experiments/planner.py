@@ -11,7 +11,6 @@ from cfdc.models import (
     SystemDescription,
 )
 
-
 _PRIMITIVE_FORBIDDEN_ALIASES: dict[str, tuple[str, ...]] = {
     ExperimentPrimitive.FREE_DECAY.value: (
         "free decay",

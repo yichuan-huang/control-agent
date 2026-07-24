@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import math
 from collections import Counter
 from pathlib import Path
-import math
 
 import numpy as np
 from scipy import signal
 
+from cfdc.evidence.units import time_unit_scale_seconds
 from cfdc.models import (
     CapabilityGap,
     EvidenceReadinessDecision,
@@ -17,7 +18,6 @@ from cfdc.models import (
     SystemDescription,
     TransferFunctionModelSpec,
 )
-from cfdc.evidence.units import time_unit_scale_seconds
 
 
 def _gap(
@@ -317,16 +317,18 @@ def validate_evidence_package(
                     "provide a compatible MIMO state-space model or measured bounded-scan traces",
                 )
             )
-        if isinstance(package.model, RegisteredNonlinearModelSpec):
-            if package.model.template_id != requirement_plan.method_profile_id:
-                gaps.append(
-                    _gap(
-                        "nonlinear_template_profile_mismatch",
-                        package.model.template_id,
-                        "The registered nonlinear model does not match the selected control-method profile.",
-                        "select the matching template or repeat structural diagnosis",
-                    )
+        if (
+            isinstance(package.model, RegisteredNonlinearModelSpec)
+            and package.model.template_id != requirement_plan.method_profile_id
+        ):
+            gaps.append(
+                _gap(
+                    "nonlinear_template_profile_mismatch",
+                    package.model.template_id,
+                    "The registered nonlinear model does not match the selected control-method profile.",
+                    "select the matching template or repeat structural diagnosis",
                 )
+            )
 
     if package.measured_traces:
         source_types.append("measured_traces")

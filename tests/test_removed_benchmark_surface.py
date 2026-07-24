@@ -3,11 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-import cfdc.lab as lab
-import cfdc.models as models
-import cfdc.sim as sim
+from cfdc import lab, models, sim
 from cfdc.lab import SimulationSession, load_model_question_examples
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 

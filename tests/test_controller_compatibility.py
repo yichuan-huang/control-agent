@@ -19,9 +19,9 @@ from cfdc.models import (
     StateSpaceModelSpec,
     TransferFunctionModelSpec,
 )
-from tests.test_model_discovery_session import session_with_ready_result
-from tests.simulation_fixtures import cartpole_model, vtol_model
 from cfdc.sim import registered_run_envelope
+from tests.simulation_fixtures import cartpole_model, vtol_model
+from tests.test_model_discovery_session import session_with_ready_result
 
 
 def confirmed_pi_tf_session():

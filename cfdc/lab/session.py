@@ -7,17 +7,16 @@ and validated through the typed contracts in this module.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from copy import deepcopy
-from datetime import datetime, timezone
 import hashlib
 import json
 import math
 import re
+from collections.abc import Mapping, Sequence
+from copy import deepcopy
+from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 from uuid import uuid4
 
-import numpy as np
 from pydantic import Field, TypeAdapter, model_validator
 
 from cfdc.lab.contracts import (
@@ -34,7 +33,6 @@ from cfdc.models.schemas import (
     ExecutableModelSpec,
     RegisteredNonlinearModelSpec,
 )
-
 
 SessionState = Literal[
     "model_review",
@@ -75,7 +73,7 @@ class SessionImportError(ValueError):
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _normalize_for_hash(value: Any) -> Any:
@@ -159,7 +157,7 @@ class TuningParameterRule(CFDCModel):
     zero_step_scale: float | None = Field(default=None, gt=0.0)
 
     @model_validator(mode="after")
-    def validate_bounds(self) -> "TuningParameterRule":
+    def validate_bounds(self) -> TuningParameterRule:
         if self.lower_bound >= self.upper_bound:
             raise ValueError("tuning lower_bound must be below upper_bound")
         return self
@@ -173,7 +171,7 @@ class TuningProfile(CFDCModel):
     max_trials: Literal[20] = 20
 
     @model_validator(mode="after")
-    def validate_parameter_identity(self) -> "TuningProfile":
+    def validate_parameter_identity(self) -> TuningProfile:
         names = [item.name for item in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("tuning parameter names must be unique")
@@ -204,7 +202,7 @@ class ParameterProposal(CFDCModel):
     approval_state: Literal["not_required", "pending", "approved", "rejected", "stale"]
 
     @model_validator(mode="after")
-    def validate_keysets(self) -> "ParameterProposal":
+    def validate_keysets(self) -> ParameterProposal:
         expected = set(self.whitelist)
         if len(self.whitelist) != len(expected):
             raise ValueError("proposal whitelist must be unique")
@@ -232,7 +230,7 @@ class TransitionRecord(CFDCModel):
     reason: str | None = Field(default=None, max_length=2000)
 
     @model_validator(mode="after")
-    def validate_revision_step(self) -> "TransitionRecord":
+    def validate_revision_step(self) -> TransitionRecord:
         if self.revision_after != self.revision_before + 1:
             raise ValueError("each transition must increment revision exactly once")
         return self
@@ -259,7 +257,7 @@ class LLMCallRecord(CFDCModel):
     occurred_at: str = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_sanitized_payload(self) -> "LLMCallRecord":
+    def validate_sanitized_payload(self) -> LLMCallRecord:
         payload = self.model_dump(
             mode="json",
             exclude={"request_sha256", "response_sha256"},
@@ -309,7 +307,7 @@ class TrialRecord(CFDCModel):
     occurred_at: str = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_trial_integrity(self) -> "TrialRecord":
+    def validate_trial_integrity(self) -> TrialRecord:
         if len(self.original_sample_counts) != len(self.traces):
             raise ValueError("original_sample_counts must align with stored traces")
         if any(
@@ -346,7 +344,7 @@ class SimulationRunConfig(CFDCModel):
     output_bounds: dict[str, tuple[float, float]] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_budget_and_bounds(self) -> "SimulationRunConfig":
+    def validate_budget_and_bounds(self) -> SimulationRunConfig:
         sample_count = math.floor(self.horizon_s / self.sample_time_s + 1e-12) + 1
         if sample_count > 20_000:
             raise ValueError("simulation configuration exceeds 20,000 samples")
@@ -410,7 +408,7 @@ class SimulationSession(CFDCModel):
     content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
-    def validate_session_integrity(self) -> "SimulationSession":
+    def validate_session_integrity(self) -> SimulationSession:
         expected_boundary = (
             "llm_proposed_model_hypothesis"
             if self.origin == "stage5_candidate_llm_model"
@@ -1480,7 +1478,7 @@ def run_next_trial(
                 full_traces,
                 decision,
             )
-    except Exception as exc:  # fail closed into auditable inconclusive evidence
+    except Exception as exc:  # noqa: BLE001 - fail closed and audit runner failures
         safe_reason = f"simulation runner rejected the trial: {type(exc).__name__}"
         full_traces = [_empty_failure_trace()]
         description = str(exc).casefold()
@@ -2051,16 +2049,20 @@ def _validate_session_derived_integrity(session: SimulationSession) -> None:
 
     if session.pending_proposal is not None:
         validate_proposal_values(session.pending_proposal)
-        if session.trial_controller is not None and profile is not None:
-            if session.pending_proposal.approval_state in {
+        if (
+            session.trial_controller is not None
+            and profile is not None
+            and session.pending_proposal.approval_state
+            in {
                 "approved",
                 "not_required",
-            }:
-                applied = extract_tunable_parameters(session.trial_controller, profile)
-                if _canonical_json(applied) != _canonical_json(
-                    session.pending_proposal.new_parameters
-                ):
-                    raise ValueError("applied pending proposal/controller mismatch")
+            }
+        ):
+            applied = extract_tunable_parameters(session.trial_controller, profile)
+            if _canonical_json(applied) != _canonical_json(
+                session.pending_proposal.new_parameters
+            ):
+                raise ValueError("applied pending proposal/controller mismatch")
     previous_controller = session.initial_controller
     for trial in session.trials:
         if trial.proposal is not None:
@@ -2292,6 +2294,7 @@ def make_llm_call_record(
 
 
 __all__ = [
+    "TERMINAL_STATES",
     "LLMCallRecord",
     "LLMMessageRecord",
     "ParameterProposal",
@@ -2303,7 +2306,6 @@ __all__ = [
     "SimulationRunner",
     "SimulationSession",
     "StaleRevisionError",
-    "TERMINAL_STATES",
     "TransitionRecord",
     "TrialRecord",
     "TuningParameterRule",
@@ -2315,8 +2317,8 @@ __all__ = [
     "cancel_session",
     "confirm_model",
     "controller_architecture_hash",
-    "create_free_input_session",
     "create_discovery_simulation_session",
+    "create_free_input_session",
     "export_session",
     "extract_tunable_parameters",
     "import_session",

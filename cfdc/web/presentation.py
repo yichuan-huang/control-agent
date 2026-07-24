@@ -6,7 +6,6 @@ from typing import Any
 from cfdc.diagnosis import clarification_question_map
 from cfdc.models import CFDCRunReport
 
-
 STATUS_LABELS = {
     "need_more_information": "需要补充信息",
     "awaiting_specifications": "等待设备规格",

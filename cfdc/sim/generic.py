@@ -9,7 +9,6 @@ from cfdc.models import (
 )
 from cfdc.performance import build_performance_summary, calculate_channel_performance
 
-
 SCALAR_BENCHMARK_FAMILIES = {
     "first_order_lag",
     "first_order_plus_dead_time",
@@ -39,7 +38,7 @@ def run_scalar_closed_loop(
     input_min = route.actuator_limits["input_min"]
     input_max = route.actuator_limits["input_max"]
     gains = controller.gains
-    steps = int(round(route.horizon_s / dt_s))
+    steps = round(route.horizon_s / dt_s)
 
     y = route.initial_state.get("output", 0.0)
     velocity = route.initial_state.get("velocity", 0.0)
@@ -53,7 +52,7 @@ def run_scalar_closed_loop(
     velocity_values: list[float] = []
     input_values: list[float] = []
 
-    delay_steps = max(0, int(round(params.get("dead_time", 0.0) / dt_s)))
+    delay_steps = max(0, round(params.get("dead_time", 0.0) / dt_s))
     delay_buffer: deque[float] = deque([0.0] * delay_steps)
 
     for step in range(steps + 1):

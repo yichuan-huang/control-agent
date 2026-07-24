@@ -32,7 +32,6 @@ from cfdc.models.schemas import (
     TransferFunctionModelSpec,
 )
 
-
 ModelKind = Literal["transfer_function", "state_space", "registered_nonlinear"]
 RegisteredTemplate = Literal["underactuated_cartpole", "vtol_cascaded"]
 
@@ -238,7 +237,7 @@ class ModelValidationContext(CFDCModel):
     )
 
     @model_validator(mode="after")
-    def validate_closed_sets(self) -> "ModelValidationContext":
+    def validate_closed_sets(self) -> ModelValidationContext:
         fact_ids = [fact.fact_id for fact in self.facts]
         if len(fact_ids) != len(set(fact_ids)):
             raise ValueError("model validation fact IDs must be unique")
@@ -652,11 +651,12 @@ def _validate_signal_and_structure(
             or local_nonlinear
         ):
             raise ValueError("generated model lacks any inspectable Class IV property")
-    elif primary_class == "class_v_multivariable_significant_coupling":
-        if input_count < 2 or output_count < 2:
-            raise ValueError(
-                "generated model conflicts with Class V multivariable structure"
-            )
+    elif primary_class == "class_v_multivariable_significant_coupling" and (
+        input_count < 2 or output_count < 2
+    ):
+        raise ValueError(
+            "generated model conflicts with Class V multivariable structure"
+        )
 
     delay = str(context.diagnosis.significant_delay.assessment)
     if isinstance(model, TransferFunctionModelSpec):
@@ -1894,7 +1894,7 @@ def validate_generated_model_payload(
 
 __all__ = [
     "ModelValidationContext",
-    "validate_non_executable_content",
     "validate_generated_model_envelope",
     "validate_generated_model_payload",
+    "validate_non_executable_content",
 ]

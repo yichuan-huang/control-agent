@@ -169,7 +169,7 @@ def test_cartpole_reports_safe_frequency_adaptation_after_mass_change():
 
 
 def test_low_quality_after_three_repeats_triggers_fourth_experiment(monkeypatch):
-    import cfdc.runtime.orchestrator as orchestrator
+    from cfdc.runtime import orchestrator
 
     decisions = iter(["repeat_experiment", "accept"])
 
@@ -210,7 +210,7 @@ def test_low_quality_after_three_repeats_triggers_fourth_experiment(monkeypatch)
 
 
 def test_five_low_quality_repeats_fail_without_controller(monkeypatch):
-    import cfdc.runtime.orchestrator as orchestrator
+    from cfdc.runtime import orchestrator
 
     def quality_gate(classification, features):
         del classification, features

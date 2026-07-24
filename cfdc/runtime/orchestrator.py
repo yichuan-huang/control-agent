@@ -16,7 +16,6 @@ from cfdc.diagnosis import (
 )
 from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.diagnosis.safety import validate_diagnostic_controller_release
-from cfdc.experiments import plan_safe_experiments
 from cfdc.evidence import (
     build_evidence_requirement_plan,
     load_measured_experiments,
@@ -24,6 +23,7 @@ from cfdc.evidence import (
     validate_controller_on_model,
     validate_evidence_package,
 )
+from cfdc.experiments import plan_safe_experiments
 from cfdc.features import (
     evaluate_feature_quality,
     extract_features_from_repeated_results,
@@ -40,39 +40,31 @@ from cfdc.models import (
     ControllerComparison,
     CoreFeatureArtifact,
     DiagnosticSessionState,
-    ExperimentPlan,
     EvidenceReadinessDecision,
     EvidenceRequirementPlan,
-    ExperimentPrimitive,
-    SimulationExperimentRecord,
-    ExperimentTrace,
-    FLLTrackerState,
-    FeatureTrackingUpdate,
+    ExperimentPlan,
     FeatureQualityDecision,
+    FeatureTrackingUpdate,
+    FLLTrackerState,
     GoNoGoDecision,
-    OnlineTuningState,
-    OnlineRefinementPolicy,
-    PlantEvidencePackage,
     HoverAverageTrackerState,
+    OnlineRefinementPolicy,
+    OnlineTuningState,
+    PlantEvidencePackage,
     ScalarRLSTrackerState,
+    SemanticRouteSelection,
+    SimulationExperimentRecord,
     StructuralDiagnosis,
     SystemDescription,
-    TrialReport,
     TrackingObservation,
     TrackingStateBundle,
-    SemanticRouteSelection,
-)
-from cfdc.specifications import (
-    assess_specification_text,
-    build_initial_specification_assessment,
-    compile_specification_model,
-    specification_template_for_profile,
+    TrialReport,
 )
 from cfdc.online import (
+    adapt_controller_from_tracked_feature,
     evaluate_algorithm1_probe,
     initialize_algorithm1,
     propose_algorithm1_candidate,
-    adapt_controller_from_tracked_feature,
     tracking_scheduler_eligible,
     update_fll_window,
     update_hover_average,
@@ -80,20 +72,26 @@ from cfdc.online import (
 )
 from cfdc.runtime.trial import SafeTrialConfig, SafeTrialRunner
 from cfdc.sim import (
-    CartpoleSwingupConfig,
     CartpoleParams,
+    CartpoleSwingupConfig,
     VtolConfig,
     VtolParams,
-    run_vtol_simulation,
-    run_vtol_lqr_baseline,
-    run_vtol_variation,
-    run_profile_experiments,
-    run_mimo_profile_adaptation,
-    run_scalar_profile_adaptation,
     run_cartpole_nmp_boundary_scan,
+    run_mimo_profile_adaptation,
+    run_profile_experiments,
+    run_scalar_profile_adaptation,
+    run_vtol_lqr_baseline,
+    run_vtol_simulation,
+    run_vtol_variation,
     search_cartpole_pd_gains,
     simulate_cartpole_energy_swingup,
     vtol_operational_gains,
+)
+from cfdc.specifications import (
+    assess_specification_text,
+    build_initial_specification_assessment,
+    compile_specification_model,
+    specification_template_for_profile,
 )
 from cfdc.validation import (
     merge_go_no_go,
@@ -101,6 +99,7 @@ from cfdc.validation import (
     validate_route_compatibility,
 )
 from cfdc.workflow import (
+    apply_profile_to_classification,
     build_candidate_route,
     compile_candidate_route,
     default_capability_catalog,
@@ -109,9 +108,7 @@ from cfdc.workflow import (
     deterministic_profile_selection,
     profile_by_id,
     validate_semantic_selection,
-    apply_profile_to_classification,
 )
-
 
 RouteId = Literal[
     "generic",
