@@ -72,8 +72,29 @@ python app.py
 
 ## 安装与测试
 
+1. 克隆仓库并进入项目目录：
+
+```bash
+git clone https://github.com/yichuan-huang/control-agent.git
+cd control-agent
+```
+
+2. 创建并激活 Conda 环境：
+
+```bash
+conda create -n control-agent python=3.11
+conda activate control-agent
+```
+
+3. 安装项目及测试依赖：
+
 ```bash
 python -m pip install -e '.[test]'
+```
+
+4. 运行测试套件并检查源代码是否可编译：
+
+```bash
 pytest -q
 python -m compileall -q cfdc tests
 ```

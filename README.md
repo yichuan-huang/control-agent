@@ -72,8 +72,29 @@ Base URL, Model, and API Key are read directly from the current provider inputs 
 
 ## Install and test
 
+1. Clone the repository and enter the project directory:
+
+```bash
+git clone https://github.com/yichuan-huang/control-agent.git
+cd control-agent
+```
+
+2. Create and activate a Conda environment:
+
+```bash
+conda create -n control-agent python=3.11
+conda activate control-agent
+```
+
+3. Install the project and test dependencies:
+
 ```bash
 python -m pip install -e '.[test]'
+```
+
+4. Run the test suite and compile-check the source code:
+
+```bash
 pytest -q
 python -m compileall -q cfdc tests
 ```
