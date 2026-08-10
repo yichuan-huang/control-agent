@@ -371,8 +371,13 @@ def _redacted_report_payload(report: CFDCRunReport) -> dict[str, Any]:
     controller_released = _controller_released(report)
     validation_evidence_released = _validation_evidence_released(report)
 
+    effective_status = _effective_status(report)
     payload["route_id"] = _display_route_id(report)
-    payload["status"] = _effective_status(report)
+    payload["status"] = (
+        "need_more_information"
+        if effective_status == "collecting_description"
+        else effective_status
+    )
     payload["evidence_boundary"] = _display_evidence_boundary(report)
 
     session = payload.get("diagnostic_session")

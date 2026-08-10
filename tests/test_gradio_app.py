@@ -2010,6 +2010,8 @@ def test_incomplete_description_uses_original_input_and_hides_measurement_contro
         '<div class="flow-step waiting"><span>2</span><small>AI 测量计划</small>'
         in view["progress"]
     )
+    assert view["raw"]["status"] == "need_more_information"
+    assert "AI 测量计划" in linked_ui._progress_output(view["raw"], {})
     assert outputs[16]["visible"] is False
     assert outputs[17]["visible"] is False
     assert outputs[18]["visible"] is False
