@@ -15,6 +15,19 @@ from main import load_diagnostic_session, main, parse_args
 
 
 class CliGuidedAdapter(DeterministicDiagnosticAdapter):
+    def guide_description(self, description, guidance):
+        output = description.observed_outputs or ["temperature"]
+        actuators = description.actuators or ["heater"]
+        return {
+            "guidance": [item.model_dump(mode="json") for item in guidance],
+            "observed_outputs": [
+                {"name": name, "source_excerpt": name} for name in output
+            ],
+            "actuators": [
+                {"name": name, "source_excerpt": name} for name in actuators
+            ],
+        }
+
     def extract_measurements(
         self, description, measurement_plan, measurement_response, previous_assessment
     ):
@@ -75,6 +88,92 @@ def test_cli_generic_guided_flow_requires_llm(monkeypatch):
     )
 
     with pytest.raises(SystemExit, match="LLM"):
+        main()
+
+
+def test_cli_measurement_response_requires_session(monkeypatch):
+    _enable_cli_guided_adapter(monkeypatch)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["main.py", "--measurement-response", "record", *_llm_args()],
+    )
+
+    with pytest.raises(SystemExit, match="diagnostic-session-input"):
+        main()
+
+
+def test_cli_v4_session_rejects_specification_text(tmp_path, monkeypatch):
+    _enable_cli_guided_adapter(monkeypatch)
+    session = start_diagnostic_session(SystemDescription(text="I have a machine."))
+    source = tmp_path / "v4.json"
+    source.write_text(session.model_dump_json(), encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--diagnostic-session-input",
+            str(source),
+            "--specification-text",
+            "manual facts",
+            *_llm_args(),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="measurement-response"):
+        main()
+
+
+@pytest.mark.parametrize("contents", [b"", b"\xff\xfe"])
+def test_cli_rejects_empty_or_non_utf8_measurement_response_file(
+    contents, tmp_path, monkeypatch
+):
+    _enable_cli_guided_adapter(monkeypatch)
+    session = start_diagnostic_session(SystemDescription(text="I have a machine."))
+    source = tmp_path / "v4.json"
+    source.write_text(session.model_dump_json(), encoding="utf-8")
+    response = tmp_path / "response.txt"
+    response.write_bytes(contents)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--diagnostic-session-input",
+            str(source),
+            "--measurement-response-file",
+            str(response),
+            *_llm_args(),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="measurement-response-file"):
+        main()
+
+
+def test_cli_converts_measurement_response_file_os_error_to_system_exit(
+    tmp_path, monkeypatch
+):
+    _enable_cli_guided_adapter(monkeypatch)
+    session = start_diagnostic_session(SystemDescription(text="I have a machine."))
+    source = tmp_path / "v4.json"
+    source.write_text(session.model_dump_json(), encoding="utf-8")
+    missing_response = tmp_path / "missing-response.txt"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--diagnostic-session-input",
+            str(source),
+            "--measurement-response-file",
+            str(missing_response),
+            *_llm_args(),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="invalid --measurement-response-file"):
         main()
 
 
@@ -294,9 +393,7 @@ def test_v1_complete_session_restarts_at_v4_measurement_gate(tmp_path):
     assert migrated.evidence_requirement_plan is None
 
 
-def test_cli_does_not_allow_specifications_to_bypass_measurement_gate(
-    monkeypatch, capsys
-):
+def test_cli_does_not_allow_specifications_to_bypass_measurement_gate(monkeypatch):
     _enable_cli_guided_adapter(monkeypatch)
     monkeypatch.setattr(
         sys,
@@ -320,11 +417,8 @@ def test_cli_does_not_allow_specifications_to_bypass_measurement_gate(
             ],
         )
 
-    main()
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["status"] == "awaiting_measurements"
-    assert payload["classification"] is None
-    assert payload["controller"] is None
+    with pytest.raises(SystemExit, match="require --measurement-response"):
+        main()
 
 
 def test_cli_collects_repeatable_specification_answers():

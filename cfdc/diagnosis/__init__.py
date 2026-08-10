@@ -18,16 +18,20 @@ from cfdc.diagnosis.llm import (
     SimulationProposalAdapter,
     validate_agent_payload,
 )
+from cfdc.diagnosis.measurements import (
+    DIAGNOSTIC_FIELD_IDS,
+    apply_description_guidance,
+    build_diagnostic_checklist,
+    build_measurement_plan,
+    normalized_measurement_description,
+    render_measurement_evidence,
+    validate_measurement_assessment,
+    validate_phrased_measurement_plan,
+)
 from cfdc.diagnosis.mechanism_cards import (
     list_mechanism_cards,
     load_mechanism_card_catalog,
     select_supplemental_mechanism_cards,
-)
-from cfdc.diagnosis.measurements import (
-    DIAGNOSTIC_FIELD_IDS,
-    build_diagnostic_checklist,
-    build_measurement_plan,
-    validate_measurement_assessment,
 )
 from cfdc.diagnosis.session import (
     clarification_question_map,
@@ -35,23 +39,26 @@ from cfdc.diagnosis.session import (
     continue_diagnostic_session,
     migrate_diagnostic_session_payload,
     start_diagnostic_session,
+    submit_evidence_to_session,
     submit_measurement_assessment,
     submit_measurements_to_session,
-    submit_evidence_to_session,
     submit_specifications_to_session,
 )
 
 __all__ = [
+    "DIAGNOSTIC_FIELD_IDS",
     "DeterministicDiagnosticAdapter",
     "DiagnosticEngine",
-    "DIAGNOSTIC_FIELD_IDS",
     "OpenAICompatibleDiagnosticAdapter",
     "SimulationProposalAdapter",
+    "apply_description_guidance",
+    "build_diagnostic_checklist",
+    "build_measurement_plan",
     "clarification_question_map",
     "collect_and_save_llm_diagnostic_responses",
     "compare_diagnostic_evaluations",
-    "continue_diagnostic_session",
     "continue_description_session",
+    "continue_diagnostic_session",
     "diagnostic_case_catalog_sha256",
     "list_diagnostic_evaluation_cases",
     "list_mechanism_cards",
@@ -59,6 +66,8 @@ __all__ = [
     "load_saved_diagnostic_responses",
     "load_saved_llm_diagnostic_responses",
     "migrate_diagnostic_session_payload",
+    "normalized_measurement_description",
+    "render_measurement_evidence",
     "run_diagnostic_evaluation",
     "run_live_llm_diagnostic_comparison",
     "run_saved_llm_diagnostic_comparison",
@@ -66,12 +75,11 @@ __all__ = [
     "select_supplemental_mechanism_cards",
     "snapshot_current_diagnostic_responses",
     "start_diagnostic_session",
-    "build_diagnostic_checklist",
-    "build_measurement_plan",
+    "submit_evidence_to_session",
     "submit_measurement_assessment",
     "submit_measurements_to_session",
-    "submit_evidence_to_session",
     "submit_specifications_to_session",
     "validate_agent_payload",
     "validate_measurement_assessment",
+    "validate_phrased_measurement_plan",
 ]

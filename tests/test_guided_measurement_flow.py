@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import ClassVar
 
 import pytest
 
@@ -18,6 +19,17 @@ class GuidedFakeAdapter:
 
     def diagnose(self, description):
         return infer_structural_diagnosis(description).model_dump(mode="json")
+
+    def guide_description(self, description, guidance):
+        return {
+            "guidance": [item.model_dump(mode="json") for item in guidance],
+            "observed_outputs": [
+                {"name": "temperature", "source_excerpt": "temperature"}
+            ],
+            "actuators": [
+                {"name": "heater power", "source_excerpt": "heater change"}
+            ],
+        }
 
     def phrase_measurement_plan(self, description, checklist, plan):
         del description, checklist
@@ -49,6 +61,75 @@ class GuidedFakeAdapter:
     def select_profile(self, description, diagnosis, classification, catalog):
         return deterministic_profile_selection(
             description, diagnosis, classification, catalog
+        ).model_dump(mode="json")
+
+
+class EvidenceDrivenAdapter(GuidedFakeAdapter):
+    """Fake whose deterministic diagnosis depends on persisted extracted facts."""
+
+    _facts: ClassVar[dict[str, str]] = {
+        "open_loop_stability": "settles or remains bounded",
+        "minimum_phase": (
+            "starts in its final direction rather than moving the opposite way first"
+        ),
+        "significant_delay": (
+            "begins within one sample without a separate silent interval"
+        ),
+        "relative_degree": "one or two dominant storage or integration processes",
+        "controllability_observability": (
+            "all relevant motion can be reconstructed from these synchronized records"
+        ),
+        "nonlinearity_strength": (
+            "small positive and negative trials are smooth, reversible, and nearly proportional"
+        ),
+        "coupling_severity": "one main physical route from actuation to the measured motion",
+        "uncertainty_magnitude": (
+            "change the response rate and final level by a modest amount"
+        ),
+    }
+
+    def diagnose(self, description):
+        raise AssertionError("guided formal diagnosis must never call the adapter")
+
+    def extract_measurements(
+        self,
+        description,
+        measurement_plan,
+        measurement_response,
+        previous_assessment,
+    ):
+        del description, previous_assessment
+        if measurement_response == "new multivariable interaction":
+            severe = (
+                "changing any one of several actuators noticeably changes several outputs"
+            )
+            return MeasurementAssessment(
+                status="need_more",
+                facts=[
+                    MeasuredFact(
+                        request_id="coupling_severity",
+                        source_excerpt=severe,
+                        text_value=severe,
+                    )
+                ],
+                gaps=[
+                    request.diagnostic_field_id
+                    for request in measurement_plan.requests
+                    if request.request_id != "coupling_severity"
+                ],
+                rationale="New validated coupling evidence.",
+            ).model_dump(mode="json")
+        return MeasurementAssessment(
+            status="ready",
+            facts=[
+                MeasuredFact(
+                    request_id=request.request_id,
+                    source_excerpt=self._facts[request.request_id],
+                    text_value=self._facts[request.request_id],
+                )
+                for request in measurement_plan.requests
+            ],
+            rationale="All eight diagnostic facts are verified.",
         ).model_dump(mode="json")
 
 
@@ -98,6 +179,223 @@ def test_generic_route_gates_classification_until_verified_measurements():
     assert released.specification_assessment.questions
 
 
+def test_formal_diagnosis_ignores_poisoned_adapter_diagnosis():
+    class PoisonedDiagnosisAdapter(GuidedFakeAdapter):
+        def diagnose(self, description):
+            payload = super().diagnose(description)
+            payload["open_loop_stability"] = {
+                "status": "known",
+                "value": "poisoned adapter claim",
+                "assessment": "unstable",
+                "confidence": 1.0,
+                "evidence": ["not validated measurement evidence"],
+            }
+            payload["coupling_severity"] = {
+                "status": "known",
+                "value": "poisoned adapter claim",
+                "assessment": "severe_mimo",
+                "confidence": 1.0,
+                "evidence": ["not validated measurement evidence"],
+            }
+            return payload
+
+    adapter = PoisonedDiagnosisAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="all records attached",
+    )
+
+    assert released.diagnosis.open_loop_stability.assessment == "stable"
+    assert released.diagnosis.coupling_severity.assessment == "siso"
+    assert released.classification.primary_class == "class_i_first_order_lag"
+
+
+def test_verified_measurement_facts_persist_across_session_serialization():
+    adapter = GuidedFakeAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="all records attached",
+    )
+
+    serialized = released.diagnostic_session.model_dump_json()
+    restored = type(released.diagnostic_session).model_validate_json(serialized)
+    assert "open_loop_stability" in restored.accumulated_description.text
+    assert "verified observation" in restored.accumulated_description.text
+    assert "Manual record for Open-loop stability." in restored.accumulated_description.text
+    assert "all records attached" not in restored.accumulated_description.text
+
+
+def test_persisted_measurement_facts_drive_later_deterministic_invalidation():
+    adapter = EvidenceDrivenAdapter()
+    vague_description = SystemDescription(
+        text="temperature and heater change records are available.",
+        observed_outputs=["temperature"],
+        actuators=["heater"],
+    )
+    initial = run_cfdc_route(
+        "generic", description=vague_description, diagnostic_adapter=adapter
+    )
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="verified records",
+    )
+    restored = type(released.diagnostic_session).model_validate_json(
+        released.diagnostic_session.model_dump_json()
+    )
+
+    invalidated = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=restored,
+        diagnostic_adapter=adapter,
+        measurement_response="new multivariable interaction",
+    )
+
+    assert invalidated.status == "awaiting_measurements"
+    assert invalidated.diagnosis.open_loop_stability.assessment == "stable"
+    assert invalidated.diagnosis.coupling_severity.assessment == "severe_mimo"
+    assert "settles or remains bounded" in (
+        invalidated.diagnostic_session.accumulated_description.text
+    )
+
+
+def test_invalidation_rejects_a_replacement_measurement_plan():
+    class InvalidationPlanMutator(EvidenceDrivenAdapter):
+        phrase_calls = 0
+
+        def phrase_measurement_plan(self, description, checklist, plan):
+            del description, checklist
+            self.phrase_calls += 1
+            payload = plan.model_dump(mode="json")
+            if self.phrase_calls == 2:
+                payload["requests"] = list(reversed(payload["requests"]))
+            return payload
+
+    adapter = InvalidationPlanMutator()
+    initial = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text="temperature and heater change records are available.",
+            observed_outputs=["temperature"],
+            actuators=["heater"],
+        ),
+        diagnostic_adapter=adapter,
+    )
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="verified records",
+    )
+
+    with pytest.raises(ValueError, match="authoritative request"):
+        run_cfdc_route(
+            "generic",
+            diagnostic_session_state=released.diagnostic_session,
+            diagnostic_adapter=adapter,
+            measurement_response="new multivariable interaction",
+        )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["omit", "reorder", "request_id", "rationale", "unsafe_instruction"],
+)
+def test_llm_phrasing_cannot_replace_the_authoritative_measurement_plan(mutation):
+    class MutatingPlanAdapter(GuidedFakeAdapter):
+        def phrase_measurement_plan(self, description, checklist, plan):
+            payload = super().phrase_measurement_plan(description, checklist, plan)
+            if mutation == "omit":
+                payload["requests"] = payload["requests"][:-1]
+            elif mutation == "reorder":
+                payload["requests"][0], payload["requests"][1] = (
+                    payload["requests"][1],
+                    payload["requests"][0],
+                )
+            elif mutation == "request_id":
+                payload["requests"][0]["request_id"] = "mutated"
+            elif mutation == "rationale":
+                payload["rationale"] = "Perform a new hardware experiment."
+            else:
+                payload["requests"][0]["instruction"] = "Apply 10 V to the heater."
+            return payload
+
+    with pytest.raises(ValueError):
+        run_cfdc_route(
+            "generic",
+            description=_description(),
+            diagnostic_adapter=MutatingPlanAdapter(),
+        )
+
+
+def test_description_guidance_extracts_only_verbatim_signals():
+    description = SystemDescription(
+        text="The manual says room temperature is recorded and heater voltage is commanded."
+    )
+
+    class ExtractingAdapter(GuidedFakeAdapter):
+        def guide_description(self, description, guidance):
+            return {
+                "guidance": [item.model_dump(mode="json") for item in guidance],
+                "observed_outputs": [
+                    {
+                        "name": "room temperature",
+                        "source_excerpt": "room temperature is recorded",
+                    }
+                ],
+                "actuators": [
+                    {
+                        "name": "heater voltage",
+                        "source_excerpt": "heater voltage is commanded",
+                    }
+                ],
+            }
+
+    report = run_cfdc_route(
+        "generic", description=description, diagnostic_adapter=ExtractingAdapter()
+    )
+
+    accumulated = report.diagnostic_session.accumulated_description
+    assert accumulated.observed_outputs == ["room temperature"]
+    assert accumulated.actuators == ["heater voltage"]
+    assert len(report.diagnostic_session.description_guidance) == 8
+
+
+@pytest.mark.parametrize("mutation", ["extra", "order", "provenance"])
+def test_description_guidance_rejects_shape_order_and_provenance_mutations(mutation):
+    class MutatingGuidanceAdapter(GuidedFakeAdapter):
+        def guide_description(self, description, guidance):
+            payload = super().guide_description(description, guidance)
+            if mutation == "extra":
+                payload["unexpected"] = True
+            elif mutation == "order":
+                payload["guidance"][0], payload["guidance"][1] = (
+                    payload["guidance"][1],
+                    payload["guidance"][0],
+                )
+            else:
+                payload["observed_outputs"][0]["source_excerpt"] = "not in source"
+            return payload
+
+    with pytest.raises(ValueError):
+        run_cfdc_route(
+            "generic",
+            description=_description(),
+            diagnostic_adapter=MutatingGuidanceAdapter(),
+        )
+
+
 def test_same_measurement_response_input_advances_profile_facts_to_model():
     adapter = GuidedFakeAdapter()
     initial = run_cfdc_route(
@@ -131,20 +429,42 @@ def test_same_measurement_response_input_advances_profile_facts_to_model():
 
 def test_new_profile_evidence_that_changes_classification_clears_downstream_artifacts():
     class ReclassifyingAdapter(GuidedFakeAdapter):
-        def diagnose(self, description):
-            if "multivariable interaction" in description.text:
-                payload = infer_structural_diagnosis(description).model_dump(
-                    mode="json"
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            if "multivariable interaction" not in measurement_response:
+                return super().extract_measurements(
+                    description,
+                    measurement_plan,
+                    measurement_response,
+                    previous_assessment,
                 )
-                payload["coupling_severity"] = {
-                    "status": "known",
-                    "value": "several inputs affect several outputs",
-                    "assessment": "severe_mimo",
-                    "confidence": 0.95,
-                    "evidence": ["Existing manual reports multivariable interaction."],
-                }
-                return payload
-            return super().diagnose(description)
+            return MeasurementAssessment(
+                status="need_more",
+                facts=[
+                    MeasuredFact(
+                        request_id="coupling_severity",
+                        source_excerpt=(
+                            "changing any one of several actuators noticeably changes "
+                            "several outputs"
+                        ),
+                        text_value=(
+                            "changing any one of several actuators noticeably changes "
+                            "several outputs"
+                        ),
+                    )
+                ],
+                gaps=[
+                    request.diagnostic_field_id
+                    for request in measurement_plan.requests
+                    if request.request_id != "coupling_severity"
+                ],
+                rationale="New structural evidence changes the coupling assessment.",
+            ).model_dump(mode="json")
 
     adapter = ReclassifyingAdapter()
     initial = run_cfdc_route(
@@ -198,6 +518,31 @@ def test_measurement_response_is_exclusive_with_legacy_text_inputs():
             assert "measurement_response" in str(exc)
         else:
             raise AssertionError("mutually exclusive inputs were accepted")
+
+
+def test_v4_session_rejects_specification_text_even_without_measurement_response():
+    adapter = GuidedFakeAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+
+    with pytest.raises(ValueError, match="measurement_response"):
+        run_cfdc_route(
+            "generic",
+            diagnostic_session_state=initial.diagnostic_session,
+            diagnostic_adapter=adapter,
+            specification_text="manual facts",
+        )
+
+
+def test_measurement_response_requires_an_existing_v4_session():
+    with pytest.raises(ValueError, match="diagnostic_session_state"):
+        run_cfdc_route(
+            "generic",
+            description=_description(),
+            diagnostic_adapter=GuidedFakeAdapter(),
+            measurement_response="record response",
+        )
 
 
 def test_profile_facts_require_explicit_simulation_boundary_confirmation():

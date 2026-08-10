@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from cfdc.models import (
     DescriptionGuidance,
+    DescriptionGuidanceAssessment,
     DiagnosticChecklistItem,
     MeasurementAssessment,
     MeasurementPlan,
@@ -12,7 +13,6 @@ from cfdc.models import (
     SystemDescription,
 )
 from cfdc.models.schemas import validate_measurement_assessment_for_plan
-
 
 DIAGNOSTIC_FIELD_IDS = (
     "open_loop_stability",
@@ -145,3 +145,110 @@ def validate_measurement_assessment(
     """Check adapter output against the active plan before a state transition."""
 
     validate_measurement_assessment_for_plan(plan, assessment)
+
+
+def validate_phrased_measurement_plan(
+    base_plan: MeasurementPlan,
+    candidate: MeasurementPlan | dict,
+) -> MeasurementPlan:
+    """Allow safe phrasing changes without allowing the LLM to replace the plan."""
+
+    phrased = MeasurementPlan.model_validate(candidate)
+    if len(phrased.requests) != len(base_plan.requests):
+        raise ValueError("phrased measurement plan must preserve all fixed requests")
+    identity_fields = (
+        "request_id",
+        "diagnostic_field_id",
+        "title",
+        "safety_scope",
+        "unit_hint",
+    )
+    for index, (expected, actual) in enumerate(
+        zip(base_plan.requests, phrased.requests, strict=True)
+    ):
+        for field_name in identity_fields:
+            if getattr(actual, field_name) != getattr(expected, field_name):
+                raise ValueError(
+                    "phrased measurement plan changed authoritative request "
+                    f"{index} field {field_name}"
+                )
+    if phrased.rationale != base_plan.rationale:
+        raise ValueError("phrased measurement plan must preserve deterministic rationale")
+    return phrased
+
+
+def apply_description_guidance(
+    description: SystemDescription,
+    payload: DescriptionGuidanceAssessment | dict,
+) -> tuple[SystemDescription, list[DescriptionGuidance]]:
+    """Validate strict guidance and verbatim signal provenance."""
+
+    assessment = DescriptionGuidanceAssessment.model_validate(payload)
+    for item in [*assessment.observed_outputs, *assessment.actuators]:
+        if item.source_excerpt not in description.text:
+            raise ValueError(
+                "description signal source_excerpt must appear verbatim in the original description"
+            )
+
+    def merged(existing: list[str], extracted) -> list[str]:
+        result = list(existing)
+        for item in extracted:
+            if item.name not in result:
+                result.append(item.name)
+        return result
+
+    updated = description.model_copy(
+        update={
+            "observed_outputs": merged(
+                description.observed_outputs, assessment.observed_outputs
+            ),
+            "actuators": merged(description.actuators, assessment.actuators),
+        }
+    )
+    return updated, assessment.guidance
+
+
+def render_measurement_evidence(
+    assessments: list[MeasurementAssessment],
+) -> str:
+    """Render validated facts deterministically without retaining raw responses."""
+
+    lines = ["Validated diagnostic measurement evidence:"]
+    for round_index, assessment in enumerate(assessments, start=1):
+        for fact in assessment.facts:
+            value = (
+                f"numeric_value={fact.numeric_value:.17g}; unit={fact.unit}"
+                if fact.numeric_value is not None
+                else f"text_value={fact.text_value}"
+            )
+            lines.extend(
+                [
+                    f"round={round_index}; request_id={fact.request_id}; {value}",
+                    "source_excerpt:",
+                    fact.source_excerpt,
+                ]
+            )
+    return "\n".join(lines)
+
+
+def normalized_measurement_description(
+    description: SystemDescription,
+    assessments: list[MeasurementAssessment],
+) -> SystemDescription:
+    """Build the deterministic formal-diagnosis view with newest facts winning."""
+
+    latest_facts = {}
+    for assessment in assessments:
+        for fact in assessment.facts:
+            latest_facts[fact.request_id] = fact
+    effective = MeasurementAssessment(
+        status="ready",
+        facts=list(latest_facts.values()),
+        rationale="Latest validated fact per diagnostic request.",
+    )
+    marker = "\n\nValidated diagnostic measurement evidence:"
+    original_text = description.text.split(marker, maxsplit=1)[0]
+    evidence_text = render_measurement_evidence([effective])
+    return description.model_copy(
+        update={"text": f"{original_text}\n\n{evidence_text}"}
+    )

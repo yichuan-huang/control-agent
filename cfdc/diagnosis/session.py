@@ -9,9 +9,12 @@ from uuid import uuid4
 from cfdc.diagnosis.engine import DiagnosticEngine
 from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.diagnosis.measurements import (
+    apply_description_guidance,
     build_diagnostic_checklist,
     build_measurement_plan,
+    render_measurement_evidence,
     validate_measurement_assessment,
+    validate_phrased_measurement_plan,
 )
 from cfdc.evidence import plant_id_for_description, validate_evidence_package
 from cfdc.models import (
@@ -83,24 +86,53 @@ def start_diagnostic_session(
 ) -> DiagnosticSessionState:
     """Create a v4 session without making a classification or profile selection."""
 
-    resolved_diagnosis = diagnosis or _diagnose(
-        description, diagnostic_adapter, use_mechanism_cards
+    guided = diagnostic_adapter is not None and hasattr(
+        diagnostic_adapter, "guide_description"
     )
-    checklist = build_diagnostic_checklist(description, resolved_diagnosis)
+    accumulated_description = description
+    if guided:
+        preliminary_diagnosis = DiagnosticEngine(
+            adapter=None, use_mechanism_cards=use_mechanism_cards
+        ).diagnose(description)
+        preliminary_checklist = build_diagnostic_checklist(
+            description, preliminary_diagnosis
+        )
+        accumulated_description, guided_items = apply_description_guidance(
+            description,
+            diagnostic_adapter.guide_description(
+                description, [item.guidance for item in preliminary_checklist]
+            ),
+        )
+        resolved_diagnosis = DiagnosticEngine(
+            adapter=None, use_mechanism_cards=use_mechanism_cards
+        ).diagnose(accumulated_description)
+        checklist = build_diagnostic_checklist(
+            accumulated_description, resolved_diagnosis
+        )
+        checklist = [
+            item.model_copy(update={"guidance": guidance})
+            for item, guidance in zip(checklist, guided_items, strict=True)
+        ]
+    else:
+        resolved_diagnosis = diagnosis or _diagnose(
+            description, diagnostic_adapter, use_mechanism_cards
+        )
+        checklist = build_diagnostic_checklist(description, resolved_diagnosis)
     measurement_plan = build_measurement_plan(checklist)
     if diagnostic_adapter is not None and hasattr(
         diagnostic_adapter, "phrase_measurement_plan"
     ):
-        measurement_plan = type(measurement_plan).model_validate(
+        measurement_plan = validate_phrased_measurement_plan(
+            measurement_plan,
             diagnostic_adapter.phrase_measurement_plan(
-                description, checklist, measurement_plan
-            )
+                accumulated_description, checklist, measurement_plan
+            ),
         )
     return DiagnosticSessionState(
         session_id=f"diagnostic-{uuid4().hex[:16]}",
         route_id=route_id,
         initial_description=description,
-        accumulated_description=description,
+        accumulated_description=accumulated_description,
         current_diagnosis=resolved_diagnosis,
         description_guidance=[item.guidance for item in checklist],
         checklist=checklist,
@@ -142,7 +174,25 @@ def continue_description_session(
     accumulated = state.accumulated_description.model_copy(
         update={"text": f"{state.accumulated_description.text}\n\n{evidence}"}
     )
-    diagnosis = _diagnose(accumulated, diagnostic_adapter, use_mechanism_cards)
+    guided = diagnostic_adapter is not None and hasattr(
+        diagnostic_adapter, "guide_description"
+    )
+    if guided:
+        preliminary = DiagnosticEngine(
+            adapter=None, use_mechanism_cards=use_mechanism_cards
+        ).diagnose(accumulated)
+        preliminary_checklist = build_diagnostic_checklist(accumulated, preliminary)
+        accumulated, guided_items = apply_description_guidance(
+            accumulated,
+            diagnostic_adapter.guide_description(
+                accumulated, [item.guidance for item in preliminary_checklist]
+            ),
+        )
+        diagnosis = DiagnosticEngine(
+            adapter=None, use_mechanism_cards=use_mechanism_cards
+        ).diagnose(accumulated)
+    else:
+        diagnosis = _diagnose(accumulated, diagnostic_adapter, use_mechanism_cards)
     turn = DiagnosticTurn(
         turn_index=state.description_turn_count + 1,
         questions=["supplemental_description"],
@@ -151,14 +201,20 @@ def continue_description_session(
         diagnosis=diagnosis,
     )
     checklist = build_diagnostic_checklist(accumulated, diagnosis)
+    if guided:
+        checklist = [
+            item.model_copy(update={"guidance": guidance})
+            for item, guidance in zip(checklist, guided_items, strict=True)
+        ]
     measurement_plan = build_measurement_plan(checklist)
     if diagnostic_adapter is not None and hasattr(
         diagnostic_adapter, "phrase_measurement_plan"
     ):
-        measurement_plan = type(measurement_plan).model_validate(
+        measurement_plan = validate_phrased_measurement_plan(
+            measurement_plan,
             diagnostic_adapter.phrase_measurement_plan(
                 accumulated, checklist, measurement_plan
-            )
+            ),
         )
     updates = {
         "accumulated_description": accumulated,
@@ -261,8 +317,15 @@ def submit_measurement_assessment(
         "refusal_reason": None,
     }
     if typed_assessment.status == "ready":
+        evidence_text = render_measurement_evidence(updates["measurement_history"])
+        accumulated = state.accumulated_description.model_copy(
+            update={
+                "text": f"{state.accumulated_description.text}\n\n{evidence_text}"
+            }
+        )
         updates.update(
             {
+                "accumulated_description": accumulated,
                 "evidence_level": "measurement_verified",
                 "status": "measurement_verified",
             }

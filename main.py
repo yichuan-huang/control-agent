@@ -391,6 +391,13 @@ def main() -> None:
     diagnostic_answers = parse_diagnostic_answers(args.diagnostic_answer)
     if diagnostic_answers and session_state is None:
         raise SystemExit("--diagnostic-answer requires --diagnostic-session-input")
+    if (
+        args.measurement_response is not None
+        or args.measurement_response_file is not None
+    ) and session_state is None:
+        raise SystemExit(
+            "--measurement-response requires --diagnostic-session-input"
+        )
     adapter = None
     if args.use_llm or args.diagnostic_eval_llm:
         try:
@@ -487,16 +494,30 @@ def main() -> None:
                 if args.measurement_response_file is not None
                 else args.measurement_response
             )
-        except OSError as exc:
+        except (OSError, UnicodeError) as exc:
             raise SystemExit(
                 f"invalid --measurement-response-file {args.measurement_response_file}: {exc}"
             ) from None
+        if measurement_response is not None and not measurement_response.strip():
+            source = (
+                "--measurement-response-file"
+                if args.measurement_response_file is not None
+                else "--measurement-response"
+            )
+            raise SystemExit(f"{source} must contain non-empty UTF-8 text")
         specification_parts = [
             item.strip()
             for item in [args.specification_text, *args.specification_answer]
             if item and item.strip()
         ]
         specification_text = "\n".join(specification_parts) or None
+        if specification_text is not None and (
+            session_state is not None or route_id == "generic"
+        ):
+            raise SystemExit(
+                "v4 guided sessions require --measurement-response; "
+                "--specification-text is unsupported"
+            )
         if measurement_response is not None and (
             diagnostic_answers
             or args.diagnostic_description is not None

@@ -10,6 +10,8 @@ from openai import OpenAI
 from cfdc.models import (
     ArchetypeClassification,
     ControlMethodProfileCatalog,
+    DescriptionGuidance,
+    DescriptionGuidanceAssessment,
     DiagnosticChecklistItem,
     MeasurementAssessment,
     MeasurementPlan,
@@ -34,6 +36,12 @@ class DiagnosticAdapter(Protocol):
         diagnosis: StructuralDiagnosis,
         classification: ArchetypeClassification,
         catalog: ControlMethodProfileCatalog,
+    ) -> dict[str, Any]: ...
+
+    def guide_description(
+        self,
+        description: SystemDescription,
+        guidance: list[DescriptionGuidance],
     ) -> dict[str, Any]: ...
 
     def phrase_measurement_plan(
@@ -431,6 +439,49 @@ class OpenAICompatibleDiagnosticAdapter:
         return MeasurementPlan.model_validate(parse_json_content(content)).model_dump(
             mode="json"
         )
+
+    def guide_description(self, description, guidance):
+        prompt = (
+            "Return one strict JSON object containing exactly the supplied eight "
+            "record/manual guidance entries in their fixed diagnostic-field order, "
+            "plus observed output and actuator names explicitly present in the "
+            "description. Every extracted name requires a non-empty verbatim source "
+            "excerpt copied from the description. Do not infer an unstated signal. "
+            "Guidance must remain record/manual-report-only and must never prescribe "
+            "a physical command, amplitude, or duration.\n\n"
+            "Required shape: {\"guidance\":[DescriptionGuidance x8],"
+            "\"observed_outputs\":[{\"name\":\"string\","
+            "\"source_excerpt\":\"verbatim string\"}],"
+            "\"actuators\":[{\"name\":\"string\","
+            "\"source_excerpt\":\"verbatim string\"}]}.\n"
+            f"description={description.model_dump_json()}\n"
+            f"guidance={json.dumps([item.model_dump(mode='json') for item in guidance], ensure_ascii=False)}"
+        )
+        options: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract description signals and return safe record-only "
+                        "guidance as strict JSON."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": self.temperature,
+            "max_tokens": min(max(self.max_tokens, 1400), 2400),
+            "response_format": {"type": "json_object"},
+        }
+        if self._disable_thinking:
+            options["extra_body"] = {"thinking": {"type": "disabled"}}
+        response = self.client.chat.completions.create(**options)
+        content = response.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("description guidance returned empty content")
+        return DescriptionGuidanceAssessment.model_validate(
+            parse_json_content(content)
+        ).model_dump(mode="json")
 
     def extract_measurements(
         self,

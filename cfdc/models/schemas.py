@@ -1184,6 +1184,47 @@ class DescriptionGuidance(CFDCModel):
         return normalized
 
 
+class DescriptionSignalEvidence(CFDCModel):
+    """One signal name extracted from a verbatim description excerpt."""
+
+    name: str = Field(min_length=1)
+    source_excerpt: str = Field(min_length=1)
+
+    @field_validator("name", "source_excerpt")
+    @classmethod
+    def strip_nonblank_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("description signal evidence must be non-empty")
+        return normalized
+
+
+class DescriptionGuidanceAssessment(CFDCModel):
+    """Strict LLM extraction result for the fixed description checklist."""
+
+    guidance: list[DescriptionGuidance] = Field(min_length=8, max_length=8)
+    observed_outputs: list[DescriptionSignalEvidence] = Field(default_factory=list)
+    actuators: list[DescriptionSignalEvidence] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_fixed_guidance_order(self) -> DescriptionGuidanceAssessment:
+        required = [
+            "open_loop_stability",
+            "minimum_phase",
+            "significant_delay",
+            "relative_degree",
+            "controllability_observability",
+            "nonlinearity_strength",
+            "coupling_severity",
+            "uncertainty_magnitude",
+        ]
+        if [item.diagnostic_field_id for item in self.guidance] != required:
+            raise ValueError(
+                "description guidance must preserve the fixed diagnostic-field order"
+            )
+        return self
+
+
 class DiagnosticChecklistItem(CFDCModel):
     diagnostic_field_id: DiagnosticFieldId
     label: str = Field(min_length=1)

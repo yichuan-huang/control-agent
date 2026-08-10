@@ -5,8 +5,8 @@ from pydantic import ValidationError
 
 from cfdc.diagnosis import (
     build_diagnostic_checklist,
-    continue_diagnostic_session,
     continue_description_session,
+    continue_diagnostic_session,
     start_diagnostic_session,
     submit_measurement_assessment,
 )
