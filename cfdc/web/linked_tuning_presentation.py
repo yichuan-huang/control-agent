@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 import pandas as pd
 
 from cfdc.lab import SimulationSession, extract_tunable_parameters
+from cfdc.web.linked_tuning_bounds import output_bound_gap
 
 _STABILITY_LABELS = {
     "stable": "稳定",
@@ -29,36 +32,135 @@ def _latest_traces(session: SimulationSession):
     return session.trials[-1].traces if session.trials else []
 
 
+def _canonical_digest(payload: Any) -> str:
+    serialized = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _scenario_identity(trace) -> str:
+    explicit_id = getattr(trace, "scenario_id", None)
+    if isinstance(explicit_id, str) and explicit_id:
+        return f"id:{explicit_id}"
+    return "reference:" + _canonical_digest(trace.reference)
+
+
+def _initial_condition_identity(trace) -> str:
+    initial_conditions = {
+        name: values[0]
+        for name, values in (trace.states or trace.outputs).items()
+        if values
+    }
+    return _canonical_digest(initial_conditions)
+
+
+def _scenario_map(trial) -> dict[tuple[str, str, int], Any]:
+    traces = trial.traces
+    evidence_ids = [
+        evidence.scenario_id for evidence in trial.stability.scenario_evidence
+    ]
+    explicit_ids = (
+        evidence_ids
+        if len(evidence_ids) == len(traces)
+        and len(evidence_ids) == len(set(evidence_ids))
+        else [None] * len(traces)
+    )
+    grouped: dict[str, list[Any]] = {}
+    for trace, explicit_id in zip(traces, explicit_ids):
+        identity = (
+            f"evidence:{explicit_id}"
+            if explicit_id is not None
+            else _scenario_identity(trace)
+        )
+        grouped.setdefault(identity, []).append(trace)
+    scenarios: dict[tuple[str, str, int], Any] = {}
+    for identity, matches in grouped.items():
+        occurrences: dict[str, int] = {}
+        for trace in matches:
+            disambiguator = (
+                _initial_condition_identity(trace) if len(matches) > 1 else ""
+            )
+            occurrence = occurrences.get(disambiguator, 0)
+            occurrences[disambiguator] = occurrence + 1
+            scenarios[(identity, disambiguator, occurrence)] = trace
+    return scenarios
+
+
 def _append_trace_channels(
     rows: list[dict[str, Any]],
     *,
-    traces,
+    scenario: str,
+    trace,
     group: str,
     channel_attribute: str,
 ) -> None:
-    for scenario_index, trace in enumerate(traces, start=1):
-        scenario = f"scenario-{scenario_index}"
-        channels = getattr(trace, channel_attribute)
-        for name, values in channels.items():
-            rows.extend(
-                {
-                    "time_s": time_s,
-                    "value": value,
-                    "series": f"{scenario} · {group} · {name}",
-                }
-                for time_s, value in zip(trace.time_s, values)
-            )
+    channels = getattr(trace, channel_attribute)
+    for name, values in channels.items():
+        rows.extend(
+            {
+                "time_s": time_s,
+                "value": value,
+                "series": f"{scenario} · {group} · {name}",
+            }
+            for time_s, value in zip(trace.time_s, values)
+        )
 
 
 def _collect_bound_time_axes(
-    axes: dict[tuple[int, str], set[float]],
+    axes: dict[tuple[str, str], set[float]],
     *,
-    traces,
+    scenario: str,
+    trace,
     channel_attribute: str,
 ) -> None:
-    for scenario_index, trace in enumerate(traces, start=1):
-        for name in getattr(trace, channel_attribute):
-            axes.setdefault((scenario_index, name), set()).update(trace.time_s)
+    for name in getattr(trace, channel_attribute):
+        axes.setdefault((scenario, name), set()).update(trace.time_s)
+
+
+def _append_scenario_trace(
+    rows: list[dict[str, Any]],
+    bound_time_axes: dict[tuple[str, str], set[float]],
+    *,
+    scenario: str,
+    trace,
+    group: str,
+    channel_attribute: str,
+) -> None:
+    _append_trace_channels(
+        rows,
+        scenario=scenario,
+        trace=trace,
+        group=group,
+        channel_attribute=channel_attribute,
+    )
+    _collect_bound_time_axes(
+        bound_time_axes,
+        scenario=scenario,
+        trace=trace,
+        channel_attribute=channel_attribute,
+    )
+
+
+def _scenario_union(first, latest):
+    first_by_identity = _scenario_map(first)
+    latest_by_identity = _scenario_map(latest)
+    identities = [
+        *first_by_identity,
+        *(key for key in latest_by_identity if key not in first_by_identity),
+    ]
+    return [
+        (
+            f"scenario-{index}",
+            first_by_identity.get(identity),
+            latest_by_identity.get(identity),
+        )
+        for index, identity in enumerate(identities, start=1)
+    ]
 
 
 def output_plot_frame(session: SimulationSession) -> pd.DataFrame:
@@ -67,47 +169,41 @@ def output_plot_frame(session: SimulationSession) -> pd.DataFrame:
         return _empty_line_frame()
     first = session.trials[0]
     latest = session.trials[-1]
-    _append_trace_channels(
-        rows,
-        traces=latest.traces,
-        group="参考",
-        channel_attribute="reference",
-    )
-    bound_time_axes: dict[tuple[int, str], set[float]] = {}
-    _collect_bound_time_axes(
-        bound_time_axes,
-        traces=latest.traces,
-        channel_attribute="reference",
-    )
-    _append_trace_channels(
-        rows,
-        traces=first.traces,
-        group="初始控制器输出",
-        channel_attribute="outputs",
-    )
-    _collect_bound_time_axes(
-        bound_time_axes,
-        traces=first.traces,
-        channel_attribute="outputs",
-    )
-    if len(session.trials) > 1 or latest.rolled_back:
-        latest_label = (
-            "最新执行输出（未采纳）" if latest.rolled_back else "最新执行输出"
-        )
-        _append_trace_channels(
-            rows,
-            traces=latest.traces,
-            group=latest_label,
-            channel_attribute="outputs",
-        )
-        _collect_bound_time_axes(
-            bound_time_axes,
-            traces=latest.traces,
-            channel_attribute="outputs",
-        )
+    scenarios = _scenario_union(first, latest)
+    bound_time_axes: dict[tuple[str, str], set[float]] = {}
+    show_latest = len(session.trials) > 1 or latest.rolled_back
+    latest_label = "最新执行输出（未采纳）" if latest.rolled_back else "最新执行输出"
+    for scenario, first_trace, latest_trace in scenarios:
+        reference_trace = latest_trace or first_trace
+        if reference_trace is not None:
+            _append_scenario_trace(
+                rows,
+                bound_time_axes,
+                scenario=scenario,
+                trace=reference_trace,
+                group="参考",
+                channel_attribute="reference",
+            )
+        if first_trace is not None:
+            _append_scenario_trace(
+                rows,
+                bound_time_axes,
+                scenario=scenario,
+                trace=first_trace,
+                group="初始控制器输出",
+                channel_attribute="outputs",
+            )
+        if show_latest and latest_trace is not None:
+            _append_scenario_trace(
+                rows,
+                bound_time_axes,
+                scenario=scenario,
+                trace=latest_trace,
+                group=latest_label,
+                channel_attribute="outputs",
+            )
     output_bounds = session.run_config.output_bounds if session.run_config else {}
-    for (scenario_index, name), time_axis in sorted(bound_time_axes.items()):
-        scenario = f"scenario-{scenario_index}"
+    for (scenario, name), time_axis in sorted(bound_time_axes.items()):
         bounds = output_bounds.get(name)
         if bounds is None:
             continue
@@ -226,28 +322,6 @@ def _status_markdown(session: SimulationSession) -> str:
             " 请重新请求；系统不会接受参数不变、越界或改变控制器结构的建议。"
         )
     return status
-
-
-def output_bound_gap(session: SimulationSession) -> str | None:
-    config = session.run_config
-    if config is None or not config.output_bounds:
-        return "缺少软件仿真输出边界，请返回测量阶段补充每个输出通道的数值上下限。"
-    expected_channels = set(config.reference)
-    expected_channels.update(
-        name
-        for trial in session.trials
-        for trace in trial.traces
-        for channels in (trace.reference, trace.outputs)
-        for name in channels
-    )
-    missing = sorted(expected_channels - set(config.output_bounds))
-    if missing:
-        return (
-            "以下输出通道缺少软件仿真边界："
-            + "、".join(missing)
-            + "。请返回测量阶段补充每个输出通道的数值上下限。"
-        )
-    return None
 
 
 def _format_poles(decision) -> str:

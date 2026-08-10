@@ -35,6 +35,7 @@ from cfdc.models import (
     SystemDescription,
     TransferFunctionModelSpec,
 )
+from cfdc.web.linked_tuning_bounds import output_bound_gap
 from cfdc.web.linked_tuning_presentation import (
     empty_linked_tuning_view,
     render_linked_tuning,
@@ -49,6 +50,12 @@ def decode_lab_state(payload: Mapping[str, Any]):
     if not isinstance(payload, Mapping) or not payload:
         raise ValueError("控制器调试尚未创建会话")
     return validate_session_mapping(payload)
+
+
+def _require_output_bounds(session) -> None:
+    gap = output_bound_gap(session)
+    if gap:
+        raise ValueError(gap)
 
 
 def _canonical_sha256(value: Mapping[str, Any]) -> str:
@@ -308,6 +315,7 @@ def run_linked_trial(
     """Apply allowed first-round edits and execute exactly one trial."""
 
     session = decode_lab_state(payload)
+    _require_output_bounds(session)
     parameters = _parameter_mapping(parameter_rows)
     if not session.trials:
         if session.trial_controller is None or session.tuning_profile is None:
@@ -369,8 +377,10 @@ def approve_and_run_linked_gain(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Approve the pending LLM proposal and run exactly one trial."""
 
+    session = decode_lab_state(payload)
+    _require_output_bounds(session)
     session = approve_llm_proposal(
-        decode_lab_state(payload),
+        session,
         expected_revision=expected_revision,
     )
     session = run_next_trial(
@@ -413,6 +423,7 @@ __all__ = [
     "decode_lab_state",
     "encode_lab_state",
     "link_stage5_report",
+    "output_bound_gap",
     "reject_linked_gain",
     "request_linked_gain",
     "restore_linked_initial",
