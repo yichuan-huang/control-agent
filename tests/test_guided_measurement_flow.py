@@ -687,6 +687,199 @@ def test_truncated_profile_llm_json_keeps_ui_flow_and_uses_grounded_local_facts(
     assert completed.controller is not None
 
 
+def test_chinese_ready_record_advances_web_state_and_accepts_profile_facts(
+    monkeypatch,
+):
+    diagnostic_facts = {
+        "open_loop_stability": (
+            "油门角度恢复到基准值 0 deg 后，车速偏差逐渐减小并最终保持有界，"
+            "没有出现自行增长或持续振荡。"
+        ),
+        "minimum_phase": (
+            "油门角度增加 1 deg 后，车速最初向增加方向变化；油门角度减少 1 deg 后，"
+            "车速最初向降低方向变化，初始方向与最终方向一致，没有反向响应。"
+        ),
+        "significant_delay": (
+            "油门角度在 10.0 s 改变，车速在 10.1 s 首次出现可辨识变化，记录到的"
+            "响应开始时间为 0.1 s，没有独立的静默延迟区间。"
+        ),
+        "relative_degree": (
+            "车速响应呈单调的一阶形状，主要响应时间约为 5 s，只观察到一个明显的"
+            "快慢阶段，没有第二个独立动态阶段。"
+        ),
+        "controllability_observability": (
+            "每次油门角度变化都会引起可记录的车速变化，油门角度和车速采用同一时钟"
+            "连续记录，相关运动可以由这些同步记录重建。"
+        ),
+        "nonlinearity_strength": (
+            "油门角度分别变化 +0.5 deg、-0.5 deg、+1 deg 和 -1 deg 时，稳态车速变化"
+            "约为 +5 mph、-5 mph、+10 mph 和 -10 mph，正反方向近似对称且成比例，"
+            "没有明显死区、滞回或幅值截断。"
+        ),
+        "coupling_severity": (
+            "系统只有一个主要控制输入油门角度和一个被测输出车速，油门角度主要影响"
+            "车速，其他量只作为外部扰动进入。"
+        ),
+        "uncertainty_magnitude": (
+            "在不同软件负载条件下，稳态增益保持在 9 至 11 mph/deg，响应时间保持在 "
+            "4.5 至 5.5 s，响应方向和单输入单输出通道结构没有改变。"
+        ),
+    }
+    diagnostic_response = "\n".join(
+        f"{request_id}：{excerpt}"
+        for request_id, excerpt in diagnostic_facts.items()
+    )
+
+    class ChineseRecordAdapter(GuidedFakeAdapter):
+        def guide_description(self, description, guidance):
+            del description
+            return {
+                "guidance": [item.model_dump(mode="json") for item in guidance],
+                "observed_outputs": [
+                    {"name": "车速", "source_excerpt": "车速"}
+                ],
+                "actuators": [
+                    {"name": "油门角度", "source_excerpt": "油门角度"}
+                ],
+            }
+
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            del description
+            if measurement_response == diagnostic_response:
+                return MeasurementAssessment(
+                    status="ready",
+                    facts=[
+                        MeasuredFact(
+                            request_id=request.request_id,
+                            source_excerpt=diagnostic_facts[request.request_id],
+                            text_value=diagnostic_facts[request.request_id],
+                        )
+                        for request in measurement_plan.requests
+                    ],
+                    rationale="八项现有记录均已提取。",
+                ).model_dump(mode="json")
+            assert previous_assessment is not None
+            assert previous_assessment.status == "ready"
+            return previous_assessment.model_dump(mode="json")
+
+    adapter = ChineseRecordAdapter()
+    monkeypatch.setattr("cfdc.web.service.build_adapter", lambda *args: adapter)
+    description = (
+        "这是一个在道路上行驶的汽车纵向运动系统。控制输入是油门角度，输出是车速。"
+    )
+    report, state = start_app_run(
+        description,
+        "车速",
+        "油门角度",
+        "",
+        None,
+        True,
+        "https://provider.example/v1",
+        "provider-model",
+        "provider-secret",
+    )
+    assert report.status == "awaiting_measurements"
+
+    released, released_state = submit_app_measurement_response(
+        state,
+        diagnostic_response,
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="provider-secret",
+    )
+
+    assert released.status == "awaiting_profile_measurements"
+    assert released.diagnostic_session.status == "awaiting_profile_measurements"
+    assert released_state["session"]["status"] == "awaiting_profile_measurements"
+
+    completed, completed_state = submit_app_measurement_response(
+        released_state,
+        (
+            "input_change=1 deg; steady_output_change=10 mph; "
+            "response_time_s=5 s; input_min=-3 deg; input_max=3 deg; "
+            "output_min=45 mph; output_max=80 mph;"
+        ),
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="provider-secret",
+        simulation_bounds_confirmed=True,
+    )
+
+    assert completed.status == "candidate_unvalidated"
+    assert completed.compiled_specification_model is not None
+    assert completed.controller is not None
+    assert completed_state["session"] is None
+
+
+def test_semantically_unresolved_ready_assessment_becomes_retryable_gaps():
+    class UnresolvedRecordAdapter(GuidedFakeAdapter):
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            del description, previous_assessment
+            return MeasurementAssessment(
+                status="ready",
+                facts=[
+                    MeasuredFact(
+                        request_id=request.request_id,
+                        source_excerpt=(
+                            f"opaque record statement for {request.request_id}"
+                        ),
+                        text_value=(
+                            f"opaque record statement for {request.request_id}"
+                        ),
+                    )
+                    for request in measurement_plan.requests
+                ],
+                rationale="The adapter claimed every field was covered.",
+            ).model_dump(mode="json")
+
+    adapter = UnresolvedRecordAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+    response = "\n".join(
+        f"opaque record statement for {request.request_id}"
+        for request in initial.diagnostic_session.measurement_plan.requests
+    )
+
+    retryable = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=response,
+    )
+
+    assert retryable.status == "measurement_needs_more"
+    assert retryable.diagnostic_session.status == "measurement_needs_more"
+    assert retryable.diagnostic_session.measurement_assessment.status == "need_more"
+    assert retryable.diagnostic_session.measurement_assessment.facts == []
+    assert retryable.diagnostic_session.measurement_assessment.gaps == [
+        "open_loop_stability",
+        "minimum_phase",
+        "significant_delay",
+        "relative_degree",
+        "controllability_observability",
+        "nonlinearity_strength",
+        "coupling_severity",
+        "uncertainty_magnitude",
+    ]
+    assert all(
+        assessment.status != "ready"
+        for assessment in retryable.diagnostic_session.measurement_history
+    )
+
+
 def test_explicit_profile_unknown_gap_retracts_prior_fact_and_invalidates_release():
     unknown_response = (
         "The current record does not establish the initial response direction; "

@@ -28,6 +28,29 @@ from cfdc.specifications import (
     validate_specification_assessment_payload,
 )
 
+_DIAGNOSTIC_FACTS = {
+    "open_loop_stability": "settles or remains bounded",
+    "minimum_phase": (
+        "starts in its final direction rather than moving the opposite way first"
+    ),
+    "significant_delay": (
+        "begins within one sample without a separate silent interval"
+    ),
+    "relative_degree": "one or two dominant storage or integration processes",
+    "controllability_observability": (
+        "all relevant motion can be reconstructed from these synchronized records"
+    ),
+    "nonlinearity_strength": (
+        "small positive and negative trials are smooth, reversible, and nearly proportional"
+    ),
+    "coupling_severity": (
+        "one main physical route from actuation to the measured motion"
+    ),
+    "uncertainty_magnitude": (
+        "change the response rate and final level by a modest amount"
+    ),
+}
+
 
 def _heater_description() -> SystemDescription:
     return SystemDescription(
@@ -47,8 +70,8 @@ def _profile_measurement_session():
         facts=[
             MeasuredFact(
                 request_id=request.request_id,
-                source_excerpt=f"Existing record for {request.title}.",
-                text_value="verified observation",
+                source_excerpt=_DIAGNOSTIC_FACTS[request.request_id],
+                text_value=_DIAGNOSTIC_FACTS[request.request_id],
             )
             for request in session.measurement_plan.requests
         ],
@@ -57,10 +80,7 @@ def _profile_measurement_session():
         session,
         measurement_assessment,
         raw_response="\n".join(
-            [
-                *(fact.source_excerpt for fact in measurement_assessment.facts),
-                "verified observation",
-            ]
+            fact.source_excerpt for fact in measurement_assessment.facts
         ),
         expected_revision=session.revision,
     )

@@ -183,6 +183,7 @@ def _direct_eight_segment_assessments(text: str) -> dict[str, str]:
                     "starts in its final direction rather than moving the opposite way first",
                     "首次有效变化与最终方向一致，不会先向相反方向运动",
                     "开始时就沿最终方向变化，不会先向相反方向运动",
+                    "初始方向与最终方向一致，没有反向响应",
                 ),
             ),
             (
@@ -212,6 +213,7 @@ def _direct_eight_segment_assessments(text: str) -> dict[str, str]:
                     "begins within one sample without a separate silent interval",
                     "首次记录变化会及时开始，不会出现独立静默区间",
                     "一个采样周期内就开始变化，不会出现独立静默区间",
+                    "没有独立的静默延迟区间",
                 ),
             ),
         ],
@@ -223,6 +225,8 @@ def _direct_eight_segment_assessments(text: str) -> dict[str, str]:
                     "one or two dominant storage or integration processes",
                     "至多经过两个主导储能或积分环节",
                     "只涉及一到两个主导储能或积分过程",
+                    "响应呈单调的一阶形状",
+                    "只观察到一个明显的快慢阶段",
                 ),
             ),
             (
@@ -243,6 +247,7 @@ def _direct_eight_segment_assessments(text: str) -> dict[str, str]:
                     "all relevant motion can be reconstructed from these synchronized records",
                     "每个相关运动模态至少出现在一项记录中",
                     "这些同步记录足以重建所有相关运动",
+                    "相关运动可以由这些同步记录重建",
                 ),
             ),
             (
@@ -266,6 +271,7 @@ def _direct_eight_segment_assessments(text: str) -> dict[str, str]:
                     "小幅正向和反向试验保持平滑、可逆且近似成比例",
                     "小幅正向和反向试验都平滑、可逆且近似成比例",
                     "响应平滑、可逆且近似成比例",
+                    "正反方向近似对称且成比例",
                 ),
             ),
             (
@@ -374,6 +380,17 @@ def _direct_eight_segment_assessments(text: str) -> dict[str, str]:
         ]
         if len(matches) == 1:
             resolved[field_name] = matches[0]
+    if (
+        "只有一个主要控制输入" in text
+        and "一个被测输出" in text
+    ):
+        resolved["coupling_severity"] = CouplingAssessment.SISO.value
+    if (
+        "稳态增益保持在" in text
+        and "响应时间保持在" in text
+        and "通道结构没有改变" in text
+    ):
+        resolved["uncertainty_magnitude"] = UncertaintyAssessment.SMALL.value
     return resolved
 
 

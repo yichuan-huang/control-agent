@@ -287,8 +287,8 @@ def test_complete_record_assessment_sets_the_measurement_verified_gate_only():
         facts=[
             MeasuredFact(
                 request_id=request.request_id,
-                source_excerpt=f"Existing record: {request.title} was reviewed.",
-                text_value="reported observation",
+                source_excerpt=_GROUNDED_FACTS[request.request_id],
+                text_value=_GROUNDED_FACTS[request.request_id],
             )
             for request in state.measurement_plan.requests
         ],
@@ -531,8 +531,8 @@ def _ready_assessment(state):
         facts=[
             MeasuredFact(
                 request_id=request.request_id,
-                source_excerpt=f"Existing record: {request.title} was reviewed.",
-                text_value="reported observation",
+                source_excerpt=_GROUNDED_FACTS[request.request_id],
+                text_value=_GROUNDED_FACTS[request.request_id],
             )
             for request in state.measurement_plan.requests
         ],

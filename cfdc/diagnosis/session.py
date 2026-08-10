@@ -326,6 +326,45 @@ def submit_measurement_assessment(
         raw_response,
         previous_assessment=state.measurement_assessment,
     )
+    reduced_diagnosis = None
+    if typed_assessment.status == "ready":
+        reduced_diagnosis = reduce_measurement_history_to_diagnosis(
+            state.measurement_plan,
+            [*state.measurement_history, typed_assessment],
+        )
+        unresolved_field_ids = [
+            request.diagnostic_field_id
+            for request in state.measurement_plan.requests
+            if getattr(
+                reduced_diagnosis, request.diagnostic_field_id
+            ).status
+            == "unknown"
+        ]
+        if unresolved_field_ids:
+            unresolved_request_ids = {
+                request.request_id
+                for request in state.measurement_plan.requests
+                if request.diagnostic_field_id in unresolved_field_ids
+            }
+            typed_assessment = MeasurementAssessment(
+                status="need_more",
+                facts=[
+                    fact
+                    for fact in typed_assessment.facts
+                    if fact.request_id not in unresolved_request_ids
+                ],
+                gaps=unresolved_field_ids,
+                rationale=(
+                    "The deterministic diagnostic reducer could not resolve every "
+                    "field from the submitted excerpts. Please clarify the listed gaps."
+                ),
+            )
+            validate_grounded_measurement_assessment(
+                state.measurement_plan,
+                typed_assessment,
+                raw_response,
+                previous_assessment=state.measurement_assessment,
+            )
     round_count = state.measurement_round_count + 1
     updates = {
         "measurement_assessment": typed_assessment,
@@ -343,6 +382,8 @@ def submit_measurement_assessment(
         ),
         "refusal_reason": None,
     }
+    if reduced_diagnosis is not None:
+        updates["current_diagnosis"] = reduced_diagnosis
     if typed_assessment.status == "ready":
         evidence_text = render_measurement_evidence(updates["measurement_history"])
         accumulated = state.accumulated_description.model_copy(
