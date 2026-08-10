@@ -122,6 +122,8 @@ def _run_ready_session(
     include_trajectory: bool,
 ) -> CFDCRunReport:
     class SessionReplayAdapter:
+        guided_measurement_verified = True
+
         def diagnose(self, description):
             del description
             return session.current_diagnosis.model_dump(mode="json")
@@ -129,6 +131,29 @@ def _run_ready_session(
         def select_profile(self, description, diagnosis, classification, catalog):
             del description, diagnosis, classification, catalog
             return session.semantic_selection.model_dump(mode="json")
+
+        def guide_description(self, description, guidance):
+            del description, guidance
+            raise AssertionError("evidence replay must not restart description guidance")
+
+        def phrase_measurement_plan(self, description, checklist, plan):
+            del description, checklist, plan
+            raise AssertionError("evidence replay must not replace the measurement plan")
+
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            del (
+                description,
+                measurement_plan,
+                measurement_response,
+                previous_assessment,
+            )
+            raise AssertionError("evidence replay must not extract new measurements")
 
     if session.status == "ready_for_experiments":
         if session.current_diagnosis is None or session.semantic_selection is None:
@@ -314,6 +339,11 @@ def continue_app_run(
         updated.model_dump(mode="json")
         if updated.status
         in {
+            "collecting_description",
+            "awaiting_measurements",
+            "measurement_needs_more",
+            "measurement_conflict",
+            "awaiting_profile_measurements",
             "collecting_information",
             "awaiting_specifications",
             "need_more_specifications",
@@ -379,6 +409,8 @@ def submit_app_measurement_response(
 
 def _session_replay_adapter(session: DiagnosticSessionState):
     class SessionReplayAdapter:
+        guided_measurement_verified = True
+
         def diagnose(self, description):
             del description
             return session.current_diagnosis.model_dump(mode="json")
@@ -386,6 +418,29 @@ def _session_replay_adapter(session: DiagnosticSessionState):
         def select_profile(self, description, diagnosis, classification, catalog):
             del description, diagnosis, classification, catalog
             return session.semantic_selection.model_dump(mode="json")
+
+        def guide_description(self, description, guidance):
+            del description, guidance
+            raise AssertionError("evidence replay must not restart description guidance")
+
+        def phrase_measurement_plan(self, description, checklist, plan):
+            del description, checklist, plan
+            raise AssertionError("evidence replay must not replace the measurement plan")
+
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            del (
+                description,
+                measurement_plan,
+                measurement_response,
+                previous_assessment,
+            )
+            raise AssertionError("evidence replay must not extract new measurements")
 
     return SessionReplayAdapter()
 

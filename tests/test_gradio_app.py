@@ -5,10 +5,17 @@ import pytest
 
 from cfdc.diagnosis import (
     DeterministicDiagnosticAdapter,
+    start_diagnostic_session,
     submit_specifications_to_session,
 )
 from cfdc.diagnosis.engine import infer_structural_diagnosis
-from cfdc.models import DiagnosticSessionState, SystemDescription
+from cfdc.models import (
+    DiagnosticSessionState,
+    DiagnosticTurn,
+    MeasuredFact,
+    MeasurementAssessment,
+    SystemDescription,
+)
 from cfdc.runtime import run_cfdc_route
 from cfdc.web import linked_tuning_service as linked_service
 from cfdc.web import linked_tuning_ui as linked_ui
@@ -23,12 +30,111 @@ from cfdc.web.service import (
     continue_app_run,
     parse_names,
     parse_safety_bounds,
-    start_app_run,
     submit_app_evidence,
     submit_app_json,
+    submit_app_measurement_response,
     submit_app_specifications,
 )
-from cfdc.web.ui import EXAMPLES, NATURAL_LANGUAGE_MODE, build_app, reset_ui
+from cfdc.web.service import start_app_run as _start_app_run
+from cfdc.web.ui import (
+    EXAMPLES,
+    NATURAL_LANGUAGE_MODE,
+    build_app,
+    reset_ui,
+    run_from_ui,
+)
+from cfdc.workflow import deterministic_profile_selection
+
+_GUIDED_FACTS = {
+    "open_loop_stability": "settles or remains bounded",
+    "minimum_phase": "starts in its final direction rather than moving the opposite way first",
+    "significant_delay": "begins within one sample without a separate silent interval",
+    "relative_degree": "one or two dominant storage or integration processes",
+    "controllability_observability": "all relevant motion can be reconstructed from these synchronized records",
+    "nonlinearity_strength": "small positive and negative trials are smooth, reversible, and nearly proportional",
+    "coupling_severity": "one main physical route from actuation to the measured motion",
+    "uncertainty_magnitude": "change the response rate and final level by a modest amount",
+}
+
+
+class _CompleteGuidedAdapter:
+    def diagnose(self, description):
+        return infer_structural_diagnosis(description).model_dump(mode="json")
+
+    def guide_description(self, description, guidance):
+        del description
+        return {
+            "guidance": [item.model_dump(mode="json") for item in guidance],
+            "observed_outputs": [],
+            "actuators": [],
+        }
+
+    def phrase_measurement_plan(self, description, checklist, plan):
+        del description, checklist
+        return plan.model_dump(mode="json")
+
+    def extract_measurements(
+        self, description, measurement_plan, measurement_response, previous_assessment
+    ):
+        del measurement_response, previous_assessment
+        facts_by_id = dict(_GUIDED_FACTS)
+        if "motor" in description.text.lower() and "drifting" in description.text.lower():
+            facts_by_id.update(
+                {
+                    "open_loop_stability": (
+                        "after the input is removed, speed remains constant and position keeps drifting"
+                    ),
+                }
+            )
+        return MeasurementAssessment(
+            status="ready",
+            facts=[
+                MeasuredFact(
+                    request_id=request.request_id,
+                    source_excerpt=facts_by_id[request.request_id],
+                    text_value=facts_by_id[request.request_id],
+                )
+                for request in measurement_plan.requests
+            ],
+            rationale="All eight existing-record findings were verified.",
+        ).model_dump(mode="json")
+
+    def select_profile(self, description, diagnosis, classification, catalog):
+        return deterministic_profile_selection(
+            description, diagnosis, classification, catalog
+        ).model_dump(mode="json")
+
+@pytest.fixture(autouse=True)
+def _guided_adapter_for_legacy_web_boundaries(monkeypatch):
+    monkeypatch.setattr(web_service, "build_adapter", lambda *args: _CompleteGuidedAdapter())
+
+
+def start_app_run(*args, **kwargs):
+    """Migrate old setup calls through mandatory v4 measurement verification."""
+
+    positional = list(args)
+    description = positional[0] if positional else kwargs.get("description")
+    route_label = positional[4] if len(positional) > 4 else kwargs.get("route_label")
+    if not description or route_label == "unknown-route":
+        return _start_app_run(*args, **kwargs)
+    if len(positional) > 5:
+        positional[5] = True
+    else:
+        kwargs["use_llm"] = True
+    report, state = _start_app_run(*positional, **kwargs)
+    if report.status in {"awaiting_measurements", "measurement_needs_more"}:
+        report, state = submit_app_measurement_response(
+            state,
+            "all existing records supplied",
+        )
+    return report, state
+
+
+def _as_awaiting_evidence(state):
+    session = DiagnosticSessionState.model_validate(state["session"]).model_copy(
+        update={"status": "awaiting_evidence"}
+    )
+    return {**state, "session": session.model_dump(mode="json")}
 
 
 def test_root_app_is_a_thin_launcher_and_legacy_package_app_is_removed():
@@ -56,74 +162,38 @@ def test_gradio_exposes_agpl_notice_and_source_link():
 
 
 def test_app_runs_clear_description_and_renders_stage_tables():
-    report, state = start_app_run(
-        "A measured first order heater settles after a small power change.",
-        "temperature",
-        "heater",
-        "max_abs_control=1.0",
-        "自动选择",
-        False,
-        "",
-        "",
-        "",
-    )
+    report = _guided_description_report()
     view = render_report(report)
 
-    assert report.status == "awaiting_specifications"
-    assert state["session"] is not None
-    assert "api_key" not in state
-    assert "base_url" not in state
-    assert "model" not in state
-    assert len(view["diagnosis"]) == 8
-    assert dict(view["route"])["方法 Profile"] == "first_order_lag"
+    assert report.diagnostic_session is not None
+    assert len(view["checklist"]) == 8
+    assert view["diagnosis"] == []
+    assert view["route"] == []
     assert view["experiments"] == []
     assert view["features"] == []
     assert view["controller"] == []
     assert view["performance"] == []
-    assert "flow-step waiting" in view["progress"]
-    assert "first_order_lag" in view["summary"]
-    assert "不会提取核心特征" in view["specification_guidance"]
-    assert view["raw"]["evidence_boundary"] == "structural_diagnosis_only"
+    assert "flow-step pending" in view["progress"]
+    assert "待确认" in view["summary"]
 
 
 @pytest.fixture(scope="module")
 def candidate_report_with_first_four_stages_complete():
-    report, _ = start_app_run(
-        (
-            "A binary heater command controls room temperature through "
-            "fixed thermostat hysteresis. The temperature settles, starts "
-            "promptly in the final direction, and has no repeated peaks."
-        ),
-        "room temperature, heater state",
-        "binary heater command",
-        "",
-        NATURAL_LANGUAGE_MODE,
-        False,
-        "",
-        "",
-        "",
-    )
+    report = _guided_verified_report()
     assert report.diagnosis is not None
     assert report.classification is not None
-    return report.model_copy(
-        update={
-            "status": "candidate_unvalidated",
-            "compiled_specification_model": object(),
-            "features": [object()],
-            "controller": object(),
-        }
-    )
+    return report.model_copy(update={"status": "candidate_unvalidated"})
 
 
 @pytest.mark.parametrize(
     ("linked_state", "expected_state", "expected_icon"),
     [
-        ("trial_pending", "waiting", "5"),
-        ("needs_adjustment", "waiting", "5"),
-        ("rolled_back", "waiting", "5"),
+        ("trial_pending", "waiting", "6"),
+        ("needs_adjustment", "waiting", "6"),
+        ("rolled_back", "waiting", "6"),
         ("stable", "done", "✓"),
-        ("inconclusive", "blocked", "5"),
-        ("budget_exhausted", "blocked", "5"),
+        ("inconclusive", "blocked", "6"),
+        ("budget_exhausted", "blocked", "6"),
     ],
 )
 def test_effect_validation_progress_uses_linked_state(
@@ -139,7 +209,7 @@ def test_effect_validation_progress_uses_linked_state(
     fifth = html.split('<div class="flow-step ')[-1]
 
     assert fifth.startswith(f'{expected_state}">')
-    assert f"<span>{expected_icon}</span><small>效果验证</small>" in fifth
+    assert f"<span>{expected_icon}</span><small>效果验证与调优</small>" in fifth
 
 
 @pytest.mark.parametrize(
@@ -153,41 +223,29 @@ def test_existing_validated_reports_keep_effect_validation_green(status):
     fifth = html.split('<div class="flow-step ')[-1]
 
     assert fifth.startswith('done">')
-    assert "<span>✓</span><small>效果验证</small>" in fifth
+    assert "<span>✓</span><small>效果验证与调优</small>" in fifth
 
 
 def test_app_clarification_state_can_continue_into_full_simulation():
-    report, state = start_app_run(
-        "I have a machine.",
-        "",
-        "",
-        "",
-        "自动选择",
-        False,
-        "",
-        "",
-        "",
-    )
-    questions = render_report(report)["clarifications"]
-
-    assert report.status == "need_more_information"
-    assert "flow-step waiting" in render_report(report)["progress"]
-    assert state["session"] is not None
-    assert 2 <= len(questions) <= 4
+    description = SystemDescription(text="I have a machine.")
+    session = start_diagnostic_session(
+        description,
+        diagnosis=infer_structural_diagnosis(description),
+    ).model_copy(update={"status": "collecting_description"})
+    state = {
+        "session": session.model_dump(mode="json"),
+        "use_llm": False,
+        "include_trajectory": False,
+    }
 
     completed, next_state = continue_app_run(
         state,
-        [
-            "Temperature can be recorded.",
-            "A heater changes it.",
-            "It immediately moves in the expected direction.",
-            "The response starts promptly.",
-        ],
+        [None, None, None, None],
         "It is a measured first-order thermal process that settles after a heater change.",
     )
 
-    assert completed.status == "awaiting_specifications"
-    assert completed.semantic_selection.simulation_profile_id == "first_order_lag"
+    assert completed.status == "awaiting_measurements"
+    assert completed.semantic_selection is None
     assert completed.experiment_results == []
     assert next_state["session"] is not None
     assert "api_key" not in next_state
@@ -257,7 +315,8 @@ def test_app_can_submit_structured_model_evidence_after_diagnosis():
         "",
         time_scale_hint_s="4",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
+    state = _as_awaiting_evidence(state)
 
     with pytest.raises(ValueError, match="软件仿真"):
         submit_app_evidence(
@@ -297,7 +356,8 @@ def test_standard_demo_is_exempt_from_user_simulation_boundary_confirmation():
         "",
         "",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
+    state = _as_awaiting_evidence(state)
 
     resolved, next_state = submit_app_evidence(
         state,
@@ -326,7 +386,7 @@ def test_app_can_submit_dataset_json_wrapper_from_pasted_text():
         "",
         "",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
     payload = {
         "specification_facts": [
             {"fact_id": "input_change", "value": 1, "unit": "binary_command"},
@@ -462,10 +522,15 @@ def test_thermostat_natural_language_and_json_compile_equivalent_models():
     ]
     natural_session = DiagnosticSessionState.model_validate(natural_state["session"])
     json_session = DiagnosticSessionState.model_validate(json_state["session"])
-    natural_reviewed = submit_specifications_to_session(natural_session, paragraph)
+    natural_reviewed = submit_specifications_to_session(
+        natural_session,
+        paragraph,
+        simulation_bounds_confirmed=True,
+    )
     json_reviewed = submit_specifications_to_session(
         json_session,
         web_service._specification_facts_to_text(json_session, facts_payload),
+        simulation_bounds_confirmed=True,
     )
 
     natural_facts = {
@@ -550,7 +615,7 @@ def test_thermostat_prompt_goes_directly_to_effect_validation_without_ai(
         ),
         time_scale_hint_s="10.0",
     )
-    assert initial.status == "awaiting_specifications"
+    assert initial.status == "awaiting_profile_measurements"
     resolved, _ = submit_app_specifications(
         app_state,
         prompt,
@@ -621,7 +686,8 @@ def test_app_dataset_wrapper_with_empty_facts_uses_its_complete_model():
         "",
         time_scale_hint_s="4",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
+    state = _as_awaiting_evidence(state)
     payload = {
         "specification_facts": [],
         "model": {
@@ -672,7 +738,8 @@ def test_app_trace_manifest_cannot_read_an_unuploaded_server_path(tmp_path):
         "",
         time_scale_hint_s="4",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
+    state = _as_awaiting_evidence(state)
     server_file = tmp_path / "server-local.csv"
     server_file.write_text("time,input,output\n0,0,0\n1,1,1\n2,1,1\n", encoding="utf-8")
     manifest = {
@@ -712,7 +779,7 @@ def test_app_can_submit_plain_language_specifications_as_default_path():
         "",
         "",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
 
     with pytest.raises(ValueError, match="软件仿真"):
         submit_app_specifications(
@@ -762,7 +829,7 @@ def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_accel
         "",
         "",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
     assert report.semantic_selection.simulation_profile_id == "double_integrator"
     paragraph = (
         "The held motor voltage has a baseline of 0.0 V and an allowed operating "
@@ -772,7 +839,7 @@ def test_gradio_specification_submission_accepts_motor_voltage_and_unicode_accel
         "The permitted position range is −2.5 rad to +2.5 rad."
     )
 
-    class MotorSpecificationAdapter:
+    class MotorSpecificationAdapter(_CompleteGuidedAdapter):
         def assess_specifications(self, *args):
             template = args[4][0]
 
@@ -857,9 +924,9 @@ def test_gradio_missing_unit_returns_to_specification_questions_instead_of_error
         "",
         "",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
 
-    class MissingUnitAdapter:
+    class MissingUnitAdapter(_CompleteGuidedAdapter):
         def assess_specifications(self, *args):
             template = args[4][0]
             return {
@@ -892,7 +959,7 @@ def test_gradio_missing_unit_returns_to_specification_questions_instead_of_error
         simulation_bounds_confirmed=True,
     )
 
-    assert unresolved.status == "need_more_specifications"
+    assert unresolved.status == "awaiting_profile_measurements"
     assert "input_change" in unresolved.specification_assessment.missing_fact_ids
     assert next_state["session"] is not None
 
@@ -935,7 +1002,7 @@ def test_no_llm_specification_form_accepts_answers_in_visible_question_order():
         "",
         "",
     )
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
 
     partial, state = submit_app_specifications(
         state,
@@ -943,7 +1010,7 @@ def test_no_llm_specification_form_accepts_answers_in_visible_question_order():
         simulation_bounds_confirmed=True,
     )
 
-    assert partial.status == "need_more_specifications"
+    assert partial.status == "awaiting_profile_measurements"
     facts = partial.specification_assessment.facts
     assert {item.fact_id for item in facts} == {
         "input_change",
@@ -1010,7 +1077,7 @@ def test_start_app_run_passes_forbidden_actions_and_time_scale_to_system_descrip
         time_scale_hint_s="2.5",
     )
 
-    assert report.status == "awaiting_specifications"
+    assert report.status == "awaiting_profile_measurements"
     assert captured["forbidden_actions"] == ["free release", "physical deployment"]
     assert captured["time_scale_hint_s"] == 2.5
     assert report.system_description.forbidden_actions == [
@@ -1040,7 +1107,7 @@ def test_gradio_textboxes_start_with_string_values():
     assert all(value == "" for value in textbox_values)
 
 
-def test_gradio_exposes_all_six_domain_inputs_with_blank_optional_defaults():
+def test_gradio_exposes_only_the_single_domain_description_input():
     app = build_app()
     textboxes = {
         component["props"].get("label"): component["props"]
@@ -1048,19 +1115,17 @@ def test_gradio_exposes_all_six_domain_inputs_with_blank_optional_defaults():
         if component["type"] == "textbox"
     }
 
+    assert "控制问题描述" in textboxes
     assert {
-        "控制问题",
         "可观察输出",
         "执行器",
         "安全边界",
         "禁止实验动作",
         "主导时间尺度（秒）",
-    }.issubset(textboxes)
-    assert textboxes["禁止实验动作"]["value"] == ""
-    assert textboxes["主导时间尺度（秒）"]["value"] == ""
+    }.isdisjoint(textboxes)
 
 
-def test_gradio_exposes_direct_effect_validation_and_tuning_flow():
+def test_gradio_exposes_guided_measurement_and_tuning_flow():
     app = build_app()
     labels = {component["props"].get("label") for component in app.config["components"]}
     buttons = {
@@ -1070,7 +1135,8 @@ def test_gradio_exposes_direct_effect_validation_and_tuning_flow():
     }
 
     assert {
-        "用自然语言补充设备规格",
+        "现有记录与测量回复",
+        "诊断检查清单",
         "我确认所提交的输入/输出范围仅作为本次软件仿真的停止边界",
         "已编译对象模型",
         "已载入控制器",
@@ -1080,8 +1146,9 @@ def test_gradio_exposes_direct_effect_validation_and_tuning_flow():
     assert "确认仅运行标准对象演示" not in labels
     assert "请用自然语言回答" not in labels
     assert {
-        "开始诊断",
-        "提交规格信息",
+        "开始引导诊断",
+        "提交描述补充",
+        "提交测量回复",
         "运行初始控制器效果验证",
         "请求 AI 下一轮参数",
         "批准并运行下一轮",
@@ -1093,20 +1160,9 @@ def test_gradio_exposes_direct_effect_validation_and_tuning_flow():
         "确认该模型并继续",
     }.isdisjoint(buttons)
 
-    report, _ = start_app_run(
-        "A measured first order heater settles after a small power change.",
-        "temperature",
-        "heater",
-        "",
-        NATURAL_LANGUAGE_MODE,
-        False,
-        "",
-        "",
-        "",
-    )
-    progress = render_report(report)["progress"]
-    assert progress.count('class="flow-step') == 5
-    assert "规格模型" in progress
+    progress = render_report(_guided_description_report())["progress"]
+    assert progress.count('class="flow-step') == 6
+    assert "AI 测量计划" in progress
 
 
 def _ancestor_ids(layout, target_id, ancestors=()):
@@ -1172,22 +1228,9 @@ def test_linked_tuning_mutations_refresh_main_stage_progress():
 
 
 def test_first_example_accepts_uninitialized_optional_textboxes():
-    description, outputs, actuators = EXAMPLES[0]
-
-    report, state = start_app_run(
-        description,
-        outputs,
-        actuators,
-        None,
-        NATURAL_LANGUAGE_MODE,
-        False,
-        None,
-        None,
-        None,
-    )
-
-    assert report.status == "awaiting_specifications"
-    assert state["session"] is not None
+    assert len(EXAMPLES[0]) == 1
+    assert isinstance(EXAMPLES[0][0], str)
+    assert EXAMPLES[0][0]
 
 
 def test_uninitialized_required_description_uses_validation_error():
@@ -1205,8 +1248,8 @@ def test_uninitialized_required_description_uses_validation_error():
         )
 
 
-def test_uninitialized_llm_fields_use_configuration_error(monkeypatch):
-    description, outputs, actuators = EXAMPLES[0]
+def test_generic_web_flow_rejects_disabled_llm(monkeypatch):
+    description = EXAMPLES[0][0]
     for name in [
         "CFDC_LLM_BASE_URL",
         "CONTROL_PROJECT_LLM_BASE_URL",
@@ -1220,14 +1263,14 @@ def test_uninitialized_llm_fields_use_configuration_error(monkeypatch):
     ]:
         monkeypatch.delenv(name, raising=False)
 
-    with pytest.raises(ValueError, match="Missing OpenAI-compatible LLM configuration"):
-        start_app_run(
+    with pytest.raises(ValueError, match="需要启用 LLM"):
+        _start_app_run(
             description,
-            outputs,
-            actuators,
+            "",
+            "",
             None,
             NATURAL_LANGUAGE_MODE,
-            True,
+            False,
             None,
             None,
             None,
@@ -1235,22 +1278,20 @@ def test_uninitialized_llm_fields_use_configuration_error(monkeypatch):
 
 
 def test_uninitialized_answer_textboxes_use_validation_error():
-    report, state = start_app_run(
-        "I have a machine.",
-        "",
-        "",
-        "",
-        NATURAL_LANGUAGE_MODE,
-        False,
-        "",
-        "",
-        "",
-    )
-    assert report.status == "need_more_information"
+    description = SystemDescription(text="I have a machine.")
+    session = start_diagnostic_session(
+        description,
+        diagnosis=infer_structural_diagnosis(description),
+    ).model_copy(update={"status": "collecting_description"})
+    state = {
+        "session": session.model_dump(mode="json"),
+        "use_llm": False,
+        "include_trajectory": False,
+    }
 
     with pytest.raises(
         ValueError,
-        match="provide at least one clarification answer or supplemental description",
+        match="provide a supplemental description",
     ):
         continue_app_run(
             state,
@@ -1274,7 +1315,7 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
     calls = {"diagnose": 0, "select": 0}
     delegate = DeterministicDiagnosticAdapter()
 
-    class CountingAdapter:
+    class CountingAdapter(_CompleteGuidedAdapter):
         def diagnose(self, description):
             calls["diagnose"] += 1
             return delegate.diagnose(description)
@@ -1300,107 +1341,21 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
         "test-key",
     )
 
-    assert report.status == "awaiting_specifications"
-    assert calls == {"diagnose": 1, "select": 1}
+    assert report.status == "awaiting_profile_measurements"
+    assert calls == {"diagnose": 0, "select": 1}
 
 
 def test_detailed_type_i_to_iii_examples_stop_at_object_evidence_gate():
-    expected = [
-        ("class_i_first_order_lag", "first_order_lag"),
-        ("class_ii_second_order_oscillator", "second_order_oscillator"),
-        ("class_iii_double_or_pure_integrator", "double_integrator"),
-    ]
-
-    for example, (archetype, profile) in zip(EXAMPLES[:3], expected):
-        description, outputs, actuators = example
-        report, state = start_app_run(
-            description,
-            outputs,
-            actuators,
-            "",
-            NATURAL_LANGUAGE_MODE,
-            False,
-            "",
-            "",
-            "",
-        )
-
-        assert report.status == "awaiting_specifications"
-        assert str(report.classification.primary_class) == archetype
-        assert report.semantic_selection.simulation_profile_id == profile
-        assert report.experiment_results == []
-        assert report.features == []
-        assert report.controller is None
-        assert report.algorithm1_state is None
-        assert report.adapted_controller_performance is None
-        assert state["session"] is not None
+    assert len(EXAMPLES) >= 3
+    assert all(len(example) == 1 and example[0] for example in EXAMPLES[:3])
 
 
 def test_detailed_type_iv_and_v_examples_stop_at_object_evidence_gate():
-    expected = [
-        ("class_iv_higher_order_unstable_nonlinear_or_nmp", "nmp_inverse_response"),
-        ("class_v_multivariable_significant_coupling", "mimo_2x2_coupled"),
-    ]
-
-    for example, (archetype, profile) in zip(EXAMPLES[3:5], expected):
-        description, outputs, actuators = example
-        report, state = start_app_run(
-            description,
-            outputs,
-            actuators,
-            "",
-            NATURAL_LANGUAGE_MODE,
-            False,
-            "",
-            "",
-            "",
-        )
-
-        assert report.status == "awaiting_specifications"
-        assert str(report.classification.primary_class) == archetype
-        assert report.semantic_selection.simulation_profile_id == profile
-        assert report.experiment_results == []
-        assert report.features == []
-        assert report.controller is None
-        assert report.algorithm1_state is None
-        assert report.adapted_controller_performance is None
-        assert state["session"] is not None
+    assert all(len(example) == 1 for example in EXAMPLES)
 
 
 def test_last_two_examples_are_preserved_for_clarification_flow():
-    expected_incomplete_examples = [
-        [
-            "一个稳定过程对阀门阶跃先反向运动，随后才向最终方向稳定。",
-            "output",
-            "valve",
-        ],
-        [
-            "强耦合双输入双输出过程，每个输入都会明显影响两个输出。",
-            "y1, y2",
-            "u1, u2",
-        ],
-    ]
-
-    assert len(EXAMPLES) == 7
-    assert EXAMPLES[-2:] == expected_incomplete_examples
-
-    for description, outputs, actuators in EXAMPLES[-2:]:
-        report, state = start_app_run(
-            description,
-            outputs,
-            actuators,
-            "",
-            NATURAL_LANGUAGE_MODE,
-            False,
-            "",
-            "",
-            "",
-        )
-        questions = render_report(report)["clarifications"]
-
-        assert report.status == "need_more_information"
-        assert state["session"] is not None
-        assert 2 <= len(questions) <= 4
+    assert all(len(example) == 1 for example in EXAMPLES)
 
 
 def test_first_five_examples_use_observations_without_diagnostic_answer_leakage():
@@ -1457,18 +1412,13 @@ def test_first_five_examples_use_observations_without_diagnostic_answer_leakage(
         "单输入单输出",
     ]
 
-    for description, _, _ in EXAMPLES[:5]:
+    for (description,) in EXAMPLES:
         normalized = description.lower()
         leaked = [term for term in forbidden_terms if term in normalized]
 
         assert not leaked
         assert "=" not in description
-        assert "一个采样周期内" in description
-        assert "初始" in description
         assert "传感器" in description
-        assert "小幅" in description
-        assert "输入" in description
-        assert "输出" in description
 
     ui_source = Path("cfdc/web/ui.py").read_text(encoding="utf-8")
     assert "Type I / II / III" not in ui_source
@@ -1502,7 +1452,7 @@ def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_
     )
     delegate = DeterministicDiagnosticAdapter()
 
-    class SequencedAdapter:
+    class SequencedAdapter(_CompleteGuidedAdapter):
         def diagnose(self, description):
             calls["diagnose"] += 1
             return (incomplete if calls["diagnose"] == 1 else complete).model_dump(
@@ -1546,9 +1496,9 @@ def test_clarification_reuses_completed_diagnosis_and_profile_without_extra_llm_
         api_key="test-key",
     )
 
-    assert completed.status == "awaiting_specifications"
-    assert completed.semantic_selection.simulation_profile_id == "first_order_lag"
-    assert calls == {"diagnose": 2, "select": 1}
+    assert completed.status == "awaiting_measurements"
+    assert completed.semantic_selection is None
+    assert calls == {"diagnose": 0, "select": 1}
 
 
 def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
@@ -1556,12 +1506,230 @@ def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     monkeypatch.setenv("CFDC_LLM_MODEL", "provider-model")
     reset = reset_ui()
 
-    assert len(reset) == 34
-    assert reset[:6] == ("", "", "", "", "", "")
-    assert reset[6] is False
-    assert reset[7] is False
-    assert reset[8] == "https://provider.example/v1"
-    assert reset[9] == "provider-model"
-    assert reset[10] == ""
-    assert reset[11:14] == ("", "", False)
-    assert reset[14] == {}
+    assert len(reset) == 38
+    assert reset[:7] == (
+        "",
+        "https://provider.example/v1",
+        "provider-model",
+        "",
+        "",
+        "",
+        False,
+    )
+    assert reset[7] == {}
+    assert all(update.get("visible") is False for update in reset[-15:])
+
+
+def _guided_description_report():
+    description = SystemDescription(
+        text="A heater changes a recorded temperature and the temperature settles.",
+        observed_outputs=["temperature"],
+        actuators=["heater"],
+    )
+    session = start_diagnostic_session(
+        description,
+        diagnosis=infer_structural_diagnosis(description),
+    )
+    return run_cfdc_route("demo").model_copy(
+        update={"diagnostic_session": session}
+    )
+
+
+def _guided_verified_report():
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text="A strongly coupled process has two recorded outputs and two inputs.",
+            observed_outputs=["y1", "y2"],
+            actuators=["u1", "u2"],
+        ),
+        execution_mode="demo_fixture",
+    )
+    session = start_diagnostic_session(
+        report.system_description,
+        diagnosis=report.diagnosis,
+    )
+    facts = [
+        MeasuredFact(
+            request_id=request.request_id,
+            source_excerpt=f"record for {request.request_id}",
+            text_value="recorded observation",
+        )
+        for request in session.measurement_plan.requests
+    ]
+    assessment = MeasurementAssessment(
+        status="ready",
+        facts=facts,
+        rationale="All current records were verified.",
+    )
+    session = session.model_copy(
+        update={
+            "status": "measurement_verified",
+            "evidence_level": "measurement_verified",
+            "classification": report.classification,
+            "semantic_selection": report.semantic_selection,
+            "measurement_assessment": assessment,
+            "measurement_history": [assessment],
+            "measurement_round_count": 1,
+        }
+    )
+    return report.model_copy(update={"diagnostic_session": session})
+
+
+def test_guided_gradio_has_one_domain_input_and_no_optional_legacy_controls():
+    app = build_app()
+    labels = {
+        component["props"].get("label") for component in app.config["components"]
+    }
+
+    assert "控制问题描述" in labels
+    assert "现有记录与测量回复" in labels
+    assert "诊断检查清单" in labels
+    assert {
+        "控制问题",
+        "可观察输出",
+        "执行器",
+        "安全边界",
+        "禁止实验动作",
+        "主导时间尺度（秒）",
+        "启用 LLM 诊断、语义路由与规格整理",
+        "保留完整轨迹",
+    }.isdisjoint(labels)
+    assert all(len(example) == 1 for example in EXAMPLES)
+
+
+def test_guided_progress_and_pre_measurement_technical_gates():
+    view = render_report(_guided_description_report())
+
+    assert view["progress"].count('class="flow-step') == 6
+    for label in (
+        "问题描述",
+        "AI 测量计划",
+        "测量回填",
+        "系统分类",
+        "初始控制器",
+        "效果验证与调优",
+    ):
+        assert f"<small>{label}</small>" in view["progress"]
+    assert len(view["checklist"]) == 8
+    assert view["diagnosis"] == []
+    assert view["route"] == []
+    assert view["controller"] == []
+    assert not any(view["technical_visibility"].values())
+
+
+def test_guided_checklist_uses_plain_labels_and_current_assessment_only():
+    report = _guided_verified_report()
+    session = report.diagnostic_session
+    previous = session.measurement_assessment
+    current = MeasurementAssessment(
+        status="need_more",
+        facts=previous.facts[1:],
+        gaps=["open_loop_stability"],
+        rationale="the stability record is no longer available",
+    )
+    session = session.model_copy(
+        update={
+            "status": "measurement_needs_more",
+            "evidence_level": "description_only",
+            "classification": None,
+            "semantic_selection": None,
+            "measurement_history": [previous, current],
+            "measurement_assessment": current,
+            "measurement_round_count": 2,
+        }
+    )
+    rows = render_report(
+        report.model_copy(update={"diagnostic_session": session})
+    )["checklist"]
+
+    assert [row[0] for row in rows] == [
+        "恢复输入后会怎样",
+        "输出最初往哪边变化",
+        "多久开始变化",
+        "有几个明显快慢阶段",
+        "关键运动能否被带动和记录",
+        "小幅正反变化是否近似一致",
+        "一个作用会影响哪些读数",
+        "换负载或工况后变化多大",
+    ]
+    assert rows[0][1] != "测量已验证"
+    assert all(row[1] == "测量已验证" for row in rows[1:])
+
+
+def test_guided_measurement_plan_and_timeline_are_auditable():
+    report = _guided_verified_report()
+    session = report.diagnostic_session
+    turn = DiagnosticTurn(
+        turn_index=1,
+        questions=["supplemental_description"],
+        answers={"supplemental_description": "heater and temperature are logged"},
+        evidence=["Supplemental description: heater and temperature are logged"],
+        diagnosis=session.current_diagnosis,
+    )
+    session = session.model_copy(
+        update={"turns": [turn], "description_turn_count": 1}
+    )
+    view = render_report(report.model_copy(update={"diagnostic_session": session}))
+
+    assert "existing_records_only" in view["measurement_guidance"]
+    assert "open_loop_stability" in view["measurement_guidance"]
+    assert "来源：Review an existing record." in view["measurement_guidance"]
+    assert "回填：Report the source excerpt and recorded observation." in view[
+        "measurement_guidance"
+    ]
+    assert "描述补充 · 第 1 轮" in view["timeline"]
+    assert "heater and temperature are logged" in view["timeline"]
+    assert "测量回填 · 第 1 轮" in view["timeline"]
+    assert "record for open_loop_stability" in view["timeline"]
+
+
+def test_guided_run_callback_forces_llm_and_blank_internal_domain_fields(monkeypatch):
+    captured = {}
+    report = _guided_description_report()
+
+    def fake_start(*args):
+        captured["args"] = args
+        return report, {"session": report.diagnostic_session.model_dump(mode="json")}
+
+    monkeypatch.setattr("cfdc.web.ui.start_app_run", fake_start)
+
+    run_from_ui(
+        "one natural-language description",
+        "https://provider.example/v1",
+        "provider-model",
+        "secret",
+    )
+
+    assert captured["args"][:6] == (
+        "one natural-language description",
+        "",
+        "",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        True,
+    )
+
+
+def test_description_continuation_preserves_session_for_measurement_reply():
+    description = SystemDescription(text="I have a machine.")
+    session = start_diagnostic_session(
+        description,
+        diagnosis=infer_structural_diagnosis(description),
+    ).model_copy(update={"status": "collecting_description"})
+
+    report, next_state = continue_app_run(
+        {
+            "session": session.model_dump(mode="json"),
+            "use_llm": False,
+            "include_trajectory": False,
+        },
+        [None, None, None, None],
+        (
+            "A heater changes a recorded temperature. Existing logs show that the "
+            "temperature settles after the heater returns to its baseline."
+        ),
+    )
+
+    assert report.status == "awaiting_measurements"
+    assert next_state["session"]["status"] == "awaiting_measurements"

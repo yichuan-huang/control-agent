@@ -12,7 +12,7 @@ from cfdc.web.presentation import render_report
 from cfdc.web.service import (
     continue_app_run,
     start_app_run,
-    submit_app_specifications,
+    submit_app_measurement_response,
 )
 
 NATURAL_LANGUAGE_MODE = "自然语言自动分析（主流程）"
@@ -23,45 +23,26 @@ LICENSE_NOTICE = (
     "[Source code](https://github.com/yichuan-huang/control-agent)"
 )
 
-
 EXAMPLES = [
     [
-        "这是一个由电加热器调节的恒温箱。控制输入是归一化加热功率，输出是温度传感器连续记录的箱内温度（temperature）。在多个小幅且可逆的功率试验中，提高功率后一个采样周期内就能看到温度开始上升，初始变化方向始终与加热作用一致，没有先下降或停顿；之后变化速度逐渐减小并停在新的恒定水平，功率恢复原值后温度也逐渐回到原工作水平。试验曲线平滑，没有持续往复波动，也没有明显分开的多个快慢阶段。当前工作区间只有一个加热器和一个主要温度输出，传感器覆盖整个试验过程；相同幅度的正负功率变化会产生方向相反、大小近似成比例的温度变化，未观察到死区、滞回或饱和。环境温度和装载量缓慢变化时，最终温差和达到恒定水平所需时间会有小幅到中等变化，但上述运动方向、响应时机和回到工作水平的现象保持不变。",
-        "temperature",
-        "heater",
+        (
+            "这是一个由电加热器调节的恒温箱。温度传感器连续记录箱内温度，"
+            "已有日志包含加热功率变化前后的温度曲线；恢复原功率后温度逐渐回到原水平。"
+        )
     ],
     [
-        "这是一个质量块通过弹簧（spring）和粘性阻尼器连接在固定支架上的装置。控制输入是施加在质量块上的双向水平力，输出是位置传感器连续记录的位置。质量块从小位移静止释放后，会反复穿过平衡位置，往复移动的幅度逐次减小，最后停回平衡位置附近；这一现象在多次小幅释放试验中都能重复观察到。施加小幅且可逆的力脉冲后，一个采样周期内就能看到位置开始变化，初始移动方向始终与施力方向一致，没有先向相反方向移动或停顿。加力后位置保持连续、不会突然跳变，位置曲线的斜率由零逐渐建立；撤去脉冲后仍会出现幅度逐次减小的往复移动。装置只有一个力执行器和一个主要位置输出，传感器能记录完整的移动过程；在小位移范围内，把脉冲幅度增大一倍时，初始弯曲程度和最大位移也近似按比例增大，未观察到死区、滞回或饱和。载荷小幅改变时，往复移动的周期、衰减速度和位移大小会有小幅到中等变化，但最终仍会回到平衡位置附近。",
-        "position",
-        "force",
+        (
+            "质量块由双向水平力驱动，位置传感器记录完整运动。现有记录显示释放后会往复穿过平衡位置，"
+            "振幅逐次减小；正反方向的小力变化产生近似对称的响应。"
+        )
     ],
     [
-        "这是一个在水平轨道上运动的低摩擦小车（low-friction cart）。控制输入是双向电机施加的水平力，输出是位置传感器和速度传感器连续记录的小车位置与速度。在多个小幅且可逆的试验中，施加恒定小力后一个采样周期内速度就开始沿施力方向变化，初始运动不会反向或停顿；保持施力时，速度近似以恒定速率变化，位置曲线连续弯曲而不会突然跳变。撤去力后，速度会在较长时间内保持接近撤力瞬间的数值，位置继续沿原方向以近似恒定斜率移动，不会自行减速并返回起点。正向和负向力会产生方向相反的速度变化，力幅增大一倍时速度变化率也近似增大一倍，限定行程和速度范围内未观察到死区、滞回或饱和。装置只有一个电机执行器；位置和速度两个读数描述的是同一段平移运动，不存在第二个执行器或其他独立运动通道。摩擦和负载小幅改变时，速度变化率会有小幅到中等变化，但撤力后的持续移动现象保持不变。",
-        "position, velocity",
-        "motor force",
-    ],
-    [
-        "这是一个带蒸汽析出的加热储液容器（tank）。控制输入是进液阀门开度，输出是液位传感器连续记录的容器液位。在多个小幅且可逆的阀门试验中，稍微增大阀门开度后一个采样周期内液位就开始变化，但初始会短暂下降，与之后的上升方向相反（opposite direction）；随后下降停止，液位转为上升并逐渐停在更高的恒定位置。稍微减小阀门开度时会观察到镜像过程：液位先短暂上升，随后转为下降并停在较低位置。整个过程中没有纯等待，液位曲线连续且不会突然跳变；阀门恢复原开度后，液位也会逐渐回到原工作位置。装置只有一个阀门执行器和一个主要液位输出，传感器覆盖完整变化过程；在当前工作范围内，把小幅阀门变化增大一倍时，初始反向幅度和最终液位变化也近似按比例增大，未观察到死区、滞回或饱和。蒸汽负荷和进液温度缓慢改变时，短暂反向移动的持续时间、幅度以及最终液位会有小幅到中等变化，但先反向再转向并停稳的现象保持不变。",
-        "liquid level",
-        "inlet valve",
-    ],
-    [
-        "这是两个通过下部连通管相连的储液容器（interconnected tank levels）。控制输入是分别向两个容器供液的泵 A 和泵 B，输出是两个液位传感器连续记录的液位 A 与液位 B。在多个小幅且可逆的单泵试验中，只提高泵 A 后一个采样周期内两个液位都开始变化，初始均沿上升方向移动，其中液位 A 变化较大、液位 B 变化较小；只提高泵 B 时也会同时看到两个液位上升，但液位 B 的变化更大。分别降低任一泵时，两个液位都会沿相反方向变化，没有先反向或停顿。保持新的泵速后，两个液位最终都会停在新的恒定位置；泵速恢复后，两个液位也逐渐回到原工作位置。两个泵都是独立可调的执行器，两个传感器覆盖完整变化过程；每个泵都会明显改变两个输出，因此不能在试验中把任何一个液位视为只受其中一个泵影响。在当前工作范围内，泵速小幅变化增大一倍时，两条液位曲线的最终变化也近似按比例增大，未观察到死区、滞回或饱和。连通管阻力、泵效率和总出液负荷缓慢变化时，各液位的变化幅度和达到恒定位置所需时间会有中等变化，但每个泵都会影响两个液位的现象保持不变。",
-        "level A, level B",
-        "pump A, pump B",
-    ],
-    [
-        "一个稳定过程对阀门阶跃先反向运动，随后才向最终方向稳定。",
-        "output",
-        "valve",
-    ],
-    [
-        "强耦合双输入双输出过程，每个输入都会明显影响两个输出。",
-        "y1, y2",
-        "u1, u2",
+        (
+            "两个泵分别向连通容器供液，两个液位传感器同步记录液位。已有单泵变化记录显示，"
+            "任一泵都会影响两个液位，但靠近该泵的液位变化更大。"
+        )
     ],
 ]
-
 
 CSS = """
 .gradio-container { max-width: 1500px !important; }
@@ -70,10 +51,10 @@ CSS = """
 .stage-table table { font-size: 13px; }
 .stage-table td, .stage-table th { white-space: normal !important; }
 .primary-run { min-height: 46px; }
-.flow-strip { display: grid; grid-template-columns: repeat(5, minmax(108px, 1fr)); gap: 6px; margin: 4px 0 12px; }
+.flow-strip { display: grid; grid-template-columns: repeat(6, minmax(108px, 1fr)); gap: 6px; margin: 4px 0 12px; }
 .flow-step { min-height: 68px; border: 1px solid #d8dee8; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; background: #f7f9fc; color: #687386; }
 .flow-step span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: #dfe5ee; font-weight: 700; }
-.flow-step small { font-size: 12px; }
+.flow-step small { font-size: 12px; text-align: center; }
 .flow-step.done { background: #eef9f2; border-color: #9cd3ae; color: #196c39; }
 .flow-step.done span { background: #258a4b; color: white; }
 .flow-step.waiting { background: #fff8e8; border-color: #e8c66c; color: #7c5a00; }
@@ -96,7 +77,7 @@ CSS = """
 .comparison-note { margin-top: 14px; padding-top: 10px; border-top: 1px solid #e5e9ef; font-weight: 600; }
 .empty-result { min-height: 90px; display: grid; place-items: center; color: #687386; border: 1px dashed #cbd3df; border-radius: 6px; }
 @media (max-width: 900px) {
-  .flow-strip { grid-template-columns: repeat(4, 1fr); }
+  .flow-strip { grid-template-columns: repeat(3, 1fr); }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
 }
 """
@@ -117,19 +98,29 @@ def _question_updates(items: list[tuple[str, str]]):
 
 def _outputs(report, state):
     view = render_report(report)
-    questions = view["clarifications"]
-    show_evidence = report.status in {
-        "awaiting_specifications",
-        "need_more_specifications",
-        "specification_conflict",
-        "evidence_rejected",
-    }
+    session = report.diagnostic_session
+    show_questions = bool(session and session.status == "collecting_description")
+    show_measurement = bool(
+        session
+        and session.status
+        in {
+            "awaiting_measurements",
+            "measurement_needs_more",
+            "measurement_conflict",
+            "awaiting_profile_measurements",
+            "specification_conflict",
+        }
+    )
+    visibility = view["technical_visibility"]
     return (
         state,
         view["status"],
         view["progress"],
         view["summary"],
         view["performance_visual"],
+        view["checklist"],
+        view["measurement_guidance"],
+        view["timeline"],
         view["diagnosis"],
         view["route"],
         view["experiments"],
@@ -138,41 +129,34 @@ def _outputs(report, state):
         view["tuning"],
         view["performance"],
         view["raw"],
-        gr.update(visible=bool(questions)),
-        *_question_updates(questions),
-        gr.update(visible=show_evidence),
-        view["specification_guidance"],
+        gr.update(visible=show_questions),
+        *_question_updates(view["clarifications"]),
+        gr.update(visible=show_questions),
+        gr.update(visible=show_measurement, value=""),
+        gr.update(visible=show_measurement),
+        gr.update(visible=show_measurement, value=False),
+        gr.update(visible=visibility["diagnosis"]),
+        gr.update(visible=visibility["route"]),
+        gr.update(visible=visibility["model"]),
+        gr.update(visible=visibility["features"]),
+        gr.update(visible=visibility["controller"]),
+        gr.update(visible=visibility["tuning"]),
     )
 
 
-def run_from_ui(
-    description,
-    observed_outputs,
-    actuators,
-    safety_bounds,
-    forbidden_actions,
-    time_scale_hint_s,
-    route,
-    use_llm,
-    base_url,
-    model,
-    api_key,
-    include_trajectory,
-):
+def run_from_ui(description, base_url, model, api_key):
     try:
         report, state = start_app_run(
             description,
-            observed_outputs,
-            actuators,
-            safety_bounds,
-            route,
-            use_llm,
+            "",
+            "",
+            "",
+            NATURAL_LANGUAGE_MODE,
+            True,
             base_url,
             model,
             api_key,
-            include_trajectory,
-            forbidden_actions=forbidden_actions,
-            time_scale_hint_s=time_scale_hint_s,
+            False,
         )
         return _outputs(report, state)
     except Exception as exc:
@@ -204,18 +188,18 @@ def continue_from_ui(
         raise gr.Error(str(exc)) from exc
 
 
-def submit_specifications_from_ui(
+def submit_measurement_from_ui(
     state,
-    specification_text,
+    measurement_response,
     simulation_bounds_confirmed,
     base_url,
     model,
     api_key,
 ):
     try:
-        report, state = submit_app_specifications(
+        report, state = submit_app_measurement_response(
             state,
-            specification_text,
+            measurement_response,
             simulation_bounds_confirmed=simulation_bounds_confirmed,
             base_url=base_url,
             model=model,
@@ -228,26 +212,22 @@ def submit_specifications_from_ui(
 
 def reset_ui():
     return (
-        "",  # description
-        "",  # observed outputs
-        "",  # actuators
-        "",  # safety bounds
-        "",  # forbidden actions
-        "",  # dominant time scale
-        False,  # include trajectory
-        False,  # use LLM
+        "",
         os.getenv("CFDC_LLM_BASE_URL", ""),
         os.getenv("CFDC_LLM_MODEL", ""),
-        "",  # API key
-        "",  # supplemental description
-        "",  # natural-language specifications
-        False,  # software-simulation boundary confirmation
+        "",
+        "",
+        "",
+        False,
         {},
         "### 等待控制问题",
         "",
         "",
         "",
         [],
+        "",
+        "",
+        [],
         [],
         [],
         [],
@@ -261,7 +241,15 @@ def reset_ui():
         gr.update(visible=False, value=""),
         gr.update(visible=False, value=""),
         gr.update(visible=False),
-        "",
+        gr.update(visible=False, value=""),
+        gr.update(visible=False),
+        gr.update(visible=False, value=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
     )
 
 
@@ -272,51 +260,20 @@ def build_app() -> gr.Blocks:
 
         with gr.Row(equal_height=False):
             with gr.Column(scale=5, min_width=360):
-                route = gr.State(NATURAL_LANGUAGE_MODE)
                 gr.Markdown(
-                    "输入控制问题后，系统会完成诊断和初始控制器设计；"
-                    "完整规格会直接生成数学模型和初始控制器，随后请在"
-                    "“调优与适应”页签运行效果验证；只有未稳定时才请求"
-                    " AI 建议下一轮参数。"
+                    "先用一段自然语言描述控制问题。系统会生成测量计划，并只请你从已有记录、"
+                    "日志或手册中回填证据；测量验证前不会展示正式分类、Profile 或控制器。"
                 )
                 description = gr.Textbox(
-                    label="控制问题",
+                    label="控制问题描述",
                     value="",
-                    lines=6,
-                    placeholder="描述对象如何运动、能够测量什么、可以施加什么控制，以及已知约束。",
+                    lines=8,
+                    placeholder=(
+                        "描述对象、能够观察到的现象、可用的控制作用，以及已经掌握的记录。"
+                        "不知道的内容可以明确写“不知道”。"
+                    ),
                 )
-                with gr.Row():
-                    observed_outputs = gr.Textbox(
-                        label="可观察输出",
-                        value="",
-                        placeholder="temperature, position",
-                    )
-                    actuators = gr.Textbox(
-                        label="执行器", value="", placeholder="heater, motor force"
-                    )
-                with gr.Accordion("已知边界与时间尺度（可选）", open=False):
-                    safety_bounds = gr.Textbox(
-                        label="安全边界",
-                        value="",
-                        lines=3,
-                        placeholder="max_abs_control=1.0\nmax_abs_output=2.0",
-                    )
-                    forbidden_actions = gr.Textbox(
-                        label="禁止实验动作",
-                        value="",
-                        lines=3,
-                        placeholder="free release\npulse",
-                    )
-                    time_scale_hint_s = gr.Textbox(
-                        label="主导时间尺度（秒）",
-                        value="",
-                        placeholder="例如：2.0；用户模型实验不允许使用默认时间尺度",
-                    )
-                    include_trajectory = gr.Checkbox(label="保留完整轨迹", value=False)
-                with gr.Accordion("LLM Provider", open=False):
-                    use_llm = gr.Checkbox(
-                        label="启用 LLM 诊断、语义路由与规格整理", value=False
-                    )
+                with gr.Accordion("LLM Provider（必需）", open=False):
                     base_url = gr.Textbox(
                         label="Base URL",
                         value=os.getenv("CFDC_LLM_BASE_URL", ""),
@@ -330,101 +287,99 @@ def build_app() -> gr.Blocks:
                     api_key = gr.Textbox(label="API Key", value="", type="password")
                 with gr.Row():
                     run_button = gr.Button(
-                        "开始诊断",
+                        "开始引导诊断",
                         variant="primary",
                         elem_classes="primary-run",
                         scale=4,
                     )
                     clear_button = gr.Button("清空", scale=1)
-                gr.Examples(
-                    examples=EXAMPLES,
-                    inputs=[description, observed_outputs, actuators],
-                    label="可完成结构诊断的详细示例（随后会按具体对象追问设备规格）",
-                )
+                gr.Examples(examples=EXAMPLES, inputs=[description], label="控制问题描述示例")
 
             with gr.Column(scale=8, min_width=560):
                 status = gr.Markdown("### 等待控制问题", elem_id="run-status")
                 progress = gr.HTML(elem_id="stage-progress")
                 summary = gr.HTML()
                 performance_visual = gr.HTML()
-                with gr.Group(visible=False) as clarification_group:
-                    gr.Markdown("### 补充诊断证据")
+                checklist = gr.Dataframe(
+                    label="诊断检查清单",
+                    headers=["需要了解的现象", "状态", "证据摘录"],
+                    datatype=["str", "str", "str"],
+                    interactive=False,
+                    elem_classes="stage-table",
+                )
+                measurement_guidance = gr.Markdown()
+                timeline = gr.Markdown()
+
+                with gr.Group(visible=False) as question_group:
+                    gr.Markdown("### 补充问题描述")
                     question_1 = gr.Textbox(value="", visible=False)
                     question_2 = gr.Textbox(value="", visible=False)
                     question_3 = gr.Textbox(value="", visible=False)
                     question_4 = gr.Textbox(value="", visible=False)
-                    supplemental = gr.Textbox(label="补充描述", value="", lines=2)
-                    continue_button = gr.Button("提交诊断补充", variant="primary")
+                    supplemental = gr.Textbox(label="补充描述", value="", lines=3)
+                    continue_button = gr.Button(
+                        "提交描述补充", variant="primary", visible=False
+                    )
 
-                with gr.Group(visible=False) as evidence_group:
-                    evidence_requirements = gr.Markdown()
-                    simulation_bounds_confirmed = gr.Checkbox(
-                        label="我确认所提交的输入/输出范围仅作为本次软件仿真的停止边界",
-                        value=False,
-                        info=(
-                            "这不代表真实硬件安全认证，也不授权向真实物理硬件下发命令。"
-                        ),
-                    )
-                    gr.Markdown("**回答初始控制器设计所需的设备信息**")
-                    specification_text = gr.Textbox(
-                        label="用自然语言补充设备规格",
-                        value="",
-                        lines=6,
-                        placeholder="可以描述已知参数、粘贴手册原文，或说明暂时不知道。未启用 LLM 时，请按上方问题顺序每行填写一个“数值 + 单位”。",
-                    )
-                    specification_button = gr.Button("提交规格信息", variant="primary")
+                measurement_response = gr.Textbox(
+                    label="现有记录与测量回复",
+                    value="",
+                    lines=8,
+                    visible=False,
+                    placeholder=(
+                        "粘贴已有记录或手册摘录，并逐项说明观察结果；"
+                        "没有记录的项目请明确写“不知道”。"
+                    ),
+                )
+                simulation_bounds_confirmed = gr.Checkbox(
+                    label="我确认所提交的输入/输出范围仅作为本次软件仿真的停止边界",
+                    value=False,
+                    visible=False,
+                    info=(
+                        "这不代表真实硬件安全认证，也不授权向真实物理硬件下发命令。"
+                    ),
+                )
+                measurement_button = gr.Button(
+                    "提交测量回复", variant="primary", visible=False
+                )
 
                 with gr.Tabs():
-                    with gr.Tab("结构诊断"):
+                    with gr.Tab("结构诊断", visible=False) as diagnosis_tab:
                         diagnosis = gr.Dataframe(
                             headers=["字段", "Assessment", "置信度", "证据"],
                             datatype=["str", "str", "str", "str"],
                             interactive=False,
                             elem_classes="stage-table",
                         )
-                    with gr.Tab("归类与路由"):
+                    with gr.Tab("归类与路由", visible=False) as route_tab:
                         route_result = gr.Dataframe(
                             headers=["项目", "结果"],
                             datatype=["str", "str"],
                             interactive=False,
                             elem_classes="stage-table",
                         )
-                    with gr.Tab("模型响应"):
+                    with gr.Tab("模型响应", visible=False) as model_tab:
                         experiments = gr.Dataframe(
                             headers=["#", "实验", "重复", "提取目标", "采样数", "信号"],
-                            datatype=[
-                                "number",
-                                "str",
-                                "number",
-                                "str",
-                                "number",
-                                "str",
-                            ],
+                            datatype=["number", "str", "number", "str", "number", "str"],
                             interactive=False,
                             elem_classes="stage-table",
                         )
-                    with gr.Tab("核心特征"):
+                    with gr.Tab("核心特征", visible=False) as features_tab:
                         features = gr.Dataframe(
-                            headers=[
-                                "特征",
-                                "值",
-                                "单位",
-                                "置信区间",
-                                "置信度",
-                                "方法",
-                            ],
+                            headers=["特征", "值", "单位", "置信区间", "置信度", "方法"],
                             datatype=["str", "str", "str", "str", "str", "str"],
                             interactive=False,
                             elem_classes="stage-table",
                         )
-                    with gr.Tab("控制器"):
+                    with gr.Tab("控制器", visible=False) as controller_tab:
                         controller = gr.Dataframe(
                             headers=["参数", "值"],
                             datatype=["str", "str"],
                             interactive=False,
                             elem_classes="stage-table",
                         )
-                    with gr.Tab("调优与适应"):
+                    with gr.Tab("调优与适应", visible=False) as tuning_tab:
                         tuning = gr.Dataframe(
                             headers=["项目", "状态", "变化/迭代", "结果"],
                             datatype=["str", "str", "str", "str"],
@@ -432,14 +387,7 @@ def build_app() -> gr.Blocks:
                             elem_classes="stage-table",
                         )
                         performance = gr.Dataframe(
-                            headers=[
-                                "场景",
-                                "安全性",
-                                "最终误差",
-                                "稳定时间/s",
-                                "饱和率",
-                                "违规",
-                            ],
+                            headers=["场景", "安全性", "最终误差", "稳定时间/s", "饱和率", "违规"],
                             datatype=["str", "str", "str", "str", "str", "str"],
                             interactive=False,
                             elem_classes="stage-table",
@@ -465,6 +413,9 @@ def build_app() -> gr.Blocks:
             progress,
             summary,
             performance_visual,
+            checklist,
+            measurement_guidance,
+            timeline,
             diagnosis,
             route_result,
             experiments,
@@ -473,30 +424,25 @@ def build_app() -> gr.Blocks:
             tuning,
             performance,
             raw_json,
-            clarification_group,
+            question_group,
             question_1,
             question_2,
             question_3,
             question_4,
-            evidence_group,
-            evidence_requirements,
+            continue_button,
+            measurement_response,
+            measurement_button,
+            simulation_bounds_confirmed,
+            diagnosis_tab,
+            route_tab,
+            model_tab,
+            features_tab,
+            controller_tab,
+            tuning_tab,
         ]
         run_button.click(
             run_from_ui,
-            inputs=[
-                description,
-                observed_outputs,
-                actuators,
-                safety_bounds,
-                forbidden_actions,
-                time_scale_hint_s,
-                route,
-                use_llm,
-                base_url,
-                model,
-                api_key,
-                include_trajectory,
-            ],
+            inputs=[description, base_url, model, api_key],
             outputs=output_components,
         )
         continue_button.click(
@@ -514,11 +460,11 @@ def build_app() -> gr.Blocks:
             ],
             outputs=output_components,
         )
-        specification_button.click(
-            submit_specifications_from_ui,
+        measurement_button.click(
+            submit_measurement_from_ui,
             inputs=[
                 app_state,
-                specification_text,
+                measurement_response,
                 simulation_bounds_confirmed,
                 base_url,
                 model,
@@ -530,18 +476,11 @@ def build_app() -> gr.Blocks:
             reset_ui,
             outputs=[
                 description,
-                observed_outputs,
-                actuators,
-                safety_bounds,
-                forbidden_actions,
-                time_scale_hint_s,
-                include_trajectory,
-                use_llm,
                 base_url,
                 model,
                 api_key,
                 supplemental,
-                specification_text,
+                measurement_response,
                 simulation_bounds_confirmed,
                 *output_components,
             ],
