@@ -536,6 +536,60 @@ def test_output_plot_aligns_reordered_scenarios_by_stable_identity():
     ) == [0.0, 0.2, 0.25]
 
 
+def test_output_plot_aligns_the_same_constant_reference_after_early_stop():
+    def scenario_trace(*, samples: int, output: float) -> SimulationTrace:
+        return SimulationTrace(
+            time_s=[0.1 * index for index in range(samples)],
+            reference={"vehicle speed": [0.5] * samples},
+            outputs={
+                "vehicle speed": [
+                    output * index / max(samples - 1, 1)
+                    for index in range(samples)
+                ]
+            },
+            requested_controls={"throttle angle": [0.05] * samples},
+            applied_controls={"throttle angle": [0.05] * samples},
+        )
+
+    def first_runner(_model, _controller):
+        _, decision = unstable_runner(_model, _controller)
+        return [scenario_trace(samples=3, output=0.1)], decision
+
+    first = run_next_trial(
+        stage5_session(),
+        expected_revision=stage5_session().revision,
+        runner=first_runner,
+    )
+    proposed = register_llm_proposal(
+        first,
+        new_parameters={"kp": 0.105, "ki": 0.021},
+        rationale="bounded test adjustment",
+        expected_revision=first.revision,
+    )
+    approved = approve_llm_proposal(proposed, expected_revision=proposed.revision)
+
+    def early_stop_runner(_model, _controller):
+        _, decision = unstable_runner(_model, _controller)
+        return [scenario_trace(samples=2, output=0.2)], decision
+
+    latest = run_next_trial(
+        approved,
+        expected_revision=approved.revision,
+        runner=early_stop_runner,
+    )
+
+    frame = output_plot_frame(latest)
+    series = set(frame["series"])
+
+    assert _series_values(
+        frame, "scenario-1 · 初始控制器输出 · vehicle speed"
+    ) == [0.0, 0.05, 0.1]
+    assert _series_values(
+        frame, "scenario-1 · 最新执行输出 · vehicle speed"
+    ) == [0.0, 0.2]
+    assert "scenario-2 · 最新执行输出 · vehicle speed" not in series
+
+
 def test_output_plot_disambiguates_reordered_scenarios_with_same_reference():
     def scenario_trace(*, initial: float, output: float) -> SimulationTrace:
         return SimulationTrace(
@@ -593,6 +647,62 @@ def test_output_plot_disambiguates_reordered_scenarios_with_same_reference():
     assert _series_values(
         frame, "scenario-2 · 最新执行输出 · vehicle speed"
     ) == [0.05, 0.22]
+
+
+def test_output_plot_does_not_position_pair_indistinguishable_duplicate_scenarios():
+    def scenario_trace(*, output: float) -> SimulationTrace:
+        return SimulationTrace(
+            time_s=[0.0, 0.1],
+            reference={"vehicle speed": [0.5, 0.5]},
+            outputs={"vehicle speed": [0.0, output]},
+            requested_controls={"throttle angle": [0.05, 0.04]},
+            applied_controls={"throttle angle": [0.05, 0.04]},
+        )
+
+    def first_runner(_model, _controller):
+        _, decision = unstable_runner(_model, _controller)
+        return [scenario_trace(output=0.1), scenario_trace(output=0.2)], decision
+
+    first = run_next_trial(
+        stage5_session(),
+        expected_revision=stage5_session().revision,
+        runner=first_runner,
+    )
+    proposed = register_llm_proposal(
+        first,
+        new_parameters={"kp": 0.105, "ki": 0.021},
+        rationale="bounded test adjustment",
+        expected_revision=first.revision,
+    )
+    approved = approve_llm_proposal(proposed, expected_revision=proposed.revision)
+
+    def reordered_runner(_model, _controller):
+        _, decision = unstable_runner(_model, _controller)
+        return [scenario_trace(output=0.22), scenario_trace(output=0.11)], decision
+
+    latest = run_next_trial(
+        approved,
+        expected_revision=approved.revision,
+        runner=reordered_runner,
+    )
+
+    frame = output_plot_frame(latest)
+    grouped = {
+        scenario: set(
+            frame.loc[
+                frame["series"].str.startswith(f"{scenario} · "), "series"
+            ].str.split(" · ").str[1]
+        )
+        for scenario in {
+            series.split(" · ", 1)[0] for series in frame["series"]
+        }
+    }
+
+    assert len(grouped) == 4
+    assert all(
+        not ({"初始控制器输出", "最新执行输出"} <= groups)
+        for groups in grouped.values()
+    )
 
 
 def test_output_plot_includes_first_only_and_latest_only_scenarios():

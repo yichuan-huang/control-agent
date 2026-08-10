@@ -47,7 +47,14 @@ def _scenario_identity(trace) -> str:
     explicit_id = getattr(trace, "scenario_id", None)
     if isinstance(explicit_id, str) and explicit_id:
         return f"id:{explicit_id}"
-    return "reference:" + _canonical_digest(trace.reference)
+    reference_profile = {}
+    for name, values in trace.reference.items():
+        transitions = []
+        for value in values:
+            if not transitions or value != transitions[-1]:
+                transitions.append(value)
+        reference_profile[name] = transitions
+    return "reference:" + _canonical_digest(reference_profile)
 
 
 def _initial_condition_identity(trace) -> str:
@@ -59,7 +66,11 @@ def _initial_condition_identity(trace) -> str:
     return _canonical_digest(initial_conditions)
 
 
-def _scenario_map(trial) -> dict[tuple[str, str, int], Any]:
+def _scenario_map(
+    trial,
+    *,
+    ambiguous_namespace: str,
+) -> dict[tuple[str, str, int], Any]:
     traces = trial.traces
     evidence_ids = [
         evidence.scenario_id for evidence in trial.stability.scenario_evidence
@@ -80,11 +91,17 @@ def _scenario_map(trial) -> dict[tuple[str, str, int], Any]:
         grouped.setdefault(identity, []).append(trace)
     scenarios: dict[tuple[str, str, int], Any] = {}
     for identity, matches in grouped.items():
+        disambiguators = [
+            _initial_condition_identity(trace) if len(matches) > 1 else ""
+            for trace in matches
+        ]
+        disambiguator_counts = {
+            value: disambiguators.count(value) for value in set(disambiguators)
+        }
         occurrences: dict[str, int] = {}
-        for trace in matches:
-            disambiguator = (
-                _initial_condition_identity(trace) if len(matches) > 1 else ""
-            )
+        for trace, disambiguator in zip(matches, disambiguators, strict=True):
+            if disambiguator_counts[disambiguator] > 1:
+                disambiguator = f"{disambiguator}:ambiguous:{ambiguous_namespace}"
             occurrence = occurrences.get(disambiguator, 0)
             occurrences[disambiguator] = occurrence + 1
             scenarios[(identity, disambiguator, occurrence)] = trace
@@ -147,8 +164,14 @@ def _append_scenario_trace(
 
 
 def _scenario_union(first, latest):
-    first_by_identity = _scenario_map(first)
-    latest_by_identity = _scenario_map(latest)
+    first_by_identity = _scenario_map(
+        first,
+        ambiguous_namespace="first",
+    )
+    latest_by_identity = _scenario_map(
+        latest,
+        ambiguous_namespace="latest",
+    )
     identities = [
         *first_by_identity,
         *(key for key in latest_by_identity if key not in first_by_identity),
