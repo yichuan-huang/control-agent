@@ -4,20 +4,36 @@ import pytest
 from pydantic import ValidationError
 
 from cfdc.diagnosis import (
+    DeterministicDiagnosticAdapter,
     build_diagnostic_checklist,
     continue_description_session,
     continue_diagnostic_session,
+    migrate_diagnostic_session_payload,
+    reduce_measurement_history_to_diagnosis,
     start_diagnostic_session,
     submit_measurement_assessment,
+    submit_profile_measurement_assessment,
+    validate_grounded_measurement_assessment,
 )
+from cfdc.diagnosis.engine import DiagnosticEngine
 from cfdc.models import (
     DiagnosticSessionState,
     MeasuredFact,
     MeasurementAssessment,
     MeasurementRequest,
+    SemanticRouteSelection,
     SystemDescription,
 )
 from cfdc.runtime import run_cfdc_route
+from cfdc.specifications import (
+    build_initial_specification_assessment,
+    specification_template_for_profile,
+)
+from cfdc.workflow import (
+    apply_profile_to_classification,
+    default_control_method_profile_catalog,
+    validate_semantic_selection,
+)
 
 
 def _description() -> SystemDescription:
@@ -26,6 +42,40 @@ def _description() -> SystemDescription:
         observed_outputs=["temperature"],
         actuators=["heater"],
     )
+
+
+_GROUNDED_FACTS = {
+    "open_loop_stability": "settles or remains bounded",
+    "minimum_phase": (
+        "starts in its final direction rather than moving the opposite way first"
+    ),
+    "significant_delay": (
+        "begins within one sample without a separate silent interval"
+    ),
+    "relative_degree": "one or two dominant storage or integration processes",
+    "controllability_observability": (
+        "all relevant motion can be reconstructed from these synchronized records"
+    ),
+    "nonlinearity_strength": (
+        "small positive and negative trials are smooth, reversible, and nearly proportional"
+    ),
+    "coupling_severity": (
+        "one main physical route from actuation to the measured motion"
+    ),
+    "uncertainty_magnitude": (
+        "change the response rate and final level by a modest amount"
+    ),
+}
+
+
+def _raw_response(assessment: MeasurementAssessment) -> str:
+    parts = []
+    for fact in assessment.facts:
+        parts.append(fact.source_excerpt)
+        if fact.text_value is not None:
+            parts.append(fact.text_value)
+    parts.extend(assessment.conflicts)
+    return "\n".join(parts)
 
 
 def test_measurement_contracts_are_strict_and_numeric_facts_require_units():
@@ -179,7 +229,10 @@ def test_measurement_assessment_preserves_conflicts_and_only_verified_evidence_a
     )
 
     updated = submit_measurement_assessment(
-        state, assessment, expected_revision=state.revision
+        state,
+        assessment,
+        raw_response=_raw_response(assessment),
+        expected_revision=state.revision,
     )
 
     assert updated.status == "measurement_conflict"
@@ -203,7 +256,10 @@ def test_complete_record_assessment_sets_the_measurement_verified_gate_only():
     )
 
     updated = submit_measurement_assessment(
-        state, assessment, expected_revision=state.revision
+        state,
+        assessment,
+        raw_response=_raw_response(assessment),
+        expected_revision=state.revision,
     )
 
     assert updated.status == "measurement_verified"
@@ -221,7 +277,10 @@ def test_measurement_rounds_refuse_after_eight_incomplete_assessments():
 
     for _ in range(8):
         state = submit_measurement_assessment(
-            state, assessment, expected_revision=state.revision
+            state,
+            assessment,
+            raw_response="No existing record is available for these fields.",
+            expected_revision=state.revision,
         )
 
     assert state.measurement_round_count == 8
@@ -244,7 +303,10 @@ def test_measurement_assessment_rejects_unknown_request_ids_and_v3_payloads():
     )
     with pytest.raises(ValueError, match="unknown measurement request"):
         submit_measurement_assessment(
-            state, invalid, expected_revision=state.revision
+            state,
+            invalid,
+            raw_response=_raw_response(invalid),
+            expected_revision=state.revision,
         )
 
     payload = state.model_dump(mode="json")
@@ -278,27 +340,28 @@ def test_session_model_rejects_classification_before_measurement_verification():
         DiagnosticSessionState.model_validate(payload)
 
 
-def test_session_model_allows_paired_later_stage_selection_after_measurement_verification():
+def test_measurement_verified_transition_cannot_smuggle_a_profile_selection():
     state = start_diagnostic_session(_description())
     verified = submit_measurement_assessment(
-        state, _ready_assessment(state), expected_revision=state.revision
+        state,
+        _ready_assessment(state),
+        raw_response=_raw_response(_ready_assessment(state)),
+        expected_revision=state.revision,
     )
     report = run_cfdc_route("generic", description=_description())
     payload = verified.model_dump(mode="json")
     payload["classification"] = report.classification.model_dump(mode="json")
     payload["semantic_selection"] = report.semantic_selection.model_dump(mode="json")
 
-    restored = DiagnosticSessionState.model_validate(payload)
-
-    assert restored.classification == report.classification
-    assert restored.semantic_selection == report.semantic_selection
+    with pytest.raises(ValidationError, match="must remain absent"):
+        DiagnosticSessionState.model_validate(payload)
 
 
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
         ("no_plan", "measurement_verified status requires a measurement plan"),
-        ("partial_plan", "fixed eight diagnostic fields"),
+        ("partial_plan", "exact fixed eight-field measurement plan"),
         ("missing_fact", "must account for every active measurement request"),
         ("unknown_fact", "unknown measurement request id"),
     ],
@@ -308,7 +371,10 @@ def test_direct_v4_payload_validation_cannot_forge_measurement_verified(
 ):
     state = start_diagnostic_session(_description())
     verified = submit_measurement_assessment(
-        state, _ready_assessment(state), expected_revision=state.revision
+        state,
+        _ready_assessment(state),
+        raw_response=_raw_response(_ready_assessment(state)),
+        expected_revision=state.revision,
     )
     payload = verified.model_dump(mode="json")
     if mutation == "no_plan":
@@ -336,7 +402,10 @@ def test_assessments_must_account_for_every_active_request():
     )
     with pytest.raises(ValueError, match="must account for every active measurement request"):
         submit_measurement_assessment(
-            state, incomplete, expected_revision=state.revision
+            state,
+            incomplete,
+            raw_response="Only one record was checked.",
+            expected_revision=state.revision,
         )
 
     incomplete_conflict = MeasurementAssessment(
@@ -347,7 +416,10 @@ def test_assessments_must_account_for_every_active_request():
     )
     with pytest.raises(ValueError, match="must account for every active measurement request"):
         submit_measurement_assessment(
-            state, incomplete_conflict, expected_revision=state.revision
+            state,
+            incomplete_conflict,
+            raw_response=_raw_response(incomplete_conflict),
+            expected_revision=state.revision,
         )
 
 
@@ -369,6 +441,9 @@ def test_direct_nonverified_payload_assessments_cannot_omit_active_requests(stat
     payload = state.model_dump(mode="json")
     payload["measurement_assessment"] = assessment.model_dump(mode="json")
     payload["measurement_history"] = [assessment.model_dump(mode="json")]
+    payload["measurement_response_history"] = [
+        "The current response accounts for only part of the plan."
+    ]
     payload["measurement_round_count"] = 1
     payload["status"] = "measurement_conflict" if status == "conflict" else "awaiting_measurements"
 
@@ -400,6 +475,7 @@ def test_direct_v4_payload_rejects_incomplete_measurement_history_entry():
     )
     payload = state.model_dump(mode="json")
     payload["measurement_history"] = [incomplete.model_dump(mode="json")]
+    payload["measurement_response_history"] = ["One field was reviewed."]
     payload["measurement_round_count"] = 1
 
     with pytest.raises(ValidationError, match="must account for every active measurement request"):
@@ -412,6 +488,7 @@ def test_direct_v4_payload_rejects_current_assessment_that_is_not_last_history_e
     current = _complete_conflict_assessment(state)
     payload = state.model_dump(mode="json")
     payload["measurement_history"] = [prior.model_dump(mode="json")]
+    payload["measurement_response_history"] = ["No records were available."]
     payload["measurement_round_count"] = 1
     payload["measurement_assessment"] = current.model_dump(mode="json")
     payload["status"] = "measurement_conflict"
@@ -433,13 +510,370 @@ def test_direct_v4_payload_accepts_empty_or_complete_auditable_measurement_histo
         first.model_dump(mode="json"),
         current.model_dump(mode="json"),
     ]
+    payload["measurement_response_history"] = [
+        "No records were available.",
+        "Two existing records disagree.",
+    ]
     payload["measurement_round_count"] = 2
     payload["measurement_assessment"] = current.model_dump(mode="json")
     payload["status"] = "measurement_conflict"
 
     restored = DiagnosticSessionState.model_validate(payload)
     assert restored.measurement_history == [first, current]
+    assert restored.measurement_response_history == [
+        "No records were available.",
+        "Two existing records disagree.",
+    ]
     assert restored.measurement_assessment == current
+
+
+def _grounded_ready_assessment(state) -> MeasurementAssessment:
+    return MeasurementAssessment(
+        status="ready",
+        facts=[
+            MeasuredFact(
+                request_id=request.request_id,
+                source_excerpt=_GROUNDED_FACTS[request.request_id],
+                text_value=_GROUNDED_FACTS[request.request_id],
+            )
+            for request in state.measurement_plan.requests
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("excerpt", "source_excerpt"),
+        ("text", "text_value"),
+        ("numeric", "numeric_value"),
+        ("unit", "unit"),
+    ],
+)
+def test_new_or_changed_measurement_fact_must_be_grounded_in_current_response(
+    mutation, message
+):
+    state = start_diagnostic_session(_description())
+    assessment = _grounded_ready_assessment(state)
+    raw_response = _raw_response(assessment)
+    facts = [fact.model_copy(deep=True) for fact in assessment.facts]
+    if mutation == "excerpt":
+        facts[0] = facts[0].model_copy(
+            update={"source_excerpt": "an invented source excerpt"}
+        )
+    elif mutation == "text":
+        facts[0] = facts[0].model_copy(update={"text_value": "invented conclusion"})
+    elif mutation == "numeric":
+        facts[0] = facts[0].model_copy(
+            update={
+                "source_excerpt": "the record reports 2.5 seconds",
+                "text_value": None,
+                "numeric_value": 9.5,
+                "unit": "seconds",
+            }
+        )
+        raw_response += "\nthe record reports 2.5 seconds"
+    else:
+        facts[0] = facts[0].model_copy(
+            update={
+                "source_excerpt": "the record reports 2.5 milliseconds",
+                "text_value": None,
+                "numeric_value": 2.5,
+                "unit": "seconds",
+            }
+        )
+        raw_response += "\nthe record reports 2.5 milliseconds"
+    mutated = assessment.model_copy(update={"facts": facts})
+
+    with pytest.raises(ValueError, match=message):
+        submit_measurement_assessment(
+            state,
+            mutated,
+            raw_response=raw_response,
+            expected_revision=state.revision,
+        )
+
+
+def test_grounding_normalizes_only_whitespace_and_rejects_invented_conflicts():
+    state = start_diagnostic_session(_description())
+    request = state.measurement_plan.requests[0]
+    fact = MeasuredFact(
+        request_id=request.request_id,
+        source_excerpt="the record says the output settles",
+        text_value="output settles",
+    )
+    assessment = MeasurementAssessment(
+        status="need_more",
+        facts=[fact],
+        gaps=[item.diagnostic_field_id for item in state.checklist[1:]],
+    )
+    validate_grounded_measurement_assessment(
+        state.measurement_plan,
+        assessment,
+        "the record says\n\t the output settles",
+    )
+
+    conflict = MeasurementAssessment(
+        status="conflict",
+        conflicts=["Record B says the output grows."],
+        conflict_request_ids=[request.request_id],
+        gaps=[item.diagnostic_field_id for item in state.checklist[1:]],
+    )
+    with pytest.raises(ValueError, match="conflict"):
+        validate_grounded_measurement_assessment(
+            state.measurement_plan,
+            conflict,
+            "Record A says the output settles.",
+        )
+
+
+def test_exact_ready_fact_carry_forward_is_unchanged_not_new_evidence():
+    state = start_diagnostic_session(_description())
+    previous = _grounded_ready_assessment(state)
+
+    validate_grounded_measurement_assessment(
+        state.measurement_plan,
+        previous,
+        "This Profile reply contains no new diagnostic claim.",
+        previous_ready_assessment=previous,
+    )
+    changed = previous.model_copy(
+        update={
+            "facts": [
+                previous.facts[0].model_copy(update={"text_value": "output grows"}),
+                *previous.facts[1:],
+            ]
+        }
+    )
+    with pytest.raises(ValueError, match="text_value"):
+        validate_grounded_measurement_assessment(
+            state.measurement_plan,
+            changed,
+            previous.facts[0].source_excerpt,
+            previous_ready_assessment=previous,
+        )
+
+
+def test_v4_schema_requires_aligned_nonempty_raw_measurement_responses():
+    state = start_diagnostic_session(_description())
+    assessment = _grounded_ready_assessment(state)
+    verified = submit_measurement_assessment(
+        state,
+        assessment,
+        raw_response=_raw_response(assessment),
+        expected_revision=state.revision,
+    )
+    payload = verified.model_dump(mode="json")
+    payload["measurement_response_history"] = []
+
+    with pytest.raises(ValidationError, match="response history"):
+        DiagnosticSessionState.model_validate(payload)
+
+
+def _post_measurement_payload() -> dict:
+    state = start_diagnostic_session(_description())
+    assessment = _grounded_ready_assessment(state)
+    verified = submit_measurement_assessment(
+        state,
+        assessment,
+        raw_response=_raw_response(assessment),
+        expected_revision=state.revision,
+    )
+    diagnosis = reduce_measurement_history_to_diagnosis(
+        verified.measurement_plan,
+        verified.measurement_history,
+    )
+    assert diagnosis.complete
+    raw_classification = DiagnosticEngine().classify(diagnosis, None)
+    catalog = default_control_method_profile_catalog()
+    selection = SemanticRouteSelection.model_validate(
+        DeterministicDiagnosticAdapter().select_profile(
+            verified.accumulated_description,
+            diagnosis,
+            raw_classification,
+            catalog,
+        )
+    )
+    profile = validate_semantic_selection(selection, raw_classification, catalog)
+    classification = apply_profile_to_classification(raw_classification, profile)
+    template = specification_template_for_profile(selection.simulation_profile_id)
+    initial_assessment = build_initial_specification_assessment(
+        verified.accumulated_description, template
+    )
+    payload = verified.model_dump(mode="json")
+    payload.update(
+        {
+            "revision": verified.revision + 1,
+            "current_diagnosis": diagnosis.model_dump(mode="json"),
+            "classification": classification.model_dump(mode="json"),
+            "semantic_selection": selection.model_dump(mode="json"),
+            "specification_templates": [template.model_dump(mode="json")],
+            "specification_assessment": initial_assessment.model_dump(mode="json"),
+            "status": "awaiting_profile_measurements",
+        }
+    )
+    return payload
+
+
+def test_migration_rejects_forged_postmeasurement_state_without_grounded_history():
+    payload = _post_measurement_payload()
+    payload["measurement_history"] = []
+    payload["measurement_response_history"] = []
+    payload["measurement_round_count"] = 0
+    payload["measurement_assessment"] = None
+
+    with pytest.raises((ValidationError, ValueError), match="grounded|history|ready"):
+        migrate_diagnostic_session_payload(payload)
+
+
+def test_postmeasurement_state_requires_a_ready_diagnostic_round_before_profile_rounds():
+    payload = _post_measurement_payload()
+    payload["measurement_round_count"] = 0
+    payload["profile_measurement_round_count"] = 1
+
+    with pytest.raises((ValidationError, ValueError), match="diagnostic.*ready"):
+        migrate_diagnostic_session_payload(payload)
+
+
+def test_migration_rejects_invented_evidence_in_persisted_history():
+    payload = _post_measurement_payload()
+    payload["measurement_history"][-1]["facts"][0]["source_excerpt"] = (
+        "an invented persisted excerpt"
+    )
+
+    with pytest.raises(ValueError, match="source_excerpt"):
+        migrate_diagnostic_session_payload(payload)
+
+
+def test_migration_recomputes_diagnosis_and_applied_classification():
+    payload = _post_measurement_payload()
+    expected = migrate_diagnostic_session_payload(payload)
+    payload["current_diagnosis"]["open_loop_stability"]["assessment"] = "unstable"
+    payload["classification"]["control_architecture"] = "injected architecture"
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.current_diagnosis == expected.current_diagnosis
+    assert restored.classification == expected.classification
+    assert restored.classification.control_architecture != "injected architecture"
+
+
+def test_migration_rejects_incompatible_or_invented_profile_selection():
+    payload = _post_measurement_payload()
+    payload["semantic_selection"].update(
+        {
+            "simulation_profile_id": "mimo_2x2_coupled",
+            "feature_bundle_id": "class_v_matrix_minimal",
+            "selected_feature_ids": [
+                "local_gain_matrix",
+                "local_time_constant",
+                "pairing_indicator",
+            ],
+        }
+    )
+
+    with pytest.raises(ValueError, match="incompatible"):
+        migrate_diagnostic_session_payload(payload)
+
+
+def test_migration_clears_downstream_derived_artifacts_to_safe_profile_resume():
+    payload = _post_measurement_payload()
+    payload["experiment_plan"] = {
+        "experiments": [],
+        "rationale": "injected",
+    }
+    payload["specification_answer_history"] = ["untrusted prior answer"]
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.status == "awaiting_profile_measurements"
+    assert restored.experiment_plan is None
+    assert restored.evidence_requirement_plan is None
+    assert restored.evidence_readiness is None
+    assert restored.compiled_specification_model is None
+    assert restored.candidate_route is None
+    assert restored.compiled_route is None
+    assert restored.specification_answer_history == []
+
+
+def test_migration_rebuilds_accumulated_description_from_retained_raw_inputs():
+    payload = _post_measurement_payload()
+    payload["accumulated_description"]["text"] += (
+        "\nInjected derived profile facts: input_change=99 V and output_max=999 degC."
+    )
+    payload["accumulated_description"]["safety_bounds"] = {"output_max": 999.0}
+    payload["accumulated_description"]["simulation_boundary_confirmation"] = {
+        "confirmed": True,
+        "scope": "software_simulation_only",
+        "statement_version": "v1",
+    }
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert "Injected derived profile facts" not in restored.accumulated_description.text
+    assert restored.accumulated_description.safety_bounds == {}
+    assert restored.accumulated_description.simulation_boundary_confirmation is None
+
+
+def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_resume():
+    payload = _post_measurement_payload()
+    diagnostic_ready = payload["measurement_history"][-1]
+    payload["measurement_history"].extend(
+        [diagnostic_ready for _ in range(8)]
+    )
+    payload["measurement_response_history"].extend(
+        ["Profile-only reply with unchanged diagnostic facts." for _ in range(8)]
+    )
+    payload["measurement_assessment"] = diagnostic_ready
+    payload["profile_measurement_round_count"] = 8
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.status == "awaiting_profile_measurements"
+    assert restored.measurement_round_count == 1
+    assert restored.profile_measurement_round_count == 0
+    assert len(restored.measurement_history) == 1
+    assert len(restored.measurement_response_history) == 1
+    assert restored.measurement_assessment == restored.measurement_history[-1]
+
+
+def test_profile_ready_carry_forward_uses_an_independent_round_counter():
+    state = migrate_diagnostic_session_payload(_post_measurement_payload())
+    assessment = state.measurement_assessment
+
+    updated = submit_profile_measurement_assessment(
+        state,
+        assessment,
+        raw_response="This Profile reply adds only model specification facts.",
+    )
+
+    assert updated.measurement_round_count == 1
+    assert updated.profile_measurement_round_count == 1
+    assert len(updated.measurement_history) == 2
+    assert len(updated.measurement_response_history) == 2
+
+
+def test_grounded_profile_conflict_invalidates_the_postmeasurement_release():
+    state = migrate_diagnostic_session_payload(_post_measurement_payload())
+    conflict_text = "A newer record says the output grows without bound."
+    conflict = MeasurementAssessment(
+        status="conflict",
+        conflicts=[conflict_text],
+        conflict_request_ids=[state.measurement_plan.requests[0].request_id],
+        gaps=[item.diagnostic_field_id for item in state.checklist[1:]],
+    )
+
+    invalidated = submit_profile_measurement_assessment(
+        state,
+        conflict,
+        raw_response=conflict_text,
+    )
+
+    assert invalidated.status == "measurement_conflict"
+    assert invalidated.evidence_level == "description_only"
+    assert invalidated.classification is None
+    assert invalidated.semantic_selection is None
+    assert invalidated.profile_measurement_round_count == 1
 
 
 def test_continue_diagnostic_session_requires_and_checks_expected_revision():

@@ -42,18 +42,25 @@ def _profile_measurement_session():
     session = start_diagnostic_session(
         report.system_description, diagnosis=report.diagnosis
     )
+    measurement_assessment = MeasurementAssessment(
+        status="ready",
+        facts=[
+            MeasuredFact(
+                request_id=request.request_id,
+                source_excerpt=f"Existing record for {request.title}.",
+                text_value="verified observation",
+            )
+            for request in session.measurement_plan.requests
+        ],
+    )
     verified = submit_measurement_assessment(
         session,
-        MeasurementAssessment(
-            status="ready",
-            facts=[
-                MeasuredFact(
-                    request_id=request.request_id,
-                    source_excerpt=f"Existing record for {request.title}.",
-                    text_value="verified observation",
-                )
-                for request in session.measurement_plan.requests
-            ],
+        measurement_assessment,
+        raw_response="\n".join(
+            [
+                *(fact.source_excerpt for fact in measurement_assessment.facts),
+                "verified observation",
+            ]
         ),
         expected_revision=session.revision,
     )

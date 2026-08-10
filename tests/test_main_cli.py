@@ -236,6 +236,17 @@ def test_cli_rejects_v3_session_payload(tmp_path):
         load_diagnostic_session(source)
 
 
+@pytest.mark.parametrize("payload", [[], "session", None, 7])
+def test_cli_rejects_non_object_diagnostic_session_json(payload, tmp_path):
+    source = tmp_path / "not-an-object.json"
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(
+        SystemExit, match="invalid --diagnostic-session-input.*JSON object"
+    ):
+        load_diagnostic_session(source)
+
+
 def test_cli_v4_session_round_trip_accepts_measurement_response_file(
     tmp_path, monkeypatch, capsys
 ):
@@ -243,7 +254,7 @@ def test_cli_v4_session_round_trip_accepts_measurement_response_file(
     initial_path = tmp_path / "initial-v4.json"
     advanced_path = tmp_path / "advanced-v4.json"
     response_path = tmp_path / "records.txt"
-    response_path.write_text("Eight existing record findings.", encoding="utf-8")
+    response_path.write_text("\n".join(_VALID_FIELD_FACTS.values()), encoding="utf-8")
     monkeypatch.setattr(
         sys,
         "argv",

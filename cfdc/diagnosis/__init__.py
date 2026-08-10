@@ -26,6 +26,7 @@ from cfdc.diagnosis.measurements import (
     build_measurement_plan,
     reduce_measurement_history_to_diagnosis,
     render_measurement_evidence,
+    validate_grounded_measurement_assessment,
     validate_measurement_assessment,
     validate_phrased_measurement_plan,
 )
@@ -43,6 +44,7 @@ from cfdc.diagnosis.session import (
     submit_evidence_to_session,
     submit_measurement_assessment,
     submit_measurements_to_session,
+    submit_profile_measurement_assessment,
     submit_specifications_to_session,
 )
 
@@ -79,8 +81,10 @@ __all__ = [
     "submit_evidence_to_session",
     "submit_measurement_assessment",
     "submit_measurements_to_session",
+    "submit_profile_measurement_assessment",
     "submit_specifications_to_session",
     "validate_agent_payload",
+    "validate_grounded_measurement_assessment",
     "validate_guided_adapter_capabilities",
     "validate_measurement_assessment",
     "validate_phrased_measurement_plan",

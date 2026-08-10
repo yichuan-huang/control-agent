@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from cfdc.models import (
     DescriptionGuidance,
     DescriptionGuidanceAssessment,
@@ -145,6 +147,89 @@ def validate_measurement_assessment(
     """Check adapter output against the active plan before a state transition."""
 
     validate_measurement_assessment_for_plan(plan, assessment)
+
+
+def _normalize_whitespace(value: str) -> str:
+    return " ".join(value.split())
+
+
+_NUMBER_TOKEN = re.compile(
+    r"(?<![\w.])[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?(?![\w.])"
+)
+
+
+def _contains_unit_token(excerpt: str, unit: str) -> bool:
+    normalized_excerpt = _normalize_whitespace(excerpt)
+    normalized_unit = _normalize_whitespace(unit)
+    prefix = r"(?<!\w)" if normalized_unit[0].isalnum() else ""
+    suffix = r"(?!\w)" if normalized_unit[-1].isalnum() else ""
+    return re.search(
+        prefix + re.escape(normalized_unit) + suffix,
+        normalized_excerpt,
+    ) is not None
+
+
+def validate_grounded_measurement_assessment(
+    plan: MeasurementPlan,
+    assessment: MeasurementAssessment,
+    raw_response: str,
+    *,
+    previous_ready_assessment: MeasurementAssessment | None = None,
+) -> None:
+    """Fail closed unless every new claim is attested by the current response."""
+
+    validate_measurement_assessment(plan, assessment)
+    normalized_response = _normalize_whitespace(raw_response)
+    if not normalized_response:
+        raise ValueError("raw measurement response must be non-empty")
+    previous_by_request = {}
+    if previous_ready_assessment is not None:
+        if previous_ready_assessment.status != "ready":
+            raise ValueError("measurement carry-forward requires a ready assessment")
+        validate_measurement_assessment(plan, previous_ready_assessment)
+        previous_by_request = {
+            fact.request_id: fact for fact in previous_ready_assessment.facts
+        }
+
+    for fact in assessment.facts:
+        if previous_by_request.get(fact.request_id) == fact:
+            continue
+        normalized_excerpt = _normalize_whitespace(fact.source_excerpt)
+        if normalized_excerpt not in normalized_response:
+            raise ValueError(
+                f"measurement source_excerpt for {fact.request_id} is not grounded "
+                "in the current raw response"
+            )
+        if fact.text_value is not None:
+            normalized_text = _normalize_whitespace(fact.text_value)
+            if (
+                normalized_text not in normalized_excerpt
+                and normalized_text not in normalized_response
+            ):
+                raise ValueError(
+                    f"measurement text_value for {fact.request_id} is not grounded "
+                    "in the current raw response"
+                )
+        if fact.numeric_value is not None:
+            attested_values = [
+                float(match.group(0)) for match in _NUMBER_TOKEN.finditer(normalized_excerpt)
+            ]
+            if fact.numeric_value not in attested_values:
+                raise ValueError(
+                    f"measurement numeric_value for {fact.request_id} is not "
+                    "attested in source_excerpt"
+                )
+            if not _contains_unit_token(normalized_excerpt, fact.unit or ""):
+                raise ValueError(
+                    f"measurement unit for {fact.request_id} is not attested in "
+                    "source_excerpt"
+                )
+
+    for conflict in assessment.conflicts:
+        if _normalize_whitespace(conflict) not in normalized_response:
+            raise ValueError(
+                "measurement conflict is not grounded in the current raw response"
+            )
 
 
 def validate_phrased_measurement_plan(

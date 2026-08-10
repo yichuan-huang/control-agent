@@ -1469,10 +1469,14 @@ class DiagnosticSessionState(CFDCModel):
     measurement_plan: MeasurementPlan | None = None
     measurement_assessment: MeasurementAssessment | None = None
     measurement_history: list[MeasurementAssessment] = Field(
-        default_factory=list, max_length=8
+        default_factory=list, max_length=16
+    )
+    measurement_response_history: list[str] = Field(
+        default_factory=list, max_length=16
     )
     description_turn_count: int = Field(default=0, ge=0, le=8)
     measurement_round_count: int = Field(default=0, ge=0, le=8)
+    profile_measurement_round_count: int = Field(default=0, ge=0, le=8)
     classification: ArchetypeClassification | None = None
     semantic_selection: SemanticRouteSelection | None = None
     experiment_plan: ExperimentPlan | None = None
@@ -1505,6 +1509,13 @@ class DiagnosticSessionState(CFDCModel):
     maximum_turns: int = Field(default=8, ge=1, le=8)
     refusal_reason: str | None = None
     evidence_boundary: str = "software_simulation_diagnostic_session"
+
+    @field_validator("measurement_response_history")
+    @classmethod
+    def validate_raw_measurement_responses(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() for item in value):
+            raise ValueError("measurement response history entries must be non-empty")
+        return value
 
     @model_validator(mode="after")
     def validate_guided_measurement_state(self) -> DiagnosticSessionState:
@@ -1543,10 +1554,50 @@ class DiagnosticSessionState(CFDCModel):
             raise ValueError(
                 "description_turn_count must match the description turn history"
             )
-        if self.measurement_round_count != len(self.measurement_history):
+        if (
+            self.measurement_round_count + self.profile_measurement_round_count
+            != len(self.measurement_history)
+        ):
             raise ValueError(
-                "measurement_round_count must match the measurement history"
+                "diagnostic and profile measurement round counts must match the "
+                "measurement history"
             )
+        if len(self.measurement_response_history) != len(self.measurement_history):
+            raise ValueError(
+                "measurement response history must align with measurement history"
+            )
+        if self.evidence_level == "measurement_verified":
+            diagnostic_history = self.measurement_history[
+                : self.measurement_round_count
+            ]
+            if (
+                not diagnostic_history
+                or diagnostic_history[-1].status != "ready"
+            ):
+                raise ValueError(
+                    "verified evidence requires a diagnostic ready assessment before "
+                    "any Profile rounds"
+                )
+            if any(item.status == "ready" for item in diagnostic_history[:-1]):
+                raise ValueError(
+                    "diagnostic measurement collection must stop at its first ready "
+                    "assessment"
+                )
+        if self.measurement_plan is not None:
+            plan_request_ids = [
+                request.request_id for request in self.measurement_plan.requests
+            ]
+            plan_field_ids = [
+                request.diagnostic_field_id
+                for request in self.measurement_plan.requests
+            ]
+            if (
+                plan_request_ids != required_field_ids
+                or plan_field_ids != required_field_ids
+            ):
+                raise ValueError(
+                    "v4 sessions require the exact fixed eight-field measurement plan"
+                )
         if self.status == "measurement_verified":
             if self.evidence_level != "measurement_verified":
                 raise ValueError(
@@ -1555,14 +1606,6 @@ class DiagnosticSessionState(CFDCModel):
             if self.measurement_plan is None:
                 raise ValueError(
                     "measurement_verified status requires a measurement plan"
-                )
-            plan_field_ids = [
-                request.diagnostic_field_id
-                for request in self.measurement_plan.requests
-            ]
-            if plan_field_ids != required_field_ids:
-                raise ValueError(
-                    "measurement_verified status requires a plan covering the fixed eight diagnostic fields"
                 )
             if self.measurement_assessment is None:
                 raise ValueError(
@@ -1577,6 +1620,30 @@ class DiagnosticSessionState(CFDCModel):
                 validate_measurement_assessment_for_plan(
                     self.measurement_plan, assessment
                 )
+            from cfdc.diagnosis.measurements import (
+                validate_grounded_measurement_assessment,
+            )
+
+            previous_ready_assessment = None
+            for index, (response, assessment) in enumerate(
+                zip(
+                    self.measurement_response_history,
+                    self.measurement_history,
+                    strict=True,
+                )
+            ):
+                validate_grounded_measurement_assessment(
+                    self.measurement_plan,
+                    assessment,
+                    response,
+                    previous_ready_assessment=(
+                        previous_ready_assessment
+                        if index >= self.measurement_round_count
+                        else None
+                    ),
+                )
+                if assessment.status == "ready":
+                    previous_ready_assessment = assessment
         if self.measurement_assessment is not None:
             if self.measurement_plan is None:
                 raise ValueError(
@@ -1599,6 +1666,13 @@ class DiagnosticSessionState(CFDCModel):
             raise ValueError(
                 "measurement_verified status requires a ready measurement assessment"
             )
+        if self.status == "measurement_verified" and (
+            has_classification or has_selection
+        ):
+            raise ValueError(
+                "classification and semantic_selection must remain absent during the "
+                "measurement_verified transition"
+            )
         post_measurement_statuses = {
             "awaiting_profile_measurements",
             "specification_conflict",
@@ -1618,6 +1692,17 @@ class DiagnosticSessionState(CFDCModel):
             if not has_classification or not has_selection:
                 raise ValueError(
                     "post-measurement states require classification and semantic_selection"
+                )
+            if (
+                self.measurement_plan is None
+                or not self.measurement_history
+                or self.measurement_assessment is None
+                or self.measurement_assessment.status != "ready"
+                or not self.current_diagnosis.complete
+            ):
+                raise ValueError(
+                    "post-measurement states require a complete grounded ready "
+                    "diagnostic history"
                 )
         elif self.evidence_level == "measurement_verified" and self.status not in {
             "measurement_verified",

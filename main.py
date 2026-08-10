@@ -100,7 +100,7 @@ def load_diagnostic_session(path: Path) -> DiagnosticSessionState:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         return migrate_diagnostic_session_payload(payload)
-    except (OSError, ValueError) as exc:
+    except (OSError, TypeError, ValueError) as exc:
         raise SystemExit(f"invalid --diagnostic-session-input {path}: {exc}") from None
 
 
