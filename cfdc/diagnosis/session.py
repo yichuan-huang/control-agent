@@ -1,38 +1,25 @@
+"""Revisioned, record-only diagnostic measurement sessions."""
+
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 from uuid import uuid4
 
 from cfdc.diagnosis.engine import DiagnosticEngine
 from cfdc.diagnosis.llm import DiagnosticAdapter
-from cfdc.evidence import (
-    build_evidence_requirement_plan,
-    plant_id_for_description,
-    validate_evidence_package,
+from cfdc.diagnosis.measurements import (
+    build_diagnostic_checklist,
+    build_measurement_plan,
+    validate_measurement_assessment,
 )
-from cfdc.experiments import plan_safe_experiments
 from cfdc.models import (
     DiagnosticSessionState,
     DiagnosticTurn,
+    MeasurementAssessment,
     PlantEvidencePackage,
-    SemanticRouteSelection,
     StructuralDiagnosis,
     SystemDescription,
-)
-from cfdc.specifications import (
-    assess_specification_text,
-    build_initial_specification_assessment,
-    compile_specification_model,
-    specification_template_for_profile,
-)
-from cfdc.workflow import (
-    apply_profile_to_classification,
-    build_candidate_route,
-    compile_candidate_route,
-    default_capability_catalog,
-    default_control_method_profile_catalog,
-    deterministic_profile_selection,
-    validate_semantic_selection,
 )
 
 
@@ -41,73 +28,42 @@ def clarification_question_id(question: str) -> str:
 
 
 def clarification_question_map(state: DiagnosticSessionState) -> dict[str, str]:
+    """Retained for callers that render the description guidance as question IDs."""
+
     return {
-        clarification_question_id(question): question
-        for question in state.pending_clarification_questions
+        clarification_question_id(guidance.prompt): guidance.prompt
+        for guidance in state.description_guidance
     }
 
 
-def _select_profile(adapter, description, diagnosis, classification):
-    catalog = default_control_method_profile_catalog()
-    if adapter is not None and hasattr(adapter, "select_profile"):
-        payload = adapter.select_profile(
-            description, diagnosis, classification, catalog
+def _expect_revision(state: DiagnosticSessionState, expected_revision: int) -> None:
+    if expected_revision != state.revision:
+        raise ValueError(
+            f"stale diagnostic session revision {expected_revision}; current={state.revision}"
         )
-        selection = SemanticRouteSelection.model_validate(payload)
-    else:
-        selection = deterministic_profile_selection(
-            description, diagnosis, classification, catalog
-        )
-    profile = validate_semantic_selection(selection, classification, catalog)
-    return selection, profile, apply_profile_to_classification(classification, profile)
 
 
-def _advance_complete_diagnosis(state, diagnosis, engine, adapter):
-    description = state.accumulated_description
-    raw_classification = engine.classify(diagnosis, description)
-    selection, profile, classification = _select_profile(
-        adapter, description, diagnosis, raw_classification
-    )
-    experiment_plan = plan_safe_experiments(diagnosis, classification, description)
-    candidate_route = build_candidate_route(
-        state.route_id, diagnosis, classification, description, experiment_plan, profile
-    )
-    compiled_route = compile_candidate_route(
-        candidate_route, default_capability_catalog()
-    )
-    evidence_requirement_plan = build_evidence_requirement_plan(
-        description,
-        diagnosis,
-        classification,
-        selection,
-    )
-    specification_template = specification_template_for_profile(
-        selection.simulation_profile_id
-    )
-    specification_assessment = build_initial_specification_assessment(
-        description,
-        specification_template,
-    )
-    return state.model_copy(
-        update={
-            "current_diagnosis": diagnosis,
-            "classification": classification,
-            "semantic_selection": selection,
-            "experiment_plan": experiment_plan,
-            "evidence_requirement_plan": evidence_requirement_plan,
-            "specification_templates": [specification_template],
-            "specification_assessment": specification_assessment,
-            "pending_clarification_questions": [],
-            "candidate_route": candidate_route,
-            "compiled_route": compiled_route,
-            "status": "awaiting_specifications"
-            if compiled_route.executable
-            else "refused",
-            "refusal_reason": None
-            if compiled_route.executable
-            else "blocking_capability_gap",
-        }
-    )
+def _transition(
+    state: DiagnosticSessionState,
+    *,
+    updates: dict,
+) -> DiagnosticSessionState:
+    """Produce one validated copy-on-write revision of a diagnostic session."""
+
+    payload = deepcopy(state.model_dump(mode="python"))
+    payload.update(deepcopy(updates))
+    payload["revision"] = state.revision + 1
+    return DiagnosticSessionState.model_validate(payload)
+
+
+def _diagnose(
+    description: SystemDescription,
+    diagnostic_adapter: DiagnosticAdapter | None,
+    use_mechanism_cards: bool,
+):
+    return DiagnosticEngine(
+        adapter=diagnostic_adapter, use_mechanism_cards=use_mechanism_cards
+    ).diagnose(description)
 
 
 def start_diagnostic_session(
@@ -118,30 +74,84 @@ def start_diagnostic_session(
     use_mechanism_cards: bool = False,
     diagnosis: StructuralDiagnosis | None = None,
 ) -> DiagnosticSessionState:
-    engine = DiagnosticEngine(
-        adapter=diagnostic_adapter, use_mechanism_cards=use_mechanism_cards
+    """Create a v4 session without making a classification or profile selection."""
+
+    resolved_diagnosis = diagnosis or _diagnose(
+        description, diagnostic_adapter, use_mechanism_cards
     )
-    resolved_diagnosis = diagnosis or engine.diagnose(description)
-    state = DiagnosticSessionState(
+    checklist = build_diagnostic_checklist(description, resolved_diagnosis)
+    return DiagnosticSessionState(
         session_id=f"diagnostic-{uuid4().hex[:16]}",
         route_id=route_id,
         initial_description=description,
         accumulated_description=description,
         current_diagnosis=resolved_diagnosis,
-        pending_clarification_questions=list(
-            resolved_diagnosis.clarification_questions
-        ),
-        status="awaiting_specifications"
-        if resolved_diagnosis.complete
-        else "collecting_information",
+        description_guidance=[item.guidance for item in checklist],
+        checklist=checklist,
+        measurement_plan=build_measurement_plan(checklist),
+        pending_clarification_questions=[],
+        status="awaiting_measurements",
     )
-    return (
-        _advance_complete_diagnosis(
-            state, resolved_diagnosis, engine, diagnostic_adapter
+
+
+def continue_description_session(
+    state: DiagnosticSessionState,
+    supplemental_description: str,
+    *,
+    expected_revision: int,
+    diagnostic_adapter: DiagnosticAdapter | None = None,
+    use_mechanism_cards: bool = False,
+) -> DiagnosticSessionState:
+    """Add a user-supplied description of existing records, at most eight times."""
+
+    _expect_revision(state, expected_revision)
+    if state.status not in {
+        "collecting_description",
+        "awaiting_measurements",
+        "measurement_conflict",
+    }:
+        raise ValueError(
+            "only a description or measurement-waiting session can continue"
         )
-        if resolved_diagnosis.complete
-        else state
+    text = supplemental_description.strip()
+    if not text:
+        raise ValueError("supplemental description must be non-empty")
+    if state.description_turn_count >= state.maximum_turns:
+        raise ValueError("maximum description turns already reached")
+
+    evidence = f"Supplemental description: {text}"
+    accumulated = state.accumulated_description.model_copy(
+        update={"text": "\n\n".join([state.accumulated_description.text, evidence])}
     )
+    diagnosis = _diagnose(accumulated, diagnostic_adapter, use_mechanism_cards)
+    turn = DiagnosticTurn(
+        turn_index=state.description_turn_count + 1,
+        questions=["supplemental_description"],
+        answers={"supplemental_description": text},
+        evidence=[evidence],
+        diagnosis=diagnosis,
+    )
+    checklist = build_diagnostic_checklist(accumulated, diagnosis)
+    updates = {
+        "accumulated_description": accumulated,
+        "turns": [*state.turns, turn],
+        "current_diagnosis": diagnosis,
+        "description_guidance": [item.guidance for item in checklist],
+        "checklist": checklist,
+        "measurement_plan": build_measurement_plan(checklist),
+        "description_turn_count": state.description_turn_count + 1,
+        "measurement_assessment": None,
+        "status": "awaiting_measurements",
+        "refusal_reason": None,
+    }
+    if updates["description_turn_count"] >= state.maximum_turns:
+        updates.update(
+            {
+                "status": "refused",
+                "refusal_reason": "maximum_description_turns_reached",
+            }
+        )
+    return _transition(state, updates=updates)
 
 
 def continue_diagnostic_session(
@@ -149,243 +159,126 @@ def continue_diagnostic_session(
     answers: dict[str, str] | None = None,
     *,
     supplemental_description: str | None = None,
+    expected_revision: int,
     diagnostic_adapter: DiagnosticAdapter | None = None,
     use_mechanism_cards: bool = False,
 ) -> DiagnosticSessionState:
-    if state.status != "collecting_information":
-        raise ValueError("only a collecting_information session can be continued")
-    answers = answers or {}
-    question_map = clarification_question_map(state)
-    normalized_answers: dict[str, str] = {}
-    for key, answer in answers.items():
-        question = question_map.get(key, key if key in question_map.values() else None)
-        if question is None:
-            raise ValueError(f"unknown clarification question id '{key}'")
-        if not answer.strip():
-            raise ValueError("clarification answers must be non-empty")
-        normalized_answers[question] = answer.strip()
-    if not normalized_answers and not (supplemental_description or "").strip():
-        raise ValueError(
-            "provide at least one clarification answer or supplemental description"
-        )
+    """Compatibility wrapper for description continuation in the v4 workflow."""
 
-    evidence = [
-        f"Clarification {clarification_question_id(question)}: {answer}"
-        for question, answer in normalized_answers.items()
-    ]
-    if supplemental_description and supplemental_description.strip():
-        evidence.append(f"Supplemental description: {supplemental_description.strip()}")
-    accumulated = state.accumulated_description.model_copy(
-        update={"text": "\n\n".join([state.accumulated_description.text, *evidence])}
+    answer_text = "\n".join(
+        value.strip() for value in (answers or {}).values() if value.strip()
     )
-    engine = DiagnosticEngine(
-        adapter=diagnostic_adapter, use_mechanism_cards=use_mechanism_cards
-    )
-    diagnosis = engine.diagnose(accumulated)
-    turn_questions = list(normalized_answers) or ["supplemental_description"]
-    turn_answers = normalized_answers or {
-        "supplemental_description": supplemental_description.strip()
-    }
-    turn = DiagnosticTurn(
-        turn_index=len(state.turns) + 1,
-        questions=turn_questions,
-        answers=turn_answers,
-        evidence=evidence,
-        diagnosis=diagnosis,
-    )
-    updated = state.model_copy(
-        update={
-            "accumulated_description": accumulated,
-            "turns": [*state.turns, turn],
-            "current_diagnosis": diagnosis,
-            "pending_clarification_questions": list(diagnosis.clarification_questions),
-        }
-    )
-    if diagnosis.complete:
-        return _advance_complete_diagnosis(
-            updated, diagnosis, engine, diagnostic_adapter
+    description = supplemental_description or answer_text
+    if not (description or "").strip():
+        raise ValueError(
+            "provide a supplemental description of an existing record or manual report"
         )
-    if len(updated.turns) >= updated.maximum_turns:
-        return updated.model_copy(
-            update={
-                "status": "refused",
-                "pending_clarification_questions": [],
-                "refusal_reason": "maximum_clarification_turns_reached",
+    return continue_description_session(
+        state,
+        description,
+        expected_revision=expected_revision,
+        diagnostic_adapter=diagnostic_adapter,
+        use_mechanism_cards=use_mechanism_cards,
+    )
+
+
+def submit_measurement_assessment(
+    state: DiagnosticSessionState,
+    assessment: MeasurementAssessment | dict,
+    *,
+    expected_revision: int,
+) -> DiagnosticSessionState:
+    """Apply a structured adapter assessment after deterministic plan validation."""
+
+    _expect_revision(state, expected_revision)
+    if state.status not in {"awaiting_measurements", "measurement_conflict"}:
+        raise ValueError(
+            "only a measurement-waiting session accepts a measurement assessment"
+        )
+    if state.measurement_round_count >= state.maximum_turns:
+        raise ValueError("maximum measurement rounds already reached")
+    if state.measurement_plan is None:
+        raise ValueError("diagnostic session is missing its measurement plan")
+    typed_assessment = MeasurementAssessment.model_validate(assessment)
+    validate_measurement_assessment(state.measurement_plan, typed_assessment)
+    round_count = state.measurement_round_count + 1
+    updates = {
+        "measurement_assessment": typed_assessment,
+        "measurement_history": [*state.measurement_history, typed_assessment],
+        "measurement_round_count": round_count,
+        "evidence_level": "description_only",
+        "status": "measurement_conflict"
+        if typed_assessment.status == "conflict"
+        else "awaiting_measurements",
+        "refusal_reason": None,
+    }
+    if typed_assessment.status == "ready":
+        updates.update(
+            {
+                "evidence_level": "measurement_verified",
+                "status": "measurement_verified",
             }
         )
-    return updated
+    elif round_count >= state.maximum_turns:
+        updates.update(
+            {
+                "status": "refused",
+                "refusal_reason": "maximum_measurement_rounds_reached",
+            }
+        )
+    return _transition(state, updates=updates)
+
+
+def submit_measurements_to_session(
+    state: DiagnosticSessionState,
+    assessment: MeasurementAssessment | dict,
+    *,
+    expected_revision: int,
+) -> DiagnosticSessionState:
+    """Plural alias used by adapters submitting one structured assessment."""
+
+    return submit_measurement_assessment(
+        state, assessment, expected_revision=expected_revision
+    )
 
 
 def submit_evidence_to_session(
     state: DiagnosticSessionState,
     package: PlantEvidencePackage,
 ) -> DiagnosticSessionState:
-    """Validate object evidence without running feature extraction or synthesis."""
+    """The v4 guided workflow accepts only its typed record assessment at this stage."""
 
-    if state.status not in {
-        "awaiting_specifications",
-        "need_more_specifications",
-        "specification_conflict",
-        "awaiting_evidence",
-        "evidence_rejected",
-    }:
-        raise ValueError("only an evidence-waiting diagnostic session accepts evidence")
-    if state.evidence_requirement_plan is None:
-        raise ValueError("diagnostic session is missing its evidence requirement plan")
-    readiness = validate_evidence_package(
-        package,
-        state.evidence_requirement_plan,
-        state.accumulated_description,
-    )
-    return state.model_copy(
-        update={
-            "evidence_readiness": readiness,
-            "status": (
-                "ready_for_experiments"
-                if readiness.decision == "ready"
-                else "evidence_rejected"
-            ),
-            "refusal_reason": (
-                None
-                if readiness.decision == "ready"
-                else "object_evidence_validation_failed"
-            ),
-        }
+    del state, package
+    raise ValueError(
+        "v4 diagnostic sessions require a measurement assessment before evidence submission"
     )
 
 
-def submit_specifications_to_session(
-    state: DiagnosticSessionState,
-    specification_text: str,
-    *,
-    specification_adapter=None,
-) -> DiagnosticSessionState:
-    """Advance the ordinary-user specification dialogue without inventing values."""
+def submit_specifications_to_session(*args, **kwargs):
+    """Specification collection is unavailable before the measurement gate releases it."""
 
-    if state.status not in {
-        "awaiting_specifications",
-        "need_more_specifications",
-        "specification_conflict",
-    }:
-        raise ValueError(
-            "only a specification-waiting session accepts specification text"
-        )
-    text = specification_text.strip()
-    if not text:
-        raise ValueError("specification text must be non-empty")
-    if not state.specification_templates:
-        if state.semantic_selection is None:
-            raise ValueError(
-                "diagnostic session is missing its selected method profile"
-            )
-        template = specification_template_for_profile(
-            state.semantic_selection.simulation_profile_id
-        )
-    else:
-        template = state.specification_templates[0]
-    assessment = assess_specification_text(
-        state.accumulated_description,
-        template,
-        text,
-        previous=state.specification_assessment,
-        adapter=specification_adapter,
-        diagnosis=state.current_diagnosis,
-        classification=state.classification,
-        method_profile_id=(
-            state.semantic_selection.simulation_profile_id
-            if state.semantic_selection is not None
-            else template.method_profile_id
-        ),
-        answer_history=state.specification_answer_history,
-    )
-    history = [*state.specification_answer_history, text]
-    if assessment.status == "conflict":
-        return state.model_copy(
-            update={
-                "specification_assessment": assessment,
-                "specification_answer_history": history,
-                "compiled_specification_model": None,
-                "status": "specification_conflict",
-            }
-        )
-    if assessment.status != "ready":
-        return state.model_copy(
-            update={
-                "specification_assessment": assessment,
-                "specification_answer_history": history,
-                "compiled_specification_model": None,
-                "status": "need_more_specifications",
-            }
-        )
-    compiled = compile_specification_model(
-        plant_id=plant_id_for_description(state.accumulated_description),
-        description=state.accumulated_description,
-        template=template,
-        assessment=assessment,
-    )
-    updated_description = state.accumulated_description.model_copy(
-        update={
-            "safety_bounds": {
-                **state.accumulated_description.safety_bounds,
-                **compiled.safety_bounds,
-            },
-            "time_scale_hint_s": (
-                state.accumulated_description.time_scale_hint_s
-                or compiled.time_scale_hint_s
-            ),
-        }
-    )
-    return state.model_copy(
-        update={
-            "accumulated_description": updated_description,
-            "specification_assessment": assessment,
-            "specification_answer_history": history,
-            "compiled_specification_model": compiled,
-            "status": "specification_model_ready",
-        }
+    del args, kwargs
+    raise ValueError(
+        "v4 diagnostic sessions require measurement verification before specifications"
     )
 
 
 def migrate_diagnostic_session_payload(payload: dict) -> DiagnosticSessionState:
-    """Upgrade persisted v1 sessions without preserving an unsafe release state."""
+    """Accept v4 payloads and explicitly refuse unsafe v3 persisted sessions."""
 
-    state = DiagnosticSessionState.model_validate(payload)
-    if state.schema_version == "3.0":
-        return state
-    if not state.current_diagnosis.complete:
-        return state.model_copy(update={"schema_version": "3.0"})
-    if state.classification is None or state.semantic_selection is None:
-        engine = DiagnosticEngine()
-        migrated = _advance_complete_diagnosis(
-            state,
-            state.current_diagnosis,
-            engine,
-            None,
+    version = payload.get("schema_version")
+    if version == "3.0":
+        raise ValueError(
+            "v3 diagnostic session payloads are not supported; start a v4 session"
         )
-        return migrated.model_copy(update={"schema_version": "3.0"})
-    requirement_plan = build_evidence_requirement_plan(
-        state.accumulated_description,
-        state.current_diagnosis,
-        state.classification,
-        state.semantic_selection,
-    )
-    template = specification_template_for_profile(
-        state.semantic_selection.simulation_profile_id
-    )
-    assessment = build_initial_specification_assessment(
-        state.accumulated_description,
-        template,
-    )
-    return state.model_copy(
-        update={
-            "schema_version": "3.0",
-            "evidence_requirement_plan": requirement_plan,
-            "evidence_readiness": None,
-            "specification_templates": [template],
-            "specification_assessment": assessment,
-            "specification_answer_history": [],
-            "compiled_specification_model": None,
-            "status": "awaiting_specifications",
-            "refusal_reason": None,
-        }
-    )
+    if version == "4.0":
+        return DiagnosticSessionState.model_validate(payload)
+    if version in {"1.0", "2.0", None}:
+        description = SystemDescription.model_validate(
+            payload.get("initial_description") or payload.get("accumulated_description")
+        )
+        return start_diagnostic_session(
+            description,
+            route_id=payload.get("route_id", "generic"),
+        )
+    raise ValueError(f"unsupported diagnostic session schema version: {version}")

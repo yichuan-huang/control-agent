@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+
 class CFDCModel(BaseModel):
     """Base model that rejects undeclared fields for auditable JSON output."""
 
@@ -1145,14 +1146,282 @@ class DiagnosticTurn(CFDCModel):
     diagnosis: StructuralDiagnosis
 
 
+DiagnosticFieldId = Literal[
+    "open_loop_stability",
+    "minimum_phase",
+    "significant_delay",
+    "relative_degree",
+    "controllability_observability",
+    "nonlinearity_strength",
+    "coupling_severity",
+    "uncertainty_magnitude",
+]
+
+
+class DescriptionGuidance(CFDCModel):
+    """A record-only prompt for one structural diagnostic field."""
+
+    diagnostic_field_id: DiagnosticFieldId
+    prompt: str = Field(min_length=1)
+    why_needed: str = Field(min_length=1)
+    accepted_sources: list[Literal["existing_record", "manual_report"]] = Field(
+        default_factory=lambda: ["existing_record", "manual_report"], min_length=1
+    )
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_record_only_prompt(cls, value: str) -> str:
+        normalized = value.strip()
+        if (
+            "existing record" not in normalized.lower()
+            and "manual report" not in normalized.lower()
+        ):
+            raise ValueError(
+                "description guidance must request an existing record or manual report"
+            )
+        forbidden = ("amplitude", "duration", "physical hardware", "issue a command")
+        if any(term in normalized.lower() for term in forbidden):
+            raise ValueError("description guidance must not prescribe physical measurements")
+        return normalized
+
+
+class DiagnosticChecklistItem(CFDCModel):
+    diagnostic_field_id: DiagnosticFieldId
+    label: str = Field(min_length=1)
+    status: Literal["known", "inferred", "unknown"]
+    evidence: list[str] = Field(default_factory=list)
+    guidance: DescriptionGuidance
+
+
+class MeasurementRequest(CFDCModel):
+    """One request to report facts already present in a record or manual."""
+
+    request_id: str = Field(min_length=1)
+    diagnostic_field_id: DiagnosticFieldId
+    title: str = Field(min_length=1)
+    safety_scope: Literal["existing_records_only"] = "existing_records_only"
+    instruction: str = Field(default="Review an existing record.", min_length=1)
+    source_hint: str = Field(
+        default="Review an existing record.", min_length=1
+    )
+    report_template: str = Field(
+        default="Report the source excerpt and recorded observation.",
+        min_length=1,
+    )
+    response_hint: str = Field(
+        default="Report the source excerpt and recorded observation.", min_length=1
+    )
+    unit_hint: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_fixed_title(cls, value: str, info) -> str:
+        expected_titles = {
+            "open_loop_stability": "Open-loop stability",
+            "minimum_phase": "Minimum-phase behavior",
+            "significant_delay": "Significant delay",
+            "relative_degree": "Relative degree",
+            "controllability_observability": "Controllability and observability",
+            "nonlinearity_strength": "Nonlinearity strength",
+            "coupling_severity": "Coupling severity",
+            "uncertainty_magnitude": "Uncertainty magnitude",
+        }
+        field_id = info.data.get("diagnostic_field_id")
+        if field_id in expected_titles and value.strip() != expected_titles[field_id]:
+            raise ValueError("measurement request title must be the fixed diagnostic label")
+        return value.strip()
+
+    @field_validator("instruction", "source_hint")
+    @classmethod
+    def validate_source_lookup_text(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        allowed = {
+            "Review an existing record.",
+            "Review a manual report.",
+            "Read an existing record.",
+            "Read a manual report.",
+            "Find an existing record.",
+            "Find a manual report.",
+            "Compare existing records.",
+            "Compare manual reports.",
+        }
+        if normalized not in allowed:
+            raise ValueError(
+                "measurement source lookup text must be a record-only lookup template"
+            )
+        return normalized
+
+    @field_validator("report_template", "response_hint")
+    @classmethod
+    def validate_report_template(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        allowed = {
+            "Report the recorded observation.",
+            "Describe the recorded observation.",
+            "Report the source excerpt and recorded observation.",
+            "Describe the source excerpt and recorded observation.",
+        }
+        if normalized not in allowed:
+            raise ValueError(
+                "measurement report text must be an observation-reporting template"
+            )
+        return normalized
+
+
+class MeasurementPlan(CFDCModel):
+    requests: list[MeasurementRequest] = Field(min_length=1, max_length=8)
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_unique_requests(self) -> MeasurementPlan:
+        request_ids = [item.request_id for item in self.requests]
+        diagnostic_field_ids = [item.diagnostic_field_id for item in self.requests]
+        if len(request_ids) != len(set(request_ids)):
+            raise ValueError("measurement request ids must be unique")
+        if len(diagnostic_field_ids) != len(set(diagnostic_field_ids)):
+            raise ValueError(
+                "measurement plan may contain only one request per diagnostic field"
+            )
+        return self
+
+
+class MeasuredFact(CFDCModel):
+    request_id: str = Field(min_length=1)
+    source_excerpt: str = Field(min_length=1)
+    numeric_value: float | None = None
+    unit: str | None = None
+    text_value: str | None = None
+
+    @field_validator("source_excerpt")
+    @classmethod
+    def validate_source_excerpt(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("source_excerpt must be non-empty")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_value_and_provenance(self) -> MeasuredFact:
+        if self.numeric_value is None and not (self.text_value or "").strip():
+            raise ValueError("measured facts require a numeric_value or text_value")
+        if self.numeric_value is not None and not (self.unit or "").strip():
+            raise ValueError("numeric measured facts require a unit")
+        if self.text_value is not None and not self.text_value.strip():
+            raise ValueError("text_value must be non-empty when supplied")
+        if (self.text_value or "").strip().lower() == "unknown":
+            raise ValueError("unknown values belong in assessment gaps, not measured facts")
+        return self
+
+
+class MeasurementAssessment(CFDCModel):
+    """Structured adapter output; session code validates it against the active plan."""
+
+    status: Literal["need_more", "conflict", "ready"]
+    facts: list[MeasuredFact] = Field(default_factory=list)
+    gaps: list[DiagnosticFieldId] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    conflict_request_ids: list[str] = Field(default_factory=list)
+    rationale: str = Field(
+        default="Measurement evidence has not been fully verified.", min_length=1
+    )
+
+    @model_validator(mode="after")
+    def validate_status(self) -> MeasurementAssessment:
+        if self.status == "conflict" and (
+            not self.conflicts or not self.conflict_request_ids
+        ):
+            raise ValueError(
+                "a conflicting measurement assessment requires mapped conflicts"
+            )
+        if len(self.conflicts) != len(self.conflict_request_ids):
+            raise ValueError("measurement conflicts require one request id each")
+        if len(self.conflict_request_ids) != len(set(self.conflict_request_ids)):
+            raise ValueError("measurement conflict request ids must be unique")
+        if self.status != "conflict" and (
+            self.conflicts or self.conflict_request_ids
+        ):
+            raise ValueError("only conflict assessments may contain conflicts")
+        if self.status == "ready" and (self.gaps or self.conflicts):
+            raise ValueError("a ready measurement assessment cannot contain gaps or conflicts")
+        return self
+
+
+def validate_measurement_assessment_for_plan(
+    plan: MeasurementPlan,
+    assessment: MeasurementAssessment,
+) -> None:
+    """Require each active record request to have exactly one auditable outcome."""
+
+    active_request_ids = [request.request_id for request in plan.requests]
+    active_request_id_set = set(active_request_ids)
+    request_field_by_id = {
+        request.request_id: request.diagnostic_field_id for request in plan.requests
+    }
+    fact_request_ids = [fact.request_id for fact in assessment.facts]
+    unknown_fact_ids = set(fact_request_ids) - active_request_id_set
+    if unknown_fact_ids:
+        raise ValueError(
+            "unknown measurement request id(s): " + ", ".join(sorted(unknown_fact_ids))
+        )
+    if len(fact_request_ids) != len(set(fact_request_ids)):
+        raise ValueError("measurement assessments may contain only one fact per request")
+    active_field_ids = set(request_field_by_id.values())
+    unknown_gaps = set(assessment.gaps) - active_field_ids
+    if unknown_gaps:
+        raise ValueError("unknown measurement gap(s): " + ", ".join(sorted(unknown_gaps)))
+    gap_request_ids = {
+        request_id
+        for request_id, field_id in request_field_by_id.items()
+        if field_id in assessment.gaps
+    }
+    conflict_request_ids = set(assessment.conflict_request_ids)
+    unknown_conflict_ids = conflict_request_ids - active_request_id_set
+    if unknown_conflict_ids:
+        raise ValueError(
+            "unknown measurement conflict request id(s): "
+            + ", ".join(sorted(unknown_conflict_ids))
+        )
+    fact_request_id_set = set(fact_request_ids)
+    if fact_request_id_set & gap_request_ids:
+        raise ValueError("measurement facts and gaps must not overlap")
+    if fact_request_id_set & conflict_request_ids:
+        raise ValueError("measurement facts and conflicts must not overlap")
+    if gap_request_ids & conflict_request_ids:
+        raise ValueError("measurement gaps and conflicts must not overlap")
+    accounted_request_ids = (
+        fact_request_id_set | gap_request_ids | conflict_request_ids
+    )
+    if accounted_request_ids != active_request_id_set:
+        raise ValueError(
+            "measurement assessments must account for every active measurement request"
+        )
+    if assessment.status == "ready" and fact_request_id_set != active_request_id_set:
+        raise ValueError("ready measurement assessments require one fact per request")
+
+
 class DiagnosticSessionState(CFDCModel):
     session_id: str = Field(min_length=1)
-    schema_version: str = "3.0"
+    schema_version: Literal["4.0"] = "4.0"
     route_id: str = "generic"
     initial_description: SystemDescription
     accumulated_description: SystemDescription
     turns: list[DiagnosticTurn] = Field(default_factory=list)
     current_diagnosis: StructuralDiagnosis
+    revision: int = Field(default=0, ge=0)
+    evidence_level: Literal["description_only", "measurement_verified"] = (
+        "description_only"
+    )
+    description_guidance: list[DescriptionGuidance] = Field(
+        default_factory=list, max_length=8
+    )
+    checklist: list[DiagnosticChecklistItem] = Field(min_length=8, max_length=8)
+    measurement_plan: MeasurementPlan | None = None
+    measurement_assessment: MeasurementAssessment | None = None
+    measurement_history: list[MeasurementAssessment] = Field(
+        default_factory=list, max_length=8
+    )
+    description_turn_count: int = Field(default=0, ge=0, le=8)
+    measurement_round_count: int = Field(default=0, ge=0, le=8)
     classification: ArchetypeClassification | None = None
     semantic_selection: SemanticRouteSelection | None = None
     experiment_plan: ExperimentPlan | None = None
@@ -1166,22 +1435,110 @@ class DiagnosticSessionState(CFDCModel):
     candidate_route: CandidateRouteIR | None = None
     compiled_route: CompiledRoute | None = None
     status: Literal[
-        "collecting_information",
-        "awaiting_specifications",
-        "need_more_specifications",
-        "specification_conflict",
-        "specification_model_ready",
-        "awaiting_evidence",
-        "evidence_rejected",
-        "ready_for_experiments",
-        "feature_extraction_failed",
-        "ready_for_controller",
+        "collecting_description",
+        "awaiting_measurements",
+        "measurement_conflict",
+        "measurement_verified",
         "refused",
-        "complete",
     ]
     maximum_turns: int = Field(default=8, ge=1, le=8)
     refusal_reason: str | None = None
     evidence_boundary: str = "software_simulation_diagnostic_session"
+
+    @model_validator(mode="after")
+    def validate_guided_measurement_state(self) -> DiagnosticSessionState:
+        required_field_ids = [
+            "open_loop_stability",
+            "minimum_phase",
+            "significant_delay",
+            "relative_degree",
+            "controllability_observability",
+            "nonlinearity_strength",
+            "coupling_severity",
+            "uncertainty_magnitude",
+        ]
+        if [item.diagnostic_field_id for item in self.checklist] != required_field_ids:
+            raise ValueError("v4 sessions require the fixed eight-field checklist")
+        if (
+            [item.diagnostic_field_id for item in self.description_guidance]
+            != required_field_ids
+        ):
+            raise ValueError("v4 sessions require guidance for each diagnostic field")
+        has_classification = self.classification is not None
+        has_selection = self.semantic_selection is not None
+        if self.evidence_level == "description_only" and (
+            has_classification or has_selection
+        ):
+            raise ValueError(
+                "classification and semantic_selection must be absent before measurement verification"
+            )
+        if self.evidence_level == "measurement_verified" and (
+            has_classification != has_selection
+        ):
+            raise ValueError(
+                "classification and semantic_selection must be populated together after measurement verification"
+            )
+        if self.description_turn_count != len(self.turns):
+            raise ValueError(
+                "description_turn_count must match the description turn history"
+            )
+        if self.measurement_round_count != len(self.measurement_history):
+            raise ValueError(
+                "measurement_round_count must match the measurement history"
+            )
+        if self.status == "measurement_verified":
+            if self.evidence_level != "measurement_verified":
+                raise ValueError(
+                    "measurement_verified status requires verified measurement evidence"
+                )
+            if self.measurement_plan is None:
+                raise ValueError(
+                    "measurement_verified status requires a measurement plan"
+                )
+            plan_field_ids = [
+                request.diagnostic_field_id
+                for request in self.measurement_plan.requests
+            ]
+            if plan_field_ids != required_field_ids:
+                raise ValueError(
+                    "measurement_verified status requires a plan covering the fixed eight diagnostic fields"
+                )
+            if self.measurement_assessment is None:
+                raise ValueError(
+                    "measurement_verified status requires a ready measurement assessment"
+                )
+        if self.measurement_history:
+            if self.measurement_plan is None:
+                raise ValueError(
+                    "measurement history requires an active measurement plan"
+                )
+            for assessment in self.measurement_history:
+                validate_measurement_assessment_for_plan(
+                    self.measurement_plan, assessment
+                )
+        if self.measurement_assessment is not None:
+            if self.measurement_plan is None:
+                raise ValueError(
+                    "measurement assessments require an active measurement plan"
+                )
+            validate_measurement_assessment_for_plan(
+                self.measurement_plan, self.measurement_assessment
+            )
+            if (
+                not self.measurement_history
+                or self.measurement_history[-1] != self.measurement_assessment
+            ):
+                raise ValueError(
+                    "current measurement assessment must be the final measurement history entry"
+                )
+        if self.status == "measurement_verified":
+            if self.measurement_assessment.status != "ready":
+                raise ValueError(
+                    "measurement_verified status requires a ready measurement assessment"
+                )
+        elif self.evidence_level == "measurement_verified":
+            raise ValueError("verified measurement evidence must use measurement_verified status")
+        return self
 
 
 class ClosedLoopBenchmarkCaseResult(CFDCModel):

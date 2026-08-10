@@ -23,11 +23,20 @@ from cfdc.diagnosis.mechanism_cards import (
     load_mechanism_card_catalog,
     select_supplemental_mechanism_cards,
 )
+from cfdc.diagnosis.measurements import (
+    DIAGNOSTIC_FIELD_IDS,
+    build_diagnostic_checklist,
+    build_measurement_plan,
+    validate_measurement_assessment,
+)
 from cfdc.diagnosis.session import (
     clarification_question_map,
+    continue_description_session,
     continue_diagnostic_session,
     migrate_diagnostic_session_payload,
     start_diagnostic_session,
+    submit_measurement_assessment,
+    submit_measurements_to_session,
     submit_evidence_to_session,
     submit_specifications_to_session,
 )
@@ -35,12 +44,14 @@ from cfdc.diagnosis.session import (
 __all__ = [
     "DeterministicDiagnosticAdapter",
     "DiagnosticEngine",
+    "DIAGNOSTIC_FIELD_IDS",
     "OpenAICompatibleDiagnosticAdapter",
     "SimulationProposalAdapter",
     "clarification_question_map",
     "collect_and_save_llm_diagnostic_responses",
     "compare_diagnostic_evaluations",
     "continue_diagnostic_session",
+    "continue_description_session",
     "diagnostic_case_catalog_sha256",
     "list_diagnostic_evaluation_cases",
     "list_mechanism_cards",
@@ -55,7 +66,12 @@ __all__ = [
     "select_supplemental_mechanism_cards",
     "snapshot_current_diagnostic_responses",
     "start_diagnostic_session",
+    "build_diagnostic_checklist",
+    "build_measurement_plan",
+    "submit_measurement_assessment",
+    "submit_measurements_to_session",
     "submit_evidence_to_session",
     "submit_specifications_to_session",
     "validate_agent_payload",
+    "validate_measurement_assessment",
 ]
