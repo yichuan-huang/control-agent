@@ -14,7 +14,7 @@ from cfdc.diagnosis import (
     build_diagnostic_checklist,
     build_measurement_plan,
     continue_diagnostic_session,
-    normalized_measurement_description,
+    reduce_measurement_history_to_diagnosis,
     render_measurement_evidence,
     start_diagnostic_session,
     submit_evidence_to_session,
@@ -947,26 +947,39 @@ def run_cfdc_route(
                     session, assessment, expected_revision=session.revision
                 )
                 if session.status == "measurement_verified":
-                    engine = DiagnosticEngine(
-                        adapter=None,
-                        use_mechanism_cards=use_mechanism_cards,
-                    )
-                    measurement_description = normalized_measurement_description(
-                        session.accumulated_description,
+                    diagnosis = reduce_measurement_history_to_diagnosis(
+                        session.measurement_plan,
                         session.measurement_history,
                     )
-                    diagnosis = engine.diagnose(measurement_description)
                     if not diagnosis.complete:
-                        raise ValueError(
-                            "verified measurement evidence did not resolve the structural diagnosis"
+                        payload = session.model_dump(mode="python")
+                        payload.update(
+                            {
+                                "current_diagnosis": diagnosis,
+                                "evidence_level": "description_only",
+                                "classification": None,
+                                "semantic_selection": None,
+                                "status": "awaiting_measurements",
+                            }
                         )
-                    raw_classification = engine.classify(
-                        diagnosis, measurement_description
+                        session = DiagnosticSessionState.model_validate(payload)
+                        return run_cfdc_route(
+                            route_id,
+                            diagnostic_session_state=session,
+                            diagnostic_adapter=diagnostic_adapter,
+                            include_trajectory=include_trajectory,
+                            run_id=run_id,
+                            use_mechanism_cards=use_mechanism_cards,
+                        )
+                    raw_classification = DiagnosticEngine(
+                        use_mechanism_cards=use_mechanism_cards
+                    ).classify(
+                        diagnosis, None
                     )
                     catalog = default_control_method_profile_catalog()
                     selection = SemanticRouteSelection.model_validate(
                         diagnostic_adapter.select_profile(
-                            measurement_description,
+                            session.accumulated_description,
                             diagnosis,
                             raw_classification,
                             catalog,
@@ -1056,27 +1069,23 @@ def run_cfdc_route(
                 session = _persist_profile_measurement_assessment(
                     session, newest_assessment
                 )
-                evidence_description = normalized_measurement_description(
-                    session.accumulated_description,
+                new_diagnosis = reduce_measurement_history_to_diagnosis(
+                    session.measurement_plan,
                     session.measurement_history,
                 )
-                new_diagnosis = DiagnosticEngine(
-                    adapter=None,
-                    use_mechanism_cards=use_mechanism_cards,
-                ).diagnose(evidence_description)
                 old_signature = _diagnosis_signature(session.current_diagnosis)
                 new_signature = _diagnosis_signature(new_diagnosis)
                 new_primary_class = None
                 if new_diagnosis.complete:
                     new_primary_class = DiagnosticEngine().classify(
-                        new_diagnosis, evidence_description
+                        new_diagnosis, None
                     ).primary_class
                 if (
                     new_signature != old_signature
                     or new_primary_class != session.classification.primary_class
                 ):
                     preliminary_checklist = build_diagnostic_checklist(
-                        evidence_description, new_diagnosis
+                        session.accumulated_description, new_diagnosis
                     )
                     if not hasattr(diagnostic_adapter, "guide_description"):
                         raise ValueError(
@@ -1095,20 +1104,8 @@ def run_cfdc_route(
                             [item.guidance for item in preliminary_checklist],
                         )
                     )
-                    evidence_description = evidence_description.model_copy(
-                        update={
-                            "observed_outputs": (
-                                accumulated_description.observed_outputs
-                            ),
-                            "actuators": accumulated_description.actuators,
-                        }
-                    )
-                    new_diagnosis = DiagnosticEngine(
-                        adapter=None,
-                        use_mechanism_cards=use_mechanism_cards,
-                    ).diagnose(evidence_description)
                     checklist = build_diagnostic_checklist(
-                        evidence_description, new_diagnosis
+                        accumulated_description, new_diagnosis
                     )
                     checklist = [
                         item.model_copy(update={"guidance": guidance})
@@ -1121,7 +1118,7 @@ def run_cfdc_route(
                         measurement_plan = validate_phrased_measurement_plan(
                             measurement_plan,
                             diagnostic_adapter.phrase_measurement_plan(
-                                evidence_description, checklist, measurement_plan
+                                accumulated_description, checklist, measurement_plan
                             ),
                         )
                     payload = session.model_dump(mode="python")

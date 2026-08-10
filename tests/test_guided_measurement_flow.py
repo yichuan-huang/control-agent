@@ -14,6 +14,27 @@ from cfdc.runtime import run_cfdc_route
 from cfdc.web.service import start_app_run, submit_app_measurement_response
 from cfdc.workflow import deterministic_profile_selection
 
+_VALID_FIELD_FACTS = {
+    "open_loop_stability": "settles or remains bounded",
+    "minimum_phase": (
+        "starts in its final direction rather than moving the opposite way first"
+    ),
+    "significant_delay": (
+        "begins within one sample without a separate silent interval"
+    ),
+    "relative_degree": "one or two dominant storage or integration processes",
+    "controllability_observability": (
+        "all relevant motion can be reconstructed from these synchronized records"
+    ),
+    "nonlinearity_strength": (
+        "small positive and negative trials are smooth, reversible, and nearly proportional"
+    ),
+    "coupling_severity": "one main physical route from actuation to the measured motion",
+    "uncertainty_magnitude": (
+        "change the response rate and final level by a modest amount"
+    ),
+}
+
 
 class GuidedFakeAdapter:
     """Complete fake for the structured operations used by the guided flow."""
@@ -51,8 +72,8 @@ class GuidedFakeAdapter:
             facts=[
                 MeasuredFact(
                     request_id=request.request_id,
-                    source_excerpt=f"Manual record for {request.title}.",
-                    text_value="verified observation",
+                    source_excerpt=_VALID_FIELD_FACTS[request.request_id],
+                    text_value=_VALID_FIELD_FACTS[request.request_id],
                 )
                 for request in measurement_plan.requests
             ],
@@ -68,26 +89,7 @@ class GuidedFakeAdapter:
 class EvidenceDrivenAdapter(GuidedFakeAdapter):
     """Fake whose deterministic diagnosis depends on persisted extracted facts."""
 
-    _facts: ClassVar[dict[str, str]] = {
-        "open_loop_stability": "settles or remains bounded",
-        "minimum_phase": (
-            "starts in its final direction rather than moving the opposite way first"
-        ),
-        "significant_delay": (
-            "begins within one sample without a separate silent interval"
-        ),
-        "relative_degree": "one or two dominant storage or integration processes",
-        "controllability_observability": (
-            "all relevant motion can be reconstructed from these synchronized records"
-        ),
-        "nonlinearity_strength": (
-            "small positive and negative trials are smooth, reversible, and nearly proportional"
-        ),
-        "coupling_severity": "one main physical route from actuation to the measured motion",
-        "uncertainty_magnitude": (
-            "change the response rate and final level by a modest amount"
-        ),
-    }
+    _facts: ClassVar[dict[str, str]] = _VALID_FIELD_FACTS
 
     def diagnose(self, description):
         raise AssertionError("guided formal diagnosis must never call the adapter")
@@ -231,8 +233,7 @@ def test_verified_measurement_facts_persist_across_session_serialization():
     serialized = released.diagnostic_session.model_dump_json()
     restored = type(released.diagnostic_session).model_validate_json(serialized)
     assert "open_loop_stability" in restored.accumulated_description.text
-    assert "verified observation" in restored.accumulated_description.text
-    assert "Manual record for Open-loop stability." in restored.accumulated_description.text
+    assert "settles or remains bounded" in restored.accumulated_description.text
     assert "all records attached" not in restored.accumulated_description.text
 
 
@@ -264,7 +265,7 @@ def test_persisted_measurement_facts_drive_later_deterministic_invalidation():
     )
 
     assert invalidated.status == "awaiting_measurements"
-    assert invalidated.diagnosis.open_loop_stability.assessment == "stable"
+    assert invalidated.diagnosis.open_loop_stability.assessment == "unknown"
     assert invalidated.diagnosis.coupling_severity.assessment == "severe_mimo"
     assert "settles or remains bounded" in (
         invalidated.diagnostic_session.accumulated_description.text
@@ -498,8 +499,8 @@ def test_same_measurement_response_input_advances_profile_facts_to_model():
     )
 
 
-def test_profile_measurement_responses_accumulate_before_joint_invalidation():
-    class CumulativeAdapter(EvidenceDrivenAdapter):
+def test_cross_field_tokens_do_not_resolve_either_diagnostic_field():
+    class CrossFieldAdapter(EvidenceDrivenAdapter):
         def extract_measurements(
             self,
             description,
@@ -507,36 +508,39 @@ def test_profile_measurement_responses_accumulate_before_joint_invalidation():
             measurement_response,
             previous_assessment,
         ):
-            if measurement_response not in {"first fragment", "second fragment"}:
+            if measurement_response != "cross-field fragments":
                 return super().extract_measurements(
                     description,
                     measurement_plan,
                     measurement_response,
                     previous_assessment,
                 )
-            request_id, fragment = (
-                ("minimum_phase", "initially points")
-                if measurement_response == "first fragment"
-                else ("significant_delay", "opposite")
-            )
             return MeasurementAssessment(
-                status="need_more",
+                status="ready",
                 facts=[
                     MeasuredFact(
-                        request_id=request_id,
-                        source_excerpt=fragment,
-                        text_value=fragment,
+                        request_id=request.request_id,
+                        source_excerpt=(
+                            "initially points"
+                            if request.request_id == "minimum_phase"
+                            else "opposite"
+                            if request.request_id == "significant_delay"
+                            else _VALID_FIELD_FACTS[request.request_id]
+                        ),
+                        text_value=(
+                            "initially points"
+                            if request.request_id == "minimum_phase"
+                            else "opposite"
+                            if request.request_id == "significant_delay"
+                            else _VALID_FIELD_FACTS[request.request_id]
+                        ),
                     )
-                ],
-                gaps=[
-                    request.diagnostic_field_id
                     for request in measurement_plan.requests
-                    if request.request_id != request_id
                 ],
-                rationale="One additional validated diagnostic observation.",
+                rationale="Two unrelated fields contain incomplete fragments.",
             ).model_dump(mode="json")
 
-    adapter = CumulativeAdapter()
+    adapter = CrossFieldAdapter()
     initial = run_cfdc_route(
         "generic",
         description=SystemDescription(
@@ -552,44 +556,111 @@ def test_profile_measurement_responses_accumulate_before_joint_invalidation():
         diagnostic_adapter=adapter,
         measurement_response="verified records",
     )
-    first = run_cfdc_route(
+    invalidated = run_cfdc_route(
         "generic",
         diagnostic_session_state=released.diagnostic_session,
         diagnostic_adapter=adapter,
-        measurement_response="first fragment",
-    )
-
-    assert first.status == "awaiting_profile_measurements"
-    assert first.diagnostic_session.revision == released.diagnostic_session.revision + 1
-    assert len(first.diagnostic_session.measurement_history) == 2
-    assert (
-        first.diagnostic_session.measurement_assessment
-        == first.diagnostic_session.measurement_history[-1]
-    )
-    restored = type(first.diagnostic_session).model_validate_json(
-        first.diagnostic_session.model_dump_json()
-    )
-    assert "initially points" in restored.accumulated_description.text
-
-    invalidated = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=restored,
-        diagnostic_adapter=adapter,
-        measurement_response="second fragment",
+        measurement_response="cross-field fragments",
     )
 
     assert invalidated.status == "awaiting_measurements"
-    assert invalidated.diagnostic_session.revision == restored.revision + 1
+    assert invalidated.classification is None
+    assert invalidated.diagnosis.minimum_phase.assessment == "unknown"
+    assert invalidated.diagnosis.significant_delay.assessment == "unknown"
+    serialized = invalidated.diagnostic_session.model_dump_json()
+    assert "initially points" in serialized
+    assert "opposite" in serialized
+
+
+def test_later_same_request_fact_supersedes_and_triggers_invalidation():
+    class SupersedingAdapter(EvidenceDrivenAdapter):
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            if measurement_response != "new inverse response":
+                return super().extract_measurements(
+                    description,
+                    measurement_plan,
+                    measurement_response,
+                    previous_assessment,
+                )
+            inverse = (
+                "first moves in an unfavorable or opposite direction before turning"
+            )
+            return MeasurementAssessment(
+                status="ready",
+                facts=[
+                    MeasuredFact(
+                        request_id=request.request_id,
+                        source_excerpt=(
+                            inverse
+                            if request.request_id == "minimum_phase"
+                            else _VALID_FIELD_FACTS[request.request_id]
+                        ),
+                        text_value=(
+                            inverse
+                            if request.request_id == "minimum_phase"
+                            else _VALID_FIELD_FACTS[request.request_id]
+                        ),
+                    )
+                    for request in measurement_plan.requests
+                ],
+                rationale="The latest phase record supersedes the earlier phase fact.",
+            ).model_dump(mode="json")
+
+    adapter = SupersedingAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="verified records",
+    )
+
+    invalidated = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=released.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="new inverse response",
+    )
+
+    assert invalidated.status == "awaiting_measurements"
     assert invalidated.classification is None
     assert invalidated.diagnosis.minimum_phase.assessment == "nonminimum_phase"
-    assert len(invalidated.diagnostic_session.measurement_history) == 3
+    assert len(invalidated.diagnostic_session.measurement_history) == 2
     assert (
         invalidated.diagnostic_session.measurement_assessment
         == invalidated.diagnostic_session.measurement_history[-1]
     )
-    serialized = invalidated.diagnostic_session.model_dump_json()
-    assert "initially points" in serialized
-    assert "opposite" in serialized
+
+
+def test_exact_eight_isolated_facts_produce_complete_diagnosis_and_classification():
+    adapter = EvidenceDrivenAdapter()
+    initial = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text="temperature and heater change records are available.",
+            observed_outputs=["temperature"],
+            actuators=["heater"],
+        ),
+        diagnostic_adapter=adapter,
+    )
+
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="verified records",
+    )
+
+    assert released.diagnosis.complete
+    assert released.classification.primary_class == "class_i_first_order_lag"
 
 
 def test_profile_measurement_response_enforces_the_session_round_cap():

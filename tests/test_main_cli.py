@@ -13,6 +13,27 @@ from cfdc.models import (
 )
 from main import load_diagnostic_session, main, parse_args
 
+_VALID_FIELD_FACTS = {
+    "open_loop_stability": "settles or remains bounded",
+    "minimum_phase": (
+        "starts in its final direction rather than moving the opposite way first"
+    ),
+    "significant_delay": (
+        "begins within one sample without a separate silent interval"
+    ),
+    "relative_degree": "one or two dominant storage or integration processes",
+    "controllability_observability": (
+        "all relevant motion can be reconstructed from these synchronized records"
+    ),
+    "nonlinearity_strength": (
+        "small positive and negative trials are smooth, reversible, and nearly proportional"
+    ),
+    "coupling_severity": "one main physical route from actuation to the measured motion",
+    "uncertainty_magnitude": (
+        "change the response rate and final level by a modest amount"
+    ),
+}
+
 
 class CliGuidedAdapter(DeterministicDiagnosticAdapter):
     def guide_description(self, description, guidance):
@@ -37,8 +58,8 @@ class CliGuidedAdapter(DeterministicDiagnosticAdapter):
             facts=[
                 MeasuredFact(
                     request_id=request.request_id,
-                    source_excerpt=f"Existing record for {request.title}.",
-                    text_value="verified observation",
+                    source_excerpt=_VALID_FIELD_FACTS[request.request_id],
+                    text_value=_VALID_FIELD_FACTS[request.request_id],
                 )
                 for request in measurement_plan.requests
             ],

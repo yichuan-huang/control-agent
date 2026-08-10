@@ -233,35 +233,71 @@ def render_measurement_evidence(
                     fact.source_excerpt,
                 ]
             )
-    text_observations = [
-        fact.text_value
-        for assessment in assessments
-        for fact in assessment.facts
-        if fact.text_value is not None
-    ]
-    if text_observations:
-        lines.extend(["validated observation text:", *text_observations])
     return "\n".join(lines)
 
 
-def normalized_measurement_description(
-    description: SystemDescription,
+def reduce_measurement_history_to_diagnosis(
+    plan: MeasurementPlan,
     assessments: list[MeasurementAssessment],
-) -> SystemDescription:
-    """Build the deterministic formal-diagnosis view with newest facts winning."""
+) -> StructuralDiagnosis:
+    """Resolve each structural field only from its own latest validated outcome."""
 
-    latest_facts = {}
+    request_by_id = {request.request_id: request for request in plan.requests}
+    if len(request_by_id) != len(DIAGNOSTIC_FIELD_IDS):
+        raise ValueError("typed measurement reduction requires exactly eight requests")
+    if {request.diagnostic_field_id for request in plan.requests} != set(
+        DIAGNOSTIC_FIELD_IDS
+    ):
+        raise ValueError(
+            "typed measurement reduction requires one request per diagnostic field"
+        )
+
+    latest_fact_by_request = dict.fromkeys(request_by_id)
     for assessment in assessments:
-        for fact in assessment.facts:
-            latest_facts[fact.request_id] = fact
-    effective = MeasurementAssessment(
-        status="ready",
-        facts=list(latest_facts.values()),
-        rationale="Latest validated fact per diagnostic request.",
-    )
-    marker = "\n\nValidated diagnostic measurement evidence:"
-    original_text = description.text.split(marker, maxsplit=1)[0]
-    evidence_text = render_measurement_evidence([effective])
-    return description.model_copy(
-        update={"text": f"{original_text}\n\n{evidence_text}"}
+        validate_measurement_assessment(plan, assessment)
+        fact_by_request = {fact.request_id: fact for fact in assessment.facts}
+        for request_id, request in request_by_id.items():
+            if request_id in fact_by_request:
+                latest_fact_by_request[request_id] = fact_by_request[request_id]
+            elif (
+                request.diagnostic_field_id in assessment.gaps
+                or request_id in assessment.conflict_request_ids
+            ):
+                latest_fact_by_request[request_id] = None
+
+    from cfdc.diagnosis.engine import infer_structural_diagnosis
+
+    resolved_fields = {}
+    for request_id, request in request_by_id.items():
+        fact = latest_fact_by_request[request_id]
+        parts = ["No validated evidence is available for this field."]
+        if fact is not None:
+            parts = [fact.source_excerpt]
+            if fact.text_value is not None:
+                parts.append(fact.text_value)
+            if fact.numeric_value is not None:
+                parts.append(f"{fact.numeric_value:.17g} {fact.unit}")
+        isolated = infer_structural_diagnosis(
+            SystemDescription(text="\n".join(parts))
+        )
+        resolved_fields[request.diagnostic_field_id] = getattr(
+            isolated, request.diagnostic_field_id
+        )
+
+    complete = all(field.status != "unknown" for field in resolved_fields.values())
+    questions = []
+    if not complete:
+        questions = [
+            f"Provide validated existing-record evidence for {field_id}."
+            for field_id in DIAGNOSTIC_FIELD_IDS
+            if resolved_fields[field_id].status == "unknown"
+        ][:4]
+        while len(questions) < 2:
+            questions.append(
+                "Provide another field-specific existing-record observation."
+            )
+    return StructuralDiagnosis(
+        **resolved_fields,
+        clarification_questions=questions,
+        complete=complete,
     )
