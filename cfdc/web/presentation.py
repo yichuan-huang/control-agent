@@ -69,32 +69,23 @@ STAGES = [
     ),
     (
         "AI 测量计划",
-        lambda report: bool(
-            report.diagnostic_session is None
-            or report.diagnostic_session.status != "collecting_description"
-        ),
+        lambda report: _measurement_plan_released(report),
     ),
     (
         "测量回填",
-        lambda report: bool(
-            report.diagnostic_session is None
-            or report.diagnostic_session.evidence_level == "measurement_verified"
-        ),
+        lambda report: _measurement_evidence_released(report),
     ),
     (
         "系统分类",
-        lambda report: bool(report.classification and report.semantic_selection),
+        lambda report: _classification_released(report),
     ),
     (
         "初始控制器",
-        lambda report: bool(
-            report.compiled_specification_model is not None
-            and report.controller is not None
-        ),
+        lambda report: _controller_released(report),
     ),
     (
         "效果验证与调优",
-        lambda report: report.status in {"validated_in_simulation", "demo_completed"},
+        lambda report: _validation_released(report),
     ),
 ]
 
@@ -105,27 +96,90 @@ LINKED_VALIDATION_BLOCKED_STATES = {
     "cancelled",
 }
 
+_PRE_MEASUREMENT_STATUSES = {
+    "collecting_description",
+    "awaiting_measurements",
+    "measurement_needs_more",
+    "measurement_conflict",
+    "need_more_information",
+}
+
+_PRE_MODEL_STATUSES = {
+    *_PRE_MEASUREMENT_STATUSES,
+    "measurement_verified",
+    "awaiting_profile_measurements",
+    "awaiting_specifications",
+    "need_more_specifications",
+    "specification_conflict",
+    "awaiting_evidence",
+    "evidence_rejected",
+}
+
+
+def _effective_status(report: CFDCRunReport) -> str:
+    session = report.diagnostic_session
+    return session.status if session is not None else report.status
+
+
+def _measurement_plan_released(report: CFDCRunReport) -> bool:
+    session = report.diagnostic_session
+    if session is None:
+        return _effective_status(report) not in {
+            "need_more_information",
+            "collecting_description",
+        }
+    return session.measurement_plan is not None and session.status != "collecting_description"
+
 
 def _measurement_evidence_released(report: CFDCRunReport) -> bool:
+    if _effective_status(report) in _PRE_MEASUREMENT_STATUSES:
+        return False
     session = report.diagnostic_session
     return session is None or session.evidence_level == "measurement_verified"
 
 
-def technical_visibility(report: CFDCRunReport) -> dict[str, bool]:
-    measurement_released = _measurement_evidence_released(report)
-    route_released = bool(
-        measurement_released and report.classification and report.semantic_selection
+def _classification_released(report: CFDCRunReport) -> bool:
+    return bool(
+        _measurement_evidence_released(report)
+        and report.classification
+        and report.semantic_selection
     )
-    model_released = bool(
-        route_released
+
+
+def _model_released(report: CFDCRunReport) -> bool:
+    return bool(
+        _classification_released(report)
+        and _effective_status(report) not in _PRE_MODEL_STATUSES
         and (
             report.compiled_specification_model
             or report.experiment_results
-            or report.status == "demo_completed"
+            or report.controller
         )
     )
-    features_released = bool(model_released and report.features)
-    controller_released = bool(model_released and report.controller)
+
+
+def _features_released(report: CFDCRunReport) -> bool:
+    return bool(_model_released(report) and report.features)
+
+
+def _controller_released(report: CFDCRunReport) -> bool:
+    return bool(_model_released(report) and report.controller)
+
+
+def _validation_released(report: CFDCRunReport) -> bool:
+    return bool(
+        _controller_released(report)
+        and _effective_status(report)
+        in {"validated_in_simulation", "demo_completed", "completed"}
+    )
+
+
+def technical_visibility(report: CFDCRunReport) -> dict[str, bool]:
+    measurement_released = _measurement_evidence_released(report)
+    route_released = _classification_released(report)
+    model_released = _model_released(report)
+    features_released = _features_released(report)
+    controller_released = _controller_released(report)
     return {
         "diagnosis": measurement_released,
         "route": route_released,
@@ -231,8 +285,86 @@ def guided_timeline_markdown(report: CFDCRunReport) -> str:
     return "\n\n".join(lines)
 
 
-def _compact_report(report: CFDCRunReport) -> dict[str, Any]:
+def _redacted_report_payload(report: CFDCRunReport) -> dict[str, Any]:
     payload = report.model_dump(mode="json")
+    measurement_released = _measurement_evidence_released(report)
+    classification_released = _classification_released(report)
+    model_released = _model_released(report)
+    features_released = _features_released(report)
+    controller_released = _controller_released(report)
+    validation_released = _validation_released(report)
+
+    session = payload.get("diagnostic_session")
+    if session is not None and not measurement_released:
+        session["current_diagnosis"] = None
+    if session is not None and not classification_released:
+        for name, empty in {
+            "classification": None,
+            "semantic_selection": None,
+            "experiment_plan": None,
+            "evidence_requirement_plan": None,
+            "evidence_readiness": None,
+            "specification_templates": [],
+            "specification_assessment": None,
+            "specification_answer_history": [],
+            "candidate_route": None,
+            "compiled_route": None,
+        }.items():
+            session[name] = empty
+    if session is not None and not model_released:
+        session["compiled_specification_model"] = None
+
+    if not measurement_released:
+        payload["diagnosis"] = None
+    if not classification_released:
+        for name, empty in {
+            "classification": None,
+            "semantic_selection": None,
+            "experiment_plan": None,
+            "evidence_requirement_plan": None,
+            "evidence_readiness": None,
+            "specification_templates": [],
+            "specification_assessment": None,
+            "candidate_route": None,
+            "compiled_route": None,
+        }.items():
+            payload[name] = empty
+    if not model_released:
+        payload["compiled_specification_model"] = None
+        payload["experiment_results"] = []
+    if not features_released:
+        payload["features"] = []
+        payload["feature_quality_decision"] = None
+    if not controller_released:
+        for name, empty in {
+            "controller": None,
+            "controller_validation": None,
+            "trial_reports": [],
+            "online_tuning_state": None,
+            "algorithm1_state": None,
+            "safe_gain_search_state": None,
+            "feature_tracking_updates": [],
+            "tracking_state": None,
+            "cartpole_simulation": None,
+            "cartpole_boundary": None,
+            "vtol_simulation": None,
+            "vtol_variation": None,
+            "baseline_comparison": None,
+            "final_gains": {},
+            "final_feedforward": {},
+            "go_no_go": None,
+        }.items():
+            payload[name] = empty
+    if not validation_released:
+        payload["stale_controller_performance"] = None
+        payload["adapted_controller_performance"] = None
+    if not controller_released:
+        payload["notes"] = []
+    return payload
+
+
+def _compact_report(report: CFDCRunReport) -> dict[str, Any]:
+    payload = _redacted_report_payload(report)
     for result in payload.get("experiment_results", []):
         trace = result.get("trace", {})
         trace["sample_count"] = len(trace.get("time_s", []))
@@ -280,7 +412,7 @@ def diagnosis_rows(report: CFDCRunReport) -> list[list[Any]]:
 
 
 def route_rows(report: CFDCRunReport) -> list[list[str]]:
-    if not _measurement_evidence_released(report):
+    if not _classification_released(report):
         return []
     rows: list[list[str]] = []
     if report.classification:
@@ -309,6 +441,8 @@ def route_rows(report: CFDCRunReport) -> list[list[str]]:
 
 
 def experiment_rows(report: CFDCRunReport) -> list[list[Any]]:
+    if not _model_released(report):
+        return []
     return [
         [
             index + 1,
@@ -323,6 +457,8 @@ def experiment_rows(report: CFDCRunReport) -> list[list[Any]]:
 
 
 def feature_rows(report: CFDCRunReport) -> list[list[Any]]:
+    if not _features_released(report):
+        return []
     rows = []
     for feature in report.features:
         value = feature.value
@@ -350,7 +486,7 @@ def feature_rows(report: CFDCRunReport) -> list[list[Any]]:
 
 
 def controller_rows(report: CFDCRunReport) -> list[list[str]]:
-    if report.controller is None or not _measurement_evidence_released(report):
+    if report.controller is None or not _controller_released(report):
         return []
     rows = [["架构", report.controller.architecture]]
     rows.extend(
@@ -368,6 +504,8 @@ def controller_rows(report: CFDCRunReport) -> list[list[str]]:
 
 
 def tuning_rows(report: CFDCRunReport) -> list[list[Any]]:
+    if not _controller_released(report):
+        return []
     rows: list[list[Any]] = []
     if report.algorithm1_state:
         rows.append(
@@ -391,6 +529,8 @@ def tuning_rows(report: CFDCRunReport) -> list[list[Any]]:
 
 
 def performance_rows(report: CFDCRunReport) -> list[list[Any]]:
+    if not _validation_released(report):
+        return []
     rows = []
     for label, performance in (
         ("变化后 · 原控制器", report.stale_controller_performance),
@@ -417,13 +557,14 @@ def stage_progress_html(
     report: CFDCRunReport,
     linked_simulation_state: str | None = None,
 ) -> str:
-    blocked = report.status in {
+    effective_status = _effective_status(report)
+    blocked = effective_status in {
         "feature_extraction_failed",
         "evidence_rejected",
         "rejected",
         "frozen",
     }
-    waiting = report.status in {
+    waiting = effective_status in {
         "collecting_description",
         "awaiting_measurements",
         "measurement_needs_more",
@@ -468,32 +609,35 @@ def stage_progress_html(
 
 
 def summary_html(report: CFDCRunReport) -> str:
-    measurement_released = _measurement_evidence_released(report)
+    classification_released = _classification_released(report)
+    features_released = _features_released(report)
+    model_released = _model_released(report)
     archetype = (
         str(report.classification.primary_class)
         .replace("class_", "Class ")
         .replace("_", " ")
-        if measurement_released and report.classification
+        if classification_released and report.classification
         else "待确认"
     )
     profile = (
         report.semantic_selection.simulation_profile_id
-        if measurement_released and report.semantic_selection
+        if classification_released and report.semantic_selection
         else "待选择"
     )
     quality = (
         report.feature_quality_decision.decision
-        if report.feature_quality_decision
+        if features_released and report.feature_quality_decision
         else "未执行"
     )
-    repeats = max(
-        (record.repeat_index for record in report.experiment_results),
-        default=0,
+    repeats = (
+        max((record.repeat_index for record in report.experiment_results), default=0)
+        if model_released
+        else 0
     )
     cards = [
         ("动力学原型", archetype),
         ("方法 Profile", profile),
-        ("核心特征", str(len(report.features))),
+        ("核心特征", str(len(report.features)) if features_released else "-"),
         ("模型/数据运行", str(repeats) if repeats else "-"),
         ("质量门", quality),
     ]
@@ -583,6 +727,8 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
 
 
 def performance_html(report: CFDCRunReport) -> str:
+    if not _validation_released(report):
+        return '<div class="empty-result">当前流程尚未生成系统变化后的性能对照。</div>'
     comparisons = [
         ("原控制器", report.stale_controller_performance),
         ("适应控制器", report.adapted_controller_performance),
@@ -619,15 +765,16 @@ def performance_html(report: CFDCRunReport) -> str:
 
 
 def status_markdown(report: CFDCRunReport) -> str:
-    label = STATUS_LABELS.get(report.status, report.status)
+    effective_status = _effective_status(report)
+    label = STATUS_LABELS.get(effective_status, effective_status)
     profile = (
         report.semantic_selection.simulation_profile_id
-        if _measurement_evidence_released(report) and report.semantic_selection
+        if _classification_released(report) and report.semantic_selection
         else "等待诊断"
     )
     quality = (
         report.feature_quality_decision.decision
-        if report.feature_quality_decision
+        if _features_released(report) and report.feature_quality_decision
         else "未执行"
     )
     return (
@@ -663,5 +810,9 @@ def render_report(report: CFDCRunReport) -> dict[str, Any]:
         "timeline": guided_timeline_markdown(report),
         "technical_visibility": technical_visibility(report),
         "clarifications": clarification_items(report),
-        "specification_guidance": specification_guidance_markdown(report),
+        "specification_guidance": (
+            specification_guidance_markdown(report)
+            if _classification_released(report)
+            else ""
+        ),
     }

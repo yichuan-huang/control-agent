@@ -132,29 +132,6 @@ def _run_ready_session(
             del description, diagnosis, classification, catalog
             return session.semantic_selection.model_dump(mode="json")
 
-        def guide_description(self, description, guidance):
-            del description, guidance
-            raise AssertionError("evidence replay must not restart description guidance")
-
-        def phrase_measurement_plan(self, description, checklist, plan):
-            del description, checklist, plan
-            raise AssertionError("evidence replay must not replace the measurement plan")
-
-        def extract_measurements(
-            self,
-            description,
-            measurement_plan,
-            measurement_response,
-            previous_assessment,
-        ):
-            del (
-                description,
-                measurement_plan,
-                measurement_response,
-                previous_assessment,
-            )
-            raise AssertionError("evidence replay must not extract new measurements")
-
     if session.status == "ready_for_experiments":
         if session.current_diagnosis is None or session.semantic_selection is None:
             raise RuntimeError(
@@ -418,29 +395,6 @@ def _session_replay_adapter(session: DiagnosticSessionState):
         def select_profile(self, description, diagnosis, classification, catalog):
             del description, diagnosis, classification, catalog
             return session.semantic_selection.model_dump(mode="json")
-
-        def guide_description(self, description, guidance):
-            del description, guidance
-            raise AssertionError("evidence replay must not restart description guidance")
-
-        def phrase_measurement_plan(self, description, checklist, plan):
-            del description, checklist, plan
-            raise AssertionError("evidence replay must not replace the measurement plan")
-
-        def extract_measurements(
-            self,
-            description,
-            measurement_plan,
-            measurement_response,
-            previous_assessment,
-        ):
-            del (
-                description,
-                measurement_plan,
-                measurement_response,
-                previous_assessment,
-            )
-            raise AssertionError("evidence replay must not extract new measurements")
 
     return SessionReplayAdapter()
 
