@@ -10,7 +10,6 @@ from cfdc.web.linked_tuning_ui import (
 )
 from cfdc.web.presentation import render_report
 from cfdc.web.service import (
-    continue_app_run,
     start_app_run,
     submit_app_measurement_response,
 )
@@ -62,43 +61,27 @@ CSS = """
 """
 
 
-def _question_updates(items: list[tuple[str, str]]):
-    updates = []
-    for index in range(4):
-        if index < len(items):
-            question_id, question = items[index]
-            updates.append(
-                gr.update(label=f"{question_id} · {question}", visible=True, value="")
-            )
-        else:
-            updates.append(gr.update(visible=False, value=""))
-    return updates
-
-
 def _outputs(report, state):
     view = render_report(report)
     session = report.diagnostic_session
-    show_questions = bool(
-        session
-        and view["clarifications"]
-        and session.status
-        in {
-            "collecting_description",
-            "awaiting_measurements",
-            "measurement_needs_more",
-            "measurement_conflict",
-        }
-    )
+    diagnostic_measurement_statuses = {
+        "awaiting_measurements",
+        "measurement_needs_more",
+        "measurement_conflict",
+    }
+    profile_measurement_statuses = {
+        "awaiting_profile_measurements",
+        "specification_conflict",
+    }
     show_measurement = bool(
         session
-        and session.status
-        in {
-            "awaiting_measurements",
-            "measurement_needs_more",
-            "measurement_conflict",
-            "awaiting_profile_measurements",
-            "specification_conflict",
-        }
+        and (
+            session.status in profile_measurement_statuses
+            or (
+                session.status in diagnostic_measurement_statuses
+                and not view["clarifications"]
+            )
+        )
     )
     visibility = view["technical_visibility"]
     return (
@@ -118,9 +101,6 @@ def _outputs(report, state):
         view["tuning"],
         view["performance"],
         view["raw"],
-        gr.update(visible=show_questions),
-        *_question_updates(view["clarifications"]),
-        gr.update(visible=show_questions),
         gr.update(visible=show_measurement, value=""),
         gr.update(visible=show_measurement),
         gr.update(visible=show_measurement, value=False),
@@ -146,31 +126,6 @@ def run_from_ui(description, base_url, model, api_key):
             model,
             api_key,
             False,
-        )
-        return _outputs(report, state)
-    except Exception as exc:
-        raise gr.Error(str(exc)) from exc
-
-
-def continue_from_ui(
-    state,
-    answer_1,
-    answer_2,
-    answer_3,
-    answer_4,
-    supplemental,
-    base_url,
-    model,
-    api_key,
-):
-    try:
-        report, state = continue_app_run(
-            state,
-            [answer_1, answer_2, answer_3, answer_4],
-            supplemental,
-            base_url=base_url,
-            model=model,
-            api_key=api_key,
         )
         return _outputs(report, state)
     except Exception as exc:
@@ -205,7 +160,6 @@ def reset_ui():
         os.getenv("CFDC_LLM_BASE_URL", ""),
         os.getenv("CFDC_LLM_MODEL", ""),
         "",
-        "",
         {},
         "### 等待控制问题",
         "",
@@ -222,12 +176,6 @@ def reset_ui():
         [],
         [],
         {},
-        gr.update(visible=False),
-        gr.update(visible=False, value=""),
-        gr.update(visible=False, value=""),
-        gr.update(visible=False, value=""),
-        gr.update(visible=False, value=""),
-        gr.update(visible=False),
         gr.update(visible=False, value=""),
         gr.update(visible=False),
         gr.update(visible=False, value=False),
@@ -248,8 +196,8 @@ def build_app() -> gr.Blocks:
         with gr.Row(equal_height=False):
             with gr.Column(scale=5, min_width=360):
                 gr.Markdown(
-                    "先用一段自然语言描述控制问题。系统会生成测量计划，并只请你从已有记录、"
-                    "日志或手册中回填证据；测量验证前不会展示正式分类、Profile 或控制器。"
+                    "先在同一个输入框中用自然语言描述控制问题。八项未完成时，请直接在原描述中"
+                    "继续补充并重新检查；全部完成后才会显示测量计划和测量回复入口。"
                 )
                 description = gr.Textbox(
                     label="控制问题描述",
@@ -274,7 +222,7 @@ def build_app() -> gr.Blocks:
                     api_key = gr.Textbox(label="API Key", value="", type="password")
                 with gr.Row():
                     run_button = gr.Button(
-                        "开始引导诊断",
+                        "检查描述并继续",
                         variant="primary",
                         elem_classes="primary-run",
                         scale=4,
@@ -294,17 +242,6 @@ def build_app() -> gr.Blocks:
                 )
                 measurement_guidance = gr.Markdown()
                 timeline = gr.Markdown()
-
-                with gr.Group(visible=False) as question_group:
-                    gr.Markdown("### 补充问题描述")
-                    question_1 = gr.Textbox(value="", visible=False)
-                    question_2 = gr.Textbox(value="", visible=False)
-                    question_3 = gr.Textbox(value="", visible=False)
-                    question_4 = gr.Textbox(value="", visible=False)
-                    supplemental = gr.Textbox(label="补充描述", value="", lines=3)
-                    continue_button = gr.Button(
-                        "提交描述补充", variant="primary", visible=False
-                    )
 
                 measurement_response = gr.Textbox(
                     label="现有记录与测量回复",
@@ -409,12 +346,6 @@ def build_app() -> gr.Blocks:
             tuning,
             performance,
             raw_json,
-            question_group,
-            question_1,
-            question_2,
-            question_3,
-            question_4,
-            continue_button,
             measurement_response,
             measurement_button,
             simulation_bounds_confirmed,
@@ -428,21 +359,6 @@ def build_app() -> gr.Blocks:
         run_button.click(
             run_from_ui,
             inputs=[description, base_url, model, api_key],
-            outputs=output_components,
-        )
-        continue_button.click(
-            continue_from_ui,
-            inputs=[
-                app_state,
-                question_1,
-                question_2,
-                question_3,
-                question_4,
-                supplemental,
-                base_url,
-                model,
-                api_key,
-            ],
             outputs=output_components,
         )
         measurement_button.click(
@@ -464,7 +380,6 @@ def build_app() -> gr.Blocks:
                 base_url,
                 model,
                 api_key,
-                supplemental,
                 *output_components,
             ],
         )

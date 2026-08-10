@@ -364,10 +364,9 @@ def test_complete_eight_item_description_switches_to_measurement_instruction():
 
     assert [row[1] for row in view["checklist"]] == ["✓ 已有线索"] * 8
     assert view["clarifications"] == []
-    assert outputs[16]["visible"] is False
-    assert outputs[21]["visible"] is False
-    assert outputs[22]["visible"] is True
-    assert outputs[23]["visible"] is True
+    assert outputs[16]["visible"] is True
+    assert outputs[17]["visible"] is True
+    assert outputs[18]["visible"] is True
     assert "八项问题描述已完成" in view["measurement_guidance"]
     assert "请把相应的值和原文摘录反馈给 AI" in view[
         "measurement_guidance"
@@ -1363,13 +1362,13 @@ def test_gradio_exposes_guided_measurement_and_tuning_flow():
     assert "确认仅运行标准对象演示" not in labels
     assert "请用自然语言回答" not in labels
     assert {
-        "开始引导诊断",
-        "提交描述补充",
+        "检查描述并继续",
         "提交测量回复",
         "运行初始控制器效果验证",
         "请求 AI 下一轮参数",
         "批准并运行下一轮",
     }.issubset(buttons)
+    assert {"开始引导诊断", "提交描述补充"}.isdisjoint(buttons)
     assert {
         "采用此示例值",
         "请求 AI 判断还缺什么",
@@ -1769,16 +1768,15 @@ def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     monkeypatch.setenv("CFDC_LLM_MODEL", "provider-model")
     reset = reset_ui()
 
-    assert len(reset) == 36
-    assert reset[:5] == (
+    assert len(reset) == 29
+    assert reset[:4] == (
         "",
         "https://provider.example/v1",
         "provider-model",
         "",
-        "",
     )
-    assert reset[5] == {}
-    assert all(update.get("visible") is False for update in reset[-15:])
+    assert reset[4] == {}
+    assert all(update.get("visible") is False for update in reset[-9:])
 
 
 def _guided_description_report():
@@ -1969,7 +1967,7 @@ def test_profile_stage_replaces_diagnostic_plan_with_profile_questions(
     assert "open_loop_stability" not in view["measurement_guidance"]
 
 
-def test_started_measurement_session_exposes_description_supplement_and_refreshes_plan(
+def test_incomplete_description_uses_original_input_and_hides_measurement_controls(
     monkeypatch,
 ):
     class CountingAdapter(_CompleteGuidedAdapter):
@@ -1984,8 +1982,9 @@ def test_started_measurement_session_exposes_description_supplement_and_refreshe
     monkeypatch.setattr(web_service, "build_adapter", lambda *args: adapter)
     app = build_app()
     component_props = [component["props"] for component in app.config["components"]]
-    assert any(props.get("label") == "补充描述" for props in component_props)
-    assert any(props.get("value") == "提交描述补充" for props in component_props)
+    assert not any(props.get("label") == "补充描述" for props in component_props)
+    assert not any(props.get("value") == "提交描述补充" for props in component_props)
+    assert any(props.get("value") == "检查描述并继续" for props in component_props)
 
     report, state = _start_app_run(
         "A heater and temperature record are available.",
@@ -1998,31 +1997,23 @@ def test_started_measurement_session_exposes_description_supplement_and_refreshe
         "provider-model",
         "test-key",
     )
+    view = render_report(report)
     outputs = web_ui._outputs(report, state)
     assert report.status == "awaiting_measurements"
-    assert outputs[16]["visible"] is True
-    assert outputs[21]["visible"] is True
-    assert outputs[22]["visible"] is True
-    assert outputs[23]["visible"] is True
-    assert adapter.phrase_calls == 1
-
-    continued, next_state = continue_app_run(
-        state,
-        [None, None, None, None],
-        "The existing manual identifies heater power and recorded temperature.",
-        base_url="https://provider.example/v1",
-        model="provider-model",
-        api_key="test-key",
+    assert "请直接在左侧“控制问题描述”栏继续补充" in view[
+        "measurement_guidance"
+    ]
+    assert "open_loop_stability" not in view["measurement_guidance"]
+    assert "Review an existing record" not in view["measurement_guidance"]
+    assert view["status"].startswith("### 补充问题描述")
+    assert (
+        '<div class="flow-step waiting"><span>2</span><small>AI 测量计划</small>'
+        in view["progress"]
     )
-
-    assert continued.status == "awaiting_measurements"
-    assert next_state["session"] is not None
-    assert next_state["session"]["description_turn_count"] == 1
-    assert "existing manual identifies heater power" in next_state["session"][
-        "accumulated_description"
-    ]["text"]
-    assert next_state["session"]["measurement_plan"] is not None
-    assert adapter.phrase_calls == 2
+    assert outputs[16]["visible"] is False
+    assert outputs[17]["visible"] is False
+    assert outputs[18]["visible"] is False
+    assert adapter.phrase_calls == 1
 
 
 def test_guided_run_callback_forces_llm_and_blank_internal_domain_fields(monkeypatch):

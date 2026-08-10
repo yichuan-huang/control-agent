@@ -145,6 +145,12 @@ def _effective_status(report: CFDCRunReport) -> str:
     session = report.diagnostic_session
     if session is None:
         return report.status
+    if (
+        session.status == "awaiting_measurements"
+        and session.measurement_round_count == 0
+        and any(item.status == "unknown" for item in session.checklist)
+    ):
+        return "collecting_description"
     allowed_outer_statuses = _SESSION_OUTER_STATUS_PRECEDENCE.get(session.status, set())
     return report.status if report.status in allowed_outer_statuses else session.status
 
@@ -168,7 +174,10 @@ def _measurement_plan_released(report: CFDCRunReport) -> bool:
             "need_more_information",
             "collecting_description",
         }
-    return session.measurement_plan is not None and session.status != "collecting_description"
+    return (
+        session.measurement_plan is not None
+        and _effective_status(report) != "collecting_description"
+    )
 
 
 def _measurement_evidence_released(report: CFDCRunReport) -> bool:
@@ -289,20 +298,21 @@ def measurement_guidance_markdown(report: CFDCRunReport) -> str:
     description_complete = bool(session.checklist) and all(
         item.status != "unknown" for item in session.checklist
     )
-    if description_complete:
-        lines = [
-            "### 八项问题描述已完成：请按以下 instruction 准备测量数据",
-            "请只查找或整理已有记录、日志或手册，不要为回答这些问题操作真实硬件。",
-            (
-                "请把相应的值和原文摘录反馈给 AI；数值还要注明单位，"
-                "没有记录的项目请明确写“不知道”。"
-            ),
-        ]
-    else:
-        lines = [
-            "### 从现有记录中补充证据",
-            "请只查找已有记录、日志或手册，不要为回答这些问题操作真实硬件。",
-        ]
+    if not description_complete:
+        return (
+            "### 八项问题描述尚未完成\n\n"
+            "请查看 checklist 中标为 `○ 缺少描述` 的项目。请直接在左侧"
+            "“控制问题描述”栏继续补充，然后再次点击“检查描述并继续”。"
+            "在八项全部完成前，不会显示测量要求或测量回复入口。"
+        )
+    lines = [
+        "### 八项问题描述已完成：请按以下 instruction 准备测量数据",
+        "请只查找或整理已有记录、日志或手册，不要为回答这些问题操作真实硬件。",
+        (
+            "请把相应的值和原文摘录反馈给 AI；数值还要注明单位，"
+            "没有记录的项目请明确写“不知道”。"
+        ),
+    ]
     for index, request in enumerate(requests, start=1):
         unit = f"；数值单位提示：{request.unit_hint}" if request.unit_hint else ""
         lines.append(
