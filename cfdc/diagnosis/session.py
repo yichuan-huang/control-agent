@@ -180,9 +180,7 @@ def continue_description_session(
     for turn in state.turns:
         prior_supplement = turn.answers.get("supplemental_description")
         if isinstance(prior_supplement, str) and prior_supplement.strip():
-            text_parts.append(
-                f"Supplemental description: {prior_supplement.strip()}"
-            )
+            text_parts.append(f"Supplemental description: {prior_supplement.strip()}")
     text_parts.append(evidence)
     accumulated = state.accumulated_description.model_copy(
         update={"text": "\n\n".join(text_parts)}
@@ -335,9 +333,7 @@ def submit_measurement_assessment(
         unresolved_field_ids = [
             request.diagnostic_field_id
             for request in state.measurement_plan.requests
-            if getattr(
-                reduced_diagnosis, request.diagnostic_field_id
-            ).status
+            if getattr(reduced_diagnosis, request.diagnostic_field_id).status
             == "unknown"
         ]
         if unresolved_field_ids:
@@ -387,9 +383,7 @@ def submit_measurement_assessment(
     if typed_assessment.status == "ready":
         evidence_text = render_measurement_evidence(updates["measurement_history"])
         accumulated = state.accumulated_description.model_copy(
-            update={
-                "text": f"{state.accumulated_description.text}\n\n{evidence_text}"
-            }
+            update={"text": f"{state.accumulated_description.text}\n\n{evidence_text}"}
         )
         updates.update(
             {
@@ -492,9 +486,7 @@ def submit_profile_measurement_assessment(
                 "revision": state.revision + 1,
                 "current_diagnosis": diagnosis,
                 "checklist": checklist,
-                "description_guidance": [
-                    item.guidance for item in checklist
-                ],
+                "description_guidance": [item.guidance for item in checklist],
                 "evidence_level": "description_only",
                 "classification": None,
                 "semantic_selection": None,
@@ -701,13 +693,15 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                 "measurement assessment and response histories must be arrays"
             )
         if any(not isinstance(item, str) for item in response_history):
-            raise ValueError(
-                "measurement response history entries must be strings"
-            )
+            raise ValueError("measurement response history entries must be strings")
         plan = None
         assessments = []
         diagnosis = None
-        if history_payload or is_post_measurement or persisted_status == "measurement_verified":
+        if (
+            history_payload
+            or is_post_measurement
+            or persisted_status == "measurement_verified"
+        ):
             from cfdc.models import MeasurementPlan
 
             plan = MeasurementPlan.model_validate(plan_payload)
@@ -722,8 +716,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                 raise ValueError("measurement round counts must be integers")
             if (
                 len(assessments) != len(response_history)
-                or len(assessments)
-                != diagnostic_round_count + profile_round_count
+                or len(assessments) != diagnostic_round_count + profile_round_count
             ):
                 raise ValueError(
                     "grounded measurement assessment and response histories must align"
@@ -736,9 +729,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                     plan,
                     assessment,
                     response,
-                    previous_assessment=(
-                        previous_assessment if index > 0 else None
-                    ),
+                    previous_assessment=(previous_assessment if index > 0 else None),
                 )
                 previous_assessment = assessment
             if is_post_measurement:
@@ -851,9 +842,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             diagnosis = DiagnosticEngine(adapter=None).diagnose(rebuilt_accumulated)
             payload["current_diagnosis"] = diagnosis.model_dump(mode="python")
         checklist = build_diagnostic_checklist(rebuilt_accumulated, diagnosis)
-        payload["checklist"] = [
-            item.model_dump(mode="python") for item in checklist
-        ]
+        payload["checklist"] = [item.model_dump(mode="python") for item in checklist]
         payload["description_guidance"] = [
             item.guidance.model_dump(mode="python") for item in checklist
         ]

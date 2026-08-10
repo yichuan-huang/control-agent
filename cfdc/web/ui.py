@@ -257,9 +257,7 @@ def build_app() -> gr.Blocks:
                     label="我确认所提交的输入/输出范围仅作为本次软件仿真的停止边界",
                     value=False,
                     visible=False,
-                    info=(
-                        "这不代表真实硬件安全认证，也不授权向真实物理硬件下发命令。"
-                    ),
+                    info=("这不代表真实硬件安全认证，也不授权向真实物理硬件下发命令。"),
                 )
                 measurement_button = gr.Button(
                     "提交测量回复", variant="primary", visible=False
@@ -283,13 +281,27 @@ def build_app() -> gr.Blocks:
                     with gr.Tab("模型响应", visible=False) as model_tab:
                         experiments = gr.Dataframe(
                             headers=["#", "实验", "重复", "提取目标", "采样数", "信号"],
-                            datatype=["number", "str", "number", "str", "number", "str"],
+                            datatype=[
+                                "number",
+                                "str",
+                                "number",
+                                "str",
+                                "number",
+                                "str",
+                            ],
                             interactive=False,
                             elem_classes="stage-table",
                         )
                     with gr.Tab("核心特征", visible=False) as features_tab:
                         features = gr.Dataframe(
-                            headers=["特征", "值", "单位", "置信区间", "置信度", "方法"],
+                            headers=[
+                                "特征",
+                                "值",
+                                "单位",
+                                "置信区间",
+                                "置信度",
+                                "方法",
+                            ],
                             datatype=["str", "str", "str", "str", "str", "str"],
                             interactive=False,
                             elem_classes="stage-table",
@@ -309,7 +321,14 @@ def build_app() -> gr.Blocks:
                             elem_classes="stage-table",
                         )
                         performance = gr.Dataframe(
-                            headers=["场景", "安全性", "最终误差", "稳定时间/s", "饱和率", "违规"],
+                            headers=[
+                                "场景",
+                                "安全性",
+                                "最终误差",
+                                "稳定时间/s",
+                                "饱和率",
+                                "违规",
+                            ],
                             datatype=["str", "str", "str", "str", "str", "str"],
                             interactive=False,
                             elem_classes="stage-table",

@@ -1014,7 +1014,9 @@ def run_cfdc_route(
                         "generic guided measurement flow requires an LLM adapter"
                     )
                 if session.measurement_plan is None:
-                    raise ValueError("diagnostic session is missing its measurement plan")
+                    raise ValueError(
+                        "diagnostic session is missing its measurement plan"
+                    )
                 assessment = diagnostic_adapter.extract_measurements(
                     session.accumulated_description,
                     session.measurement_plan,
@@ -1042,9 +1044,13 @@ def run_cfdc_route(
                         "profile measurement collection requires an LLM adapter"
                     )
                 if session.measurement_plan is None:
-                    raise ValueError("diagnostic session is missing its measurement plan")
+                    raise ValueError(
+                        "diagnostic session is missing its measurement plan"
+                    )
                 if session.profile_measurement_round_count >= session.maximum_turns:
-                    raise ValueError("maximum Profile measurement rounds already reached")
+                    raise ValueError(
+                        "maximum Profile measurement rounds already reached"
+                    )
                 newest_assessment = MeasurementAssessment.model_validate(
                     diagnostic_adapter.extract_measurements(
                         session.accumulated_description,
@@ -1079,9 +1085,9 @@ def run_cfdc_route(
                 new_signature = _diagnosis_signature(new_diagnosis)
                 new_primary_class = None
                 if new_diagnosis.complete:
-                    new_primary_class = DiagnosticEngine().classify(
-                        new_diagnosis, None
-                    ).primary_class
+                    new_primary_class = (
+                        DiagnosticEngine().classify(new_diagnosis, None).primary_class
+                    )
                 if (
                     new_signature != old_signature
                     or new_primary_class != old_primary_class
@@ -1093,27 +1099,20 @@ def run_cfdc_route(
                         raise ValueError(
                             "generic guided flow requires description guidance extraction"
                         )
-                    accumulated_description, guided_items = (
-                        apply_description_guidance(
+                    accumulated_description, guided_items = apply_description_guidance(
+                        session.accumulated_description,
+                        diagnostic_adapter.guide_description(
                             session.accumulated_description,
-                            diagnostic_adapter.guide_description(
-                                session.accumulated_description,
-                                [
-                                    item.guidance
-                                    for item in preliminary_checklist
-                                ],
-                            ),
                             [item.guidance for item in preliminary_checklist],
-                        )
+                        ),
+                        [item.guidance for item in preliminary_checklist],
                     )
                     checklist = build_diagnostic_checklist(
                         accumulated_description, new_diagnosis
                     )
                     checklist = [
                         item.model_copy(update={"guidance": guidance})
-                        for item, guidance in zip(
-                            checklist, guided_items, strict=True
-                        )
+                        for item, guidance in zip(checklist, guided_items, strict=True)
                     ]
                     measurement_plan = build_measurement_plan(checklist)
                     if hasattr(diagnostic_adapter, "phrase_measurement_plan"):

@@ -141,7 +141,9 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
         assert "?" not in description and "？" not in description
         if language == "en":
             assert sentences[0].startswith(("This is ", "These are "))
-            assert sentences[1].startswith(("The control input is ", "The control inputs are "))
+            assert sentences[1].startswith(
+                ("The control input is ", "The control inputs are ")
+            )
         else:
             assert sentences[0].startswith("这是")
             assert sentences[1].startswith("控制输入是")
@@ -156,7 +158,9 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
         assert [label for label, _field_id, _body in bullets] == expected_labels
         assert [field_id for _label, field_id, _body in bullets] == MEASUREMENT_FIELDS
 
-        for field_id, (_label, _actual_field_id, body) in zip(MEASUREMENT_FIELDS, bullets):
+        for field_id, (_label, _actual_field_id, body) in zip(
+            MEASUREMENT_FIELDS, bullets
+        ):
             assert body.strip(), (language, index, field_id)
             quote_match = re.search(r"[“\"]([^”\"]+)[”\"]", body)
             assert quote_match is not None, (language, index, field_id)
@@ -169,7 +173,10 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
         assert len(profile) >= 200, (language, index, len(profile))
         assert "```" not in profile
         if language == "en":
-            assert "The existing software record" in profile or "The declared software model" in profile
+            assert (
+                "The existing software record" in profile
+                or "The declared software model" in profile
+            )
             assert "software-simulation stopping boundaries only" in profile
             assert not HAN_PATTERN.search(title)
         else:
@@ -213,8 +220,12 @@ def test_bilingual_prompts_have_strict_structural_and_measurement_parity():
 
     assert len(english) == len(chinese) == 200
     for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
-        assert [item[1] for item in english_item["bullets"]] == MEASUREMENT_FIELDS, index
-        assert [item[1] for item in chinese_item["bullets"]] == MEASUREMENT_FIELDS, index
+        assert [item[1] for item in english_item["bullets"]] == MEASUREMENT_FIELDS, (
+            index
+        )
+        assert [item[1] for item in chinese_item["bullets"]] == MEASUREMENT_FIELDS, (
+            index
+        )
         assert english_item["delay_values"] == chinese_item["delay_values"], index
         assert len(english_item["sentences"]) == len(chinese_item["sentences"]), index
 
@@ -254,7 +265,9 @@ def test_prompt_documents_do_not_authorize_physical_hardware_actions():
 
 def test_technical_corpus_has_four_required_fields_and_source_for_every_entry():
     markdown = TECHNICAL_PATH.read_text(encoding="utf-8")
-    entries = re.split(r"^### \d+\. \[Ch\d+-\d+\] .+$", markdown, flags=re.MULTILINE)[1:]
+    entries = re.split(r"^### \d+\. \[Ch\d+-\d+\] .+$", markdown, flags=re.MULTILINE)[
+        1:
+    ]
 
     assert len(entries) == len(_technical_ids())
     for index, entry in enumerate(entries, 1):
@@ -283,7 +296,9 @@ def test_prompt_documents_describe_data_without_textbook_provenance_claims():
     assert "教材" not in CHINESE_PATH.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("chapter", range(1, 11), ids=lambda chapter: f"chapter-{chapter}")
+@pytest.mark.parametrize(
+    "chapter", range(1, 11), ids=lambda chapter: f"chapter-{chapter}"
+)
 def test_technical_corpus_has_reproducible_derivations_for_each_chapter(chapter):
     markdown = TECHNICAL_PATH.read_text(encoding="utf-8")
     matches = list(
@@ -297,7 +312,11 @@ def test_technical_corpus_has_reproducible_derivations_for_each_chapter(chapter)
     for position, match in enumerate(matches):
         if int(match.group(2)) != chapter:
             continue
-        end = matches[position + 1].start() if position + 1 < len(matches) else len(markdown)
+        end = (
+            matches[position + 1].start()
+            if position + 1 < len(matches)
+            else len(markdown)
+        )
         chapter_entries.append((int(match.group(1)), markdown[match.end() : end]))
 
     assert len(chapter_entries) == 20

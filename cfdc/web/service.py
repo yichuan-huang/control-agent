@@ -351,9 +351,7 @@ def submit_app_measurement_response(
     text = _textbox_text(measurement_response).strip()
     if not text:
         raise ValueError("请填写现有记录、手册摘录或明确说明未知。")
-    adapter = build_adapter(
-        bool(app_state.get("use_llm")), base_url, model, api_key
-    )
+    adapter = build_adapter(bool(app_state.get("use_llm")), base_url, model, api_key)
     if adapter is None:
         raise ValueError("通用引导测量流程需要启用 LLM。")
     report = run_cfdc_route(

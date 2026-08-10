@@ -481,11 +481,11 @@ class OpenAICompatibleDiagnosticAdapter:
             "excerpt copied from the description. "
             "Guidance must remain record/manual-report-only and must never prescribe "
             "a physical command, amplitude, or duration.\n\n"
-            "Required shape: {\"guidance\":[DescriptionGuidance x8],"
-            "\"observed_outputs\":[{\"name\":\"string\","
-            "\"source_excerpt\":\"verbatim string\"}],"
-            "\"actuators\":[{\"name\":\"string\","
-            "\"source_excerpt\":\"verbatim string\"}]}.\n"
+            'Required shape: {"guidance":[DescriptionGuidance x8],'
+            '"observed_outputs":[{"name":"string",'
+            '"source_excerpt":"verbatim string"}],'
+            '"actuators":[{"name":"string",'
+            '"source_excerpt":"verbatim string"}]}.\n'
             f"description={description.model_dump_json()}\n"
             f"guidance={json.dumps([item.model_dump(mode='json') for item in guidance], ensure_ascii=False)}"
         )
@@ -510,8 +510,7 @@ class OpenAICompatibleDiagnosticAdapter:
         response = self.client.chat.completions.create(**options)
         fallback = DescriptionGuidanceAssessment(
             guidance=[
-                item.model_copy(update={"response": "unknown"})
-                for item in guidance
+                item.model_copy(update={"response": "unknown"}) for item in guidance
             ]
         )
         try:
@@ -526,9 +525,7 @@ class OpenAICompatibleDiagnosticAdapter:
                 candidate,
                 guidance,
             )
-            candidate = candidate.model_copy(
-                update={"guidance": validated_guidance}
-            )
+            candidate = candidate.model_copy(update={"guidance": validated_guidance})
         except (AttributeError, IndexError, TypeError, ValueError):
             candidate = fallback
         return candidate.model_dump(mode="json")
@@ -550,11 +547,11 @@ class OpenAICompatibleDiagnosticAdapter:
             "omission into a gap or retraction. Only emit a changed fact or "
             "conflict when the current user_response explicitly supplies the supporting "
             "source excerpt. Profile-specific numeric facts are not diagnostic changes.\n\n"
-            "Required shape: {\"status\":\"need_more|conflict|ready\","
-            "\"facts\":[{\"request_id\":\"string\",\"source_excerpt\":\"string\","
-            "\"numeric_value\":null,\"unit\":null,\"text_value\":\"string\"}],"
-            "\"gaps\":[\"diagnostic_field_id\"],\"conflicts\":[\"string\"],"
-            "\"conflict_request_ids\":[\"request_id\"],\"rationale\":\"string\"}.\n"
+            'Required shape: {"status":"need_more|conflict|ready",'
+            '"facts":[{"request_id":"string","source_excerpt":"string",'
+            '"numeric_value":null,"unit":null,"text_value":"string"}],'
+            '"gaps":["diagnostic_field_id"],"conflicts":["string"],'
+            '"conflict_request_ids":["request_id"],"rationale":"string"}.\n'
             f"description={description.model_dump_json()}\n"
             f"measurement_plan={measurement_plan.model_dump_json()}\n"
             f"previous_assessment={previous_assessment.model_dump_json() if previous_assessment else 'null'}\n"
@@ -590,8 +587,7 @@ class OpenAICompatibleDiagnosticAdapter:
             assessment = previous_assessment or MeasurementAssessment(
                 status="need_more",
                 gaps=[
-                    request.diagnostic_field_id
-                    for request in measurement_plan.requests
+                    request.diagnostic_field_id for request in measurement_plan.requests
                 ],
                 rationale=(
                     "The AI response was incomplete JSON. Please submit the same "

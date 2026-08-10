@@ -259,7 +259,9 @@ def checklist_rows(report: CFDCRunReport) -> list[list[str]]:
         return []
     request_field_by_id = {
         request.request_id: request.diagnostic_field_id
-        for request in (session.measurement_plan.requests if session.measurement_plan else [])
+        for request in (
+            session.measurement_plan.requests if session.measurement_plan else []
+        )
     }
     fact_by_field = {}
     assessment = session.measurement_assessment
@@ -347,9 +349,7 @@ def guided_timeline_markdown(report: CFDCRunReport) -> str:
         lines.append(f"#### 测量回填 · 第 {round_index} 轮")
         for fact in assessment.facts:
             rendered = fact.text_value or f"{fact.numeric_value} {fact.unit}"
-            lines.append(
-                f"- `{fact.request_id}`：{fact.source_excerpt}（{rendered}）"
-            )
+            lines.append(f"- `{fact.request_id}`：{fact.source_excerpt}（{rendered}）")
         if assessment.gaps:
             lines.append("- 缺口：" + "、".join(assessment.gaps))
         for request_id, conflict in zip(
@@ -892,8 +892,7 @@ def clarification_items(report: CFDCRunReport) -> list[tuple[str, str]]:
     missing_prompts = {
         item.guidance.prompt
         for item in session.checklist
-        if item.status == "unknown"
-        and item.diagnostic_field_id not in verified_fields
+        if item.status == "unknown" and item.diagnostic_field_id not in verified_fields
     }
     return [
         (question_id, prompt)

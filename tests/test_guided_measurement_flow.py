@@ -52,9 +52,7 @@ class GuidedFakeAdapter:
             "observed_outputs": [
                 {"name": "temperature", "source_excerpt": "temperature"}
             ],
-            "actuators": [
-                {"name": "heater", "source_excerpt": "heater change"}
-            ],
+            "actuators": [{"name": "heater", "source_excerpt": "heater change"}],
         }
 
     def phrase_measurement_plan(self, description, checklist, plan):
@@ -68,7 +66,9 @@ class GuidedFakeAdapter:
         if measurement_response == "need another record":
             return MeasurementAssessment(
                 status="need_more",
-                gaps=[request.diagnostic_field_id for request in measurement_plan.requests],
+                gaps=[
+                    request.diagnostic_field_id for request in measurement_plan.requests
+                ],
                 rationale="The supplied response did not identify an existing record.",
             ).model_dump(mode="json")
         if previous_assessment is not None and previous_assessment.status == "ready":
@@ -110,9 +110,7 @@ class EvidenceDrivenAdapter(GuidedFakeAdapter):
         del description
         if "changing any one of several actuators" in measurement_response:
             assert previous_assessment.status == "ready"
-            severe = (
-                "changing any one of several actuators noticeably changes several outputs"
-            )
+            severe = "changing any one of several actuators noticeably changes several outputs"
             return MeasurementAssessment(
                 status="ready",
                 facts=[
@@ -654,9 +652,7 @@ def test_truncated_profile_llm_json_keeps_ui_flow_and_uses_grounded_local_facts(
     class TruncatedOpenAI:
         def __init__(self, **kwargs):
             del kwargs
-            self.chat = type(
-                "Chat", (), {"completions": TruncatedCompletions()}
-            )()
+            self.chat = type("Chat", (), {"completions": TruncatedCompletions()})()
 
     monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", TruncatedOpenAI)
     live_adapter = OpenAICompatibleDiagnosticAdapter(
@@ -726,8 +722,7 @@ def test_chinese_ready_record_advances_web_state_and_accepts_profile_facts(
         ),
     }
     diagnostic_response = "\n".join(
-        f"{request_id}：{excerpt}"
-        for request_id, excerpt in diagnostic_facts.items()
+        f"{request_id}：{excerpt}" for request_id, excerpt in diagnostic_facts.items()
     )
 
     class ChineseRecordAdapter(GuidedFakeAdapter):
@@ -735,12 +730,8 @@ def test_chinese_ready_record_advances_web_state_and_accepts_profile_facts(
             del description
             return {
                 "guidance": [item.model_dump(mode="json") for item in guidance],
-                "observed_outputs": [
-                    {"name": "车速", "source_excerpt": "车速"}
-                ],
-                "actuators": [
-                    {"name": "油门角度", "source_excerpt": "油门角度"}
-                ],
+                "observed_outputs": [{"name": "车速", "source_excerpt": "车速"}],
+                "actuators": [{"name": "油门角度", "source_excerpt": "油门角度"}],
             }
 
         def extract_measurements(
@@ -949,9 +940,7 @@ def test_explicit_profile_unknown_gap_retracts_prior_fact_and_invalidates_releas
     latest_assessment = invalidated.diagnostic_session.measurement_assessment
     assert latest_assessment.gaps == ["minimum_phase"]
     assert {fact.request_id for fact in latest_assessment.facts} == {
-        request_id
-        for request_id in _VALID_FIELD_FACTS
-        if request_id != "minimum_phase"
+        request_id for request_id in _VALID_FIELD_FACTS if request_id != "minimum_phase"
     }
 
 
@@ -1066,7 +1055,9 @@ def test_migrated_session_profile_adapter_failure_is_atomic():
             raise RuntimeError("profile provider unavailable")
 
         def extract_measurements(self, *args, **kwargs):
-            raise AssertionError("Profile response must not be consumed before selection")
+            raise AssertionError(
+                "Profile response must not be consumed before selection"
+            )
 
     with pytest.raises(RuntimeError, match="profile provider unavailable"):
         run_cfdc_route(
@@ -1236,8 +1227,7 @@ def test_cross_field_tokens_do_not_resolve_either_diagnostic_field():
                                 else "opposite"
                             ),
                         )
-                        if fact.request_id
-                        in {"minimum_phase", "significant_delay"}
+                        if fact.request_id in {"minimum_phase", "significant_delay"}
                         else fact
                     )
                     for fact in previous_assessment.facts
@@ -1605,7 +1595,9 @@ def test_profile_facts_require_explicit_simulation_boundary_confirmation():
     except ValueError as exc:
         assert "simulation bounds" in str(exc)
     else:
-        raise AssertionError("profile facts compiled without confirmed simulation bounds")
+        raise AssertionError(
+            "profile facts compiled without confirmed simulation bounds"
+        )
 
 
 def test_web_guided_flow_requires_llm_and_uses_measurement_callback(monkeypatch):
@@ -1674,9 +1666,7 @@ def test_live_measurement_extraction_rejects_non_strict_payload(monkeypatch):
     class FakeOpenAI:
         def __init__(self, **kwargs):
             del kwargs
-            self.chat = type(
-                "Chat", (), {"completions": FakeCompletions()}
-            )()
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
 
     monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
     adapter = OpenAICompatibleDiagnosticAdapter(
@@ -1728,9 +1718,7 @@ def test_live_guidance_contract_errors_fall_back_to_deterministic_data(
         result = adapter.guide_description(
             _description(), [item.guidance for item in checklist]
         )
-        assert [item["response"] for item in result["guidance"]] == [
-            "unknown"
-        ] * 8
+        assert [item["response"] for item in result["guidance"]] == ["unknown"] * 8
         assert result["observed_outputs"] == []
         assert result["actuators"] == []
     else:
@@ -1753,9 +1741,7 @@ def test_live_measurement_prompt_never_contains_provider_secret(monkeypatch):
     class FakeOpenAI:
         def __init__(self, **kwargs):
             del kwargs
-            self.chat = type(
-                "Chat", (), {"completions": FakeCompletions()}
-            )()
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
 
     monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
     adapter = OpenAICompatibleDiagnosticAdapter(

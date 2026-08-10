@@ -114,7 +114,9 @@ def build_measurement_plan(
     """Request only excerpts and values already present in records or manuals."""
 
     if [item.diagnostic_field_id for item in checklist] != list(DIAGNOSTIC_FIELD_IDS):
-        raise ValueError("measurement plans require the fixed eight-field diagnostic checklist")
+        raise ValueError(
+            "measurement plans require the fixed eight-field diagnostic checklist"
+        )
     requests = []
     for item in checklist:
         _, _, unit_hint = _FIELD_DETAILS[item.diagnostic_field_id]
@@ -163,10 +165,13 @@ def _contains_unit_token(excerpt: str, unit: str) -> bool:
     normalized_unit = _normalize_whitespace(unit)
     prefix = r"(?<!\w)" if normalized_unit[0].isalnum() else ""
     suffix = r"(?!\w)" if normalized_unit[-1].isalnum() else ""
-    return re.search(
-        prefix + re.escape(normalized_unit) + suffix,
-        normalized_excerpt,
-    ) is not None
+    return (
+        re.search(
+            prefix + re.escape(normalized_unit) + suffix,
+            normalized_excerpt,
+        )
+        is not None
+    )
 
 
 def validate_grounded_measurement_assessment(
@@ -214,7 +219,8 @@ def validate_grounded_measurement_assessment(
                 )
         if fact.numeric_value is not None:
             attested_values = [
-                float(match.group(0)) for match in _NUMBER_TOKEN.finditer(normalized_excerpt)
+                float(match.group(0))
+                for match in _NUMBER_TOKEN.finditer(normalized_excerpt)
             ]
             if fact.numeric_value not in attested_values:
                 raise ValueError(
@@ -260,7 +266,9 @@ def validate_phrased_measurement_plan(
                     f"{index} field {field_name}"
                 )
     if phrased.rationale != base_plan.rationale:
-        raise ValueError("phrased measurement plan must preserve deterministic rationale")
+        raise ValueError(
+            "phrased measurement plan must preserve deterministic rationale"
+        )
     return phrased
 
 
@@ -273,12 +281,10 @@ def apply_description_guidance(
 
     assessment = DescriptionGuidanceAssessment.model_validate(payload)
     normalized_guidance = [
-        item.model_copy(update={"response": "unknown"})
-        for item in assessment.guidance
+        item.model_copy(update={"response": "unknown"}) for item in assessment.guidance
     ]
     normalized_expected = [
-        item.model_copy(update={"response": "unknown"})
-        for item in expected_guidance
+        item.model_copy(update={"response": "unknown"}) for item in expected_guidance
     ]
     if normalized_guidance != normalized_expected:
         raise ValueError(
@@ -421,9 +427,7 @@ def reduce_measurement_history_to_diagnosis(
                 parts.append(fact.text_value)
             if fact.numeric_value is not None:
                 parts.append(f"{fact.numeric_value:.17g} {fact.unit}")
-        isolated = infer_structural_diagnosis(
-            SystemDescription(text="\n".join(parts))
-        )
+        isolated = infer_structural_diagnosis(SystemDescription(text="\n".join(parts)))
         resolved_fields[request.diagnostic_field_id] = getattr(
             isolated, request.diagnostic_field_id
         )

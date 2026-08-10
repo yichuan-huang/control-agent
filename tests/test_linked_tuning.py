@@ -446,21 +446,20 @@ def test_output_plot_overlays_stored_initial_and_latest_siso_trials_with_bounds(
 
     frame = output_plot_frame(latest)
 
-    assert _series_values(
-        frame, "scenario-1 · 参考 · vehicle speed"
-    ) == [0.5, 0.5]
-    assert _series_values(
-        frame, "scenario-1 · 初始控制器输出 · vehicle speed"
-    ) == [0.0, 0.1]
-    assert _series_values(
-        frame, "scenario-1 · 最新执行输出 · vehicle speed"
-    ) == [0.0, 0.2]
-    assert _series_values(
-        frame, "scenario-1 · 输出下界 · vehicle speed"
-    ) == [-2.0, -2.0]
-    assert _series_values(
-        frame, "scenario-1 · 输出上界 · vehicle speed"
-    ) == [2.0, 2.0]
+    assert _series_values(frame, "scenario-1 · 参考 · vehicle speed") == [0.5, 0.5]
+    assert _series_values(frame, "scenario-1 · 初始控制器输出 · vehicle speed") == [
+        0.0,
+        0.1,
+    ]
+    assert _series_values(frame, "scenario-1 · 最新执行输出 · vehicle speed") == [
+        0.0,
+        0.2,
+    ]
+    assert _series_values(frame, "scenario-1 · 输出下界 · vehicle speed") == [
+        -2.0,
+        -2.0,
+    ]
+    assert _series_values(frame, "scenario-1 · 输出上界 · vehicle speed") == [2.0, 2.0]
 
 
 def test_output_plot_aligns_reordered_scenarios_by_stable_identity():
@@ -513,27 +512,30 @@ def test_output_plot_aligns_reordered_scenarios_by_stable_identity():
 
     frame = output_plot_frame(latest)
 
-    assert _series_values(
-        frame, "scenario-1 · 参考 · vehicle speed"
-    ) == [0.5, 0.5]
-    assert _series_values(
-        frame, "scenario-1 · 初始控制器输出 · vehicle speed"
-    ) == [0.0, 0.1]
-    assert _series_values(
-        frame, "scenario-1 · 最新执行输出 · vehicle speed"
-    ) == [0.0, 0.11]
-    assert _series_times(
-        frame, "scenario-1 · 输出下界 · vehicle speed"
-    ) == [0.0, 0.1, 0.15]
-    assert _series_values(
-        frame, "scenario-2 · 参考 · vehicle speed"
-    ) == [0.25, 0.25]
-    assert _series_values(
-        frame, "scenario-2 · 最新执行输出 · vehicle speed"
-    ) == [0.0, 0.22]
-    assert _series_times(
-        frame, "scenario-2 · 输出下界 · vehicle speed"
-    ) == [0.0, 0.2, 0.25]
+    assert _series_values(frame, "scenario-1 · 参考 · vehicle speed") == [0.5, 0.5]
+    assert _series_values(frame, "scenario-1 · 初始控制器输出 · vehicle speed") == [
+        0.0,
+        0.1,
+    ]
+    assert _series_values(frame, "scenario-1 · 最新执行输出 · vehicle speed") == [
+        0.0,
+        0.11,
+    ]
+    assert _series_times(frame, "scenario-1 · 输出下界 · vehicle speed") == [
+        0.0,
+        0.1,
+        0.15,
+    ]
+    assert _series_values(frame, "scenario-2 · 参考 · vehicle speed") == [0.25, 0.25]
+    assert _series_values(frame, "scenario-2 · 最新执行输出 · vehicle speed") == [
+        0.0,
+        0.22,
+    ]
+    assert _series_times(frame, "scenario-2 · 输出下界 · vehicle speed") == [
+        0.0,
+        0.2,
+        0.25,
+    ]
 
 
 def test_output_plot_aligns_the_same_constant_reference_after_early_stop():
@@ -543,8 +545,7 @@ def test_output_plot_aligns_the_same_constant_reference_after_early_stop():
             reference={"vehicle speed": [0.5] * samples},
             outputs={
                 "vehicle speed": [
-                    output * index / max(samples - 1, 1)
-                    for index in range(samples)
+                    output * index / max(samples - 1, 1) for index in range(samples)
                 ]
             },
             requested_controls={"throttle angle": [0.05] * samples},
@@ -581,12 +582,15 @@ def test_output_plot_aligns_the_same_constant_reference_after_early_stop():
     frame = output_plot_frame(latest)
     series = set(frame["series"])
 
-    assert _series_values(
-        frame, "scenario-1 · 初始控制器输出 · vehicle speed"
-    ) == [0.0, 0.05, 0.1]
-    assert _series_values(
-        frame, "scenario-1 · 最新执行输出 · vehicle speed"
-    ) == [0.0, 0.2]
+    assert _series_values(frame, "scenario-1 · 初始控制器输出 · vehicle speed") == [
+        0.0,
+        0.05,
+        0.1,
+    ]
+    assert _series_values(frame, "scenario-1 · 最新执行输出 · vehicle speed") == [
+        0.0,
+        0.2,
+    ]
     assert "scenario-2 · 最新执行输出 · vehicle speed" not in series
 
 
@@ -635,18 +639,22 @@ def test_output_plot_disambiguates_reordered_scenarios_with_same_reference():
 
     frame = output_plot_frame(latest)
 
-    assert _series_values(
-        frame, "scenario-1 · 初始控制器输出 · vehicle speed"
-    ) == [0.0, 0.1]
-    assert _series_values(
-        frame, "scenario-1 · 最新执行输出 · vehicle speed"
-    ) == [0.0, 0.11]
-    assert _series_values(
-        frame, "scenario-2 · 初始控制器输出 · vehicle speed"
-    ) == [0.05, 0.2]
-    assert _series_values(
-        frame, "scenario-2 · 最新执行输出 · vehicle speed"
-    ) == [0.05, 0.22]
+    assert _series_values(frame, "scenario-1 · 初始控制器输出 · vehicle speed") == [
+        0.0,
+        0.1,
+    ]
+    assert _series_values(frame, "scenario-1 · 最新执行输出 · vehicle speed") == [
+        0.0,
+        0.11,
+    ]
+    assert _series_values(frame, "scenario-2 · 初始控制器输出 · vehicle speed") == [
+        0.05,
+        0.2,
+    ]
+    assert _series_values(frame, "scenario-2 · 最新执行输出 · vehicle speed") == [
+        0.05,
+        0.22,
+    ]
 
 
 def test_output_plot_does_not_position_pair_indistinguishable_duplicate_scenarios():
@@ -689,13 +697,11 @@ def test_output_plot_does_not_position_pair_indistinguishable_duplicate_scenario
     frame = output_plot_frame(latest)
     grouped = {
         scenario: set(
-            frame.loc[
-                frame["series"].str.startswith(f"{scenario} · "), "series"
-            ].str.split(" · ").str[1]
+            frame.loc[frame["series"].str.startswith(f"{scenario} · "), "series"]
+            .str.split(" · ")
+            .str[1]
         )
-        for scenario in {
-            series.split(" · ", 1)[0] for series in frame["series"]
-        }
+        for scenario in {series.split(" · ", 1)[0] for series in frame["series"]}
     }
 
     assert len(grouped) == 4
@@ -756,26 +762,23 @@ def test_output_plot_includes_first_only_and_latest_only_scenarios():
     frame = output_plot_frame(latest)
     series = set(frame["series"])
 
-    assert _series_values(
-        frame, "scenario-1 · 参考 · vehicle speed"
-    ) == [0.5, 0.5]
-    assert _series_values(
-        frame, "scenario-1 · 初始控制器输出 · vehicle speed"
-    ) == [0.0, 0.1]
+    assert _series_values(frame, "scenario-1 · 参考 · vehicle speed") == [0.5, 0.5]
+    assert _series_values(frame, "scenario-1 · 初始控制器输出 · vehicle speed") == [
+        0.0,
+        0.1,
+    ]
     assert "scenario-1 · 最新执行输出 · vehicle speed" not in series
-    assert _series_times(
-        frame, "scenario-1 · 输出下界 · vehicle speed"
-    ) == [0.0, 0.1]
-    assert _series_values(
-        frame, "scenario-2 · 最新执行输出 · vehicle speed"
-    ) == [0.0, 0.22]
-    assert _series_values(
-        frame, "scenario-3 · 参考 · vehicle speed"
-    ) == [0.75, 0.75]
+    assert _series_times(frame, "scenario-1 · 输出下界 · vehicle speed") == [0.0, 0.1]
+    assert _series_values(frame, "scenario-2 · 最新执行输出 · vehicle speed") == [
+        0.0,
+        0.22,
+    ]
+    assert _series_values(frame, "scenario-3 · 参考 · vehicle speed") == [0.75, 0.75]
     assert "scenario-3 · 初始控制器输出 · vehicle speed" not in series
-    assert _series_values(
-        frame, "scenario-3 · 最新执行输出 · vehicle speed"
-    ) == [0.0, 0.3]
+    assert _series_values(frame, "scenario-3 · 最新执行输出 · vehicle speed") == [
+        0.0,
+        0.3,
+    ]
 
 
 def test_output_plot_expands_bounds_for_each_mimo_output_channel():
@@ -798,15 +801,12 @@ def test_output_plot_expands_bounds_for_each_mimo_output_channel():
 
     frame = output_plot_frame(evaluated)
 
-    assert _series_values(
-        frame, "scenario-1 · 初始控制器输出 · yaw rate"
-    ) == [0.0, 0.05]
-    assert _series_values(
-        frame, "scenario-1 · 输出下界 · yaw rate"
-    ) == [-0.4, -0.4]
-    assert _series_values(
-        frame, "scenario-1 · 输出上界 · yaw rate"
-    ) == [0.6, 0.6]
+    assert _series_values(frame, "scenario-1 · 初始控制器输出 · yaw rate") == [
+        0.0,
+        0.05,
+    ]
+    assert _series_values(frame, "scenario-1 · 输出下界 · yaw rate") == [-0.4, -0.4]
+    assert _series_values(frame, "scenario-1 · 输出上界 · yaw rate") == [0.6, 0.6]
     assert not any("最新执行输出" in series for series in frame["series"])
 
 
@@ -866,9 +866,10 @@ def test_stability_evidence_is_placed_above_output_curves():
         for index, component in enumerate(demo.get_config_file()["components"])
     }
 
-    assert component_order["linked-stability-summary"] < component_order[
-        "linked-output-plot"
-    ]
+    assert (
+        component_order["linked-stability-summary"]
+        < component_order["linked-output-plot"]
+    )
 
 
 def test_trial_entry_rejects_missing_output_bounds_with_measurement_action():
@@ -883,9 +884,7 @@ def test_trial_entry_rejects_missing_output_bounds_with_measurement_action():
 
     with pytest.raises(
         gr.Error,
-        match=(
-            "yaw rate.*请返回测量阶段补充每个输出通道的数值上下限"
-        ),
+        match=("yaw rate.*请返回测量阶段补充每个输出通道的数值上下限"),
     ):
         _run_callback(
             state,
@@ -1082,18 +1081,18 @@ def test_output_bounds_cover_union_of_displayed_first_and_latest_time_axes():
 
     frame = output_plot_frame(latest)
 
-    assert _series_times(
-        frame, "scenario-1 · 输出下界 · yaw rate"
-    ) == [0.0, 0.2]
-    assert _series_values(
-        frame, "scenario-1 · 输出下界 · yaw rate"
-    ) == [-0.4, -0.4]
-    assert _series_times(
-        frame, "scenario-1 · 输出下界 · vehicle speed"
-    ) == [0.0, 0.1, 0.2]
-    assert _series_values(
-        frame, "scenario-1 · 输出下界 · vehicle speed"
-    ) == [-2.0, -2.0, -2.0]
+    assert _series_times(frame, "scenario-1 · 输出下界 · yaw rate") == [0.0, 0.2]
+    assert _series_values(frame, "scenario-1 · 输出下界 · yaw rate") == [-0.4, -0.4]
+    assert _series_times(frame, "scenario-1 · 输出下界 · vehicle speed") == [
+        0.0,
+        0.1,
+        0.2,
+    ]
+    assert _series_values(frame, "scenario-1 · 输出下界 · vehicle speed") == [
+        -2.0,
+        -2.0,
+        -2.0,
+    ]
 
 
 def test_historical_reference_only_bound_gap_blocks_valid_run_and_approval():

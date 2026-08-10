@@ -189,6 +189,7 @@ class _ChecklistGuidanceAdapter:
         del description, checklist
         return plan.model_dump(mode="json")
 
+
 @pytest.fixture
 def guided_adapter(monkeypatch):
     adapter = _CompleteGuidedAdapter()
@@ -268,9 +269,7 @@ def test_thermostat_checklist_renders_eight_hollow_missing_items():
         description,
         diagnostic_adapter=_ChecklistGuidanceAdapter(),
     )
-    report = run_cfdc_route("demo").model_copy(
-        update={"diagnostic_session": session}
-    )
+    report = run_cfdc_route("demo").model_copy(update={"diagnostic_session": session})
 
     view = render_report(report)
 
@@ -283,20 +282,13 @@ def test_thermostat_checklist_renders_eight_hollow_missing_items():
 def test_grounded_description_checks_only_answered_checklist_item():
     excerpt = "已有记录显示恢复原输入后房间温度会逐渐稳定"
     description = SystemDescription(
-        text=(
-            "这是一个住宅供暖系统。"
-            f"{excerpt}，但没有记录其他动态现象。"
-        )
+        text=(f"这是一个住宅供暖系统。{excerpt}，但没有记录其他动态现象。")
     )
     session = start_diagnostic_session(
         description,
-        diagnostic_adapter=_ChecklistGuidanceAdapter(
-            {"open_loop_stability": excerpt}
-        ),
+        diagnostic_adapter=_ChecklistGuidanceAdapter({"open_loop_stability": excerpt}),
     )
-    report = run_cfdc_route("demo").model_copy(
-        update={"diagnostic_session": session}
-    )
+    report = run_cfdc_route("demo").model_copy(update={"diagnostic_session": session})
 
     view = render_report(report)
 
@@ -330,8 +322,7 @@ def test_complete_eight_item_description_switches_to_measurement_instruction():
         ),
         "minimum_phase": "室温开始时就沿最终方向变化，不会先向相反方向运动",
         "significant_delay": (
-            "二值加热命令改变后，室温在一个采样周期内就开始变化，"
-            "不会出现独立静默区间"
+            "二值加热命令改变后，室温在一个采样周期内就开始变化，不会出现独立静默区间"
         ),
         "relative_degree": "从执行作用到可见响应只涉及一到两个主导储能或积分过程",
         "controllability_observability": (
@@ -343,8 +334,7 @@ def test_complete_eight_item_description_switches_to_measurement_instruction():
             "不会增加新的动态状态"
         ),
         "coupling_severity": (
-            "装置只有一条从执行作用到被测运动的主要物理通道，"
-            "其他给定量只作为扰动进入"
+            "装置只有一条从执行作用到被测运动的主要物理通道，其他给定量只作为扰动进入"
         ),
         "uncertainty_magnitude": (
             "这些变化会使响应速度和最终水平发生适度变化，"
@@ -355,9 +345,7 @@ def test_complete_eight_item_description_switches_to_measurement_instruction():
         SystemDescription(text=description_text),
         diagnostic_adapter=_ChecklistGuidanceAdapter(response_by_field),
     )
-    report = run_cfdc_route("demo").model_copy(
-        update={"diagnostic_session": session}
-    )
+    report = run_cfdc_route("demo").model_copy(update={"diagnostic_session": session})
 
     view = render_report(report)
     outputs = web_ui._outputs(report, {"session": session.model_dump(mode="json")})
@@ -368,9 +356,7 @@ def test_complete_eight_item_description_switches_to_measurement_instruction():
     assert outputs[17]["visible"] is True
     assert outputs[18]["visible"] is True
     assert "八项问题描述已完成" in view["measurement_guidance"]
-    assert "请把相应的值和原文摘录反馈给 AI" in view[
-        "measurement_guidance"
-    ]
+    assert "请把相应的值和原文摘录反馈给 AI" in view["measurement_guidance"]
 
 
 @pytest.fixture(scope="module")
@@ -1447,8 +1433,7 @@ def test_main_ui_exposes_no_examples_component():
     app = build_app()
 
     assert all(
-        component["type"] != "examples"
-        for component in app.config["components"]
+        component["type"] != "examples" for component in app.config["components"]
     )
     assert all(
         component["props"].get("label") != "控制问题描述示例"
@@ -1616,11 +1601,31 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
 @pytest.mark.parametrize(
     ("description", "expected_class", "expected_profile"),
     [
-        (_GUIDED_BEHAVIOR_DESCRIPTIONS[0], "class_i_first_order_lag", "first_order_lag"),
-        (_GUIDED_BEHAVIOR_DESCRIPTIONS[1], "class_ii_second_order_oscillator", "second_order_oscillator"),
-        (_GUIDED_BEHAVIOR_DESCRIPTIONS[2], "class_iii_double_or_pure_integrator", "double_integrator"),
-        (_GUIDED_BEHAVIOR_DESCRIPTIONS[3], "class_iv_higher_order_unstable_nonlinear_or_nmp", "nmp_inverse_response"),
-        (_GUIDED_BEHAVIOR_DESCRIPTIONS[4], "class_v_multivariable_significant_coupling", "mimo_2x2_coupled"),
+        (
+            _GUIDED_BEHAVIOR_DESCRIPTIONS[0],
+            "class_i_first_order_lag",
+            "first_order_lag",
+        ),
+        (
+            _GUIDED_BEHAVIOR_DESCRIPTIONS[1],
+            "class_ii_second_order_oscillator",
+            "second_order_oscillator",
+        ),
+        (
+            _GUIDED_BEHAVIOR_DESCRIPTIONS[2],
+            "class_iii_double_or_pure_integrator",
+            "double_integrator",
+        ),
+        (
+            _GUIDED_BEHAVIOR_DESCRIPTIONS[3],
+            "class_iv_higher_order_unstable_nonlinear_or_nmp",
+            "nmp_inverse_response",
+        ),
+        (
+            _GUIDED_BEHAVIOR_DESCRIPTIONS[4],
+            "class_v_multivariable_significant_coupling",
+            "mimo_2x2_coupled",
+        ),
     ],
 )
 def test_type_i_to_v_behavior_descriptions_wait_for_measurements_before_releasing_route(
@@ -1789,9 +1794,7 @@ def _guided_description_report():
         description,
         diagnosis=infer_structural_diagnosis(description),
     )
-    return run_cfdc_route("demo").model_copy(
-        update={"diagnostic_session": session}
-    )
+    return run_cfdc_route("demo").model_copy(update={"diagnostic_session": session})
 
 
 def _guided_verified_report():
@@ -1837,9 +1840,7 @@ def _guided_verified_report():
 
 def test_guided_gradio_has_one_domain_input_and_no_optional_legacy_controls():
     app = build_app()
-    labels = {
-        component["props"].get("label") for component in app.config["components"]
-    }
+    labels = {component["props"].get("label") for component in app.config["components"]}
 
     assert "控制问题描述" in labels
     assert "现有记录与测量回复" in labels
@@ -1897,9 +1898,9 @@ def test_guided_checklist_uses_status_icons_and_current_assessment_only():
             "measurement_round_count": 2,
         }
     )
-    rows = render_report(
-        report.model_copy(update={"diagnostic_session": session})
-    )["checklist"]
+    rows = render_report(report.model_copy(update={"diagnostic_session": session}))[
+        "checklist"
+    ]
 
     assert [row[0] for row in rows] == [
         "恢复输入后会怎样",
@@ -1925,17 +1926,16 @@ def test_guided_measurement_plan_and_timeline_are_auditable():
         evidence=["Supplemental description: heater and temperature are logged"],
         diagnosis=session.current_diagnosis,
     )
-    session = session.model_copy(
-        update={"turns": [turn], "description_turn_count": 1}
-    )
+    session = session.model_copy(update={"turns": [turn], "description_turn_count": 1})
     view = render_report(report.model_copy(update={"diagnostic_session": session}))
 
     assert "existing_records_only" in view["measurement_guidance"]
     assert "open_loop_stability" in view["measurement_guidance"]
     assert "来源：Review an existing record." in view["measurement_guidance"]
-    assert "回填：Report the source excerpt and recorded observation." in view[
-        "measurement_guidance"
-    ]
+    assert (
+        "回填：Report the source excerpt and recorded observation."
+        in view["measurement_guidance"]
+    )
     assert "描述补充 · 第 1 轮" in view["timeline"]
     assert "heater and temperature are logged" in view["timeline"]
     assert "测量回填 · 第 1 轮" in view["timeline"]
@@ -2000,9 +2000,7 @@ def test_incomplete_description_uses_original_input_and_hides_measurement_contro
     view = render_report(report)
     outputs = web_ui._outputs(report, state)
     assert report.status == "awaiting_measurements"
-    assert "请直接在左侧“控制问题描述”栏继续补充" in view[
-        "measurement_guidance"
-    ]
+    assert "请直接在左侧“控制问题描述”栏继续补充" in view["measurement_guidance"]
     assert "open_loop_stability" not in view["measurement_guidance"]
     assert "Review an existing record" not in view["measurement_guidance"]
     assert view["status"].startswith("### 补充问题描述")
@@ -2112,12 +2110,13 @@ def test_pre_measurement_render_redacts_all_stale_technical_artifacts(
     ):
         assert view[key] == []
     assert not any(view["technical_visibility"].values())
-    assert 'flow-step done"><span>✓</span><small>系统分类</small>' not in view[
-        "progress"
-    ]
-    assert 'flow-step done"><span>✓</span><small>初始控制器</small>' not in view[
-        "progress"
-    ]
+    assert (
+        'flow-step done"><span>✓</span><small>系统分类</small>' not in view["progress"]
+    )
+    assert (
+        'flow-step done"><span>✓</span><small>初始控制器</small>'
+        not in view["progress"]
+    )
     assert (
         'flow-step done"><span>✓</span><small>效果验证与调优</small>'
         not in view["progress"]
@@ -2125,10 +2124,7 @@ def test_pre_measurement_render_redacts_all_stale_technical_artifacts(
     assert view["raw"]["diagnosis"] is None
     assert view["raw"]["route_id"] == "generic"
     assert view["raw"]["status"] == "awaiting_measurements"
-    assert (
-        view["raw"]["evidence_boundary"]
-        == "software_simulation_diagnostic_session"
-    )
+    assert view["raw"]["evidence_boundary"] == "software_simulation_diagnostic_session"
     assert view["raw"]["classification"] is None
     assert view["raw"]["semantic_selection"] is None
     assert view["raw"]["experiment_results"] == []
@@ -2175,12 +2171,11 @@ def test_profile_measurement_stage_redacts_stale_model_and_controller_artifacts(
         "controller": False,
         "tuning": False,
     }
-    assert 'flow-step done"><span>✓</span><small>系统分类</small>' in view[
-        "progress"
-    ]
-    assert 'flow-step done"><span>✓</span><small>初始控制器</small>' not in view[
-        "progress"
-    ]
+    assert 'flow-step done"><span>✓</span><small>系统分类</small>' in view["progress"]
+    assert (
+        'flow-step done"><span>✓</span><small>初始控制器</small>'
+        not in view["progress"]
+    )
     assert view["raw"]["classification"] is not None
     assert view["raw"]["semantic_selection"] is not None
     assert view["raw"]["experiment_results"] == []
@@ -2259,7 +2254,4 @@ def test_outer_terminal_rejection_overrides_model_ready_session_status(
     assert "### 已拒绝" in view["status"]
     assert "规格模型已就绪" not in view["status"]
     assert view["raw"]["status"] == "rejected"
-    assert (
-        view["raw"]["evidence_boundary"]
-        == "user_object_model_validation_failed"
-    )
+    assert view["raw"]["evidence_boundary"] == "user_object_model_validation_failed"

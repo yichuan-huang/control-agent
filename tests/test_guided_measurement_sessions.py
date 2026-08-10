@@ -44,9 +44,7 @@ def _description() -> SystemDescription:
     )
 
 
-_THERMOSTAT_DESCRIPTION = (
-    "这是一个由恒温器监测房间温度并控制电加热器通断的住宅供暖系统"
-)
+_THERMOSTAT_DESCRIPTION = "这是一个由恒温器监测房间温度并控制电加热器通断的住宅供暖系统"
 
 
 class _UnknownDescriptionGuidanceAdapter:
@@ -57,12 +55,8 @@ class _UnknownDescriptionGuidanceAdapter:
                 {**item.model_dump(mode="json"), "response": "unknown"}
                 for item in guidance
             ],
-            "observed_outputs": [
-                {"name": "房间温度", "source_excerpt": "房间温度"}
-            ],
-            "actuators": [
-                {"name": "电加热器", "source_excerpt": "电加热器"}
-            ],
+            "observed_outputs": [{"name": "房间温度", "source_excerpt": "房间温度"}],
+            "actuators": [{"name": "电加热器", "source_excerpt": "电加热器"}],
         }
 
     def phrase_measurement_plan(self, description, checklist, plan):
@@ -126,7 +120,9 @@ def test_measurement_contracts_are_strict_and_numeric_facts_require_units():
             numeric_value=math.inf,
             unit="degC",
         )
-    with pytest.raises(ValidationError, match="unknown values belong in assessment gaps"):
+    with pytest.raises(
+        ValidationError, match="unknown values belong in assessment gaps"
+    ):
         MeasuredFact(
             request_id="open_loop_stability",
             source_excerpt="The record has no stability finding.",
@@ -356,13 +352,12 @@ def test_diagnostic_rounds_accumulate_exact_grounded_facts_from_need_more():
                 request_id="minimum_phase",
                 source_excerpt=second_text,
                 text_value=second_text,
-            )
+            ),
         ],
         gaps=[
             item.diagnostic_field_id
             for item in state.checklist
-            if item.diagnostic_field_id
-            not in {"open_loop_stability", "minimum_phase"}
+            if item.diagnostic_field_id not in {"open_loop_stability", "minimum_phase"}
         ],
     )
 
@@ -381,9 +376,7 @@ def test_diagnostic_rounds_accumulate_exact_grounded_facts_from_need_more():
     assert "open_loop_stability" not in accumulated.measurement_assessment.gaps
     assert "minimum_phase" not in accumulated.measurement_assessment.gaps
     assert accumulated.measurement_response_history == [first_text, second_text]
-    restored = migrate_diagnostic_session_payload(
-        accumulated.model_dump(mode="json")
-    )
+    restored = migrate_diagnostic_session_payload(accumulated.model_dump(mode="json"))
     assert restored.measurement_assessment == accumulated.measurement_assessment
 
 
@@ -594,9 +587,9 @@ def test_direct_v4_payload_validation_cannot_forge_measurement_verified(
             "requests"
         ][:-1]
     elif mutation == "missing_fact":
-        payload["measurement_assessment"]["facts"] = payload[
-            "measurement_assessment"
-        ]["facts"][:-1]
+        payload["measurement_assessment"]["facts"] = payload["measurement_assessment"][
+            "facts"
+        ][:-1]
     else:
         payload["measurement_assessment"]["facts"][0]["request_id"] = "unknown"
 
@@ -610,7 +603,9 @@ def test_assessments_must_account_for_every_active_request():
         status="need_more",
         gaps=[state.checklist[0].diagnostic_field_id],
     )
-    with pytest.raises(ValueError, match="must account for every active measurement request"):
+    with pytest.raises(
+        ValueError, match="must account for every active measurement request"
+    ):
         submit_measurement_assessment(
             state,
             incomplete,
@@ -624,7 +619,9 @@ def test_assessments_must_account_for_every_active_request():
         conflict_request_ids=[state.measurement_plan.requests[0].request_id],
         gaps=[state.checklist[1].diagnostic_field_id],
     )
-    with pytest.raises(ValueError, match="must account for every active measurement request"):
+    with pytest.raises(
+        ValueError, match="must account for every active measurement request"
+    ):
         submit_measurement_assessment(
             state,
             incomplete_conflict,
@@ -655,9 +652,13 @@ def test_direct_nonverified_payload_assessments_cannot_omit_active_requests(stat
         "The current response accounts for only part of the plan."
     ]
     payload["measurement_round_count"] = 1
-    payload["status"] = "measurement_conflict" if status == "conflict" else "awaiting_measurements"
+    payload["status"] = (
+        "measurement_conflict" if status == "conflict" else "awaiting_measurements"
+    )
 
-    with pytest.raises(ValidationError, match="must account for every active measurement request"):
+    with pytest.raises(
+        ValidationError, match="must account for every active measurement request"
+    ):
         DiagnosticSessionState.model_validate(payload)
 
 
@@ -688,7 +689,9 @@ def test_direct_v4_payload_rejects_incomplete_measurement_history_entry():
     payload["measurement_response_history"] = ["One field was reviewed."]
     payload["measurement_round_count"] = 1
 
-    with pytest.raises(ValidationError, match="must account for every active measurement request"):
+    with pytest.raises(
+        ValidationError, match="must account for every active measurement request"
+    ):
         DiagnosticSessionState.model_validate(payload)
 
 
@@ -709,7 +712,9 @@ def test_direct_v4_payload_rejects_current_assessment_that_is_not_last_history_e
 
 def test_direct_v4_payload_accepts_empty_or_complete_auditable_measurement_history():
     state = start_diagnostic_session(_description())
-    restored_empty = DiagnosticSessionState.model_validate(state.model_dump(mode="json"))
+    restored_empty = DiagnosticSessionState.model_validate(
+        state.model_dump(mode="json")
+    )
     assert restored_empty.measurement_history == []
     assert restored_empty.measurement_assessment is None
 
@@ -1117,9 +1122,7 @@ def test_migration_rebuilds_accumulated_description_from_retained_raw_inputs():
 def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_reselection():
     payload = _post_measurement_payload()
     diagnostic_ready = payload["measurement_history"][-1]
-    payload["measurement_history"].extend(
-        [diagnostic_ready for _ in range(8)]
-    )
+    payload["measurement_history"].extend([diagnostic_ready for _ in range(8)])
     payload["measurement_response_history"].extend(
         ["Profile-only reply with unchanged diagnostic facts." for _ in range(8)]
     )
@@ -1178,9 +1181,7 @@ def test_grounded_profile_conflict_invalidates_the_postmeasurement_release():
 def test_refused_migration_clears_forged_release_and_downstream_fields():
     payload = _post_measurement_payload()
     diagnostic_ready = payload["measurement_history"][-1]
-    payload["measurement_history"].extend(
-        [diagnostic_ready for _ in range(8)]
-    )
+    payload["measurement_history"].extend([diagnostic_ready for _ in range(8)])
     payload["measurement_response_history"].extend(
         ["Profile-only reply with unchanged diagnostic facts." for _ in range(8)]
     )

@@ -396,9 +396,7 @@ def main() -> None:
         args.measurement_response is not None
         or args.measurement_response_file is not None
     ) and session_state is None:
-        raise SystemExit(
-            "--measurement-response requires --diagnostic-session-input"
-        )
+        raise SystemExit("--measurement-response requires --diagnostic-session-input")
     adapter = None
     if args.use_llm or args.diagnostic_eval_llm:
         try:
@@ -488,7 +486,9 @@ def main() -> None:
             session_state.route_id if session_state is not None else "generic"
         )
         if route_id == "generic" and adapter is None:
-            raise SystemExit("The generic guided measurement flow requires an LLM; use --use-llm.")
+            raise SystemExit(
+                "The generic guided measurement flow requires an LLM; use --use-llm."
+            )
         if route_id == "generic":
             try:
                 validate_guided_adapter_capabilities(adapter)

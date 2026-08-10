@@ -56,8 +56,7 @@ _DIAGNOSTIC_RESPONSE = "\n".join(
 )
 _CONFLICT_RESPONSE = "One saved record settles while another grows."
 _PARTIAL_RESPONSE = (
-    f"{_DIAGNOSTIC_FACTS['open_loop_stability']}. "
-    "The remaining fields are unknown."
+    f"{_DIAGNOSTIC_FACTS['open_loop_stability']}. The remaining fields are unknown."
 )
 
 _GUIDANCE_PAYLOADS = [
@@ -436,14 +435,10 @@ class StructuredGuidedLLM(DiagnosticAdapter):
                 "facts": [
                     {
                         "request_id": "open_loop_stability",
-                        "source_excerpt": _DIAGNOSTIC_FACTS[
-                            "open_loop_stability"
-                        ],
+                        "source_excerpt": _DIAGNOSTIC_FACTS["open_loop_stability"],
                         "numeric_value": None,
                         "unit": None,
-                        "text_value": _DIAGNOSTIC_FACTS[
-                            "open_loop_stability"
-                        ],
+                        "text_value": _DIAGNOSTIC_FACTS["open_loop_stability"],
                     }
                 ],
                 "gaps": list(_FIELD_IDS[1:]),
@@ -533,9 +528,7 @@ class StructuredGuidedLLM(DiagnosticAdapter):
             "conflicts": [],
             "rejected_facts": [],
             "questions": [],
-            "rationale": (
-                "The manual excerpts provide every selected-profile fact."
-            ),
+            "rationale": ("The manual excerpts provide every selected-profile fact."),
             "no_progress": False,
         }
 
@@ -563,9 +556,10 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
         item.guidance.model_dump(mode="json")
         for item in initial.diagnostic_session.checklist
     ] == _GUIDANCE_PAYLOADS
-    assert initial.diagnostic_session.measurement_plan.model_dump(
-        mode="json"
-    ) == _MEASUREMENT_PLAN_PAYLOAD
+    assert (
+        initial.diagnostic_session.measurement_plan.model_dump(mode="json")
+        == _MEASUREMENT_PLAN_PAYLOAD
+    )
     assert {
         request.safety_scope
         for request in initial.diagnostic_session.measurement_plan.requests
@@ -587,7 +581,8 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
     assert all(
         "existing record" in item.guidance.prompt.lower()
         and "manual report" in item.guidance.prompt.lower()
-        and item.guidance.accepted_sources == [
+        and item.guidance.accepted_sources
+        == [
             "existing_record",
             "manual_report",
         ]
@@ -837,9 +832,7 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
         "assess",
     ]
 
-    linked_state, linked_view = link_stage5_report(
-        completed.model_dump(mode="json")
-    )
+    linked_state, linked_view = link_stage5_report(completed.model_dump(mode="json"))
     assert linked_view["available"] is True
     assert linked_state["state"] == "trial_pending"
     initial_linked_revision = linked_state["revision"]
@@ -863,10 +856,7 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
     assert trial.hard_violation is False
     assert trial.stability.status == "stable"
     assert trial.stability.analysis_domain == "continuous"
-    assert (
-        trial.stability.pole_analysis_method
-        == "exact_continuous_interconnection"
-    )
+    assert trial.stability.pole_analysis_method == "exact_continuous_interconnection"
     assert trial.stability.trajectory_finite is True
     assert trial.stability.trajectory_bounded is True
     assert trial.stability.saturation_fraction == 0.0
@@ -916,12 +906,8 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
     initial_output = frame[
         frame["series"] == "scenario-1 · 初始控制器输出 · temperature"
     ]
-    lower_bound = frame[
-        frame["series"] == "scenario-1 · 输出下界 · temperature"
-    ]
-    upper_bound = frame[
-        frame["series"] == "scenario-1 · 输出上界 · temperature"
-    ]
+    lower_bound = frame[frame["series"] == "scenario-1 · 输出下界 · temperature"]
+    upper_bound = frame[frame["series"] == "scenario-1 · 输出上界 · temperature"]
     assert reference.iloc[0][["time_s", "value"]].tolist() == [0.0, 11.0]
     assert reference.iloc[-1][["time_s", "value"]].tolist() == [120.0, 11.0]
     assert set(reference["value"]) == {11.0}

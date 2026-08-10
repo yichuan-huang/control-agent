@@ -380,10 +380,7 @@ def _direct_eight_segment_assessments(text: str) -> dict[str, str]:
         ]
         if len(matches) == 1:
             resolved[field_name] = matches[0]
-    if (
-        "只有一个主要控制输入" in text
-        and "一个被测输出" in text
-    ):
+    if "只有一个主要控制输入" in text and "一个被测输出" in text:
         resolved["coupling_severity"] = CouplingAssessment.SISO.value
     if (
         "稳态增益保持在" in text

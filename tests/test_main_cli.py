@@ -44,9 +44,7 @@ class CliGuidedAdapter(DeterministicDiagnosticAdapter):
             "observed_outputs": [
                 {"name": name, "source_excerpt": name} for name in output
             ],
-            "actuators": [
-                {"name": name, "source_excerpt": name} for name in actuators
-            ],
+            "actuators": [{"name": name, "source_excerpt": name} for name in actuators],
         }
 
     def extract_measurements(
@@ -232,7 +230,9 @@ def test_cli_rejects_v3_session_payload(tmp_path):
     source = tmp_path / "v3.json"
     source.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(SystemExit, match="v3 diagnostic session payloads are not supported"):
+    with pytest.raises(
+        SystemExit, match="v3 diagnostic session payloads are not supported"
+    ):
         load_diagnostic_session(source)
 
 
@@ -255,9 +255,7 @@ def test_cli_rejects_non_string_measurement_response_history(raw_entry, tmp_path
         {
             "status": "need_more",
             "facts": [],
-            "gaps": [
-                item["diagnostic_field_id"] for item in payload["checklist"]
-            ],
+            "gaps": [item["diagnostic_field_id"] for item in payload["checklist"]],
             "conflicts": [],
             "conflict_request_ids": [],
             "rationale": "No record was available.",
@@ -501,10 +499,10 @@ def test_cli_does_not_allow_specifications_to_bypass_measurement_gate(monkeypatc
                 "steady_output_change=10 degC; response_time_s=20 s; "
                 "input_min=-2 normalized_input; input_max=2 normalized_input; "
                 "output_min=-30 degC; output_max=80 degC."
-                ),
-                *_llm_args(),
-            ],
-        )
+            ),
+            *_llm_args(),
+        ],
+    )
 
     with pytest.raises(SystemExit, match="require --measurement-response"):
         main()

@@ -1189,7 +1189,9 @@ class DescriptionGuidance(CFDCModel):
             )
         forbidden = ("amplitude", "duration", "physical hardware", "issue a command")
         if any(term in normalized.lower() for term in forbidden):
-            raise ValueError("description guidance must not prescribe physical measurements")
+            raise ValueError(
+                "description guidance must not prescribe physical measurements"
+            )
         return normalized
 
 
@@ -1261,9 +1263,7 @@ class MeasurementRequest(CFDCModel):
     title: str = Field(min_length=1)
     safety_scope: Literal["existing_records_only"] = "existing_records_only"
     instruction: str = Field(default="Review an existing record.", min_length=1)
-    source_hint: str = Field(
-        default="Review an existing record.", min_length=1
-    )
+    source_hint: str = Field(default="Review an existing record.", min_length=1)
     report_template: str = Field(
         default="Report the source excerpt and recorded observation.",
         min_length=1,
@@ -1288,7 +1288,9 @@ class MeasurementRequest(CFDCModel):
         }
         field_id = info.data.get("diagnostic_field_id")
         if field_id in expected_titles and value.strip() != expected_titles[field_id]:
-            raise ValueError("measurement request title must be the fixed diagnostic label")
+            raise ValueError(
+                "measurement request title must be the fixed diagnostic label"
+            )
         return value.strip()
 
     @field_validator("instruction", "source_hint")
@@ -1369,7 +1371,9 @@ class MeasuredFact(CFDCModel):
         if self.text_value is not None and not self.text_value.strip():
             raise ValueError("text_value must be non-empty when supplied")
         if (self.text_value or "").strip().lower() == "unknown":
-            raise ValueError("unknown values belong in assessment gaps, not measured facts")
+            raise ValueError(
+                "unknown values belong in assessment gaps, not measured facts"
+            )
         return self
 
 
@@ -1397,12 +1401,12 @@ class MeasurementAssessment(CFDCModel):
             raise ValueError("measurement conflicts require one request id each")
         if len(self.conflict_request_ids) != len(set(self.conflict_request_ids)):
             raise ValueError("measurement conflict request ids must be unique")
-        if self.status != "conflict" and (
-            self.conflicts or self.conflict_request_ids
-        ):
+        if self.status != "conflict" and (self.conflicts or self.conflict_request_ids):
             raise ValueError("only conflict assessments may contain conflicts")
         if self.status == "ready" and (self.gaps or self.conflicts):
-            raise ValueError("a ready measurement assessment cannot contain gaps or conflicts")
+            raise ValueError(
+                "a ready measurement assessment cannot contain gaps or conflicts"
+            )
         return self
 
 
@@ -1424,11 +1428,15 @@ def validate_measurement_assessment_for_plan(
             "unknown measurement request id(s): " + ", ".join(sorted(unknown_fact_ids))
         )
     if len(fact_request_ids) != len(set(fact_request_ids)):
-        raise ValueError("measurement assessments may contain only one fact per request")
+        raise ValueError(
+            "measurement assessments may contain only one fact per request"
+        )
     active_field_ids = set(request_field_by_id.values())
     unknown_gaps = set(assessment.gaps) - active_field_ids
     if unknown_gaps:
-        raise ValueError("unknown measurement gap(s): " + ", ".join(sorted(unknown_gaps)))
+        raise ValueError(
+            "unknown measurement gap(s): " + ", ".join(sorted(unknown_gaps))
+        )
     gap_request_ids = {
         request_id
         for request_id, field_id in request_field_by_id.items()
@@ -1448,9 +1456,7 @@ def validate_measurement_assessment_for_plan(
         raise ValueError("measurement facts and conflicts must not overlap")
     if gap_request_ids & conflict_request_ids:
         raise ValueError("measurement gaps and conflicts must not overlap")
-    accounted_request_ids = (
-        fact_request_id_set | gap_request_ids | conflict_request_ids
-    )
+    accounted_request_ids = fact_request_id_set | gap_request_ids | conflict_request_ids
     if accounted_request_ids != active_request_id_set:
         raise ValueError(
             "measurement assessments must account for every active measurement request"
@@ -1480,9 +1486,7 @@ class DiagnosticSessionState(CFDCModel):
     measurement_history: list[MeasurementAssessment] = Field(
         default_factory=list, max_length=16
     )
-    measurement_response_history: list[str] = Field(
-        default_factory=list, max_length=16
-    )
+    measurement_response_history: list[str] = Field(default_factory=list, max_length=16)
     description_turn_count: int = Field(default=0, ge=0, le=8)
     measurement_round_count: int = Field(default=0, ge=0, le=8)
     profile_measurement_round_count: int = Field(default=0, ge=0, le=8)
@@ -1542,10 +1546,9 @@ class DiagnosticSessionState(CFDCModel):
         ]
         if [item.diagnostic_field_id for item in self.checklist] != required_field_ids:
             raise ValueError("v4 sessions require the fixed eight-field checklist")
-        if (
-            [item.diagnostic_field_id for item in self.description_guidance]
-            != required_field_ids
-        ):
+        if [
+            item.diagnostic_field_id for item in self.description_guidance
+        ] != required_field_ids:
             raise ValueError("v4 sessions require guidance for each diagnostic field")
         has_classification = self.classification is not None
         has_selection = self.semantic_selection is not None
@@ -1565,9 +1568,8 @@ class DiagnosticSessionState(CFDCModel):
             raise ValueError(
                 "description_turn_count must match the description turn history"
             )
-        if (
-            self.measurement_round_count + self.profile_measurement_round_count
-            != len(self.measurement_history)
+        if self.measurement_round_count + self.profile_measurement_round_count != len(
+            self.measurement_history
         ):
             raise ValueError(
                 "diagnostic and profile measurement round counts must match the "
@@ -1581,10 +1583,7 @@ class DiagnosticSessionState(CFDCModel):
             diagnostic_history = self.measurement_history[
                 : self.measurement_round_count
             ]
-            if (
-                not diagnostic_history
-                or diagnostic_history[-1].status != "ready"
-            ):
+            if not diagnostic_history or diagnostic_history[-1].status != "ready":
                 raise ValueError(
                     "verified evidence requires a diagnostic ready assessment before "
                     "any Profile rounds"
@@ -1647,9 +1646,7 @@ class DiagnosticSessionState(CFDCModel):
                     self.measurement_plan,
                     assessment,
                     response,
-                    previous_assessment=(
-                        previous_assessment if index > 0 else None
-                    ),
+                    previous_assessment=(previous_assessment if index > 0 else None),
                 )
                 previous_assessment = assessment
         if self.measurement_assessment is not None:
@@ -1719,9 +1716,8 @@ class DiagnosticSessionState(CFDCModel):
             raise ValueError(
                 "verified measurement evidence must use a post-measurement status"
             )
-        if (
-            self.status == "awaiting_profile_measurements"
-            and (not self.specification_templates or self.specification_assessment is None)
+        if self.status == "awaiting_profile_measurements" and (
+            not self.specification_templates or self.specification_assessment is None
         ):
             raise ValueError(
                 "awaiting_profile_measurements requires a specification assessment"
