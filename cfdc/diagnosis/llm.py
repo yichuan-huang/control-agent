@@ -23,6 +23,26 @@ from cfdc.models import (
 )
 
 PROMPT_VERSION = "cfdc-stage0-v5-negation-and-order-bounds"
+GUIDED_ADAPTER_CAPABILITIES = (
+    "guide_description",
+    "phrase_measurement_plan",
+    "extract_measurements",
+    "select_profile",
+)
+
+
+def validate_guided_adapter_capabilities(adapter: object) -> None:
+    """Fail closed when a guided adapter cannot perform every required operation."""
+
+    missing = [
+        name
+        for name in GUIDED_ADAPTER_CAPABILITIES
+        if not callable(getattr(adapter, name, None))
+    ]
+    if missing:
+        raise ValueError(
+            "guided adapter is missing required capabilities: " + ", ".join(missing)
+        )
 
 
 class DiagnosticAdapter(Protocol):

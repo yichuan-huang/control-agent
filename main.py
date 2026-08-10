@@ -14,6 +14,7 @@ from cfdc.diagnosis import (
     run_live_llm_diagnostic_comparison,
     run_saved_llm_diagnostic_comparison,
     start_diagnostic_session,
+    validate_guided_adapter_capabilities,
 )
 from cfdc.evidence import plant_id_for_description
 from cfdc.models import (
@@ -488,6 +489,11 @@ def main() -> None:
         )
         if route_id == "generic" and adapter is None:
             raise SystemExit("The generic guided measurement flow requires an LLM; use --use-llm.")
+        if route_id == "generic":
+            try:
+                validate_guided_adapter_capabilities(adapter)
+            except ValueError as exc:
+                raise SystemExit(str(exc)) from None
         try:
             measurement_response = (
                 args.measurement_response_file.read_text(encoding="utf-8")

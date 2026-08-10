@@ -91,6 +91,33 @@ def test_cli_generic_guided_flow_requires_llm(monkeypatch):
         main()
 
 
+def test_cli_rejects_partial_guided_adapter_capabilities(monkeypatch):
+    class PartialAdapter:
+        def guide_description(self, description, guidance):
+            raise AssertionError("capability validation must run first")
+
+    monkeypatch.setattr(
+        "main.OpenAICompatibleDiagnosticAdapter", lambda **kwargs: PartialAdapter()
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--description",
+            "A temperature process settles after a heater change.",
+            "--observed-output",
+            "temperature",
+            "--actuator",
+            "heater",
+            *_llm_args(),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="phrase_measurement_plan"):
+        main()
+
+
 def test_cli_measurement_response_requires_session(monkeypatch):
     _enable_cli_guided_adapter(monkeypatch)
     monkeypatch.setattr(

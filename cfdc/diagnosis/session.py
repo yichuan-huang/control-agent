@@ -102,6 +102,7 @@ def start_diagnostic_session(
             diagnostic_adapter.guide_description(
                 description, [item.guidance for item in preliminary_checklist]
             ),
+            [item.guidance for item in preliminary_checklist],
         )
         resolved_diagnosis = DiagnosticEngine(
             adapter=None, use_mechanism_cards=use_mechanism_cards
@@ -187,6 +188,7 @@ def continue_description_session(
             diagnostic_adapter.guide_description(
                 accumulated, [item.guidance for item in preliminary_checklist]
             ),
+            [item.guidance for item in preliminary_checklist],
         )
         diagnosis = DiagnosticEngine(
             adapter=None, use_mechanism_cards=use_mechanism_cards

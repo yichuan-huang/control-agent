@@ -5,6 +5,7 @@ from typing import ClassVar
 
 import pytest
 
+import cfdc.web.service as web_service
 from cfdc.diagnosis import build_diagnostic_checklist, build_measurement_plan
 from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.diagnosis.llm import OpenAICompatibleDiagnosticAdapter
@@ -27,7 +28,7 @@ class GuidedFakeAdapter:
                 {"name": "temperature", "source_excerpt": "temperature"}
             ],
             "actuators": [
-                {"name": "heater power", "source_excerpt": "heater change"}
+                {"name": "heater", "source_excerpt": "heater change"}
             ],
         }
 
@@ -350,7 +351,7 @@ def test_description_guidance_extracts_only_verbatim_signals():
                 "guidance": [item.model_dump(mode="json") for item in guidance],
                 "observed_outputs": [
                     {
-                        "name": "room temperature",
+                        "name": "ROOM   TEMPERATURE",
                         "source_excerpt": "room temperature is recorded",
                     }
                 ],
@@ -367,12 +368,22 @@ def test_description_guidance_extracts_only_verbatim_signals():
     )
 
     accumulated = report.diagnostic_session.accumulated_description
-    assert accumulated.observed_outputs == ["room temperature"]
+    assert accumulated.observed_outputs == ["ROOM   TEMPERATURE"]
     assert accumulated.actuators == ["heater voltage"]
     assert len(report.diagnostic_session.description_guidance) == 8
 
 
-@pytest.mark.parametrize("mutation", ["extra", "order", "provenance"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "extra",
+        "order",
+        "provenance",
+        "invented_name",
+        "hardware_prompt",
+        "hardware_why_needed",
+    ],
+)
 def test_description_guidance_rejects_shape_order_and_provenance_mutations(mutation):
     class MutatingGuidanceAdapter(GuidedFakeAdapter):
         def guide_description(self, description, guidance):
@@ -384,8 +395,21 @@ def test_description_guidance_rejects_shape_order_and_provenance_mutations(mutat
                     payload["guidance"][1],
                     payload["guidance"][0],
                 )
-            else:
+            elif mutation == "provenance":
                 payload["observed_outputs"][0]["source_excerpt"] = "not in source"
+            elif mutation == "invented_name":
+                payload["observed_outputs"][0] = {
+                    "name": "pressure",
+                    "source_excerpt": "temperature",
+                }
+            elif mutation == "hardware_prompt":
+                payload["guidance"][0]["prompt"] = (
+                    "Review an existing record and apply 10 V to the heater."
+                )
+            else:
+                payload["guidance"][0]["why_needed"] = (
+                    "Apply 10 V to the heater before recording the result."
+                )
             return payload
 
     with pytest.raises(ValueError):
@@ -393,6 +417,48 @@ def test_description_guidance_rejects_shape_order_and_provenance_mutations(mutat
             "generic",
             description=_description(),
             diagnostic_adapter=MutatingGuidanceAdapter(),
+        )
+
+
+@pytest.mark.parametrize(
+    "missing_capability",
+    [
+        "guide_description",
+        "phrase_measurement_plan",
+        "extract_measurements",
+        "select_profile",
+    ],
+)
+def test_guided_route_rejects_partial_adapter_capabilities(missing_capability):
+    adapter = GuidedFakeAdapter()
+    setattr(adapter, missing_capability, None)
+
+    with pytest.raises(ValueError, match=missing_capability):
+        run_cfdc_route(
+            "generic",
+            description=_description(),
+            diagnostic_adapter=adapter,
+        )
+
+
+def test_web_guided_start_rejects_partial_adapter_capabilities(monkeypatch):
+    class PartialAdapter:
+        def guide_description(self, description, guidance):
+            raise AssertionError("capability validation must run first")
+
+    monkeypatch.setattr(web_service, "build_adapter", lambda *args: PartialAdapter())
+
+    with pytest.raises(ValueError, match="phrase_measurement_plan"):
+        start_app_run(
+            "temperature settles after a heater change",
+            "temperature",
+            "heater",
+            "",
+            "generic",
+            True,
+            None,
+            "fake",
+            "secret",
         )
 
 
@@ -425,6 +491,127 @@ def test_same_measurement_response_input_advances_profile_facts_to_model():
     assert completed.compiled_specification_model is not None
     assert completed.controller is not None
     assert completed.controller.release_level == "candidate_unvalidated"
+    assert len(completed.diagnostic_session.measurement_history) == 2
+    assert (
+        completed.diagnostic_session.measurement_assessment
+        == completed.diagnostic_session.measurement_history[-1]
+    )
+
+
+def test_profile_measurement_responses_accumulate_before_joint_invalidation():
+    class CumulativeAdapter(EvidenceDrivenAdapter):
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            if measurement_response not in {"first fragment", "second fragment"}:
+                return super().extract_measurements(
+                    description,
+                    measurement_plan,
+                    measurement_response,
+                    previous_assessment,
+                )
+            request_id, fragment = (
+                ("minimum_phase", "initially points")
+                if measurement_response == "first fragment"
+                else ("significant_delay", "opposite")
+            )
+            return MeasurementAssessment(
+                status="need_more",
+                facts=[
+                    MeasuredFact(
+                        request_id=request_id,
+                        source_excerpt=fragment,
+                        text_value=fragment,
+                    )
+                ],
+                gaps=[
+                    request.diagnostic_field_id
+                    for request in measurement_plan.requests
+                    if request.request_id != request_id
+                ],
+                rationale="One additional validated diagnostic observation.",
+            ).model_dump(mode="json")
+
+    adapter = CumulativeAdapter()
+    initial = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text="temperature and heater change records are available.",
+            observed_outputs=["temperature"],
+            actuators=["heater"],
+        ),
+        diagnostic_adapter=adapter,
+    )
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="verified records",
+    )
+    first = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=released.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="first fragment",
+    )
+
+    assert first.status == "awaiting_profile_measurements"
+    assert first.diagnostic_session.revision == released.diagnostic_session.revision + 1
+    assert len(first.diagnostic_session.measurement_history) == 2
+    assert (
+        first.diagnostic_session.measurement_assessment
+        == first.diagnostic_session.measurement_history[-1]
+    )
+    restored = type(first.diagnostic_session).model_validate_json(
+        first.diagnostic_session.model_dump_json()
+    )
+    assert "initially points" in restored.accumulated_description.text
+
+    invalidated = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=restored,
+        diagnostic_adapter=adapter,
+        measurement_response="second fragment",
+    )
+
+    assert invalidated.status == "awaiting_measurements"
+    assert invalidated.diagnostic_session.revision == restored.revision + 1
+    assert invalidated.classification is None
+    assert invalidated.diagnosis.minimum_phase.assessment == "nonminimum_phase"
+    assert len(invalidated.diagnostic_session.measurement_history) == 3
+    assert (
+        invalidated.diagnostic_session.measurement_assessment
+        == invalidated.diagnostic_session.measurement_history[-1]
+    )
+    serialized = invalidated.diagnostic_session.model_dump_json()
+    assert "initially points" in serialized
+    assert "opposite" in serialized
+
+
+def test_profile_measurement_response_enforces_the_session_round_cap():
+    adapter = GuidedFakeAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="all records attached",
+    )
+    capped = released.diagnostic_session.model_copy(update={"maximum_turns": 1})
+
+    with pytest.raises(ValueError, match="maximum measurement rounds"):
+        run_cfdc_route(
+            "generic",
+            diagnostic_session_state=capped,
+            diagnostic_adapter=adapter,
+            measurement_response="another profile record",
+        )
 
 
 def test_new_profile_evidence_that_changes_classification_clears_downstream_artifacts():

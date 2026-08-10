@@ -23,7 +23,11 @@ from cfdc.diagnosis import (
     validate_measurement_assessment,
     validate_phrased_measurement_plan,
 )
-from cfdc.diagnosis.llm import DiagnosticAdapter
+from cfdc.diagnosis.llm import (
+    GUIDED_ADAPTER_CAPABILITIES,
+    DiagnosticAdapter,
+    validate_guided_adapter_capabilities,
+)
 from cfdc.diagnosis.safety import validate_diagnostic_controller_release
 from cfdc.evidence import (
     build_evidence_requirement_plan,
@@ -818,6 +822,38 @@ def _object_evidence_report(
     )
 
 
+def _diagnosis_signature(diagnosis: StructuralDiagnosis) -> tuple[str, ...]:
+    return tuple(
+        str(getattr(field.assessment, "value", field.assessment))
+        for field in diagnosis.fields
+    )
+
+
+def _persist_profile_measurement_assessment(
+    session: DiagnosticSessionState,
+    assessment: MeasurementAssessment,
+) -> DiagnosticSessionState:
+    """Persist one validated public response without consuming a second revision."""
+
+    if session.measurement_round_count >= session.maximum_turns:
+        raise ValueError("maximum measurement rounds already reached")
+    history = [*session.measurement_history, assessment]
+    evidence_text = render_measurement_evidence([assessment])
+    accumulated = session.accumulated_description.model_copy(
+        update={"text": f"{session.accumulated_description.text}\n\n{evidence_text}"}
+    )
+    payload = session.model_dump(mode="python")
+    payload.update(
+        {
+            "accumulated_description": accumulated,
+            "measurement_assessment": assessment,
+            "measurement_history": history,
+            "measurement_round_count": len(history),
+        }
+    )
+    return DiagnosticSessionState.model_validate(payload)
+
+
 def run_cfdc_route(
     route_id: RouteId = "generic",
     description: SystemDescription | None = None,
@@ -862,6 +898,23 @@ def run_cfdc_route(
         raise ValueError(
             "v4 diagnostic sessions require measurement_response; specification_text is unsupported"
         )
+    guided_capability_requested = (
+        diagnostic_adapter is not None
+        and not getattr(diagnostic_adapter, "guided_measurement_verified", False)
+        and any(
+            callable(getattr(diagnostic_adapter, name, None))
+            for name in GUIDED_ADAPTER_CAPABILITIES
+        )
+    )
+    if diagnostic_adapter is not None and (
+        (diagnostic_session_state is not None and route_id == "generic")
+        or (
+            route_id == "generic"
+            and execution_mode == "user_object"
+            and guided_capability_requested
+        )
+    ):
+        validate_guided_adapter_capabilities(diagnostic_adapter)
 
     if diagnostic_session_state is not None:
         session = diagnostic_session_state
@@ -987,6 +1040,8 @@ def run_cfdc_route(
                     )
                 if session.measurement_plan is None:
                     raise ValueError("diagnostic session is missing its measurement plan")
+                if session.measurement_round_count >= session.maximum_turns:
+                    raise ValueError("maximum measurement rounds already reached")
                 newest_assessment = MeasurementAssessment.model_validate(
                     diagnostic_adapter.extract_measurements(
                         session.accumulated_description,
@@ -998,34 +1053,19 @@ def run_cfdc_route(
                 validate_measurement_assessment(
                     session.measurement_plan, newest_assessment
                 )
-                normalized_evidence = render_measurement_evidence(
-                    [newest_assessment]
-                )
-                persisted_evidence_description = (
-                    session.accumulated_description.model_copy(
-                        update={
-                            "text": (
-                                session.accumulated_description.text
-                                + "\n\n"
-                                + normalized_evidence
-                            )
-                        }
-                    )
+                session = _persist_profile_measurement_assessment(
+                    session, newest_assessment
                 )
                 evidence_description = normalized_measurement_description(
-                    persisted_evidence_description,
-                    [*session.measurement_history, newest_assessment],
+                    session.accumulated_description,
+                    session.measurement_history,
                 )
                 new_diagnosis = DiagnosticEngine(
                     adapter=None,
                     use_mechanism_cards=use_mechanism_cards,
                 ).diagnose(evidence_description)
-                old_signature = tuple(
-                    str(field.assessment) for field in session.current_diagnosis.fields
-                )
-                new_signature = tuple(
-                    str(field.assessment) for field in new_diagnosis.fields
-                )
+                old_signature = _diagnosis_signature(session.current_diagnosis)
+                new_signature = _diagnosis_signature(new_diagnosis)
                 new_primary_class = None
                 if new_diagnosis.complete:
                     new_primary_class = DiagnosticEngine().classify(
@@ -1042,24 +1082,25 @@ def run_cfdc_route(
                         raise ValueError(
                             "generic guided flow requires description guidance extraction"
                         )
-                    persisted_evidence_description, guided_items = (
+                    accumulated_description, guided_items = (
                         apply_description_guidance(
-                            persisted_evidence_description,
+                            session.accumulated_description,
                             diagnostic_adapter.guide_description(
-                                persisted_evidence_description,
+                                session.accumulated_description,
                                 [
                                     item.guidance
                                     for item in preliminary_checklist
                                 ],
                             ),
+                            [item.guidance for item in preliminary_checklist],
                         )
                     )
                     evidence_description = evidence_description.model_copy(
                         update={
                             "observed_outputs": (
-                                persisted_evidence_description.observed_outputs
+                                accumulated_description.observed_outputs
                             ),
-                            "actuators": persisted_evidence_description.actuators,
+                            "actuators": accumulated_description.actuators,
                         }
                     )
                     new_diagnosis = DiagnosticEngine(
@@ -1087,7 +1128,7 @@ def run_cfdc_route(
                     payload.update(
                         {
                             "revision": session.revision + 1,
-                            "accumulated_description": persisted_evidence_description,
+                            "accumulated_description": accumulated_description,
                             "current_diagnosis": new_diagnosis,
                             "evidence_level": "description_only",
                             "checklist": checklist,
@@ -1095,9 +1136,6 @@ def run_cfdc_route(
                                 item.guidance for item in checklist
                             ],
                             "measurement_plan": measurement_plan,
-                            "measurement_assessment": None,
-                            "measurement_history": [],
-                            "measurement_round_count": 0,
                             "classification": None,
                             "semantic_selection": None,
                             "experiment_plan": None,

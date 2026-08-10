@@ -17,6 +17,7 @@ from cfdc.diagnosis.llm import (
     OpenAICompatibleDiagnosticAdapter,
     SimulationProposalAdapter,
     validate_agent_payload,
+    validate_guided_adapter_capabilities,
 )
 from cfdc.diagnosis.measurements import (
     DIAGNOSTIC_FIELD_IDS,
@@ -80,6 +81,7 @@ __all__ = [
     "submit_measurements_to_session",
     "submit_specifications_to_session",
     "validate_agent_payload",
+    "validate_guided_adapter_capabilities",
     "validate_measurement_assessment",
     "validate_phrased_measurement_plan",
 ]

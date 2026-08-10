@@ -180,10 +180,15 @@ def validate_phrased_measurement_plan(
 def apply_description_guidance(
     description: SystemDescription,
     payload: DescriptionGuidanceAssessment | dict,
+    expected_guidance: list[DescriptionGuidance],
 ) -> tuple[SystemDescription, list[DescriptionGuidance]]:
     """Validate strict guidance and verbatim signal provenance."""
 
     assessment = DescriptionGuidanceAssessment.model_validate(payload)
+    if assessment.guidance != expected_guidance:
+        raise ValueError(
+            "adapter guidance must exactly preserve deterministic safe guidance"
+        )
     for item in [*assessment.observed_outputs, *assessment.actuators]:
         if item.source_excerpt not in description.text:
             raise ValueError(
@@ -228,6 +233,14 @@ def render_measurement_evidence(
                     fact.source_excerpt,
                 ]
             )
+    text_observations = [
+        fact.text_value
+        for assessment in assessments
+        for fact in assessment.facts
+        if fact.text_value is not None
+    ]
+    if text_observations:
+        lines.extend(["validated observation text:", *text_observations])
     return "\n".join(lines)
 
 

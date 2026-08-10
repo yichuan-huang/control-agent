@@ -1198,6 +1198,17 @@ class DescriptionSignalEvidence(CFDCModel):
             raise ValueError("description signal evidence must be non-empty")
         return normalized
 
+    @model_validator(mode="after")
+    def validate_name_provenance(self) -> DescriptionSignalEvidence:
+        def normalize(value: str) -> str:
+            return " ".join(value.casefold().split())
+
+        if normalize(self.name) not in normalize(self.source_excerpt):
+            raise ValueError(
+                "description signal name must occur within its source_excerpt"
+            )
+        return self
+
 
 class DescriptionGuidanceAssessment(CFDCModel):
     """Strict LLM extraction result for the fixed description checklist."""

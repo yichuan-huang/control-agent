@@ -13,6 +13,7 @@ from cfdc.diagnosis import (
     continue_diagnostic_session,
     start_diagnostic_session,
     submit_evidence_to_session,
+    validate_guided_adapter_capabilities,
 )
 from cfdc.models import (
     CFDCRunReport,
@@ -179,6 +180,8 @@ def start_app_run(
     if route_id == "generic" and not use_llm:
         raise ValueError("通用引导测量流程需要启用 LLM。")
     adapter = build_adapter(use_llm, base_url_text, model_text, api_key_text)
+    if route_id == "generic":
+        validate_guided_adapter_capabilities(adapter)
 
     system = SystemDescription(
         text=description_text,
