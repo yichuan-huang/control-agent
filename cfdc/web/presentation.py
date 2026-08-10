@@ -286,10 +286,23 @@ def measurement_guidance_markdown(report: CFDCRunReport) -> str:
     if session is None or session.measurement_plan is None:
         return ""
     requests = session.measurement_plan.requests
-    lines = [
-        "### 从现有记录中补充证据",
-        "请只查找已有记录、日志或手册，不要为回答这些问题操作真实硬件。",
-    ]
+    description_complete = bool(session.checklist) and all(
+        item.status != "unknown" for item in session.checklist
+    )
+    if description_complete:
+        lines = [
+            "### 八项问题描述已完成：请按以下 instruction 准备测量数据",
+            "请只查找或整理已有记录、日志或手册，不要为回答这些问题操作真实硬件。",
+            (
+                "请把相应的值和原文摘录反馈给 AI；数值还要注明单位，"
+                "没有记录的项目请明确写“不知道”。"
+            ),
+        ]
+    else:
+        lines = [
+            "### 从现有记录中补充证据",
+            "请只查找已有记录、日志或手册，不要为回答这些问题操作真实硬件。",
+        ]
     for index, request in enumerate(requests, start=1):
         unit = f"；数值单位提示：{request.unit_hint}" if request.unit_hint else ""
         lines.append(

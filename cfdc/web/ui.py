@@ -80,6 +80,7 @@ def _outputs(report, state):
     session = report.diagnostic_session
     show_questions = bool(
         session
+        and view["clarifications"]
         and session.status
         in {
             "collecting_description",

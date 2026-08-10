@@ -306,6 +306,74 @@ def test_grounded_description_checks_only_answered_checklist_item():
     assert all(excerpt not in prompt for _, prompt in view["clarifications"])
 
 
+def test_complete_eight_item_description_switches_to_measurement_instruction():
+    description_text = (
+        "这是一个由恒温器监测房间温度并控制电加热器通断的住宅供暖系统。"
+        "控制输入是二值加热命令，输出是由传感器或同步记录器连续获取的室温、加热器状态。"
+        "在多次小幅且可逆的试验中，室温开始时就沿最终方向变化，不会先向相反方向运动；"
+        "二值加热命令改变后，室温在一个采样周期内就开始变化，不会出现独立静默区间，"
+        "而且从执行作用到可见响应只涉及一到两个主导储能或积分过程。"
+        "把二值加热命令恢复到基准值后，室温最终会收敛或保持有界，不会出现自行增长的运动。"
+        "改变二值加热命令的方向和幅值时，可以观察到固定滞环和继电切换，"
+        "但非比例现象只存在于这条固定输入输出规律中，不会增加新的动态状态。"
+        "二值加热命令与室温、加热器状态采用同一时钟记录，"
+        "因此这些同步记录足以重建所有相关运动；"
+        "装置只有一条从执行作用到被测运动的主要物理通道，其他给定量只作为扰动进入。"
+        "在安全范围内改变负载、元件或运行条件并重复试验时，"
+        "这些变化会使响应速度和最终水平发生适度变化，"
+        "但不会改变主要运动方向和通道结构。"
+    )
+    response_by_field = {
+        "open_loop_stability": (
+            "把二值加热命令恢复到基准值后，室温最终会收敛或保持有界，"
+            "不会出现自行增长的运动"
+        ),
+        "minimum_phase": "室温开始时就沿最终方向变化，不会先向相反方向运动",
+        "significant_delay": (
+            "二值加热命令改变后，室温在一个采样周期内就开始变化，"
+            "不会出现独立静默区间"
+        ),
+        "relative_degree": "从执行作用到可见响应只涉及一到两个主导储能或积分过程",
+        "controllability_observability": (
+            "二值加热命令与室温、加热器状态采用同一时钟记录，"
+            "因此这些同步记录足以重建所有相关运动"
+        ),
+        "nonlinearity_strength": (
+            "可以观察到固定滞环和继电切换，但非比例现象只存在于这条固定输入输出规律中，"
+            "不会增加新的动态状态"
+        ),
+        "coupling_severity": (
+            "装置只有一条从执行作用到被测运动的主要物理通道，"
+            "其他给定量只作为扰动进入"
+        ),
+        "uncertainty_magnitude": (
+            "这些变化会使响应速度和最终水平发生适度变化，"
+            "但不会改变主要运动方向和通道结构"
+        ),
+    }
+    session = start_diagnostic_session(
+        SystemDescription(text=description_text),
+        diagnostic_adapter=_ChecklistGuidanceAdapter(response_by_field),
+    )
+    report = run_cfdc_route("demo").model_copy(
+        update={"diagnostic_session": session}
+    )
+
+    view = render_report(report)
+    outputs = web_ui._outputs(report, {"session": session.model_dump(mode="json")})
+
+    assert [row[1] for row in view["checklist"]] == ["✓ 已有线索"] * 8
+    assert view["clarifications"] == []
+    assert outputs[16]["visible"] is False
+    assert outputs[21]["visible"] is False
+    assert outputs[22]["visible"] is True
+    assert outputs[23]["visible"] is True
+    assert "八项问题描述已完成" in view["measurement_guidance"]
+    assert "请把相应的值和原文摘录反馈给 AI" in view[
+        "measurement_guidance"
+    ]
+
+
 @pytest.fixture(scope="module")
 def candidate_report_with_first_four_stages_complete():
     report = _guided_verified_report()
