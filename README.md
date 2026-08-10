@@ -126,7 +126,9 @@ python main.py --use-llm \
   --diagnostic-session-output session-v4.json
 ```
 
-Resume the saved v4 session with either inline text or one UTF-8 response file:
+The resume commands below assume the `CFDC_LLM_BASE_URL`, `CFDC_LLM_MODEL`, and
+`CFDC_LLM_API_KEY` variables exported above are still set. Resume the saved v4
+session with either inline text or one UTF-8 response file:
 
 ```bash
 python main.py --use-llm \

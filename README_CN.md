@@ -126,7 +126,9 @@ python main.py --use-llm \
   --diagnostic-session-output session-v4.json
 ```
 
-继续处理已保存的 v4 会话时，可以在命令行直接回填，也可以使用一个 UTF-8 文本文件：
+以下继续命令假定上文导出的 `CFDC_LLM_BASE_URL`、`CFDC_LLM_MODEL` 和
+`CFDC_LLM_API_KEY` 环境变量仍然有效。继续处理已保存的 v4 会话时，可以在命令行直接回填，
+也可以使用一个 UTF-8 文本文件：
 
 ```bash
 python main.py --use-llm \
