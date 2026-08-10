@@ -71,6 +71,7 @@ _GUIDANCE_PAYLOADS = [
         "why_needed": (
             "This keeps the open-loop stability diagnostic field evidence-backed."
         ),
+        "response": "unknown",
         "accepted_sources": ["existing_record", "manual_report"],
     },
     {
@@ -83,6 +84,7 @@ _GUIDANCE_PAYLOADS = [
         "why_needed": (
             "This keeps the minimum-phase behavior diagnostic field evidence-backed."
         ),
+        "response": "unknown",
         "accepted_sources": ["existing_record", "manual_report"],
     },
     {
@@ -95,6 +97,7 @@ _GUIDANCE_PAYLOADS = [
         "why_needed": (
             "This keeps the significant delay diagnostic field evidence-backed."
         ),
+        "response": "unknown",
         "accepted_sources": ["existing_record", "manual_report"],
     },
     {
@@ -105,6 +108,7 @@ _GUIDANCE_PAYLOADS = [
             "record. If no such record exists, say unknown."
         ),
         "why_needed": "This keeps the relative degree diagnostic field evidence-backed.",
+        "response": "unknown",
         "accepted_sources": ["existing_record", "manual_report"],
     },
     {
@@ -119,6 +123,7 @@ _GUIDANCE_PAYLOADS = [
             "This keeps the controllability and observability diagnostic field "
             "evidence-backed."
         ),
+        "response": "unknown",
         "accepted_sources": ["existing_record", "manual_report"],
     },
     {
@@ -131,6 +136,7 @@ _GUIDANCE_PAYLOADS = [
         "why_needed": (
             "This keeps the nonlinearity strength diagnostic field evidence-backed."
         ),
+        "response": "unknown",
         "accepted_sources": ["existing_record", "manual_report"],
     },
     {
@@ -143,6 +149,7 @@ _GUIDANCE_PAYLOADS = [
         "why_needed": (
             "This keeps the coupling severity diagnostic field evidence-backed."
         ),
+        "response": "unknown",
         "accepted_sources": ["existing_record", "manual_report"],
     },
     {
@@ -155,6 +162,7 @@ _GUIDANCE_PAYLOADS = [
         "why_needed": (
             "This keeps the uncertainty magnitude diagnostic field evidence-backed."
         ),
+        "response": "unknown",
         "accepted_sources": ["existing_record", "manual_report"],
     },
 ]

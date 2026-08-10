@@ -55,9 +55,9 @@ CHECKLIST_LABELS = {
 }
 
 CHECKLIST_STATUS_LABELS = {
-    "missing": "缺少描述",
-    "described": "已有线索",
-    "verified": "测量已验证",
+    "missing": "○ 缺少描述",
+    "described": "✓ 已有线索",
+    "verified": "✓ 测量已验证",
 }
 
 STAGES = [
@@ -846,7 +846,32 @@ def clarification_items(report: CFDCRunReport) -> list[tuple[str, str]]:
     session = report.diagnostic_session
     if session is None:
         return []
-    return list(clarification_question_map(session).items())
+    request_field_by_id = {
+        request.request_id: request.diagnostic_field_id
+        for request in (
+            session.measurement_plan.requests if session.measurement_plan else []
+        )
+    }
+    verified_fields = {
+        request_field_by_id[fact.request_id]
+        for fact in (
+            session.measurement_assessment.facts
+            if session.measurement_assessment is not None
+            else []
+        )
+        if fact.request_id in request_field_by_id
+    }
+    missing_prompts = {
+        item.guidance.prompt
+        for item in session.checklist
+        if item.status == "unknown"
+        and item.diagnostic_field_id not in verified_fields
+    }
+    return [
+        (question_id, prompt)
+        for question_id, prompt in clarification_question_map(session).items()
+        if prompt in missing_prompts
+    ]
 
 
 def render_report(report: CFDCRunReport) -> dict[str, Any]:

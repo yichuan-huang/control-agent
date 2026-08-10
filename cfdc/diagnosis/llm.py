@@ -7,6 +7,10 @@ from urllib.parse import urlparse
 
 from openai import OpenAI
 
+from cfdc.diagnosis.measurements import (
+    apply_description_guidance,
+    validate_phrased_measurement_plan,
+)
 from cfdc.models import (
     ArchetypeClassification,
     ControlMethodProfileCatalog,
@@ -453,12 +457,17 @@ class OpenAICompatibleDiagnosticAdapter:
         if self._disable_thinking:
             options["extra_body"] = {"thinking": {"type": "disabled"}}
         response = self.client.chat.completions.create(**options)
-        content = response.choices[0].message.content
-        if not isinstance(content, str) or not content.strip():
-            raise ValueError("measurement-plan phrasing returned empty content")
-        return MeasurementPlan.model_validate(parse_json_content(content)).model_dump(
-            mode="json"
-        )
+        try:
+            content = response.choices[0].message.content
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError("measurement-plan phrasing returned empty content")
+            phrased = validate_phrased_measurement_plan(
+                plan,
+                MeasurementPlan.model_validate(parse_json_content(content)),
+            )
+        except (AttributeError, IndexError, TypeError, ValueError):
+            phrased = plan
+        return phrased.model_dump(mode="json")
 
     def guide_description(self, description, guidance):
         prompt = (
@@ -467,6 +476,9 @@ class OpenAICompatibleDiagnosticAdapter:
             "plus observed output and actuator names explicitly present in the "
             "description. Every extracted name requires a non-empty verbatim source "
             "excerpt copied from the description. Do not infer an unstated signal. "
+            "For every guidance entry, add response='unknown' when the description "
+            "does not answer that item; otherwise response must be one verbatim "
+            "excerpt copied from the description. "
             "Guidance must remain record/manual-report-only and must never prescribe "
             "a physical command, amplitude, or duration.\n\n"
             "Required shape: {\"guidance\":[DescriptionGuidance x8],"
@@ -496,12 +508,30 @@ class OpenAICompatibleDiagnosticAdapter:
         if self._disable_thinking:
             options["extra_body"] = {"thinking": {"type": "disabled"}}
         response = self.client.chat.completions.create(**options)
-        content = response.choices[0].message.content
-        if not isinstance(content, str) or not content.strip():
-            raise ValueError("description guidance returned empty content")
-        return DescriptionGuidanceAssessment.model_validate(
-            parse_json_content(content)
-        ).model_dump(mode="json")
+        fallback = DescriptionGuidanceAssessment(
+            guidance=[
+                item.model_copy(update={"response": "unknown"})
+                for item in guidance
+            ]
+        )
+        try:
+            content = response.choices[0].message.content
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError("description guidance returned empty content")
+            candidate = DescriptionGuidanceAssessment.model_validate(
+                parse_json_content(content)
+            )
+            _, validated_guidance = apply_description_guidance(
+                description,
+                candidate,
+                guidance,
+            )
+            candidate = candidate.model_copy(
+                update={"guidance": validated_guidance}
+            )
+        except (AttributeError, IndexError, TypeError, ValueError):
+            candidate = fallback
+        return candidate.model_dump(mode="json")
 
     def extract_measurements(
         self,

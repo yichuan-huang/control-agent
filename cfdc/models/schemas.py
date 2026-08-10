@@ -1163,9 +1163,18 @@ class DescriptionGuidance(CFDCModel):
     diagnostic_field_id: DiagnosticFieldId
     prompt: str = Field(min_length=1)
     why_needed: str = Field(min_length=1)
+    response: str = "unknown"
     accepted_sources: list[Literal["existing_record", "manual_report"]] = Field(
         default_factory=lambda: ["existing_record", "manual_report"], min_length=1
     )
+
+    @field_validator("prompt", "response")
+    @classmethod
+    def strip_guidance_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("description guidance text must be non-empty")
+        return normalized
 
     @field_validator("prompt")
     @classmethod

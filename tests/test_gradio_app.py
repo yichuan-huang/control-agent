@@ -38,7 +38,6 @@ from cfdc.web.service import (
 )
 from cfdc.web.service import start_app_run as _start_app_run
 from cfdc.web.ui import (
-    EXAMPLES,
     NATURAL_LANGUAGE_MODE,
     build_app,
     reset_ui,
@@ -60,6 +59,34 @@ _GUIDED_FACTS = {
 _COMPLETE_GUIDED_RESPONSE = "\n".join(
     f"{request_id}: {source_excerpt}"
     for request_id, source_excerpt in _GUIDED_FACTS.items()
+)
+
+_GUIDED_BEHAVIOR_DESCRIPTIONS = (
+    (
+        "这是一个由电加热器调节的恒温箱。温度传感器连续记录箱内温度，"
+        "已有日志包含小幅加热功率变化前后的温度曲线；一个采样周期内温度就沿最终方向开始变化，"
+        "恢复原功率后温度逐渐回到原水平，正反变化平滑且近似成比例。"
+    ),
+    (
+        "质量块通过弹簧和阻尼器连接在支架上，由双向水平力驱动，位置传感器记录完整运动。"
+        "现有小幅试验记录显示释放后会出现往复运动并多次穿过平衡位置，振幅逐次减小；"
+        "一个采样周期内就开始变化，正反方向的小力变化产生近似对称的响应。"
+    ),
+    (
+        "低摩擦小车由双向电机力驱动，位置和速度传感器连续记录同一段平移运动。"
+        "已有小幅试验记录显示施力后一个采样周期内速度就沿施力方向变化；撤力后速度保持，"
+        "位置继续漂移而不会自行返回，正反方向的力产生近似对称的变化。"
+    ),
+    (
+        "带蒸汽析出的储液容器由进液阀门调节，液位传感器连续记录完整变化。"
+        "已有小幅阀门试验显示一个采样周期内液位就开始变化，但开始时会先沿不利或相反方向运动，"
+        "随后才转向并停在新的恒定位置；正反试验近似对称。"
+    ),
+    (
+        "两个泵分别向连通容器供液，两个液位传感器同步记录液位。已有小幅单泵变化记录显示，"
+        "改变任一执行器都会明显改变多个输出，但靠近该泵的液位变化更大；保持新泵速后两个液位"
+        "最终停在新的恒定位置，正反泵速变化近似对称。"
+    ),
 )
 
 
@@ -137,6 +164,31 @@ class _CompleteGuidedAdapter:
             description, diagnosis, classification, catalog
         ).model_dump(mode="json")
 
+
+class _ChecklistGuidanceAdapter:
+    def __init__(self, response_by_field=None):
+        self.response_by_field = response_by_field or {}
+
+    def guide_description(self, description, guidance):
+        del description
+        return {
+            "guidance": [
+                {
+                    **item.model_dump(mode="json"),
+                    "response": self.response_by_field.get(
+                        item.diagnostic_field_id, "unknown"
+                    ),
+                }
+                for item in guidance
+            ],
+            "observed_outputs": [],
+            "actuators": [],
+        }
+
+    def phrase_measurement_plan(self, description, checklist, plan):
+        del description, checklist
+        return plan.model_dump(mode="json")
+
 @pytest.fixture
 def guided_adapter(monkeypatch):
     adapter = _CompleteGuidedAdapter()
@@ -206,6 +258,52 @@ def test_app_runs_clear_description_and_renders_stage_tables():
     assert view["performance"] == []
     assert "flow-step pending" in view["progress"]
     assert "待确认" in view["summary"]
+
+
+def test_thermostat_checklist_renders_eight_hollow_missing_items():
+    description = SystemDescription(
+        text="这是一个由恒温器监测房间温度并控制电加热器通断的住宅供暖系统"
+    )
+    session = start_diagnostic_session(
+        description,
+        diagnostic_adapter=_ChecklistGuidanceAdapter(),
+    )
+    report = run_cfdc_route("demo").model_copy(
+        update={"diagnostic_session": session}
+    )
+
+    view = render_report(report)
+
+    assert session.status == "awaiting_measurements"
+    assert len(view["checklist"]) == 8
+    assert [row[1] for row in view["checklist"]] == ["○ 缺少描述"] * 8
+    assert len(view["clarifications"]) == 8
+
+
+def test_grounded_description_checks_only_answered_checklist_item():
+    excerpt = "已有记录显示恢复原输入后房间温度会逐渐稳定"
+    description = SystemDescription(
+        text=(
+            "这是一个住宅供暖系统。"
+            f"{excerpt}，但没有记录其他动态现象。"
+        )
+    )
+    session = start_diagnostic_session(
+        description,
+        diagnostic_adapter=_ChecklistGuidanceAdapter(
+            {"open_loop_stability": excerpt}
+        ),
+    )
+    report = run_cfdc_route("demo").model_copy(
+        update={"diagnostic_session": session}
+    )
+
+    view = render_report(report)
+
+    assert view["checklist"][0][1] == "✓ 已有线索"
+    assert [row[1] for row in view["checklist"][1:]] == ["○ 缺少描述"] * 7
+    assert len(view["clarifications"]) == 7
+    assert all(excerpt not in prompt for _, prompt in view["clarifications"])
 
 
 @pytest.fixture(scope="module")
@@ -1278,10 +1376,17 @@ def test_linked_tuning_mutations_refresh_main_stage_progress():
     assert progress_id in dependency["outputs"]
 
 
-def test_first_example_accepts_uninitialized_optional_textboxes():
-    assert len(EXAMPLES[0]) == 1
-    assert isinstance(EXAMPLES[0][0], str)
-    assert EXAMPLES[0][0]
+def test_main_ui_exposes_no_examples_component():
+    app = build_app()
+
+    assert all(
+        component["type"] != "examples"
+        for component in app.config["components"]
+    )
+    assert all(
+        component["props"].get("label") != "控制问题描述示例"
+        for component in app.config["components"]
+    )
 
 
 def test_uninitialized_required_description_uses_validation_error():
@@ -1300,7 +1405,7 @@ def test_uninitialized_required_description_uses_validation_error():
 
 
 def test_generic_web_flow_rejects_disabled_llm(monkeypatch):
-    description = EXAMPLES[0][0]
+    description = _GUIDED_BEHAVIOR_DESCRIPTIONS[0]
     for name in [
         "CFDC_LLM_BASE_URL",
         "CONTROL_PROJECT_LLM_BASE_URL",
@@ -1347,7 +1452,7 @@ def test_generic_web_flow_requires_complete_provider_configuration(monkeypatch):
         match="Missing OpenAI-compatible LLM configuration.*base URL, model, API key",
     ):
         _start_app_run(
-            EXAMPLES[0][0],
+            _GUIDED_BEHAVIOR_DESCRIPTIONS[0],
             "",
             "",
             "",
@@ -1442,24 +1547,21 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("example_index", "expected_class", "expected_profile"),
+    ("description", "expected_class", "expected_profile"),
     [
-        (0, "class_i_first_order_lag", "first_order_lag"),
-        (1, "class_ii_second_order_oscillator", "second_order_oscillator"),
-        (2, "class_iii_double_or_pure_integrator", "double_integrator"),
-        (3, "class_iv_higher_order_unstable_nonlinear_or_nmp", "nmp_inverse_response"),
-        (4, "class_v_multivariable_significant_coupling", "mimo_2x2_coupled"),
+        (_GUIDED_BEHAVIOR_DESCRIPTIONS[0], "class_i_first_order_lag", "first_order_lag"),
+        (_GUIDED_BEHAVIOR_DESCRIPTIONS[1], "class_ii_second_order_oscillator", "second_order_oscillator"),
+        (_GUIDED_BEHAVIOR_DESCRIPTIONS[2], "class_iii_double_or_pure_integrator", "double_integrator"),
+        (_GUIDED_BEHAVIOR_DESCRIPTIONS[3], "class_iv_higher_order_unstable_nonlinear_or_nmp", "nmp_inverse_response"),
+        (_GUIDED_BEHAVIOR_DESCRIPTIONS[4], "class_v_multivariable_significant_coupling", "mimo_2x2_coupled"),
     ],
 )
-def test_type_i_to_v_examples_wait_for_measurements_before_releasing_route(
-    example_index,
+def test_type_i_to_v_behavior_descriptions_wait_for_measurements_before_releasing_route(
+    description,
     expected_class,
     expected_profile,
     guided_adapter,
 ):
-    assert len(EXAMPLES) > example_index
-    description = EXAMPLES[example_index][0]
-
     initial, state = _start_app_run(
         description,
         "",
@@ -1494,72 +1596,6 @@ def test_type_i_to_v_examples_wait_for_measurements_before_releasing_route(
     assert released.experiment_results == []
     assert released.features == []
     assert released.controller is None
-
-
-def test_first_five_examples_use_observations_without_diagnostic_answer_leakage():
-    forbidden_terms = [
-        "first-order",
-        "first order",
-        "self-regulating",
-        "oscillator",
-        "double integrator",
-        "integrator",
-        "non-restoring",
-        "relative degree",
-        "estimated_order",
-        "open_loop_stability",
-        "minimum_phase",
-        "significant_delay",
-        "controllability_observability",
-        "nonlinearity_strength",
-        "coupling_severity",
-        "uncertainty_magnitude",
-        "clarification_questions",
-        "complete=true",
-        "stage 0",
-        "type i",
-        "type ii",
-        "type iii",
-        "type iv",
-        "type v",
-        "class_i",
-        "class_ii",
-        "class_iii",
-        "class_iv",
-        "class_v",
-        "higher-order",
-        "higher order",
-        "inverse response",
-        "nmp",
-        "mimo",
-        "multivariable",
-        "一阶系统",
-        "二阶系统",
-        "高阶系统",
-        "不稳定系统",
-        "双积分",
-        "相对阶",
-        "最小相位",
-        "非最小相位",
-        "逆响应",
-        "多变量系统",
-        "强耦合",
-        "双输入双输出",
-        "开环稳定",
-        "边界稳定",
-        "单输入单输出",
-    ]
-
-    for (description,) in EXAMPLES:
-        normalized = description.lower()
-        leaked = [term for term in forbidden_terms if term in normalized]
-
-        assert not leaked
-        assert "=" not in description
-        assert "传感器" in description
-
-    ui_source = Path("cfdc/web/ui.py").read_text(encoding="utf-8")
-    assert "Type I / II / III" not in ui_source
 
 
 def test_main_ui_has_no_case_or_developer_route_selector():
@@ -1752,7 +1788,6 @@ def test_guided_gradio_has_one_domain_input_and_no_optional_legacy_controls():
         "启用 LLM 诊断、语义路由与规格整理",
         "保留完整轨迹",
     }.isdisjoint(labels)
-    assert all(len(example) == 1 for example in EXAMPLES)
 
 
 def test_guided_progress_and_pre_measurement_technical_gates():
@@ -1775,7 +1810,7 @@ def test_guided_progress_and_pre_measurement_technical_gates():
     assert not any(view["technical_visibility"].values())
 
 
-def test_guided_checklist_uses_plain_labels_and_current_assessment_only():
+def test_guided_checklist_uses_status_icons_and_current_assessment_only():
     report = _guided_verified_report()
     session = report.diagnostic_session
     previous = session.measurement_assessment
@@ -1810,8 +1845,8 @@ def test_guided_checklist_uses_plain_labels_and_current_assessment_only():
         "一个作用会影响哪些读数",
         "换负载或工况后变化多大",
     ]
-    assert rows[0][1] != "测量已验证"
-    assert all(row[1] == "测量已验证" for row in rows[1:])
+    assert rows[0][1] != "✓ 测量已验证"
+    assert all(row[1] == "✓ 测量已验证" for row in rows[1:])
 
 
 def test_guided_measurement_plan_and_timeline_are_auditable():

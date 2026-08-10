@@ -272,10 +272,26 @@ def apply_description_guidance(
     """Validate strict guidance and verbatim signal provenance."""
 
     assessment = DescriptionGuidanceAssessment.model_validate(payload)
-    if assessment.guidance != expected_guidance:
+    normalized_guidance = [
+        item.model_copy(update={"response": "unknown"})
+        for item in assessment.guidance
+    ]
+    normalized_expected = [
+        item.model_copy(update={"response": "unknown"})
+        for item in expected_guidance
+    ]
+    if normalized_guidance != normalized_expected:
         raise ValueError(
             "adapter guidance must exactly preserve deterministic safe guidance"
         )
+    for item in assessment.guidance:
+        if (
+            item.response.casefold() != "unknown"
+            and item.response not in description.text
+        ):
+            raise ValueError(
+                "description guidance response must appear verbatim in the original description"
+            )
     for item in [*assessment.observed_outputs, *assessment.actuators]:
         if item.source_excerpt not in description.text:
             raise ValueError(
@@ -298,6 +314,47 @@ def apply_description_guidance(
         }
     )
     return updated, assessment.guidance
+
+
+def apply_guidance_responses_to_checklist(
+    checklist: list[DiagnosticChecklistItem],
+    guidance: list[DescriptionGuidance],
+    description_text: str,
+) -> list[DiagnosticChecklistItem]:
+    """Use only grounded LLM excerpts to mark description checklist progress."""
+
+    if len(checklist) != len(guidance):
+        raise ValueError("description guidance must match the fixed checklist length")
+    result = []
+    for item, guided in zip(checklist, guidance, strict=True):
+        if item.diagnostic_field_id != guided.diagnostic_field_id:
+            raise ValueError("description guidance must match checklist field order")
+        response = guided.response.strip()
+        if response.casefold() == "unknown":
+            result.append(
+                item.model_copy(
+                    update={
+                        "status": "unknown",
+                        "evidence": [],
+                        "guidance": guided,
+                    }
+                )
+            )
+            continue
+        if response not in description_text:
+            raise ValueError(
+                "description guidance response must appear verbatim in the original description"
+            )
+        result.append(
+            item.model_copy(
+                update={
+                    "status": "inferred",
+                    "evidence": [response],
+                    "guidance": guided,
+                }
+            )
+        )
+    return result
 
 
 def render_measurement_evidence(

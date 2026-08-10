@@ -11,6 +11,7 @@ from cfdc.diagnosis.engine import DiagnosticEngine
 from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.diagnosis.measurements import (
     apply_description_guidance,
+    apply_guidance_responses_to_checklist,
     build_diagnostic_checklist,
     build_measurement_plan,
     reduce_measurement_history_to_diagnosis,
@@ -112,10 +113,11 @@ def start_diagnostic_session(
         checklist = build_diagnostic_checklist(
             accumulated_description, resolved_diagnosis
         )
-        checklist = [
-            item.model_copy(update={"guidance": guidance})
-            for item, guidance in zip(checklist, guided_items, strict=True)
-        ]
+        checklist = apply_guidance_responses_to_checklist(
+            checklist,
+            guided_items,
+            accumulated_description.text,
+        )
     else:
         resolved_diagnosis = diagnosis or _diagnose(
             description, diagnostic_adapter, use_mechanism_cards
@@ -214,10 +216,11 @@ def continue_description_session(
     )
     checklist = build_diagnostic_checklist(accumulated, diagnosis)
     if guided:
-        checklist = [
-            item.model_copy(update={"guidance": guidance})
-            for item, guidance in zip(checklist, guided_items, strict=True)
-        ]
+        checklist = apply_guidance_responses_to_checklist(
+            checklist,
+            guided_items,
+            accumulated.text,
+        )
     measurement_plan = build_measurement_plan(checklist)
     if diagnostic_adapter is not None and hasattr(
         diagnostic_adapter, "phrase_measurement_plan"

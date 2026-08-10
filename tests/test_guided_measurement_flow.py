@@ -1439,6 +1439,54 @@ def test_live_measurement_extraction_rejects_non_strict_payload(monkeypatch):
         adapter.extract_measurements(_description(), plan, "record", None)
 
 
+@pytest.mark.parametrize(
+    ("operation", "content"),
+    [
+        ("guidance", '{"guidance":"invalid"}'),
+        ("plan", '{"requests":[]}'),
+    ],
+)
+def test_live_guidance_contract_errors_fall_back_to_deterministic_data(
+    monkeypatch,
+    operation,
+    content,
+):
+    class FakeCompletions:
+        def create(self, **kwargs):
+            del kwargs
+            message = type("Message", (), {"content": content})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
+    adapter = OpenAICompatibleDiagnosticAdapter(
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="provider-secret",
+    )
+    checklist = build_diagnostic_checklist(_description())
+    plan = build_measurement_plan(checklist)
+
+    if operation == "guidance":
+        result = adapter.guide_description(
+            _description(), [item.guidance for item in checklist]
+        )
+        assert [item["response"] for item in result["guidance"]] == [
+            "unknown"
+        ] * 8
+        assert result["observed_outputs"] == []
+        assert result["actuators"] == []
+    else:
+        assert adapter.phrase_measurement_plan(
+            _description(), checklist, plan
+        ) == plan.model_dump(mode="json")
+
+
 def test_live_measurement_prompt_never_contains_provider_secret(monkeypatch):
     captured = {}
 

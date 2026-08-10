@@ -23,44 +23,6 @@ LICENSE_NOTICE = (
     "[Source code](https://github.com/yichuan-huang/control-agent)"
 )
 
-EXAMPLES = [
-    [
-        (
-            "这是一个由电加热器调节的恒温箱。温度传感器连续记录箱内温度，"
-            "已有日志包含小幅加热功率变化前后的温度曲线；一个采样周期内温度就沿最终方向开始变化，"
-            "恢复原功率后温度逐渐回到原水平，正反变化平滑且近似成比例。"
-        )
-    ],
-    [
-        (
-            "质量块通过弹簧和阻尼器连接在支架上，由双向水平力驱动，位置传感器记录完整运动。"
-            "现有小幅试验记录显示释放后会出现往复运动并多次穿过平衡位置，振幅逐次减小；"
-            "一个采样周期内就开始变化，正反方向的小力变化产生近似对称的响应。"
-        )
-    ],
-    [
-        (
-            "低摩擦小车由双向电机力驱动，位置和速度传感器连续记录同一段平移运动。"
-            "已有小幅试验记录显示施力后一个采样周期内速度就沿施力方向变化；撤力后速度保持，"
-            "位置继续漂移而不会自行返回，正反方向的力产生近似对称的变化。"
-        )
-    ],
-    [
-        (
-            "带蒸汽析出的储液容器由进液阀门调节，液位传感器连续记录完整变化。"
-            "已有小幅阀门试验显示一个采样周期内液位就开始变化，但开始时会先沿不利或相反方向运动，"
-            "随后才转向并停在新的恒定位置；正反试验近似对称。"
-        )
-    ],
-    [
-        (
-            "两个泵分别向连通容器供液，两个液位传感器同步记录液位。已有小幅单泵变化记录显示，"
-            "改变任一执行器都会明显改变多个输出，但靠近该泵的液位变化更大；保持新泵速后两个液位"
-            "最终停在新的恒定位置，正反泵速变化近似对称。"
-        )
-    ],
-]
-
 CSS = """
 .gradio-container { max-width: 1500px !important; }
 #app-title h1 { font-size: 28px; margin-bottom: 4px; letter-spacing: 0; }
@@ -317,8 +279,6 @@ def build_app() -> gr.Blocks:
                         scale=4,
                     )
                     clear_button = gr.Button("清空", scale=1)
-                gr.Examples(examples=EXAMPLES, inputs=[description], label="控制问题描述示例")
-
             with gr.Column(scale=8, min_width=560):
                 status = gr.Markdown("### 等待控制问题", elem_id="run-status")
                 progress = gr.HTML(elem_id="stage-progress")

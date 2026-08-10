@@ -44,6 +44,32 @@ def _description() -> SystemDescription:
     )
 
 
+_THERMOSTAT_DESCRIPTION = (
+    "这是一个由恒温器监测房间温度并控制电加热器通断的住宅供暖系统"
+)
+
+
+class _UnknownDescriptionGuidanceAdapter:
+    def guide_description(self, description, guidance):
+        del description
+        return {
+            "guidance": [
+                {**item.model_dump(mode="json"), "response": "unknown"}
+                for item in guidance
+            ],
+            "observed_outputs": [
+                {"name": "房间温度", "source_excerpt": "房间温度"}
+            ],
+            "actuators": [
+                {"name": "电加热器", "source_excerpt": "电加热器"}
+            ],
+        }
+
+    def phrase_measurement_plan(self, description, checklist, plan):
+        del description, checklist
+        return plan.model_dump(mode="json")
+
+
 _GROUNDED_FACTS = {
     "open_loop_stability": "settles or remains bounded",
     "minimum_phase": (
@@ -179,6 +205,19 @@ def test_checklist_has_the_eight_fixed_diagnostic_field_ids():
         "uncertainty_magnitude",
     ]
     assert all("existing" in item.guidance.prompt.lower() for item in checklist)
+
+
+def test_thermostat_description_unknown_guidance_stays_on_all_eight_gaps():
+    state = start_diagnostic_session(
+        SystemDescription(text=_THERMOSTAT_DESCRIPTION),
+        diagnostic_adapter=_UnknownDescriptionGuidanceAdapter(),
+    )
+
+    assert state.status == "awaiting_measurements"
+    assert len(state.checklist) == 8
+    assert {item.status for item in state.checklist} == {"unknown"}
+    assert state.accumulated_description.observed_outputs == ["房间温度"]
+    assert state.accumulated_description.actuators == ["电加热器"]
 
 
 def test_v4_session_rejects_a_checklist_that_loses_a_required_field_identity():
