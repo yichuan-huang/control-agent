@@ -50,6 +50,17 @@ def _append_trace_channels(
             )
 
 
+def _collect_bound_time_axes(
+    axes: dict[tuple[int, str], set[float]],
+    *,
+    traces,
+    channel_attribute: str,
+) -> None:
+    for scenario_index, trace in enumerate(traces, start=1):
+        for name in getattr(trace, channel_attribute):
+            axes.setdefault((scenario_index, name), set()).update(trace.time_s)
+
+
 def output_plot_frame(session: SimulationSession) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     if not session.trials:
@@ -62,10 +73,21 @@ def output_plot_frame(session: SimulationSession) -> pd.DataFrame:
         group="参考",
         channel_attribute="reference",
     )
+    bound_time_axes: dict[tuple[int, str], set[float]] = {}
+    _collect_bound_time_axes(
+        bound_time_axes,
+        traces=latest.traces,
+        channel_attribute="reference",
+    )
     _append_trace_channels(
         rows,
         traces=first.traces,
         group="初始控制器输出",
+        channel_attribute="outputs",
+    )
+    _collect_bound_time_axes(
+        bound_time_axes,
+        traces=first.traces,
         channel_attribute="outputs",
     )
     if len(session.trials) > 1 or latest.rolled_back:
@@ -78,23 +100,27 @@ def output_plot_frame(session: SimulationSession) -> pd.DataFrame:
             group=latest_label,
             channel_attribute="outputs",
         )
+        _collect_bound_time_axes(
+            bound_time_axes,
+            traces=latest.traces,
+            channel_attribute="outputs",
+        )
     output_bounds = session.run_config.output_bounds if session.run_config else {}
-    for scenario_index, trace in enumerate(latest.traces, start=1):
+    for (scenario_index, name), time_axis in sorted(bound_time_axes.items()):
         scenario = f"scenario-{scenario_index}"
-        for name in trace.outputs:
-            bounds = output_bounds.get(name)
-            if bounds is None:
-                continue
-            lower, upper = bounds
-            for group, value in (("输出下界", lower), ("输出上界", upper)):
-                rows.extend(
-                    {
-                        "time_s": time_s,
-                        "value": value,
-                        "series": f"{scenario} · {group} · {name}",
-                    }
-                    for time_s in trace.time_s
-                )
+        bounds = output_bounds.get(name)
+        if bounds is None:
+            continue
+        lower, upper = bounds
+        for group, value in (("输出下界", lower), ("输出上界", upper)):
+            rows.extend(
+                {
+                    "time_s": time_s,
+                    "value": value,
+                    "series": f"{scenario} · {group} · {name}",
+                }
+                for time_s in sorted(time_axis)
+            )
     return pd.DataFrame(rows) if rows else _empty_line_frame()
 
 
@@ -211,7 +237,8 @@ def output_bound_gap(session: SimulationSession) -> str | None:
         name
         for trial in session.trials
         for trace in trial.traces
-        for name in trace.outputs
+        for channels in (trace.reference, trace.outputs)
+        for name in channels
     )
     missing = sorted(expected_channels - set(config.output_bounds))
     if missing:

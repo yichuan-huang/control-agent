@@ -8,6 +8,7 @@ from cfdc.lab import (
     PIControllerSpec,
     SessionActionError,
     SimulationRunConfig,
+    SimulationSession,
     SimulationTrace,
     StabilityDecision,
     TuningParameterRule,
@@ -28,6 +29,7 @@ from cfdc.web.linked_tuning_presentation import (
     render_linked_tuning,
 )
 from cfdc.web.linked_tuning_ui import (
+    _approve_callback,
     _render_outputs,
     _run_callback,
     build_linked_tuning_panel,
@@ -171,6 +173,10 @@ def mimo_runner(_model, _controller):
 
 def _series_values(frame, series: str) -> list[float]:
     return frame.loc[frame["series"] == series, "value"].tolist()
+
+
+def _series_times(frame, series: str) -> list[float]:
+    return frame.loc[frame["series"] == series, "time_s"].tolist()
 
 
 def test_stage5_session_is_immediately_ready_for_first_trial():
@@ -623,3 +629,132 @@ def test_historical_output_bound_gap_disables_approve_and_run():
     assert view["controls"]["approve_and_run"] is False
     assert view["controls"]["reject_gain"] is True
     assert _render_outputs(pending.model_dump(mode="json"), view)[16]["visible"] is True
+
+
+def test_output_bounds_cover_union_of_displayed_first_and_latest_time_axes():
+    configuration = SimulationRunConfig(
+        reference={"vehicle speed": 0.5},
+        horizon_s=30.0,
+        sample_time_s=0.05,
+        actuator_bounds={"throttle angle": (-3.0, 3.0)},
+        output_bounds={
+            "vehicle speed": (-2.0, 2.0),
+            "yaw rate": (-0.4, 0.6),
+        },
+    )
+
+    def first_runner(_model, _controller):
+        trace = SimulationTrace(
+            time_s=[0.0, 0.2],
+            reference={"vehicle speed": [0.5, 0.5]},
+            outputs={
+                "vehicle speed": [0.0, 0.1],
+                "yaw rate": [0.0, 0.05],
+            },
+            requested_controls={"throttle angle": [0.05, 0.04]},
+            applied_controls={"throttle angle": [0.05, 0.04]},
+        )
+        _, decision = unstable_runner(_model, _controller)
+        return [trace], decision
+
+    session = stage5_session(configuration)
+    first = run_next_trial(
+        session,
+        expected_revision=session.revision,
+        runner=first_runner,
+    )
+    proposed = register_llm_proposal(
+        first,
+        new_parameters={"kp": 0.105, "ki": 0.021},
+        rationale="bounded test adjustment",
+        expected_revision=first.revision,
+    )
+    approved = approve_llm_proposal(proposed, expected_revision=proposed.revision)
+    latest = run_next_trial(
+        approved,
+        expected_revision=approved.revision,
+        runner=unstable_runner,
+    )
+
+    frame = output_plot_frame(latest)
+
+    assert _series_times(
+        frame, "scenario-1 · 输出下界 · yaw rate"
+    ) == [0.0, 0.2]
+    assert _series_values(
+        frame, "scenario-1 · 输出下界 · yaw rate"
+    ) == [-0.4, -0.4]
+    assert _series_times(
+        frame, "scenario-1 · 输出下界 · vehicle speed"
+    ) == [0.0, 0.1, 0.2]
+    assert _series_values(
+        frame, "scenario-1 · 输出下界 · vehicle speed"
+    ) == [-2.0, -2.0, -2.0]
+
+
+def test_historical_reference_only_bound_gap_blocks_valid_run_and_approval():
+    configuration = SimulationRunConfig(
+        reference={"vehicle speed": 0.5},
+        horizon_s=30.0,
+        sample_time_s=0.05,
+        actuator_bounds={"throttle angle": (-3.0, 3.0)},
+        output_bounds={"vehicle speed": (-2.0, 2.0)},
+    )
+
+    def historical_reference_runner(_model, _controller):
+        trace = SimulationTrace(
+            time_s=[0.0, 0.2],
+            reference={
+                "vehicle speed": [0.5, 0.5],
+                "operator target": [0.1, 0.1],
+            },
+            outputs={"vehicle speed": [0.0, 0.1]},
+            requested_controls={"throttle angle": [0.05, 0.04]},
+            applied_controls={"throttle angle": [0.05, 0.04]},
+        )
+        _, decision = unstable_runner(_model, _controller)
+        return [trace], decision
+
+    session = stage5_session(configuration)
+    first = run_next_trial(
+        session,
+        expected_revision=session.revision,
+        runner=historical_reference_runner,
+    )
+    proposed = register_llm_proposal(
+        first,
+        new_parameters={"kp": 0.105, "ki": 0.021},
+        rationale="bounded test adjustment",
+        expected_revision=first.revision,
+    )
+    approved = approve_llm_proposal(proposed, expected_revision=proposed.revision)
+    latest = run_next_trial(
+        approved,
+        expected_revision=approved.revision,
+        runner=unstable_runner,
+    )
+    restored = restore_initial_controller(latest, expected_revision=latest.revision)
+    pending = register_llm_proposal(
+        latest,
+        new_parameters={"kp": 0.11, "ki": 0.022},
+        rationale="another bounded test adjustment",
+        expected_revision=latest.revision,
+    )
+
+    restored = SimulationSession.model_validate(restored.model_dump(mode="json"))
+    pending = SimulationSession.model_validate(pending.model_dump(mode="json"))
+    restored_view = render_linked_tuning(restored)
+    pending_view = render_linked_tuning(pending)
+
+    assert "operator target" in restored_view["status"]
+    assert restored_view["controls"]["run_trial"] is False
+    assert "operator target" in pending_view["status"]
+    assert pending_view["controls"]["approve_and_run"] is False
+    with pytest.raises(gr.Error, match="operator target.*请返回测量阶段"):
+        _run_callback(
+            restored.model_dump(mode="json"),
+            [["kp", 0.1], ["ki", 0.02]],
+            {},
+        )
+    with pytest.raises(gr.Error, match="operator target.*请返回测量阶段"):
+        _approve_callback(pending.model_dump(mode="json"), {})
