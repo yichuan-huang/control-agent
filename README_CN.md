@@ -7,18 +7,19 @@
 ## 主流程
 
 ```text
-自然语言控制问题
-→ 结构诊断与五类归类
-→ 八字段与补充数值规格
-→ 后端确定性编译对象模型
-→ 第五步生成尚未验证的初始控制器
-→ 运行初始控制器效果验证
-→ 判断稳定性
-→ AI 提出受限增益更新并由用户批准
-→ 首次稳定或终止条件出现时停止
+1 问题描述
+→ 2 AI 测量计划
+→ 3 测量回填
+→ 4 系统分类
+→ 5 初始控制器
+→ 6 效果验证与调优
 ```
 
-分类结果只帮助选择模型族，不能提供对象数值。每个系数、矩阵元素、物理参数、工作范围和试验条件都必须来自问题原文、已提交的规格信息，或可复算的确定性派生。一旦这些输入足以编译模型，主流程不会再次采集相同信息。
+通用 Web 与 CLI 流程必须配置 OpenAI-compatible LLM 服务。流程从一段自然语言控制问题描述开始，也可以用一次可选的描述补充加入现有记录或手册中的事实。随后 AI 展示固定八项诊断清单和测量计划。描述补充与测量回填分别最多进行 8 轮；未知事实始终保留为缺口，不会被虚构默认值填补。
+
+所有测量请求都限定为 `existing_records_only`：只说明应查找哪一份现有记录或手册内容，以及如何回填，不会规定实体硬件的幅值、持续时间、动作或命令。系统分类后，仍通过同一个测量回填入口收集所选 Profile 要求的数值事实，不存在绕过证据门的独立入口。
+
+在固定八项诊断事实全部验证前，正式分类和闭集 Profile 选择都保持为空。分类只用于选择模型族，不能提供对象数值。每个系数、矩阵元素、物理参数、工作范围和试验条件都必须来自问题原文、已提交的记录/手册事实，或可复算的确定性派生。信息完整后，后端确定性编译模型并生成初始控制器候选。
 
 运行时不会按题号、案例 ID 或 Profile 查找对象模型。`dataset/` 下的 200 道 Markdown 问题只用于离线研究和评测，不被生产代码导入。
 
@@ -39,19 +40,22 @@ LLM 只能返回严格类型化数据。任意 Python、MATLAB、ODE 字符串�
 python app.py
 ```
 
-浏览器访问 `http://127.0.0.1:7860`。八字段与补充数值规格完整后：
+浏览器访问 `http://127.0.0.1:7860`。通用 Web 流程只有一个领域输入“控制问题描述”，并要求填写 Provider Base URL、Model 和 API Key；不存在可选的无 LLM 模式。六个进度阶段严格为：问题描述、AI 测量计划、测量回填、系统分类、初始控制器、效果验证与调优。
 
-1. 后端校验规格并直接编译被控对象数学模型。
-2. “控制器”页签展示第五步选出的初始控制器。
-3. “调优与适应”自动接收该模型和控制器。
-4. 运行初始控制器效果验证。
-5. 试验稳定后，“5 效果验证”显示绿色勾；否则请求一次白名单 AI 增益更新，查看差异后批准或拒绝下一轮试验。
+八项诊断事实和所选 Profile 的数值事实完整后：
+
+1. 用户确认已声明的输入/输出范围只作为软件仿真的运行与停止边界，不是硬件安全认证。
+2. 后端校验 Profile 事实并确定性编译被控对象模型。
+3. “控制器”页签展示尚未验证的初始控制器候选。
+4. “调优与适应”接收同一个已编译模型和控制器，并运行第一次软件试验。
+5. 输出曲线展示参考值、初始控制器输出、存在差异时的最新执行输出，以及每个已展示通道的输出上下界。
+6. 稳定性只能由确定性的 `StabilityDecision` 映射为“稳定”“不稳定”或“证据不足”。最新试验若回滚，曲线仍作为“未采纳”证据显示，但不会成为当前安全控制器。
 
 完整规格流程不会再次询问相同的建模信息，也不需要二次确认数学模型。
 
 主界面没有案例选择、独立仿真实验室、固定 MIMO Demo 或连续自动调参按钮。
 
-只有试验不稳定、需要请求 AI 增益建议时，才读取当前 Base URL、Model 和 API Key 输入。API Key 不写入 Gradio 状态、模型/仿真会话、审计 JSON、日志、哈希或导出文件。
+通用引导流程必须填写 Base URL、Model 和 API Key，系统只从当前 Provider 输入读取这些信息。API Key 不写入 Gradio 状态、诊断/模型/仿真会话、审计 JSON、日志、哈希或导出文件。
 
 ## 目录
 
@@ -108,8 +112,7 @@ export CFDC_LLM_API_KEY="..."
 
 python main.py --use-llm \
   --description "一个弹簧质量系统在施加力脉冲后会振荡。" \
-  --observed-output position \
-  --actuator force
+  --diagnostic-session-output session-v4.json
 ```
 
 也可通过命令行传入同一配置：
@@ -120,13 +123,30 @@ python main.py --use-llm \
   --llm-model "deepseek-v4-pro" \
   --llm-api-key "$DEEPSEEK_API_KEY" \
   --description "加热器改变箱体内测得的温度。" \
-  --observed-output temperature \
-  --actuator heater
+  --diagnostic-session-output session-v4.json
 ```
+
+继续处理已保存的 v4 会话时，可以在命令行直接回填，也可以使用一个 UTF-8 文本文件：
+
+```bash
+python main.py --use-llm \
+  --diagnostic-session-input session-v4.json \
+  --diagnostic-session-output session-v4-next.json \
+  --measurement-response "在此粘贴现有记录或手册中的发现。"
+
+python main.py --use-llm \
+  --diagnostic-session-input session-v4.json \
+  --diagnostic-session-output session-v4-next.json \
+  --measurement-response-file measurement-response.txt
+```
+
+`--measurement-response` 与 `--measurement-response-file` 互斥；测量回填必须同时提供 `--diagnostic-session-input`。如需补充问题描述，应在单独一轮使用 `--diagnostic-description`。当所选 Profile 的回填已包含完整数值仿真范围时，还必须传入 `--confirm-simulation-bounds`，确认这些范围只用于软件仿真。
+
+持久化引导会话的 schema 版本为 `4.0`。版本 3 会话会被明确拒绝而不会迁移；更早的已保存会话同样与本流程不兼容，应使用原始问题描述重新创建 v4 会话。
 
 ## 证据边界
 
-“稳定”只说明当前用户确认的软件模型通过了已实现的稳定判据。`example_hypothesis` 仍是可重复演示假设；`local_linear_hypothesis` 只在确认范围内有效。任何结果都不代表真实对象的稳定性、鲁棒性、性能或安全性。
+应用不会向硬件发送命令。确认输入/输出边界只允许执行有界软件仿真，不代表允许驱动实体硬件，也不是硬件安全认证。“稳定”只说明当前用户确认的软件模型通过了确定性稳定判据。`example_hypothesis` 仍是可重复演示假设；`local_linear_hypothesis` 只在确认范围内有效。任何结果都不代表真实对象的稳定性、鲁棒性、性能或安全性。
 
 ## 许可证
 

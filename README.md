@@ -7,18 +7,19 @@ This repository is an independent implementation of the Core-Feature-Driven Cont
 ## Main workflow
 
 ```text
-plain-language control problem
-→ structural diagnosis and five-class classification
-→ eight-field and supplemental numeric specifications
-→ deterministic plant-model compilation
-→ Stage-5 unvalidated controller candidate
-→ initial-controller effect-validation trial
-→ stability decision
-→ constrained AI gain proposal and user approval
-→ stop at the first stable or terminal result
+1 Problem Description
+→ 2 AI Measurement Plan
+→ 3 Measurement Response
+→ 4 System Classification
+→ 5 Initial Controller
+→ 6 Effect Validation and Tuning
 ```
 
-Classification helps select a model family, but it never supplies plant numbers. Every coefficient, matrix element, physical parameter, operating range, and experiment condition must come from the problem statement, the submitted specifications, or a reproducible deterministic derivation. Once those inputs are sufficient to compile the model, the main workflow does not collect them again.
+The generic Web and CLI flow requires an OpenAI-compatible LLM provider. Start with one natural-language problem description; an optional description supplement may add facts from an existing record or manual. The AI then presents the fixed eight-item diagnostic checklist and measurement plan. Description supplements and measurement responses are separately limited to eight rounds. Unknown facts remain gaps and are never filled with invented defaults.
+
+Measurement requests are `existing_records_only`: they tell you what existing record or manual passage to find and how to report it. They never prescribe physical-hardware amplitudes, durations, actions, or commands. The same measurement-response path later collects the numeric facts required by the selected Profile; there is no separate shortcut around the evidence gate.
+
+Formal classification and closed-catalog Profile selection remain absent until all eight diagnostic fields have verified evidence. Classification selects a model family but never supplies plant numbers. Every coefficient, matrix element, physical parameter, operating range, and experiment condition must come from the problem statement, submitted record/manual facts, or a reproducible deterministic derivation. Once those inputs are sufficient, the backend deterministically compiles the model and creates an initial controller candidate.
 
 The runtime does not look up a model by question number, case ID, or Profile. The 200 Markdown problems under `dataset/` are offline research and evaluation data only.
 
@@ -39,19 +40,22 @@ Start the application:
 python app.py
 ```
 
-Open `http://127.0.0.1:7860`. Once the eight structural fields and supplemental numeric specifications are complete:
+Open `http://127.0.0.1:7860`. The generic Web workflow has one domain input, **Control Problem Description**, plus the required provider Base URL, Model, and API Key. There is no optional no-LLM mode. Its six progress stages are exactly Problem Description, AI Measurement Plan, Measurement Response, System Classification, Initial Controller, and Effect Validation and Tuning.
 
-1. The backend validates the specifications and compiles the plant model.
-2. The Controller tab presents the Stage-5 initial controller.
-3. Tuning & Adaptation automatically receives that compiled model and controller.
-4. Run the initial-controller effect validation.
-5. A stable trial completes Effect Validation with a green check. Otherwise, request one whitelisted AI gain update, review the difference, and approve or reject the next trial.
+Once the eight diagnostic fields and selected-Profile facts are complete:
+
+1. Confirm that the declared input/output ranges are boundaries for software simulation only, not hardware-safety certification.
+2. The backend validates the Profile facts and deterministically compiles the plant model.
+3. The Controller tab presents the initial unvalidated controller candidate.
+4. Tuning & Adaptation receives that exact compiled model and controller and runs the first software trial.
+5. The output curve shows the reference, initial-controller output, latest executed output when different, and lower/upper output bounds for every displayed channel.
+6. Stability is mapped only from the deterministic `StabilityDecision`: stable, unstable, or inconclusive. A rolled-back latest trial stays visible as unaccepted evidence and never becomes the current safe controller.
 
 The complete-specification path does not ask for the same model information again or require a second model-confirmation step.
 
 There is no case selector, separate simulation laboratory, fixed MIMO demo, or continuous auto-tuning button in the main UI.
 
-Base URL, Model, and API Key are read directly from the current provider inputs only when an unstable result requires an AI gain request. API keys are never stored in Gradio state, model/simulation sessions, audit JSON, logs, hashes, or exports.
+Base URL, Model, and API Key are required for the generic guided flow and are read directly from the current provider inputs. API keys are never stored in Gradio state, diagnostic/model/simulation sessions, audit JSON, logs, hashes, or exports.
 
 ## Project layout
 
@@ -108,8 +112,7 @@ export CFDC_LLM_API_KEY="..."
 
 python main.py --use-llm \
   --description "A spring-mass process oscillates after a force pulse." \
-  --observed-output position \
-  --actuator force
+  --diagnostic-session-output session-v4.json
 ```
 
 The same configuration may be supplied on the command line:
@@ -120,13 +123,30 @@ python main.py --use-llm \
   --llm-model "deepseek-v4-pro" \
   --llm-api-key "$DEEPSEEK_API_KEY" \
   --description "A heater changes a measured chamber temperature." \
-  --observed-output temperature \
-  --actuator heater
+  --diagnostic-session-output session-v4.json
 ```
+
+Resume the saved v4 session with either inline text or one UTF-8 response file:
+
+```bash
+python main.py --use-llm \
+  --diagnostic-session-input session-v4.json \
+  --diagnostic-session-output session-v4-next.json \
+  --measurement-response "Paste existing-record or manual findings here."
+
+python main.py --use-llm \
+  --diagnostic-session-input session-v4.json \
+  --diagnostic-session-output session-v4-next.json \
+  --measurement-response-file measurement-response.txt
+```
+
+`--measurement-response` and `--measurement-response-file` are mutually exclusive. A response requires `--diagnostic-session-input`; use `--diagnostic-description` separately when adding a description supplement. When the selected-Profile response supplies complete numeric simulation ranges, also pass `--confirm-simulation-bounds` to confirm their software-only meaning.
+
+Persisted guided sessions use schema version `4.0`. Version 3 payloads are explicitly rejected rather than migrated, and older saved sessions are incompatible with this workflow; start a new v4 session from the original description.
 
 ## Evidence boundary
 
-An accepted result means only that the current confirmed software model satisfied the implemented stability checks. An `example_hypothesis` remains a repeatable demonstration assumption. A `local_linear_hypothesis` is valid only inside its confirmed range. Neither is evidence of the real plant’s stability, robustness, performance, or safety.
+The application never sends hardware commands. Confirmation of input/output bounds authorizes only a bounded software simulation; it is not permission to actuate hardware and is not hardware-safety certification. An accepted result means only that the current confirmed software model satisfied the deterministic stability checks. An `example_hypothesis` remains a repeatable demonstration assumption. A `local_linear_hypothesis` is valid only inside its confirmed range. Neither is evidence of the real plant’s stability, robustness, performance, or safety.
 
 ## License
 
