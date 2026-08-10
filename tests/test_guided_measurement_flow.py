@@ -64,13 +64,15 @@ class GuidedFakeAdapter:
     def extract_measurements(
         self, description, measurement_plan, measurement_response, previous_assessment
     ):
-        del description, previous_assessment
+        del description
         if measurement_response == "need another record":
             return MeasurementAssessment(
                 status="need_more",
                 gaps=[request.diagnostic_field_id for request in measurement_plan.requests],
                 rationale="The supplied response did not identify an existing record.",
             ).model_dump(mode="json")
+        if previous_assessment is not None and previous_assessment.status == "ready":
+            return previous_assessment.model_dump(mode="json")
         return MeasurementAssessment(
             status="ready",
             facts=[
@@ -105,24 +107,25 @@ class EvidenceDrivenAdapter(GuidedFakeAdapter):
         measurement_response,
         previous_assessment,
     ):
-        del description, previous_assessment
+        del description
         if "changing any one of several actuators" in measurement_response:
+            assert previous_assessment.status == "ready"
             severe = (
                 "changing any one of several actuators noticeably changes several outputs"
             )
             return MeasurementAssessment(
-                status="need_more",
+                status="ready",
                 facts=[
-                    MeasuredFact(
-                        request_id="coupling_severity",
-                        source_excerpt=severe,
-                        text_value=severe,
+                    (
+                        MeasuredFact(
+                            request_id="coupling_severity",
+                            source_excerpt=severe,
+                            text_value=severe,
+                        )
+                        if fact.request_id == "coupling_severity"
+                        else fact
                     )
-                ],
-                gaps=[
-                    request.diagnostic_field_id
-                    for request in measurement_plan.requests
-                    if request.request_id != "coupling_severity"
+                    for fact in previous_assessment.facts
                 ],
                 rationale="New validated coupling evidence.",
             ).model_dump(mode="json")
@@ -573,7 +576,7 @@ def test_same_measurement_response_input_advances_profile_facts_to_model():
 
 
 def test_profile_only_response_keeps_ready_diagnosis_and_compiles_specifications():
-    class ProfileOmissionAdapter(GuidedFakeAdapter):
+    class ProfileCarryForwardAdapter(GuidedFakeAdapter):
         def extract_measurements(
             self,
             description,
@@ -583,17 +586,7 @@ def test_profile_only_response_keeps_ready_diagnosis_and_compiles_specifications
         ):
             if measurement_response.startswith("Manual: input_change"):
                 assert previous_assessment.status == "ready"
-                return MeasurementAssessment(
-                    status="need_more",
-                    gaps=[
-                        request.diagnostic_field_id
-                        for request in measurement_plan.requests
-                    ],
-                    rationale=(
-                        "This Profile-only response contains no newly submitted "
-                        "diagnostic facts."
-                    ),
-                ).model_dump(mode="json")
+                return previous_assessment.model_dump(mode="json")
             return super().extract_measurements(
                 description,
                 measurement_plan,
@@ -601,7 +594,7 @@ def test_profile_only_response_keeps_ready_diagnosis_and_compiles_specifications
                 previous_assessment,
             )
 
-    adapter = ProfileOmissionAdapter()
+    adapter = ProfileCarryForwardAdapter()
     initial = run_cfdc_route(
         "generic", description=_description(), diagnostic_adapter=adapter
     )
@@ -633,6 +626,81 @@ def test_profile_only_response_keeps_ready_diagnosis_and_compiles_specifications
     assert completed.diagnostic_session.current_diagnosis.complete is True
     assert completed.compiled_specification_model is not None
     assert completed.controller is not None
+
+
+def test_explicit_profile_unknown_gap_retracts_prior_fact_and_invalidates_release():
+    unknown_response = (
+        "The current record does not establish the initial response direction; "
+        "minimum phase is unknown."
+    )
+
+    class ExplicitUnknownAdapter(GuidedFakeAdapter):
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            if measurement_response == unknown_response:
+                assert previous_assessment.status == "ready"
+                return MeasurementAssessment(
+                    status="need_more",
+                    facts=[
+                        fact
+                        for fact in previous_assessment.facts
+                        if fact.request_id != "minimum_phase"
+                    ],
+                    gaps=["minimum_phase"],
+                    rationale=(
+                        "The latest response explicitly retracts the prior phase fact."
+                    ),
+                ).model_dump(mode="json")
+            return super().extract_measurements(
+                description,
+                measurement_plan,
+                measurement_response,
+                previous_assessment,
+            )
+
+    adapter = ExplicitUnknownAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+    released = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=_complete_diagnostic_response(),
+    )
+
+    invalidated = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=released.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=unknown_response,
+    )
+
+    assert invalidated.status == "measurement_needs_more"
+    assert invalidated.diagnostic_session.status == "measurement_needs_more"
+    assert invalidated.diagnosis.minimum_phase.assessment == "unknown"
+    assert invalidated.classification is None
+    assert invalidated.semantic_selection is None
+    assert invalidated.experiment_plan is None
+    assert invalidated.evidence_requirement_plan is None
+    assert invalidated.specification_templates == []
+    assert invalidated.specification_assessment is None
+    assert invalidated.compiled_specification_model is None
+    assert invalidated.diagnostic_session.candidate_route is None
+    assert invalidated.diagnostic_session.compiled_route is None
+    assert invalidated.controller is None
+    latest_assessment = invalidated.diagnostic_session.measurement_assessment
+    assert latest_assessment.gaps == ["minimum_phase"]
+    assert {fact.request_id for fact in latest_assessment.facts} == {
+        request_id
+        for request_id in _VALID_FIELD_FACTS
+        if request_id != "minimum_phase"
+    }
 
 
 def test_migrated_session_ignores_tampered_compatible_profile_and_reselects():
@@ -703,14 +771,8 @@ def test_migrated_session_reselects_then_consumes_profile_response_in_same_call(
         ):
             if measurement_response.startswith("Manual: input_change"):
                 events.append("extract_profile_response")
-                return MeasurementAssessment(
-                    status="need_more",
-                    gaps=[
-                        request.diagnostic_field_id
-                        for request in measurement_plan.requests
-                    ],
-                    rationale="No new diagnostic fact was submitted.",
-                ).model_dump(mode="json")
+                assert previous_assessment.status == "ready"
+                return previous_assessment.model_dump(mode="json")
             return super().extract_measurements(
                 description,
                 measurement_plan,
@@ -784,14 +846,8 @@ def test_diagnostic_round_eight_can_enter_and_complete_profile_collection():
                     rationale="The diagnostic record is still incomplete.",
                 ).model_dump(mode="json")
             if measurement_response.startswith("Manual: input_change"):
-                return MeasurementAssessment(
-                    status="need_more",
-                    gaps=[
-                        request.diagnostic_field_id
-                        for request in measurement_plan.requests
-                    ],
-                    rationale="No new diagnostic evidence was submitted.",
-                ).model_dump(mode="json")
+                assert previous_assessment.status == "ready"
+                return previous_assessment.model_dump(mode="json")
             return super().extract_measurements(
                 description,
                 measurement_plan,
@@ -847,15 +903,9 @@ def test_profile_collection_refuses_after_its_own_eighth_incomplete_round():
             measurement_response,
             previous_assessment,
         ):
-            if measurement_response.startswith("Profile record round"):
-                return MeasurementAssessment(
-                    status="need_more",
-                    gaps=[
-                        request.diagnostic_field_id
-                        for request in measurement_plan.requests
-                    ],
-                    rationale="No new diagnostic evidence was submitted.",
-                ).model_dump(mode="json")
+            if measurement_response.startswith("Profile specification round"):
+                assert previous_assessment.status == "ready"
+                return previous_assessment.model_dump(mode="json")
             return super().extract_measurements(
                 description,
                 measurement_plan,
@@ -879,14 +929,16 @@ def test_profile_collection_refuses_after_its_own_eighth_incomplete_round():
             "generic",
             diagnostic_session_state=report.diagnostic_session,
             diagnostic_adapter=adapter,
-            measurement_response=f"Profile record round {round_index}: unknown.",
+            measurement_response=(
+                f"Profile specification round {round_index}: still incomplete."
+            ),
         )
         assert report.status == "awaiting_profile_measurements"
     refused = run_cfdc_route(
         "generic",
         diagnostic_session_state=report.diagnostic_session,
         diagnostic_adapter=adapter,
-        measurement_response="Profile record round 8: unknown.",
+        measurement_response="Profile specification round 8: still incomplete.",
     )
 
     assert refused.status == "rejected"
@@ -914,27 +966,29 @@ def test_cross_field_tokens_do_not_resolve_either_diagnostic_field():
                     measurement_response,
                     previous_assessment,
                 )
+            assert previous_assessment.status == "ready"
             return MeasurementAssessment(
                 status="ready",
                 facts=[
-                    MeasuredFact(
-                        request_id=request.request_id,
-                        source_excerpt=(
-                            "initially points"
-                            if request.request_id == "minimum_phase"
-                            else "opposite"
-                            if request.request_id == "significant_delay"
-                            else _VALID_FIELD_FACTS[request.request_id]
-                        ),
-                        text_value=(
-                            "initially points"
-                            if request.request_id == "minimum_phase"
-                            else "opposite"
-                            if request.request_id == "significant_delay"
-                            else _VALID_FIELD_FACTS[request.request_id]
-                        ),
+                    (
+                        MeasuredFact(
+                            request_id=fact.request_id,
+                            source_excerpt=(
+                                "initially points"
+                                if fact.request_id == "minimum_phase"
+                                else "opposite"
+                            ),
+                            text_value=(
+                                "initially points"
+                                if fact.request_id == "minimum_phase"
+                                else "opposite"
+                            ),
+                        )
+                        if fact.request_id
+                        in {"minimum_phase", "significant_delay"}
+                        else fact
                     )
-                    for request in measurement_plan.requests
+                    for fact in previous_assessment.facts
                 ],
                 rationale="Two unrelated fields contain incomplete fragments.",
             ).model_dump(mode="json")
@@ -990,23 +1044,20 @@ def test_later_same_request_fact_supersedes_and_triggers_invalidation():
             inverse = (
                 "first moves in an unfavorable or opposite direction before turning"
             )
+            assert previous_assessment.status == "ready"
             return MeasurementAssessment(
                 status="ready",
                 facts=[
-                    MeasuredFact(
-                        request_id=request.request_id,
-                        source_excerpt=(
-                            inverse
-                            if request.request_id == "minimum_phase"
-                            else _VALID_FIELD_FACTS[request.request_id]
-                        ),
-                        text_value=(
-                            inverse
-                            if request.request_id == "minimum_phase"
-                            else _VALID_FIELD_FACTS[request.request_id]
-                        ),
+                    (
+                        MeasuredFact(
+                            request_id="minimum_phase",
+                            source_excerpt=inverse,
+                            text_value=inverse,
+                        )
+                        if fact.request_id == "minimum_phase"
+                        else fact
                     )
-                    for request in measurement_plan.requests
+                    for fact in previous_assessment.facts
                 ],
                 rationale="The latest phase record supersedes the earlier phase fact.",
             ).model_dump(mode="json")
@@ -1108,25 +1159,24 @@ def test_grounded_profile_diagnostic_contradiction_clears_all_downstream_artifac
                     measurement_response,
                     previous_assessment,
                 )
+            assert previous_assessment.status == "ready"
+            severe = (
+                "changing any one of several actuators noticeably changes several "
+                "outputs"
+            )
             return MeasurementAssessment(
-                status="need_more",
+                status="ready",
                 facts=[
-                    MeasuredFact(
-                        request_id="coupling_severity",
-                        source_excerpt=(
-                            "changing any one of several actuators noticeably changes "
-                            "several outputs"
-                        ),
-                        text_value=(
-                            "changing any one of several actuators noticeably changes "
-                            "several outputs"
-                        ),
+                    (
+                        MeasuredFact(
+                            request_id="coupling_severity",
+                            source_excerpt=severe,
+                            text_value=severe,
+                        )
+                        if fact.request_id == "coupling_severity"
+                        else fact
                     )
-                ],
-                gaps=[
-                    request.diagnostic_field_id
-                    for request in measurement_plan.requests
-                    if request.request_id != "coupling_severity"
+                    for fact in previous_assessment.facts
                 ],
                 rationale="New structural evidence changes the coupling assessment.",
             ).model_dump(mode="json")
@@ -1181,13 +1231,13 @@ def test_grounded_profile_diagnostic_conflict_returns_to_measurement_collection(
             previous_assessment,
         ):
             if measurement_response == conflict_text:
+                assert previous_assessment.status == "ready"
                 return MeasurementAssessment(
                     status="conflict",
-                    facts=[],
-                    gaps=[
-                        request.diagnostic_field_id
-                        for request in measurement_plan.requests
-                        if request.request_id != "minimum_phase"
+                    facts=[
+                        fact
+                        for fact in previous_assessment.facts
+                        if fact.request_id != "minimum_phase"
                     ],
                     conflicts=[conflict_text],
                     conflict_request_ids=["minimum_phase"],

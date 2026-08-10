@@ -115,7 +115,9 @@ class _CompleteGuidedAdapter:
     def extract_measurements(
         self, description, measurement_plan, measurement_response, previous_assessment
     ):
-        del measurement_response, previous_assessment
+        del measurement_response
+        if previous_assessment is not None and previous_assessment.status == "ready":
+            return previous_assessment.model_dump(mode="json")
         facts_by_id = _guided_facts_for_description(description.text)
         return MeasurementAssessment(
             status="ready",

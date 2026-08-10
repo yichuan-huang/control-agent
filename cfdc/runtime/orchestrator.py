@@ -20,7 +20,6 @@ from cfdc.diagnosis import (
     submit_measurement_assessment,
     submit_profile_measurement_assessment,
     submit_specifications_to_session,
-    validate_measurement_assessment,
     validate_phrased_measurement_plan,
 )
 from cfdc.diagnosis.llm import (
@@ -829,49 +828,6 @@ def _diagnosis_signature(diagnosis: StructuralDiagnosis) -> tuple[str, ...]:
     )
 
 
-def _carry_forward_profile_diagnostic_assessment(
-    session: DiagnosticSessionState,
-    candidate: MeasurementAssessment,
-) -> MeasurementAssessment:
-    """Treat Profile-response omissions as unchanged diagnostic facts."""
-
-    if session.measurement_plan is None:
-        raise ValueError("diagnostic session is missing its measurement plan")
-    previous = session.measurement_assessment
-    if previous is None or previous.status != "ready":
-        raise ValueError("profile collection requires a ready diagnostic assessment")
-    validate_measurement_assessment(session.measurement_plan, candidate)
-    previous_by_request = {fact.request_id: fact for fact in previous.facts}
-    candidate_by_request = {fact.request_id: fact for fact in candidate.facts}
-    conflict_ids = set(candidate.conflict_request_ids)
-    facts = []
-    gaps = []
-    for request in session.measurement_plan.requests:
-        request_id = request.request_id
-        if request_id in candidate_by_request:
-            facts.append(candidate_by_request[request_id])
-        elif request_id in conflict_ids:
-            continue
-        elif request_id in previous_by_request:
-            facts.append(previous_by_request[request_id])
-        else:
-            gaps.append(request.diagnostic_field_id)
-    return MeasurementAssessment(
-        status=(
-            "conflict"
-            if candidate.conflicts
-            else "need_more"
-            if gaps
-            else "ready"
-        ),
-        facts=facts,
-        gaps=gaps,
-        conflicts=candidate.conflicts,
-        conflict_request_ids=candidate.conflict_request_ids,
-        rationale=candidate.rationale,
-    )
-
-
 def _release_measurement_verified_session(
     session: DiagnosticSessionState,
     diagnostic_adapter: DiagnosticAdapter | None,
@@ -1089,16 +1045,13 @@ def run_cfdc_route(
                     raise ValueError("diagnostic session is missing its measurement plan")
                 if session.profile_measurement_round_count >= session.maximum_turns:
                     raise ValueError("maximum Profile measurement rounds already reached")
-                extracted_assessment = MeasurementAssessment.model_validate(
+                newest_assessment = MeasurementAssessment.model_validate(
                     diagnostic_adapter.extract_measurements(
                         session.accumulated_description,
                         session.measurement_plan,
                         text,
                         session.measurement_assessment,
                     )
-                )
-                newest_assessment = _carry_forward_profile_diagnostic_assessment(
-                    session, extracted_assessment
                 )
                 old_signature = _diagnosis_signature(session.current_diagnosis)
                 old_primary_class = session.classification.primary_class

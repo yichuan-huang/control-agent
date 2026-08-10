@@ -453,16 +453,7 @@ class StructuredGuidedLLM(DiagnosticAdapter):
         if measurement_response == _PROFILE_RESPONSE:
             assert previous_assessment.status == "ready"
             self.calls.append("extract:profile")
-            return {
-                "status": "need_more",
-                "facts": [],
-                "gaps": list(_FIELD_IDS),
-                "conflicts": [],
-                "conflict_request_ids": [],
-                "rationale": (
-                    "The selected-Profile response supplies no new diagnostic fact."
-                ),
-            }
+            return previous_assessment.model_dump(mode="json")
         else:
             assert previous_assessment.status == "need_more"
             self.calls.append("extract:ready")
