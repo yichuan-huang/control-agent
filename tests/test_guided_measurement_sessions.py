@@ -288,6 +288,114 @@ def test_measurement_rounds_refuse_after_eight_incomplete_assessments():
     assert state.refusal_reason == "maximum_measurement_rounds_reached"
 
 
+def test_diagnostic_rounds_accumulate_exact_grounded_facts_from_need_more():
+    state = start_diagnostic_session(_description())
+    first_text = _GROUNDED_FACTS["open_loop_stability"]
+    first = MeasurementAssessment(
+        status="need_more",
+        facts=[
+            MeasuredFact(
+                request_id="open_loop_stability",
+                source_excerpt=first_text,
+                text_value=first_text,
+            )
+        ],
+        gaps=[item.diagnostic_field_id for item in state.checklist[1:]],
+    )
+    after_first = submit_measurement_assessment(
+        state,
+        first,
+        raw_response=first_text,
+        expected_revision=state.revision,
+    )
+    second_text = _GROUNDED_FACTS["minimum_phase"]
+    second = MeasurementAssessment(
+        status="need_more",
+        facts=[
+            MeasuredFact(
+                request_id="minimum_phase",
+                source_excerpt=second_text,
+                text_value=second_text,
+            )
+        ],
+        gaps=[
+            item.diagnostic_field_id
+            for item in state.checklist
+            if item.diagnostic_field_id != "minimum_phase"
+        ],
+    )
+
+    accumulated = submit_measurement_assessment(
+        after_first,
+        second,
+        raw_response=second_text,
+        expected_revision=after_first.revision,
+    )
+
+    assert accumulated.status == "measurement_needs_more"
+    assert [fact.request_id for fact in accumulated.measurement_assessment.facts] == [
+        "open_loop_stability",
+        "minimum_phase",
+    ]
+    assert "open_loop_stability" not in accumulated.measurement_assessment.gaps
+    assert "minimum_phase" not in accumulated.measurement_assessment.gaps
+    assert accumulated.measurement_response_history == [first_text, second_text]
+    restored = migrate_diagnostic_session_payload(
+        accumulated.model_dump(mode="json")
+    )
+    assert restored.measurement_assessment == accumulated.measurement_assessment
+
+
+def test_later_diagnostic_round_rejects_changed_fact_not_grounded_in_current_raw():
+    state = start_diagnostic_session(_description())
+    first_text = _GROUNDED_FACTS["open_loop_stability"]
+    first = MeasurementAssessment(
+        status="need_more",
+        facts=[
+            MeasuredFact(
+                request_id="open_loop_stability",
+                source_excerpt=first_text,
+                text_value=first_text,
+            )
+        ],
+        gaps=[item.diagnostic_field_id for item in state.checklist[1:]],
+    )
+    after_first = submit_measurement_assessment(
+        state,
+        first,
+        raw_response=first_text,
+        expected_revision=state.revision,
+    )
+    second_text = _GROUNDED_FACTS["minimum_phase"]
+    changed = MeasurementAssessment(
+        status="need_more",
+        facts=[
+            MeasuredFact(
+                request_id="open_loop_stability",
+                source_excerpt="the output grows without bound",
+                text_value="the output grows without bound",
+            ),
+            MeasuredFact(
+                request_id="minimum_phase",
+                source_excerpt=second_text,
+                text_value=second_text,
+            ),
+        ],
+        gaps=[item.diagnostic_field_id for item in state.checklist[2:]],
+    )
+
+    with pytest.raises(ValueError, match="source_excerpt"):
+        submit_measurement_assessment(
+            after_first,
+            changed,
+            raw_response=second_text,
+            expected_revision=after_first.revision,
+        )
+
+    assert after_first.classification is None
+    assert after_first.measurement_round_count == 1
+
+
 def test_measurement_assessment_rejects_unknown_request_ids_and_v3_payloads():
     state = start_diagnostic_session(_description())
     invalid = MeasurementAssessment(
@@ -627,6 +735,19 @@ def test_grounding_normalizes_only_whitespace_and_rejects_invented_conflicts():
         )
 
 
+def test_submit_measurement_rejects_non_string_raw_response_without_attribute_error():
+    state = start_diagnostic_session(_description())
+    assessment = _grounded_ready_assessment(state)
+
+    with pytest.raises(ValueError, match="raw measurement response must be a string"):
+        submit_measurement_assessment(
+            state,
+            assessment,
+            raw_response=123,
+            expected_revision=state.revision,
+        )
+
+
 def test_exact_ready_fact_carry_forward_is_unchanged_not_new_evidence():
     state = start_diagnostic_session(_description())
     previous = _grounded_ready_assessment(state)
@@ -635,7 +756,7 @@ def test_exact_ready_fact_carry_forward_is_unchanged_not_new_evidence():
         state.measurement_plan,
         previous,
         "This Profile reply contains no new diagnostic claim.",
-        previous_ready_assessment=previous,
+        previous_assessment=previous,
     )
     changed = previous.model_copy(
         update={
@@ -650,7 +771,7 @@ def test_exact_ready_fact_carry_forward_is_unchanged_not_new_evidence():
             state.measurement_plan,
             changed,
             previous.facts[0].source_excerpt,
-            previous_ready_assessment=previous,
+            previous_assessment=previous,
         )
 
 
@@ -745,7 +866,7 @@ def test_migration_rejects_invented_evidence_in_persisted_history():
         migrate_diagnostic_session_payload(payload)
 
 
-def test_migration_recomputes_diagnosis_and_applied_classification():
+def test_migration_recomputes_diagnosis_but_requires_fresh_profile_selection():
     payload = _post_measurement_payload()
     expected = migrate_diagnostic_session_payload(payload)
     payload["current_diagnosis"]["open_loop_stability"]["assessment"] = "unstable"
@@ -754,11 +875,12 @@ def test_migration_recomputes_diagnosis_and_applied_classification():
     restored = migrate_diagnostic_session_payload(payload)
 
     assert restored.current_diagnosis == expected.current_diagnosis
-    assert restored.classification == expected.classification
-    assert restored.classification.control_architecture != "injected architecture"
+    assert restored.status == "measurement_verified"
+    assert restored.classification is None
+    assert restored.semantic_selection is None
 
 
-def test_migration_rejects_incompatible_or_invented_profile_selection():
+def test_migration_discards_incompatible_or_invented_profile_selection():
     payload = _post_measurement_payload()
     payload["semantic_selection"].update(
         {
@@ -772,11 +894,37 @@ def test_migration_rejects_incompatible_or_invented_profile_selection():
         }
     )
 
-    with pytest.raises(ValueError, match="incompatible"):
-        migrate_diagnostic_session_payload(payload)
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.status == "measurement_verified"
+    assert restored.classification is None
+    assert restored.semantic_selection is None
 
 
-def test_migration_clears_downstream_derived_artifacts_to_safe_profile_resume():
+def test_migration_discards_an_alternate_catalog_compatible_profile_choice():
+    payload = _post_measurement_payload()
+    payload["semantic_selection"].update(
+        {
+            "simulation_profile_id": "first_order_lag_with_delay",
+            "feature_bundle_id": "class_i_delay_minimal",
+            "selected_feature_ids": [
+                "static_gain",
+                "time_constant",
+                "dead_time",
+            ],
+        }
+    )
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.status == "measurement_verified"
+    assert restored.classification is None
+    assert restored.semantic_selection is None
+    assert restored.specification_templates == []
+    assert restored.specification_assessment is None
+
+
+def test_migration_clears_downstream_derived_artifacts_before_profile_reselection():
     payload = _post_measurement_payload()
     payload["experiment_plan"] = {
         "experiments": [],
@@ -786,7 +934,9 @@ def test_migration_clears_downstream_derived_artifacts_to_safe_profile_resume():
 
     restored = migrate_diagnostic_session_payload(payload)
 
-    assert restored.status == "awaiting_profile_measurements"
+    assert restored.status == "measurement_verified"
+    assert restored.classification is None
+    assert restored.semantic_selection is None
     assert restored.experiment_plan is None
     assert restored.evidence_requirement_plan is None
     assert restored.evidence_readiness is None
@@ -815,7 +965,7 @@ def test_migration_rebuilds_accumulated_description_from_retained_raw_inputs():
     assert restored.accumulated_description.simulation_boundary_confirmation is None
 
 
-def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_resume():
+def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_reselection():
     payload = _post_measurement_payload()
     diagnostic_ready = payload["measurement_history"][-1]
     payload["measurement_history"].extend(
@@ -829,7 +979,7 @@ def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_resum
 
     restored = migrate_diagnostic_session_payload(payload)
 
-    assert restored.status == "awaiting_profile_measurements"
+    assert restored.status == "measurement_verified"
     assert restored.measurement_round_count == 1
     assert restored.profile_measurement_round_count == 0
     assert len(restored.measurement_history) == 1
@@ -838,7 +988,7 @@ def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_resum
 
 
 def test_profile_ready_carry_forward_uses_an_independent_round_counter():
-    state = migrate_diagnostic_session_payload(_post_measurement_payload())
+    state = DiagnosticSessionState.model_validate(_post_measurement_payload())
     assessment = state.measurement_assessment
 
     updated = submit_profile_measurement_assessment(
@@ -854,7 +1004,7 @@ def test_profile_ready_carry_forward_uses_an_independent_round_counter():
 
 
 def test_grounded_profile_conflict_invalidates_the_postmeasurement_release():
-    state = migrate_diagnostic_session_payload(_post_measurement_payload())
+    state = DiagnosticSessionState.model_validate(_post_measurement_payload())
     conflict_text = "A newer record says the output grows without bound."
     conflict = MeasurementAssessment(
         status="conflict",
@@ -874,6 +1024,83 @@ def test_grounded_profile_conflict_invalidates_the_postmeasurement_release():
     assert invalidated.classification is None
     assert invalidated.semantic_selection is None
     assert invalidated.profile_measurement_round_count == 1
+
+
+def test_refused_migration_clears_forged_release_and_downstream_fields():
+    payload = _post_measurement_payload()
+    diagnostic_ready = payload["measurement_history"][-1]
+    payload["measurement_history"].extend(
+        [diagnostic_ready for _ in range(8)]
+    )
+    payload["measurement_response_history"].extend(
+        ["Profile-only reply with unchanged diagnostic facts." for _ in range(8)]
+    )
+    payload.update(
+        {
+            "measurement_assessment": diagnostic_ready,
+            "profile_measurement_round_count": 8,
+            "status": "refused",
+            "refusal_reason": "maximum_profile_measurement_rounds_reached",
+            "experiment_plan": {"forged": True},
+            "candidate_route": {"forged": True},
+            "compiled_route": {"forged": True},
+            "specification_answer_history": ["forged prior answer"],
+        }
+    )
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.status == "refused"
+    assert restored.refusal_reason == "maximum_profile_measurement_rounds_reached"
+    assert restored.measurement_round_count == 1
+    assert restored.profile_measurement_round_count == 8
+    assert restored.classification is None
+    assert restored.semantic_selection is None
+    assert restored.experiment_plan is None
+    assert restored.candidate_route is None
+    assert restored.compiled_route is None
+    assert restored.specification_answer_history == []
+
+
+def test_refused_migration_recomputes_forged_description_derived_state():
+    state = start_diagnostic_session(SystemDescription(text="I have a machine."))
+    for index in range(state.maximum_turns):
+        state = continue_description_session(
+            state,
+            f"Existing record {index} names the observed output.",
+            expected_revision=state.revision,
+        )
+    payload = state.model_dump(mode="json")
+    payload["current_diagnosis"]["open_loop_stability"].update(
+        {
+            "status": "known",
+            "value": "forged unstable result",
+            "confidence": 1.0,
+            "evidence": ["forged audit evidence"],
+            "assessment": "unstable",
+        }
+    )
+    payload["checklist"][0].update(
+        {
+            "status": "known",
+            "evidence": ["forged audit evidence"],
+        }
+    )
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.status == "refused"
+    assert restored.description_turn_count == state.maximum_turns
+    assert restored.current_diagnosis == state.current_diagnosis
+    assert restored.checklist == state.checklist
+
+
+def test_migration_rejects_non_string_raw_measurement_history_without_attribute_error():
+    payload = _post_measurement_payload()
+    payload["measurement_response_history"][0] = 7
+
+    with pytest.raises(ValueError, match="response history entries must be strings"):
+        migrate_diagnostic_session_payload(payload)
 
 
 def test_continue_diagnostic_session_requires_and_checks_expected_revision():

@@ -174,21 +174,23 @@ def validate_grounded_measurement_assessment(
     assessment: MeasurementAssessment,
     raw_response: str,
     *,
-    previous_ready_assessment: MeasurementAssessment | None = None,
+    previous_assessment: MeasurementAssessment | None = None,
 ) -> None:
     """Fail closed unless every new claim is attested by the current response."""
 
     validate_measurement_assessment(plan, assessment)
+    if not isinstance(raw_response, str):
+        raise ValueError(  # noqa: TRY004 - public validation contract
+            "raw measurement response must be a string"
+        )
     normalized_response = _normalize_whitespace(raw_response)
     if not normalized_response:
         raise ValueError("raw measurement response must be non-empty")
     previous_by_request = {}
-    if previous_ready_assessment is not None:
-        if previous_ready_assessment.status != "ready":
-            raise ValueError("measurement carry-forward requires a ready assessment")
-        validate_measurement_assessment(plan, previous_ready_assessment)
+    if previous_assessment is not None:
+        validate_measurement_assessment(plan, previous_assessment)
         previous_by_request = {
-            fact.request_id: fact for fact in previous_ready_assessment.facts
+            fact.request_id: fact for fact in previous_assessment.facts
         }
 
     for fact in assessment.facts:
@@ -230,6 +232,47 @@ def validate_grounded_measurement_assessment(
             raise ValueError(
                 "measurement conflict is not grounded in the current raw response"
             )
+
+
+def merge_measurement_assessment(
+    plan: MeasurementPlan,
+    candidate: MeasurementAssessment,
+    previous: MeasurementAssessment | None,
+) -> MeasurementAssessment:
+    """Carry exact prior facts through fields omitted in a later response."""
+
+    validate_measurement_assessment(plan, candidate)
+    if previous is None:
+        return candidate
+    validate_measurement_assessment(plan, previous)
+    candidate_by_request = {fact.request_id: fact for fact in candidate.facts}
+    previous_by_request = {fact.request_id: fact for fact in previous.facts}
+    conflict_ids = set(candidate.conflict_request_ids)
+    facts = []
+    gaps = []
+    for request in plan.requests:
+        if request.request_id in candidate_by_request:
+            facts.append(candidate_by_request[request.request_id])
+        elif request.request_id in conflict_ids:
+            continue
+        elif request.request_id in previous_by_request:
+            facts.append(previous_by_request[request.request_id])
+        else:
+            gaps.append(request.diagnostic_field_id)
+    return MeasurementAssessment(
+        status=(
+            "conflict"
+            if candidate.conflicts
+            else "need_more"
+            if gaps
+            else "ready"
+        ),
+        facts=facts,
+        gaps=gaps,
+        conflicts=candidate.conflicts,
+        conflict_request_ids=candidate.conflict_request_ids,
+        rationale=candidate.rationale,
+    )
 
 
 def validate_phrased_measurement_plan(

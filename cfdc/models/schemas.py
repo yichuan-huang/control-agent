@@ -1513,6 +1513,8 @@ class DiagnosticSessionState(CFDCModel):
     @field_validator("measurement_response_history")
     @classmethod
     def validate_raw_measurement_responses(cls, value: list[str]) -> list[str]:
+        if any(not isinstance(item, str) for item in value):
+            raise ValueError("measurement response history entries must be strings")
         if any(not item.strip() for item in value):
             raise ValueError("measurement response history entries must be non-empty")
         return value
@@ -1624,7 +1626,7 @@ class DiagnosticSessionState(CFDCModel):
                 validate_grounded_measurement_assessment,
             )
 
-            previous_ready_assessment = None
+            previous_assessment = None
             for index, (response, assessment) in enumerate(
                 zip(
                     self.measurement_response_history,
@@ -1636,14 +1638,11 @@ class DiagnosticSessionState(CFDCModel):
                     self.measurement_plan,
                     assessment,
                     response,
-                    previous_ready_assessment=(
-                        previous_ready_assessment
-                        if index >= self.measurement_round_count
-                        else None
+                    previous_assessment=(
+                        previous_assessment if index > 0 else None
                     ),
                 )
-                if assessment.status == "ready":
-                    previous_ready_assessment = assessment
+                previous_assessment = assessment
         if self.measurement_assessment is not None:
             if self.measurement_plan is None:
                 raise ValueError(

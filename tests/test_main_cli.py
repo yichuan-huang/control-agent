@@ -247,6 +247,36 @@ def test_cli_rejects_non_object_diagnostic_session_json(payload, tmp_path):
         load_diagnostic_session(source)
 
 
+@pytest.mark.parametrize("raw_entry", [None, 7, {}, []])
+def test_cli_rejects_non_string_measurement_response_history(raw_entry, tmp_path):
+    session = start_diagnostic_session(SystemDescription(text="I have a machine."))
+    payload = session.model_dump(mode="json")
+    payload["measurement_history"] = [
+        {
+            "status": "need_more",
+            "facts": [],
+            "gaps": [
+                item["diagnostic_field_id"] for item in payload["checklist"]
+            ],
+            "conflicts": [],
+            "conflict_request_ids": [],
+            "rationale": "No record was available.",
+        }
+    ]
+    payload["measurement_response_history"] = [raw_entry]
+    payload["measurement_assessment"] = payload["measurement_history"][0]
+    payload["measurement_round_count"] = 1
+    payload["status"] = "measurement_needs_more"
+    source = tmp_path / "invalid-raw-history.json"
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(
+        SystemExit,
+        match="invalid --diagnostic-session-input.*response history entries must be strings",
+    ):
+        load_diagnostic_session(source)
+
+
 def test_cli_v4_session_round_trip_accepts_measurement_response_file(
     tmp_path, monkeypatch, capsys
 ):

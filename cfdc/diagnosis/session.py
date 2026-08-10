@@ -13,6 +13,7 @@ from cfdc.diagnosis.measurements import (
     apply_description_guidance,
     build_diagnostic_checklist,
     build_measurement_plan,
+    merge_measurement_assessment,
     reduce_measurement_history_to_diagnosis,
     render_measurement_evidence,
     validate_grounded_measurement_assessment,
@@ -30,7 +31,6 @@ from cfdc.models import (
 )
 from cfdc.specifications import (
     assess_specification_text,
-    build_initial_specification_assessment,
     compile_specification_model,
     specification_template_for_profile,
 )
@@ -314,6 +314,12 @@ def submit_measurement_assessment(
         state.measurement_plan,
         typed_assessment,
         raw_response,
+        previous_assessment=state.measurement_assessment,
+    )
+    typed_assessment = merge_measurement_assessment(
+        state.measurement_plan,
+        typed_assessment,
+        state.measurement_assessment,
     )
     round_count = state.measurement_round_count + 1
     updates = {
@@ -409,7 +415,7 @@ def submit_profile_measurement_assessment(
         state.measurement_plan,
         typed_assessment,
         raw_response,
-        previous_ready_assessment=previous_ready,
+        previous_assessment=previous_ready,
     )
     payload = state.model_dump(mode="python")
     payload.update(
@@ -631,10 +637,9 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
         }
         persisted_status = payload.get("status")
         is_post_measurement = persisted_status in post_measurement_statuses
-        persisted_selection = payload.get("semantic_selection")
         if persisted_status == "measurement_verified" and (
             payload.get("classification") is not None
-            or persisted_selection is not None
+            or payload.get("semantic_selection") is not None
         ):
             raise ValueError(
                 "measurement_verified payloads cannot contain a Profile selection"
@@ -648,6 +653,10 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
         ):
             raise ValueError(
                 "measurement assessment and response histories must be arrays"
+            )
+        if any(not isinstance(item, str) for item in response_history):
+            raise ValueError(
+                "measurement response history entries must be strings"
             )
         plan = None
         assessments = []
@@ -673,7 +682,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                 raise ValueError(
                     "grounded measurement assessment and response histories must align"
                 )
-            previous_ready = None
+            previous_assessment = None
             for index, (response, assessment) in enumerate(
                 zip(response_history, assessments, strict=True)
             ):
@@ -681,14 +690,11 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                     plan,
                     assessment,
                     response,
-                    previous_ready_assessment=(
-                        previous_ready
-                        if index >= diagnostic_round_count
-                        else None
+                    previous_assessment=(
+                        previous_assessment if index > 0 else None
                     ),
                 )
-                if assessment.status == "ready":
-                    previous_ready = assessment
+                previous_assessment = assessment
             if is_post_measurement:
                 assessments = assessments[:diagnostic_round_count]
                 response_history = response_history[:diagnostic_round_count]
@@ -723,6 +729,22 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
         payload.update(derived_fields)
         if diagnosis is not None:
             payload["current_diagnosis"] = diagnosis.model_dump(mode="python")
+        if persisted_status == "refused":
+            payload.update(
+                {
+                    "classification": None,
+                    "semantic_selection": None,
+                }
+            )
+            diagnostic_round_count = payload.get("measurement_round_count", 0)
+            diagnostic_history = assessments[:diagnostic_round_count]
+            if (
+                not diagnostic_history
+                or diagnostic_history[-1].status != "ready"
+                or diagnosis is None
+                or not diagnosis.complete
+            ):
+                payload["evidence_level"] = "description_only"
 
         initial_description = SystemDescription.model_validate(
             payload.get("initial_description")
@@ -779,14 +801,16 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
         payload["accumulated_description"] = rebuilt_accumulated.model_dump(
             mode="python"
         )
-        if diagnosis is not None:
-            checklist = build_diagnostic_checklist(rebuilt_accumulated, diagnosis)
-            payload["checklist"] = [
-                item.model_dump(mode="python") for item in checklist
-            ]
-            payload["description_guidance"] = [
-                item.guidance.model_dump(mode="python") for item in checklist
-            ]
+        if diagnosis is None:
+            diagnosis = DiagnosticEngine(adapter=None).diagnose(rebuilt_accumulated)
+            payload["current_diagnosis"] = diagnosis.model_dump(mode="python")
+        checklist = build_diagnostic_checklist(rebuilt_accumulated, diagnosis)
+        payload["checklist"] = [
+            item.model_dump(mode="python") for item in checklist
+        ]
+        payload["description_guidance"] = [
+            item.guidance.model_dump(mode="python") for item in checklist
+        ]
 
         if is_post_measurement:
             if (
@@ -800,27 +824,6 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                     "post-measurement payload requires complete grounded diagnostic "
                     "ready history"
                 )
-            if persisted_selection is None:
-                raise ValueError(
-                    "post-measurement payload requires a persisted Profile selection"
-                )
-            from cfdc.models import SemanticRouteSelection
-            from cfdc.workflow import (
-                apply_profile_to_classification,
-                default_control_method_profile_catalog,
-                validate_semantic_selection,
-            )
-
-            raw_classification = DiagnosticEngine().classify(diagnosis, None)
-            selection = SemanticRouteSelection.model_validate(persisted_selection)
-            catalog = default_control_method_profile_catalog()
-            profile = validate_semantic_selection(
-                selection, raw_classification, catalog
-            )
-            classification = apply_profile_to_classification(
-                raw_classification, profile
-            )
-
             payload.update(
                 {
                     "evidence_level": "measurement_verified",
@@ -830,25 +833,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                     "refusal_reason": None,
                 }
             )
-            transitional = DiagnosticSessionState.model_validate(payload)
-            template = specification_template_for_profile(
-                selection.simulation_profile_id
-            )
-            initial_assessment = build_initial_specification_assessment(
-                transitional.accumulated_description,
-                template,
-            )
-            safe_payload = transitional.model_dump(mode="python")
-            safe_payload.update(
-                {
-                    "classification": classification,
-                    "semantic_selection": selection,
-                    "specification_templates": [template],
-                    "specification_assessment": initial_assessment,
-                    "status": "awaiting_profile_measurements",
-                }
-            )
-            return DiagnosticSessionState.model_validate(safe_payload)
+            return DiagnosticSessionState.model_validate(payload)
 
         return DiagnosticSessionState.model_validate(payload)
     if version in {"1.0", "2.0", None}:
