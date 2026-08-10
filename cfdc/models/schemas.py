@@ -8,7 +8,6 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-
 class CFDCModel(BaseModel):
     """Base model that rejects undeclared fields for auditable JSON output."""
 
@@ -1437,8 +1436,18 @@ class DiagnosticSessionState(CFDCModel):
     status: Literal[
         "collecting_description",
         "awaiting_measurements",
+        "measurement_needs_more",
         "measurement_conflict",
         "measurement_verified",
+        "awaiting_profile_measurements",
+        "specification_conflict",
+        "specification_model_ready",
+        "awaiting_evidence",
+        "evidence_rejected",
+        "ready_for_experiments",
+        "feature_extraction_failed",
+        "ready_for_controller",
+        "complete",
         "refused",
     ]
     maximum_turns: int = Field(default=8, ge=1, le=8)
@@ -1531,13 +1540,54 @@ class DiagnosticSessionState(CFDCModel):
                 raise ValueError(
                     "current measurement assessment must be the final measurement history entry"
                 )
-        if self.status == "measurement_verified":
-            if self.measurement_assessment.status != "ready":
+        if (
+            self.status == "measurement_verified"
+            and self.measurement_assessment.status != "ready"
+        ):
+            raise ValueError(
+                "measurement_verified status requires a ready measurement assessment"
+            )
+        post_measurement_statuses = {
+            "awaiting_profile_measurements",
+            "specification_conflict",
+            "specification_model_ready",
+            "awaiting_evidence",
+            "evidence_rejected",
+            "ready_for_experiments",
+            "feature_extraction_failed",
+            "ready_for_controller",
+            "complete",
+        }
+        if self.status in post_measurement_statuses:
+            if self.evidence_level != "measurement_verified":
                 raise ValueError(
-                    "measurement_verified status requires a ready measurement assessment"
+                    "post-measurement states require verified measurement evidence"
                 )
-        elif self.evidence_level == "measurement_verified":
-            raise ValueError("verified measurement evidence must use measurement_verified status")
+            if not has_classification or not has_selection:
+                raise ValueError(
+                    "post-measurement states require classification and semantic_selection"
+                )
+        elif self.evidence_level == "measurement_verified" and self.status not in {
+            "measurement_verified",
+            "refused",
+        }:
+            raise ValueError(
+                "verified measurement evidence must use a post-measurement status"
+            )
+        if (
+            self.status == "awaiting_profile_measurements"
+            and (not self.specification_templates or self.specification_assessment is None)
+        ):
+            raise ValueError(
+                "awaiting_profile_measurements requires a specification assessment"
+            )
+        if (
+            self.status == "specification_model_ready"
+            and self.compiled_specification_model is None
+        ):
+            raise ValueError(
+                "specification_model_ready requires a compiled specification model"
+            )
         return self
 
 
@@ -1964,6 +2014,10 @@ class CFDCRunReport(CFDCModel):
     route_id: str = "generic"
     status: Literal[
         "need_more_information",
+        "awaiting_measurements",
+        "measurement_needs_more",
+        "measurement_conflict",
+        "awaiting_profile_measurements",
         "awaiting_specifications",
         "need_more_specifications",
         "specification_conflict",

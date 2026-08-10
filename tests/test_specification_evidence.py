@@ -6,10 +6,14 @@ from pydantic import ValidationError
 from cfdc.diagnosis import (
     migrate_diagnostic_session_payload,
     start_diagnostic_session,
+    submit_measurement_assessment,
     submit_specifications_to_session,
 )
 from cfdc.diagnosis.llm import build_specification_prompt
 from cfdc.models import (
+    DiagnosticSessionState,
+    MeasuredFact,
+    MeasurementAssessment,
     SpecificationAssessment,
     SpecificationFact,
     SystemDescription,
@@ -31,6 +35,44 @@ def _heater_description() -> SystemDescription:
         observed_outputs=["temperature"],
         actuators=["heater power"],
     )
+
+
+def _profile_measurement_session():
+    report = run_cfdc_route("generic", description=_heater_description())
+    session = start_diagnostic_session(
+        report.system_description, diagnosis=report.diagnosis
+    )
+    verified = submit_measurement_assessment(
+        session,
+        MeasurementAssessment(
+            status="ready",
+            facts=[
+                MeasuredFact(
+                    request_id=request.request_id,
+                    source_excerpt=f"Existing record for {request.title}.",
+                    text_value="verified observation",
+                )
+                for request in session.measurement_plan.requests
+            ],
+        ),
+        expected_revision=session.revision,
+    )
+    payload = verified.model_dump(mode="python")
+    payload.update(
+        {
+            "revision": verified.revision + 1,
+            "classification": report.classification,
+            "semantic_selection": report.semantic_selection,
+            "experiment_plan": report.experiment_plan,
+            "evidence_requirement_plan": report.evidence_requirement_plan,
+            "specification_templates": report.specification_templates,
+            "specification_assessment": report.specification_assessment,
+            "candidate_route": report.candidate_route,
+            "compiled_route": report.compiled_route,
+            "status": "awaiting_profile_measurements",
+        }
+    )
+    return DiagnosticSessionState.model_validate(payload)
 
 
 def test_complete_diagnosis_enters_object_specific_specification_stage():
@@ -381,39 +423,33 @@ def test_specification_fact_requires_numeric_value_unit_and_source_text():
 
 
 def test_vague_language_cannot_become_a_numeric_fact():
-    report = run_cfdc_route("generic", description=_heater_description())
-    session = start_diagnostic_session(
-        report.system_description,
-        diagnosis=report.diagnosis,
-    )
+    session = _profile_measurement_session()
 
     updated = submit_specifications_to_session(
         session,
         specification_text="The heater responds very quickly and has a strong effect.",
     )
 
-    assert updated.status == "need_more_specifications"
+    assert updated.status == "awaiting_profile_measurements"
     assert updated.specification_assessment.facts == []
     assert updated.compiled_specification_model is None
 
 
 def test_multiple_plain_language_turns_reduce_gaps_and_compile_only_when_complete():
-    report = run_cfdc_route("generic", description=_heater_description())
-    session = start_diagnostic_session(
-        report.system_description, diagnosis=report.diagnosis
-    )
+    session = _profile_measurement_session()
     partial = submit_specifications_to_session(
         session,
         "Manual: input_change=1 normalized_input; steady_output_change=10 degC; response_time_s=20 s.",
     )
 
-    assert partial.status == "need_more_specifications"
+    assert partial.status == "awaiting_profile_measurements"
     assert len(partial.specification_assessment.missing_fact_ids) == 4
     assert partial.compiled_specification_model is None
 
     complete = submit_specifications_to_session(
         partial,
         "Manual: input_min=-2 normalized_input; input_max=2 normalized_input; output_min=-30 degC; output_max=80 degC.",
+        simulation_bounds_confirmed=True,
     )
 
     assert complete.status == "specification_model_ready"
@@ -425,10 +461,7 @@ def test_multiple_plain_language_turns_reduce_gaps_and_compile_only_when_complet
 
 
 def test_conflicting_specification_values_stop_model_compilation():
-    report = run_cfdc_route("generic", description=_heater_description())
-    session = start_diagnostic_session(
-        report.system_description, diagnosis=report.diagnosis
-    )
+    session = _profile_measurement_session()
     first = submit_specifications_to_session(
         session,
         "input_change=1 normalized_input;",
@@ -446,7 +479,7 @@ def test_conflicting_specification_values_stop_model_compilation():
         conflict,
         "input_change=2 normalized_input;",
     )
-    assert corrected.status == "need_more_specifications"
+    assert corrected.status == "awaiting_profile_measurements"
     assert corrected.specification_assessment.conflicts == []
 
 
@@ -1369,7 +1402,7 @@ def test_inverse_response_specs_compile_without_reusing_demo_severity():
     assert report.controller.release_level == "candidate_unvalidated"
 
 
-def test_schema_v2_evidence_session_migrates_to_specifications_without_losing_diagnosis():
+def test_schema_v2_evidence_session_restarts_at_v4_measurement_gate():
     report = run_cfdc_route("generic", description=_heater_description())
     session = start_diagnostic_session(
         report.system_description, diagnosis=report.diagnosis
@@ -1382,7 +1415,7 @@ def test_schema_v2_evidence_session_migrates_to_specifications_without_losing_di
 
     migrated = migrate_diagnostic_session_payload(legacy)
 
-    assert migrated.schema_version == "3.0"
-    assert migrated.status == "awaiting_specifications"
+    assert migrated.schema_version == "4.0"
+    assert migrated.status == "awaiting_measurements"
     assert migrated.current_diagnosis == session.current_diagnosis
-    assert migrated.specification_assessment is not None
+    assert migrated.specification_assessment is None

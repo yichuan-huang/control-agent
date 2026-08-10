@@ -176,6 +176,8 @@ def start_app_run(
     api_key_text = _textbox_text(api_key)
     if not description_text:
         raise ValueError("请描述需要控制的对象、可观察输出和可用执行器。")
+    if route_id == "generic" and not use_llm:
+        raise ValueError("通用引导测量流程需要启用 LLM。")
     adapter = build_adapter(use_llm, base_url_text, model_text, api_key_text)
 
     system = SystemDescription(
@@ -192,7 +194,7 @@ def start_app_run(
         diagnostic_adapter=adapter,
         include_trajectory=include_trajectory,
     )
-    session = None
+    session = report.diagnostic_session
     if report.status in {"need_more_information", "awaiting_specifications"}:
         if report.diagnosis is None:
             raise RuntimeError("incomplete route report is missing its diagnosis")
@@ -226,9 +228,11 @@ def start_app_run(
         session is not None
         and session.status
         in {
-            "collecting_information",
-            "awaiting_specifications",
-            "need_more_specifications",
+            "collecting_description",
+            "awaiting_measurements",
+            "measurement_needs_more",
+            "measurement_conflict",
+            "awaiting_profile_measurements",
             "specification_conflict",
         }
     )
@@ -292,6 +296,7 @@ def continue_app_run(
         keyed_answers,
         supplemental_description=_textbox_text(supplemental_description).strip()
         or None,
+        expected_revision=session.revision,
         diagnostic_adapter=adapter,
     )
     report = _run_ready_session(
@@ -312,6 +317,56 @@ def continue_app_run(
             "specification_conflict",
             "evidence_rejected",
         }
+        else None
+    )
+    if next_state["session"] is None:
+        next_state["use_llm"] = False
+    return report, next_state
+
+
+def submit_app_measurement_response(
+    app_state: dict[str, Any],
+    measurement_response: str | None,
+    *,
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+    simulation_bounds_confirmed: bool = False,
+) -> tuple[CFDCRunReport, dict[str, Any]]:
+    """Advance diagnostic records or profile facts through the shared textbox."""
+
+    if not app_state or not app_state.get("session"):
+        raise ValueError("当前没有等待测量记录的诊断会话。")
+    session = DiagnosticSessionState.model_validate(app_state["session"])
+    text = _textbox_text(measurement_response).strip()
+    if not text:
+        raise ValueError("请填写现有记录、手册摘录或明确说明未知。")
+    adapter = build_adapter(
+        bool(app_state.get("use_llm")), base_url, model, api_key
+    )
+    if adapter is None:
+        raise ValueError("通用引导测量流程需要启用 LLM。")
+    report = run_cfdc_route(
+        session.route_id,
+        diagnostic_session_state=session,
+        diagnostic_adapter=adapter,
+        measurement_response=text,
+        simulation_bounds_confirmed=simulation_bounds_confirmed,
+        include_trajectory=bool(app_state.get("include_trajectory")),
+    )
+    waiting = report.status in {
+        "awaiting_measurements",
+        "measurement_needs_more",
+        "measurement_conflict",
+        "awaiting_profile_measurements",
+        "specification_conflict",
+        "awaiting_evidence",
+        "evidence_rejected",
+    }
+    next_state = dict(app_state)
+    next_state["session"] = (
+        report.diagnostic_session.model_dump(mode="json")
+        if waiting and report.diagnostic_session is not None
         else None
     )
     if next_state["session"] is None:
@@ -365,8 +420,7 @@ def submit_app_specifications(
         raise ValueError("当前没有等待设备规格的诊断会话。")
     session = DiagnosticSessionState.model_validate(app_state["session"])
     if session.status not in {
-        "awaiting_specifications",
-        "need_more_specifications",
+        "awaiting_profile_measurements",
         "specification_conflict",
     }:
         raise ValueError("当前诊断会话不处于设备规格补充阶段。")
@@ -387,12 +441,11 @@ def submit_app_specifications(
         session.route_id,
         diagnostic_session_state=session,
         diagnostic_adapter=adapter,
-        specification_text=text,
+        measurement_response=text,
         include_trajectory=bool(app_state.get("include_trajectory")),
     )
     waiting = report.status in {
-        "awaiting_specifications",
-        "need_more_specifications",
+        "awaiting_profile_measurements",
         "specification_conflict",
     }
     next_state = dict(app_state)

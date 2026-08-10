@@ -41,19 +41,20 @@ def test_session_round_trip_and_stable_question_ids():
         SystemDescription(text="I have a machine."), diagnostic_adapter=adapter
     )
     ids = clarification_question_map(state)
-    assert state.status == "collecting_information"
+    assert state.status == "awaiting_measurements"
     assert all(key.startswith("q_") for key in ids)
     assert DiagnosticSessionState.model_validate_json(state.model_dump_json()) == state
     completed = continue_diagnostic_session(
         state,
         {next(iter(ids)): "It settles and I can record it."},
         supplemental_description="A heater changes measured temperature.",
+        expected_revision=state.revision,
         diagnostic_adapter=adapter,
     )
-    assert completed.status == "awaiting_specifications"
-    assert completed.semantic_selection is not None
-    assert completed.evidence_requirement_plan is not None
-    assert completed.compiled_route.executable
+    assert completed.status == "awaiting_measurements"
+    assert completed.semantic_selection is None
+    assert completed.evidence_requirement_plan is None
+    assert completed.measurement_plan is not None
 
 
 def test_session_accepts_supplemental_description_without_keyed_answers():
@@ -64,19 +65,21 @@ def test_session_accepts_supplemental_description_without_keyed_answers():
     completed = continue_diagnostic_session(
         state,
         supplemental_description="It is a measured first-order thermal loop with a heater.",
+        expected_revision=state.revision,
         diagnostic_adapter=adapter,
     )
     assert completed.current_diagnosis.complete
 
 
-def test_session_rejects_unknown_question_id():
+def test_session_rejects_empty_legacy_answer_submission():
     state = start_diagnostic_session(
         SystemDescription(text="I have a machine."),
         diagnostic_adapter=SequencedAdapter([_incomplete()]),
     )
-    with pytest.raises(ValueError, match="unknown clarification"):
+    with pytest.raises(ValueError, match="supplemental description"):
         continue_diagnostic_session(
             state,
-            {"q_invalid": "answer"},
+            {"q_invalid": "   "},
+            expected_revision=state.revision,
             diagnostic_adapter=SequencedAdapter([_complete()]),
         )

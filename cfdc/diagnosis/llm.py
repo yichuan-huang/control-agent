@@ -10,6 +10,9 @@ from openai import OpenAI
 from cfdc.models import (
     ArchetypeClassification,
     ControlMethodProfileCatalog,
+    DiagnosticChecklistItem,
+    MeasurementAssessment,
+    MeasurementPlan,
     SemanticRouteSelection,
     SpecificationAssessment,
     SpecificationTemplate,
@@ -31,6 +34,21 @@ class DiagnosticAdapter(Protocol):
         diagnosis: StructuralDiagnosis,
         classification: ArchetypeClassification,
         catalog: ControlMethodProfileCatalog,
+    ) -> dict[str, Any]: ...
+
+    def phrase_measurement_plan(
+        self,
+        description: SystemDescription,
+        checklist: list[DiagnosticChecklistItem],
+        plan: MeasurementPlan,
+    ) -> dict[str, Any]: ...
+
+    def extract_measurements(
+        self,
+        description: SystemDescription,
+        measurement_plan: MeasurementPlan,
+        measurement_response: str,
+        previous_assessment: MeasurementAssessment | None,
     ) -> dict[str, Any]: ...
 
     def assess_specifications(
@@ -196,6 +214,10 @@ class DeterministicDiagnosticAdapter:
         return deterministic_profile_selection(
             description, diagnosis, classification, catalog
         ).model_dump()
+
+    def phrase_measurement_plan(self, description, checklist, plan):
+        del description, checklist
+        return plan.model_dump(mode="json")
 
 
 class OpenAICompatibleDiagnosticAdapter:
@@ -374,6 +396,89 @@ class OpenAICompatibleDiagnosticAdapter:
                 f"reasoning_content_present={bool(reasoning_content)})"
             )
         return parse_json_content(content)
+
+    def phrase_measurement_plan(self, description, checklist, plan):
+        prompt = (
+            "Rephrase no behavior and add no instructions. Return ONLY the supplied "
+            "record-only measurement plan as one JSON object with every field present. "
+            "The requests must remain the fixed eight requests, in order. Only the "
+            "closed source lookup and observation-reporting template strings already "
+            "present in the plan may be used. Never request a physical command, new "
+            "experiment, amplitude, or duration.\n\n"
+            f"description={description.model_dump_json()}\n"
+            f"checklist={json.dumps([item.model_dump(mode='json') for item in checklist], ensure_ascii=False)}\n"
+            f"plan={plan.model_dump_json()}"
+        )
+        options: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You return strict JSON for a record-only measurement plan.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": self.temperature,
+            "max_tokens": min(max(self.max_tokens, 1400), 2400),
+            "response_format": {"type": "json_object"},
+        }
+        if self._disable_thinking:
+            options["extra_body"] = {"thinking": {"type": "disabled"}}
+        response = self.client.chat.completions.create(**options)
+        content = response.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("measurement-plan phrasing returned empty content")
+        return MeasurementPlan.model_validate(parse_json_content(content)).model_dump(
+            mode="json"
+        )
+
+    def extract_measurements(
+        self,
+        description,
+        measurement_plan,
+        measurement_response,
+        previous_assessment,
+    ):
+        prompt = (
+            "Extract evidence from the user's response into one strict JSON object. "
+            "Do not invent facts. Account for every active request exactly once as a "
+            "fact, gap, or mapped conflict. Numeric facts require the unit stated by "
+            "the user. Unknown values are gaps. Preserve short source excerpts.\n\n"
+            "Required shape: {\"status\":\"need_more|conflict|ready\","
+            "\"facts\":[{\"request_id\":\"string\",\"source_excerpt\":\"string\","
+            "\"numeric_value\":null,\"unit\":null,\"text_value\":\"string\"}],"
+            "\"gaps\":[\"diagnostic_field_id\"],\"conflicts\":[\"string\"],"
+            "\"conflict_request_ids\":[\"request_id\"],\"rationale\":\"string\"}.\n"
+            f"description={description.model_dump_json()}\n"
+            f"measurement_plan={measurement_plan.model_dump_json()}\n"
+            f"previous_assessment={previous_assessment.model_dump_json() if previous_assessment else 'null'}\n"
+            f"user_response={json.dumps(measurement_response, ensure_ascii=False)}"
+        )
+        options: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract auditable record evidence into strict JSON. "
+                        "You never invent facts or prescribe hardware actions."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": self.temperature,
+            "max_tokens": min(max(self.max_tokens, 1400), 2400),
+            "response_format": {"type": "json_object"},
+        }
+        if self._disable_thinking:
+            options["extra_body"] = {"thinking": {"type": "disabled"}}
+        response = self.client.chat.completions.create(**options)
+        content = response.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("measurement extraction returned empty content")
+        return MeasurementAssessment.model_validate(
+            parse_json_content(content)
+        ).model_dump(mode="json")
 
     def select_profile(self, description, diagnosis, classification, catalog):
         compatible = [

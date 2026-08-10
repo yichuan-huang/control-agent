@@ -13,13 +13,20 @@ from cfdc.diagnosis.measurements import (
     build_measurement_plan,
     validate_measurement_assessment,
 )
+from cfdc.evidence import plant_id_for_description, validate_evidence_package
 from cfdc.models import (
     DiagnosticSessionState,
     DiagnosticTurn,
     MeasurementAssessment,
     PlantEvidencePackage,
+    SimulationBoundaryConfirmation,
     StructuralDiagnosis,
     SystemDescription,
+)
+from cfdc.specifications import (
+    assess_specification_text,
+    compile_specification_model,
+    specification_template_for_profile,
 )
 
 
@@ -80,6 +87,15 @@ def start_diagnostic_session(
         description, diagnostic_adapter, use_mechanism_cards
     )
     checklist = build_diagnostic_checklist(description, resolved_diagnosis)
+    measurement_plan = build_measurement_plan(checklist)
+    if diagnostic_adapter is not None and hasattr(
+        diagnostic_adapter, "phrase_measurement_plan"
+    ):
+        measurement_plan = type(measurement_plan).model_validate(
+            diagnostic_adapter.phrase_measurement_plan(
+                description, checklist, measurement_plan
+            )
+        )
     return DiagnosticSessionState(
         session_id=f"diagnostic-{uuid4().hex[:16]}",
         route_id=route_id,
@@ -88,7 +104,7 @@ def start_diagnostic_session(
         current_diagnosis=resolved_diagnosis,
         description_guidance=[item.guidance for item in checklist],
         checklist=checklist,
-        measurement_plan=build_measurement_plan(checklist),
+        measurement_plan=measurement_plan,
         pending_clarification_questions=[],
         status="awaiting_measurements",
     )
@@ -108,7 +124,10 @@ def continue_description_session(
     if state.status not in {
         "collecting_description",
         "awaiting_measurements",
+        "measurement_needs_more",
         "measurement_conflict",
+        "awaiting_profile_measurements",
+        "specification_conflict",
     }:
         raise ValueError(
             "only a description or measurement-waiting session can continue"
@@ -121,7 +140,7 @@ def continue_description_session(
 
     evidence = f"Supplemental description: {text}"
     accumulated = state.accumulated_description.model_copy(
-        update={"text": "\n\n".join([state.accumulated_description.text, evidence])}
+        update={"text": f"{state.accumulated_description.text}\n\n{evidence}"}
     )
     diagnosis = _diagnose(accumulated, diagnostic_adapter, use_mechanism_cards)
     turn = DiagnosticTurn(
@@ -132,15 +151,38 @@ def continue_description_session(
         diagnosis=diagnosis,
     )
     checklist = build_diagnostic_checklist(accumulated, diagnosis)
+    measurement_plan = build_measurement_plan(checklist)
+    if diagnostic_adapter is not None and hasattr(
+        diagnostic_adapter, "phrase_measurement_plan"
+    ):
+        measurement_plan = type(measurement_plan).model_validate(
+            diagnostic_adapter.phrase_measurement_plan(
+                accumulated, checklist, measurement_plan
+            )
+        )
     updates = {
         "accumulated_description": accumulated,
         "turns": [*state.turns, turn],
         "current_diagnosis": diagnosis,
         "description_guidance": [item.guidance for item in checklist],
         "checklist": checklist,
-        "measurement_plan": build_measurement_plan(checklist),
+        "measurement_plan": measurement_plan,
         "description_turn_count": state.description_turn_count + 1,
         "measurement_assessment": None,
+        "measurement_history": [],
+        "measurement_round_count": 0,
+        "evidence_level": "description_only",
+        "classification": None,
+        "semantic_selection": None,
+        "experiment_plan": None,
+        "evidence_requirement_plan": None,
+        "evidence_readiness": None,
+        "specification_templates": [],
+        "specification_assessment": None,
+        "specification_answer_history": [],
+        "compiled_specification_model": None,
+        "candidate_route": None,
+        "compiled_route": None,
         "status": "awaiting_measurements",
         "refusal_reason": None,
     }
@@ -191,7 +233,11 @@ def submit_measurement_assessment(
     """Apply a structured adapter assessment after deterministic plan validation."""
 
     _expect_revision(state, expected_revision)
-    if state.status not in {"awaiting_measurements", "measurement_conflict"}:
+    if state.status not in {
+        "awaiting_measurements",
+        "measurement_needs_more",
+        "measurement_conflict",
+    }:
         raise ValueError(
             "only a measurement-waiting session accepts a measurement assessment"
         )
@@ -207,9 +253,11 @@ def submit_measurement_assessment(
         "measurement_history": [*state.measurement_history, typed_assessment],
         "measurement_round_count": round_count,
         "evidence_level": "description_only",
-        "status": "measurement_conflict"
-        if typed_assessment.status == "conflict"
-        else "awaiting_measurements",
+        "status": (
+            "measurement_conflict"
+            if typed_assessment.status == "conflict"
+            else "measurement_needs_more"
+        ),
         "refusal_reason": None,
     }
     if typed_assessment.status == "ready":
@@ -248,18 +296,137 @@ def submit_evidence_to_session(
 ) -> DiagnosticSessionState:
     """The v4 guided workflow accepts only its typed record assessment at this stage."""
 
-    del state, package
-    raise ValueError(
-        "v4 diagnostic sessions require a measurement assessment before evidence submission"
+    if state.status not in {
+        "awaiting_profile_measurements",
+        "specification_conflict",
+        "awaiting_evidence",
+        "evidence_rejected",
+    }:
+        raise ValueError("only an evidence-waiting diagnostic session accepts evidence")
+    if state.evidence_requirement_plan is None:
+        raise ValueError("diagnostic session is missing its evidence requirement plan")
+    readiness = validate_evidence_package(
+        package, state.evidence_requirement_plan, state.accumulated_description
+    )
+    return _transition(
+        state,
+        updates={
+            "evidence_readiness": readiness,
+            "status": (
+                "ready_for_experiments"
+                if readiness.decision == "ready"
+                else "evidence_rejected"
+            ),
+            "refusal_reason": (
+                None
+                if readiness.decision == "ready"
+                else "object_evidence_validation_failed"
+            ),
+        },
     )
 
 
-def submit_specifications_to_session(*args, **kwargs):
-    """Specification collection is unavailable before the measurement gate releases it."""
+def submit_specifications_to_session(
+    state: DiagnosticSessionState,
+    specification_text: str,
+    *,
+    specification_adapter=None,
+    simulation_bounds_confirmed: bool = False,
+) -> DiagnosticSessionState:
+    """Assess post-classification profile facts supplied through the shared textbox."""
 
-    del args, kwargs
-    raise ValueError(
-        "v4 diagnostic sessions require measurement verification before specifications"
+    if state.status not in {
+        "awaiting_profile_measurements",
+        "specification_conflict",
+    }:
+        raise ValueError(
+            "only an awaiting_profile_measurements session accepts profile facts"
+        )
+    text = specification_text.strip()
+    if not text:
+        raise ValueError("measurement response must be non-empty")
+    if state.semantic_selection is None or state.classification is None:
+        raise ValueError("profile fact collection requires a selected method profile")
+    template = (
+        state.specification_templates[0]
+        if state.specification_templates
+        else specification_template_for_profile(
+            state.semantic_selection.simulation_profile_id
+        )
+    )
+    assessment = assess_specification_text(
+        state.accumulated_description,
+        template,
+        text,
+        previous=state.specification_assessment,
+        adapter=specification_adapter,
+        diagnosis=state.current_diagnosis,
+        classification=state.classification,
+        method_profile_id=state.semantic_selection.simulation_profile_id,
+        answer_history=state.specification_answer_history,
+    )
+    history = [*state.specification_answer_history, text]
+    if assessment.status == "conflict":
+        return _transition(
+            state,
+            updates={
+                "specification_assessment": assessment,
+                "specification_answer_history": history,
+                "compiled_specification_model": None,
+                "status": "specification_conflict",
+            },
+        )
+    if assessment.status != "ready":
+        return _transition(
+            state,
+            updates={
+                "specification_assessment": assessment,
+                "specification_answer_history": history,
+                "compiled_specification_model": None,
+                "status": "awaiting_profile_measurements",
+            },
+        )
+    if (
+        state.accumulated_description.simulation_boundary_confirmation is None
+        and not simulation_bounds_confirmed
+    ):
+        raise ValueError(
+            "confirmed simulation bounds are required before compiling a software model"
+        )
+    confirmed_description = state.accumulated_description
+    if confirmed_description.simulation_boundary_confirmation is None:
+        confirmed_description = confirmed_description.model_copy(
+            update={
+                "simulation_boundary_confirmation": SimulationBoundaryConfirmation()
+            }
+        )
+    compiled = compile_specification_model(
+        plant_id=plant_id_for_description(confirmed_description),
+        description=confirmed_description,
+        template=template,
+        assessment=assessment,
+    )
+    updated_description = confirmed_description.model_copy(
+        update={
+            "safety_bounds": {
+                **state.accumulated_description.safety_bounds,
+                **compiled.safety_bounds,
+            },
+            "time_scale_hint_s": (
+                state.accumulated_description.time_scale_hint_s
+                or compiled.time_scale_hint_s
+            ),
+        }
+    )
+    return _transition(
+        state,
+        updates={
+            "accumulated_description": updated_description,
+            "specification_assessment": assessment,
+            "specification_answer_history": history,
+            "compiled_specification_model": compiled,
+            "status": "specification_model_ready",
+        },
     )
 
 

@@ -200,6 +200,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Add a free-form supplemental description when resuming a diagnostic session.",
     )
+    measurement_group = parser.add_mutually_exclusive_group()
+    measurement_group.add_argument(
+        "--measurement-response",
+        type=str,
+        default=None,
+        help="Submit existing-record evidence or requested profile facts.",
+    )
+    measurement_group.add_argument(
+        "--measurement-response-file",
+        type=Path,
+        default=None,
+        help="Read the measurement response from a UTF-8 text file.",
+    )
+    parser.add_argument(
+        "--confirm-simulation-bounds",
+        action="store_true",
+        help=(
+            "Confirm that supplied ranges are software-simulation run/stop bounds, "
+            "not real-hardware safety certification."
+        ),
+    )
     parser.add_argument(
         "--benchmark",
         action="store_true",
@@ -458,12 +479,33 @@ def main() -> None:
         route_id = args.run_route or (
             session_state.route_id if session_state is not None else "generic"
         )
+        if route_id == "generic" and adapter is None:
+            raise SystemExit("The generic guided measurement flow requires an LLM; use --use-llm.")
+        try:
+            measurement_response = (
+                args.measurement_response_file.read_text(encoding="utf-8")
+                if args.measurement_response_file is not None
+                else args.measurement_response
+            )
+        except OSError as exc:
+            raise SystemExit(
+                f"invalid --measurement-response-file {args.measurement_response_file}: {exc}"
+            ) from None
         specification_parts = [
             item.strip()
             for item in [args.specification_text, *args.specification_answer]
             if item and item.strip()
         ]
         specification_text = "\n".join(specification_parts) or None
+        if measurement_response is not None and (
+            diagnostic_answers
+            or args.diagnostic_description is not None
+            or specification_text is not None
+        ):
+            raise SystemExit(
+                "--measurement-response cannot be combined with diagnostic answers, "
+                "--diagnostic-description, or --specification-text"
+            )
         if args.validation_spec is not None and args.model_spec is None:
             raise SystemExit("--validation-spec requires --model-spec")
         if specification_text is not None and (
@@ -559,6 +601,8 @@ def main() -> None:
             diagnostic_session_state=session_state,
             diagnostic_answers=(diagnostic_answers or None),
             supplemental_description=args.diagnostic_description,
+            measurement_response=measurement_response,
+            simulation_bounds_confirmed=args.confirm_simulation_bounds,
             evidence_package=evidence_package,
             specification_text=specification_text,
             execution_mode="demo_fixture" if args.demo_fixture else "user_object",

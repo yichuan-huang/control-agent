@@ -747,19 +747,17 @@ def test_repeated_features_from_different_operating_regions_are_not_averaged():
         extract_features_from_repeated_results(records)
 
 
-def test_diagnostic_session_requires_evidence_after_eight_fields():
+def test_diagnostic_session_requires_measurements_before_object_evidence():
     description = _parameterized_first_order_description()
     state = start_diagnostic_session(description)
 
-    assert state.schema_version == "3.0"
-    assert state.status == "awaiting_specifications"
-    assert state.evidence_requirement_plan is not None
+    assert state.schema_version == "4.0"
+    assert state.status == "awaiting_measurements"
+    assert state.evidence_requirement_plan is None
 
     package = _transfer_function_evidence(description, gain=1.0, tau=2.0)
-    updated = submit_evidence_to_session(state, package)
-
-    assert updated.status == "ready_for_experiments"
-    assert updated.evidence_readiness.decision == "ready"
+    with pytest.raises(ValueError, match="evidence-waiting"):
+        submit_evidence_to_session(state, package)
 
 
 def test_ready_for_experiments_requires_a_positive_evidence_decision():
