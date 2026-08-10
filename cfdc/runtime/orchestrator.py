@@ -872,6 +872,104 @@ def _carry_forward_profile_diagnostic_assessment(
     )
 
 
+def _release_measurement_verified_session(
+    session: DiagnosticSessionState,
+    diagnostic_adapter: DiagnosticAdapter | None,
+    *,
+    use_mechanism_cards: bool,
+) -> DiagnosticSessionState:
+    """Rebuild all derived routing state from grounded diagnostic evidence."""
+
+    if session.status != "measurement_verified":
+        raise ValueError("only a measurement-verified session can be released")
+    if diagnostic_adapter is None:
+        raise ValueError(
+            "releasing verified measurements requires a guided LLM adapter"
+        )
+    if session.measurement_plan is None:
+        raise ValueError("diagnostic session is missing its measurement plan")
+
+    diagnosis = reduce_measurement_history_to_diagnosis(
+        session.measurement_plan,
+        session.measurement_history,
+    )
+    if not diagnosis.complete:
+        payload = session.model_dump(mode="python")
+        payload.update(
+            {
+                "current_diagnosis": diagnosis,
+                "evidence_level": "description_only",
+                "classification": None,
+                "semantic_selection": None,
+                "status": "awaiting_measurements",
+            }
+        )
+        return DiagnosticSessionState.model_validate(payload)
+
+    raw_classification = DiagnosticEngine(
+        use_mechanism_cards=use_mechanism_cards
+    ).classify(diagnosis, None)
+    catalog = default_control_method_profile_catalog()
+    selection = SemanticRouteSelection.model_validate(
+        diagnostic_adapter.select_profile(
+            session.accumulated_description.model_copy(deep=True),
+            diagnosis.model_copy(deep=True),
+            raw_classification.model_copy(deep=True),
+            catalog.model_copy(deep=True),
+        )
+    )
+    profile = validate_semantic_selection(selection, raw_classification, catalog)
+    classification = apply_profile_to_classification(raw_classification, profile)
+    plan = plan_safe_experiments(
+        diagnosis, classification, session.accumulated_description
+    )
+    candidate_route = build_candidate_route(
+        session.route_id,
+        diagnosis,
+        classification,
+        session.accumulated_description,
+        plan,
+        profile,
+    )
+    compiled_route = compile_candidate_route(
+        candidate_route, default_capability_catalog()
+    )
+    evidence_requirement_plan = build_evidence_requirement_plan(
+        session.accumulated_description,
+        diagnosis,
+        classification,
+        selection,
+    )
+    template = specification_template_for_profile(selection.simulation_profile_id)
+    specification_assessment = build_initial_specification_assessment(
+        session.accumulated_description, template
+    )
+    payload = session.model_dump(mode="python")
+    payload.update(
+        {
+            "revision": session.revision + 1,
+            "current_diagnosis": diagnosis,
+            "classification": classification,
+            "semantic_selection": selection,
+            "experiment_plan": plan,
+            "evidence_requirement_plan": evidence_requirement_plan,
+            "specification_templates": [template],
+            "specification_assessment": specification_assessment,
+            "candidate_route": candidate_route,
+            "compiled_route": compiled_route,
+            "status": (
+                "awaiting_profile_measurements"
+                if compiled_route.executable
+                else "refused"
+            ),
+            "refusal_reason": (
+                None if compiled_route.executable else "blocking_capability_gap"
+            ),
+        }
+    )
+    return DiagnosticSessionState.model_validate(payload)
+
+
 def run_cfdc_route(
     route_id: RouteId = "generic",
     description: SystemDescription | None = None,
@@ -938,6 +1036,12 @@ def run_cfdc_route(
         session = diagnostic_session_state
         if session.schema_version != "4.0":
             raise ValueError("only v4 diagnostic sessions are supported")
+        if session.status == "measurement_verified":
+            session = _release_measurement_verified_session(
+                session,
+                diagnostic_adapter,
+                use_mechanism_cards=use_mechanism_cards,
+            )
         if measurement_response is not None:
             text = measurement_response.strip()
             if not text:
@@ -968,102 +1072,11 @@ def run_cfdc_route(
                     expected_revision=session.revision,
                 )
                 if session.status == "measurement_verified":
-                    diagnosis = reduce_measurement_history_to_diagnosis(
-                        session.measurement_plan,
-                        session.measurement_history,
+                    session = _release_measurement_verified_session(
+                        session,
+                        diagnostic_adapter,
+                        use_mechanism_cards=use_mechanism_cards,
                     )
-                    if not diagnosis.complete:
-                        payload = session.model_dump(mode="python")
-                        payload.update(
-                            {
-                                "current_diagnosis": diagnosis,
-                                "evidence_level": "description_only",
-                                "classification": None,
-                                "semantic_selection": None,
-                                "status": "awaiting_measurements",
-                            }
-                        )
-                        session = DiagnosticSessionState.model_validate(payload)
-                        return run_cfdc_route(
-                            route_id,
-                            diagnostic_session_state=session,
-                            diagnostic_adapter=diagnostic_adapter,
-                            include_trajectory=include_trajectory,
-                            run_id=run_id,
-                            use_mechanism_cards=use_mechanism_cards,
-                        )
-                    raw_classification = DiagnosticEngine(
-                        use_mechanism_cards=use_mechanism_cards
-                    ).classify(
-                        diagnosis, None
-                    )
-                    catalog = default_control_method_profile_catalog()
-                    selection = SemanticRouteSelection.model_validate(
-                        diagnostic_adapter.select_profile(
-                            session.accumulated_description,
-                            diagnosis,
-                            raw_classification,
-                            catalog,
-                        )
-                    )
-                    profile = validate_semantic_selection(
-                        selection, raw_classification, catalog
-                    )
-                    classification = apply_profile_to_classification(
-                        raw_classification, profile
-                    )
-                    plan = plan_safe_experiments(
-                        diagnosis, classification, session.accumulated_description
-                    )
-                    candidate_route = build_candidate_route(
-                        session.route_id,
-                        diagnosis,
-                        classification,
-                        session.accumulated_description,
-                        plan,
-                        profile,
-                    )
-                    compiled_route = compile_candidate_route(
-                        candidate_route, default_capability_catalog()
-                    )
-                    evidence_requirement_plan = build_evidence_requirement_plan(
-                        session.accumulated_description,
-                        diagnosis,
-                        classification,
-                        selection,
-                    )
-                    template = specification_template_for_profile(
-                        selection.simulation_profile_id
-                    )
-                    specification_assessment = build_initial_specification_assessment(
-                        session.accumulated_description, template
-                    )
-                    payload = session.model_dump(mode="python")
-                    payload.update(
-                        {
-                            "revision": session.revision + 1,
-                            "current_diagnosis": diagnosis,
-                            "classification": classification,
-                            "semantic_selection": selection,
-                            "experiment_plan": plan,
-                            "evidence_requirement_plan": evidence_requirement_plan,
-                            "specification_templates": [template],
-                            "specification_assessment": specification_assessment,
-                            "candidate_route": candidate_route,
-                            "compiled_route": compiled_route,
-                            "status": (
-                                "awaiting_profile_measurements"
-                                if compiled_route.executable
-                                else "refused"
-                            ),
-                            "refusal_reason": (
-                                None
-                                if compiled_route.executable
-                                else "blocking_capability_gap"
-                            ),
-                        }
-                    )
-                    session = DiagnosticSessionState.model_validate(payload)
             elif session.status in {
                 "awaiting_profile_measurements",
                 "specification_conflict",

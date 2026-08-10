@@ -6,7 +6,11 @@ from typing import ClassVar
 import pytest
 
 import cfdc.web.service as web_service
-from cfdc.diagnosis import build_diagnostic_checklist, build_measurement_plan
+from cfdc.diagnosis import (
+    build_diagnostic_checklist,
+    build_measurement_plan,
+    migrate_diagnostic_session_payload,
+)
 from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.diagnosis.llm import OpenAICompatibleDiagnosticAdapter
 from cfdc.models import MeasuredFact, MeasurementAssessment, SystemDescription
@@ -148,6 +152,22 @@ def _complete_diagnostic_response() -> str:
     return "\n".join(
         f"{request_id}: {source_excerpt}"
         for request_id, source_excerpt in _VALID_FIELD_FACTS.items()
+    )
+
+
+def _migrated_measurement_verified_session():
+    adapter = GuidedFakeAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+    routed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=_complete_diagnostic_response(),
+    )
+    return migrate_diagnostic_session_payload(
+        routed.diagnostic_session.model_dump(mode="json")
     )
 
 
@@ -613,6 +633,136 @@ def test_profile_only_response_keeps_ready_diagnosis_and_compiles_specifications
     assert completed.diagnostic_session.current_diagnosis.complete is True
     assert completed.compiled_specification_model is not None
     assert completed.controller is not None
+
+
+def test_migrated_session_ignores_tampered_compatible_profile_and_reselects():
+    source_adapter = GuidedFakeAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=source_adapter
+    )
+    routed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=source_adapter,
+        measurement_response=_complete_diagnostic_response(),
+    )
+    payload = routed.diagnostic_session.model_dump(mode="json")
+    payload["semantic_selection"].update(
+        {
+            "simulation_profile_id": "first_order_lag_with_delay",
+            "feature_bundle_id": "class_i_delay_minimal",
+            "selected_feature_ids": ["static_gain", "time_constant", "dead_time"],
+        }
+    )
+    restored = migrate_diagnostic_session_payload(payload)
+
+    class ReselectingAdapter(GuidedFakeAdapter):
+        def __init__(self):
+            self.selection_calls = 0
+
+        def select_profile(self, description, diagnosis, classification, catalog):
+            self.selection_calls += 1
+            return super().select_profile(
+                description, diagnosis, classification, catalog
+            )
+
+    adapter = ReselectingAdapter()
+    resumed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=restored,
+        diagnostic_adapter=adapter,
+    )
+
+    assert restored.status == "measurement_verified"
+    assert restored.semantic_selection is None
+    assert adapter.selection_calls == 1
+    assert resumed.status == "awaiting_profile_measurements"
+    assert resumed.diagnostic_session.status == "awaiting_profile_measurements"
+    assert resumed.semantic_selection.simulation_profile_id == "first_order_lag"
+    assert resumed.specification_assessment is not None
+    assert resumed.diagnostic_session.revision == restored.revision + 1
+
+
+def test_migrated_session_reselects_then_consumes_profile_response_in_same_call():
+    restored = _migrated_measurement_verified_session()
+    events = []
+
+    class ResumeAdapter(GuidedFakeAdapter):
+        def select_profile(self, description, diagnosis, classification, catalog):
+            events.append("select_profile")
+            return super().select_profile(
+                description, diagnosis, classification, catalog
+            )
+
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            if measurement_response.startswith("Manual: input_change"):
+                events.append("extract_profile_response")
+                return MeasurementAssessment(
+                    status="need_more",
+                    gaps=[
+                        request.diagnostic_field_id
+                        for request in measurement_plan.requests
+                    ],
+                    rationale="No new diagnostic fact was submitted.",
+                ).model_dump(mode="json")
+            return super().extract_measurements(
+                description,
+                measurement_plan,
+                measurement_response,
+                previous_assessment,
+            )
+
+    profile_response = (
+        "Manual: input_change=1 normalized_input; "
+        "steady_output_change=10 degC; response_time_s=20 s; "
+        "input_min=-2 normalized_input; input_max=2 normalized_input; "
+        "output_min=-30 degC; output_max=80 degC."
+    )
+    completed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=restored,
+        diagnostic_adapter=ResumeAdapter(),
+        measurement_response=profile_response,
+        simulation_bounds_confirmed=True,
+    )
+
+    assert events == ["select_profile", "extract_profile_response"]
+    assert completed.status == "candidate_unvalidated"
+    assert completed.compiled_specification_model is not None
+    assert completed.diagnostic_session.revision == restored.revision + 2
+    assert completed.diagnostic_session.profile_measurement_round_count == 1
+    assert completed.diagnostic_session.specification_answer_history == [
+        profile_response
+    ]
+
+
+def test_migrated_session_profile_adapter_failure_is_atomic():
+    restored = _migrated_measurement_verified_session()
+    before = restored.model_dump(mode="json")
+
+    class FailingReselectionAdapter(GuidedFakeAdapter):
+        def select_profile(self, description, diagnosis, classification, catalog):
+            description.text = "MUTATED BY FAILING ADAPTER"
+            raise RuntimeError("profile provider unavailable")
+
+        def extract_measurements(self, *args, **kwargs):
+            raise AssertionError("Profile response must not be consumed before selection")
+
+    with pytest.raises(RuntimeError, match="profile provider unavailable"):
+        run_cfdc_route(
+            "generic",
+            diagnostic_session_state=restored,
+            diagnostic_adapter=FailingReselectionAdapter(),
+            measurement_response="Manual: input_change=1 normalized_input.",
+        )
+
+    assert restored.model_dump(mode="json") == before
 
 
 def test_diagnostic_round_eight_can_enter_and_complete_profile_collection():
@@ -1269,3 +1419,54 @@ def test_live_measurement_prompt_never_contains_provider_secret(monkeypatch):
     adapter.phrase_measurement_plan(_description(), checklist, plan)
 
     assert "provider-secret" not in json.dumps(captured)
+
+
+def test_live_measurement_prompt_carries_facts_from_partial_previous_assessment(
+    monkeypatch,
+):
+    captured = {}
+    checklist = build_diagnostic_checklist(_description())
+    plan = build_measurement_plan(checklist)
+    previous = MeasurementAssessment(
+        status="need_more",
+        facts=[
+            MeasuredFact(
+                request_id="open_loop_stability",
+                source_excerpt="settles or remains bounded",
+                text_value="settles or remains bounded",
+            )
+        ],
+        gaps=[request.diagnostic_field_id for request in plan.requests[1:]],
+        rationale="One fact is known and seven remain missing.",
+    )
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            message = type("Message", (), {"content": previous.model_dump_json()})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
+    adapter = OpenAICompatibleDiagnosticAdapter(
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="provider-secret",
+    )
+
+    adapter.extract_measurements(
+        _description(),
+        plan,
+        "A later response addresses another field.",
+        previous,
+    )
+
+    prompt = captured["messages"][-1]["content"].lower()
+    assert "whether previous_assessment is need_more, conflict, or ready" in prompt
+    assert "copy each exact prior fact" in prompt
+    assert "if previous_assessment is ready" not in prompt
