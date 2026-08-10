@@ -8,8 +8,12 @@ from typing import Any
 
 import gradio as gr
 
+from cfdc.lab import SimulationSession
 from cfdc.models import CFDCRunReport
-from cfdc.web.linked_tuning_presentation import empty_linked_tuning_view
+from cfdc.web.linked_tuning_presentation import (
+    empty_linked_tuning_view,
+    output_bound_gap,
+)
 from cfdc.web.linked_tuning_service import (
     approve_and_run_linked_gain,
     link_stage5_report,
@@ -101,6 +105,14 @@ def build_linked_tuning_panel() -> LinkedTuningComponents:
             visible=False,
             elem_id="linked-trial-result",
         ) as trial_result:
+            stability_summary = gr.Dataframe(
+                headers=["稳定性证据", "值"],
+                datatype=["str", "str"],
+                value=[],
+                interactive=False,
+                label="确定性稳定性判定与证据",
+                elem_id="linked-stability-summary",
+            )
             with gr.Row():
                 output_plot = gr.LinePlot(
                     x="time_s",
@@ -118,14 +130,6 @@ def build_linked_tuning_panel() -> LinkedTuningComponents:
                     x_title="时间 / s",
                     elem_id="linked-control-plot",
                 )
-            stability_summary = gr.Dataframe(
-                headers=["稳定性证据", "值"],
-                datatype=["str", "str"],
-                value=[],
-                interactive=False,
-                label="本轮效果验证结果",
-                elem_id="linked-stability-summary",
-            )
             with gr.Row():
                 request_gain = gr.Button(
                     "请求 AI 下一轮参数",
@@ -248,7 +252,7 @@ def _render_outputs(
         state and state.get("state") == "trial_pending" and not state.get("trials")
     )
     has_trials = bool(state and state.get("trials"))
-    show_proposal = bool(controls["approve_and_run"])
+    show_proposal = bool(controls["approve_and_run"] or controls["reject_gain"])
     return (
         dict(state),
         view["status"],
@@ -348,6 +352,7 @@ def _sync_callback(report_json, state):
 
 
 def _run_callback(state, parameters, report_json):
+    _require_trial_output_bounds(state)
     return _service_call(
         run_linked_trial,
         state,
@@ -392,6 +397,7 @@ def _request_callback(
 
 
 def _approve_callback(state, report_json):
+    _require_trial_output_bounds(state)
     return _service_call(
         approve_and_run_linked_gain,
         state,
@@ -416,6 +422,16 @@ def _restore_callback(state, report_json):
         report_json=report_json,
         expected_revision=_revision(state),
     )
+
+
+def _require_trial_output_bounds(state: Mapping[str, Any]) -> None:
+    try:
+        session = SimulationSession.model_validate(state)
+    except (TypeError, ValueError):
+        return
+    gap = output_bound_gap(session)
+    if gap:
+        raise gr.Error(gap)
 
 
 def bind_linked_tuning_events(

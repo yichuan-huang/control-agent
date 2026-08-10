@@ -8,6 +8,12 @@ import pandas as pd
 
 from cfdc.lab import SimulationSession, extract_tunable_parameters
 
+_STABILITY_LABELS = {
+    "stable": "稳定",
+    "unstable": "不稳定",
+    "inconclusive": "证据不足",
+}
+
 
 def _empty_line_frame() -> pd.DataFrame:
     return pd.DataFrame(
@@ -23,22 +29,71 @@ def _latest_traces(session: SimulationSession):
     return session.trials[-1].traces if session.trials else []
 
 
+def _append_trace_channels(
+    rows: list[dict[str, Any]],
+    *,
+    traces,
+    group: str,
+    channel_attribute: str,
+) -> None:
+    for scenario_index, trace in enumerate(traces, start=1):
+        scenario = f"scenario-{scenario_index}"
+        channels = getattr(trace, channel_attribute)
+        for name, values in channels.items():
+            rows.extend(
+                {
+                    "time_s": time_s,
+                    "value": value,
+                    "series": f"{scenario} · {group} · {name}",
+                }
+                for time_s, value in zip(trace.time_s, values)
+            )
+
+
 def output_plot_frame(session: SimulationSession) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
-    for scenario_index, trace in enumerate(_latest_traces(session), start=1):
+    if not session.trials:
+        return _empty_line_frame()
+    first = session.trials[0]
+    latest = session.trials[-1]
+    _append_trace_channels(
+        rows,
+        traces=latest.traces,
+        group="参考",
+        channel_attribute="reference",
+    )
+    _append_trace_channels(
+        rows,
+        traces=first.traces,
+        group="初始控制器输出",
+        channel_attribute="outputs",
+    )
+    if len(session.trials) > 1 or latest.rolled_back:
+        latest_label = (
+            "最新执行输出（未采纳）" if latest.rolled_back else "最新执行输出"
+        )
+        _append_trace_channels(
+            rows,
+            traces=latest.traces,
+            group=latest_label,
+            channel_attribute="outputs",
+        )
+    output_bounds = session.run_config.output_bounds if session.run_config else {}
+    for scenario_index, trace in enumerate(latest.traces, start=1):
         scenario = f"scenario-{scenario_index}"
-        for group, channels in (
-            ("reference", trace.reference),
-            ("output", trace.outputs),
-        ):
-            for name, values in channels.items():
+        for name in trace.outputs:
+            bounds = output_bounds.get(name)
+            if bounds is None:
+                continue
+            lower, upper = bounds
+            for group, value in (("输出下界", lower), ("输出上界", upper)):
                 rows.extend(
                     {
                         "time_s": time_s,
                         "value": value,
                         "series": f"{scenario} · {group} · {name}",
                     }
-                    for time_s, value in zip(trace.time_s, values)
+                    for time_s in trace.time_s
                 )
     return pd.DataFrame(rows) if rows else _empty_line_frame()
 
@@ -68,7 +123,7 @@ def iteration_rows(session: SimulationSession) -> list[list[Any]]:
         [
             trial.iteration,
             trial.creation_source,
-            trial.stability.status,
+            _STABILITY_LABELS[trial.stability.status],
             f"{trial.stability_score:.6f}",
             f"{100 * trial.stability.saturation_fraction:.2f}%",
             "是" if trial.hard_violation else "否",
@@ -125,6 +180,14 @@ def _status_markdown(session: SimulationSession) -> str:
         f"已完成 {len(session.trials)}/20 轮。\n\n"
         "**结论只针对当前软件模型，不代表真实对象或硬件安全。**"
     )
+    if session.trials and session.trials[-1].rolled_back:
+        status += (
+            "\n\n**最新执行试验触发硬边界，曲线仅作为失败证据并标记为"
+            "“未采纳”；它不是当前安全控制器。**"
+        )
+    bound_gap = output_bound_gap(session)
+    if bound_gap:
+        status += f"\n\n**测量缺口：{bound_gap}**"
     latest_call = session.llm_calls[-1] if session.llm_calls else None
     if (
         latest_call is not None
@@ -139,25 +202,62 @@ def _status_markdown(session: SimulationSession) -> str:
     return status
 
 
+def output_bound_gap(session: SimulationSession) -> str | None:
+    config = session.run_config
+    if config is None or not config.output_bounds:
+        return "缺少软件仿真输出边界，请返回测量阶段补充每个输出通道的数值上下限。"
+    expected_channels = set(config.reference)
+    expected_channels.update(
+        name
+        for trial in session.trials
+        for trace in trial.traces
+        for name in trace.outputs
+    )
+    missing = sorted(expected_channels - set(config.output_bounds))
+    if missing:
+        return (
+            "以下输出通道缺少软件仿真边界："
+            + "、".join(missing)
+            + "。请返回测量阶段补充每个输出通道的数值上下限。"
+        )
+    return None
+
+
+def _format_poles(decision) -> str:
+    if not decision.poles:
+        return "未记录"
+    return "，".join(
+        f"{pole.real:.6g}{pole.imaginary:+.6g}j" for pole in decision.poles
+    )
+
+
 def _stability_rows(session: SimulationSession) -> list[list[Any]]:
     if not session.trials:
         return []
-    decision = session.trials[-1].stability
-    dominant_value = (
-        max((value.real for value in decision.poles), default=None)
+    trial = session.trials[-1]
+    decision = trial.stability
+    rows = [
+        ["判定", _STABILITY_LABELS[decision.status]],
+        ["极点", _format_poles(decision)]
         if decision.analysis_domain == "continuous"
-        else decision.spectral_radius
-    )
-    return [
-        ["判定", decision.status],
-        [
-            "最大极点实部" if decision.analysis_domain == "continuous" else "谱半径",
-            dominant_value,
-        ],
+        else ["谱半径", decision.spectral_radius],
         ["末段误差收缩", decision.tail_error_envelope_contraction],
-        ["饱和比例", decision.saturation_fraction],
-        ["硬边界失败", decision.hard_failure],
+        ["饱和率", f"{100 * decision.saturation_fraction:.2f}%"],
+        [
+            "硬边界违规",
+            (
+                "；".join(decision.violations)
+                if trial.hard_violation and decision.violations
+                else (trial.rollback_reason or "是")
+                if trial.hard_violation
+                else "无"
+            ),
+        ],
     ]
+    settling_time_s = getattr(decision, "settling_time_s", None)
+    if settling_time_s is not None:
+        rows.insert(3, ["稳定时间", f"{settling_time_s:.6g} s"])
+    return rows
 
 
 def render_linked_tuning(session: SimulationSession) -> dict[str, Any]:
@@ -204,6 +304,7 @@ def render_linked_tuning(session: SimulationSession) -> dict[str, Any]:
         "budget_exhausted",
         "cancelled",
     }
+    output_bounds_gap = output_bound_gap(session)
     return {
         "available": True,
         "status": _status_markdown(session),
@@ -219,11 +320,13 @@ def render_linked_tuning(session: SimulationSession) -> dict[str, Any]:
         "iterations": iteration_rows(session),
         "llm_audit": [record.model_dump(mode="json") for record in session.llm_calls],
         "controls": {
-            "run_trial": session.state == "trial_pending" and not terminal,
+            "run_trial": session.state == "trial_pending"
+            and not terminal
+            and output_bounds_gap is None,
             "request_gain": (
                 session.state in {"needs_adjustment", "rolled_back"} and not pending_llm
             ),
-            "approve_and_run": pending_llm,
+            "approve_and_run": pending_llm and output_bounds_gap is None,
             "reject_gain": pending_llm,
             "restore_initial": session.state
             in {"trial_pending", "needs_adjustment", "rolled_back"}
@@ -234,5 +337,7 @@ def render_linked_tuning(session: SimulationSession) -> dict[str, Any]:
 
 __all__ = [
     "empty_linked_tuning_view",
+    "output_bound_gap",
+    "output_plot_frame",
     "render_linked_tuning",
 ]
