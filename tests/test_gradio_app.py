@@ -1902,6 +1902,8 @@ def test_pre_measurement_render_redacts_all_stale_technical_artifacts(
     assert "underactuated_cartpole" not in view["status"]
     assert "accept" not in view["status"]
     assert "标准对象演示完成" not in view["status"]
+    assert "cartpole" not in view["status"]
+    assert "demo_fixture_only" not in view["status"]
     assert "最终误差" not in view["performance_visual"]
     for key in (
         "diagnosis",
@@ -1925,6 +1927,12 @@ def test_pre_measurement_render_redacts_all_stale_technical_artifacts(
         not in view["progress"]
     )
     assert view["raw"]["diagnosis"] is None
+    assert view["raw"]["route_id"] == "generic"
+    assert view["raw"]["status"] == "awaiting_measurements"
+    assert (
+        view["raw"]["evidence_boundary"]
+        == "software_simulation_diagnostic_session"
+    )
     assert view["raw"]["classification"] is None
     assert view["raw"]["semantic_selection"] is None
     assert view["raw"]["experiment_results"] == []
@@ -1995,3 +2003,67 @@ def test_every_gradio_event_declares_unique_outputs():
     ]
 
     assert duplicated == []
+
+
+def test_frozen_validation_keeps_failure_evidence_visible_and_stage_blocked(
+    completed_cartpole_report,
+):
+    report = completed_cartpole_report.model_copy(update={"status": "frozen"})
+
+    view = render_report(report)
+    final_stage = view["progress"].split('<div class="flow-step ')[-1]
+
+    assert len(view["performance"]) == 2
+    assert "最终误差" in view["performance_visual"]
+    assert view["raw"]["stale_controller_performance"] is not None
+    assert view["raw"]["adapted_controller_performance"] is not None
+    assert final_stage.startswith('blocked">')
+    assert "效果验证与调优" in final_stage
+
+
+@pytest.fixture
+def specification_candidate_report(guided_adapter):
+    _, state = _start_verified_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature",
+        "heater power",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        True,
+        "https://provider.example/v1",
+        "provider-model",
+        "test-key",
+    )
+    report, _ = submit_app_specifications(
+        state,
+        (
+            "input_change=1 normalized_input; steady_output_change=10 degC; "
+            "response_time_s=20 s; input_min=-2 normalized_input; "
+            "input_max=2 normalized_input; output_min=-30 degC; output_max=80 degC."
+        ),
+        simulation_bounds_confirmed=True,
+    )
+    assert report.status == "candidate_unvalidated"
+    assert report.diagnostic_session.status == "specification_model_ready"
+    return report
+
+
+def test_outer_terminal_rejection_overrides_model_ready_session_status(
+    specification_candidate_report,
+):
+    report = specification_candidate_report.model_copy(
+        update={
+            "status": "rejected",
+            "evidence_boundary": "user_object_model_validation_failed",
+        }
+    )
+
+    view = render_report(report)
+
+    assert "### 已拒绝" in view["status"]
+    assert "规格模型已就绪" not in view["status"]
+    assert view["raw"]["status"] == "rejected"
+    assert (
+        view["raw"]["evidence_boundary"]
+        == "user_object_model_validation_failed"
+    )

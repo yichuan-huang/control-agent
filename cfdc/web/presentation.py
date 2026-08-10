@@ -115,10 +115,50 @@ _PRE_MODEL_STATUSES = {
     "evidence_rejected",
 }
 
+_SESSION_OUTER_STATUS_PRECEDENCE = {
+    "specification_model_ready": {
+        "candidate_unvalidated",
+        "validation_pending",
+        "validated_in_simulation",
+        "controller_candidate_ready",
+        "feature_extraction_failed",
+        "evidence_rejected",
+        "rejected",
+    },
+    "ready_for_experiments": {
+        "candidate_unvalidated",
+        "validation_pending",
+        "validated_in_simulation",
+        "controller_candidate_ready",
+        "feature_extraction_failed",
+        "evidence_rejected",
+        "rejected",
+    },
+    "ready_for_controller": {"controller_candidate_ready", "rejected"},
+    "feature_extraction_failed": {"feature_extraction_failed", "rejected"},
+    "refused": {"rejected"},
+    "complete": {"accepted", "completed", "frozen"},
+}
+
 
 def _effective_status(report: CFDCRunReport) -> str:
     session = report.diagnostic_session
-    return session.status if session is not None else report.status
+    if session is None:
+        return report.status
+    allowed_outer_statuses = _SESSION_OUTER_STATUS_PRECEDENCE.get(session.status, set())
+    return report.status if report.status in allowed_outer_statuses else session.status
+
+
+def _display_route_id(report: CFDCRunReport) -> str:
+    session = report.diagnostic_session
+    return session.route_id if session is not None else report.route_id
+
+
+def _display_evidence_boundary(report: CFDCRunReport) -> str:
+    session = report.diagnostic_session
+    if session is not None and not _model_released(report):
+        return session.evidence_boundary
+    return report.evidence_boundary
 
 
 def _measurement_plan_released(report: CFDCRunReport) -> bool:
@@ -171,6 +211,20 @@ def _validation_released(report: CFDCRunReport) -> bool:
         _controller_released(report)
         and _effective_status(report)
         in {"validated_in_simulation", "demo_completed", "completed"}
+    )
+
+
+def _validation_evidence_released(report: CFDCRunReport) -> bool:
+    return bool(
+        _controller_released(report)
+        and _effective_status(report)
+        in {
+            "validated_in_simulation",
+            "demo_completed",
+            "completed",
+            "frozen",
+            "rejected",
+        }
     )
 
 
@@ -292,7 +346,11 @@ def _redacted_report_payload(report: CFDCRunReport) -> dict[str, Any]:
     model_released = _model_released(report)
     features_released = _features_released(report)
     controller_released = _controller_released(report)
-    validation_released = _validation_released(report)
+    validation_evidence_released = _validation_evidence_released(report)
+
+    payload["route_id"] = _display_route_id(report)
+    payload["status"] = _effective_status(report)
+    payload["evidence_boundary"] = _display_evidence_boundary(report)
 
     session = payload.get("diagnostic_session")
     if session is not None and not measurement_released:
@@ -355,7 +413,7 @@ def _redacted_report_payload(report: CFDCRunReport) -> dict[str, Any]:
             "go_no_go": None,
         }.items():
             payload[name] = empty
-    if not validation_released:
+    if not validation_evidence_released:
         payload["stale_controller_performance"] = None
         payload["adapted_controller_performance"] = None
     if not controller_released:
@@ -529,7 +587,7 @@ def tuning_rows(report: CFDCRunReport) -> list[list[Any]]:
 
 
 def performance_rows(report: CFDCRunReport) -> list[list[Any]]:
-    if not _validation_released(report):
+    if not _validation_evidence_released(report):
         return []
     rows = []
     for label, performance in (
@@ -727,7 +785,7 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
 
 
 def performance_html(report: CFDCRunReport) -> str:
-    if not _validation_released(report):
+    if not _validation_evidence_released(report):
         return '<div class="empty-result">当前流程尚未生成系统变化后的性能对照。</div>'
     comparisons = [
         ("原控制器", report.stale_controller_performance),
@@ -780,7 +838,7 @@ def status_markdown(report: CFDCRunReport) -> str:
     return (
         f"### {label}\n"
         f"`{report.run_id}` · `{profile}` · 特征质量门 `{quality}` · "
-        f"证据边界 `{report.evidence_boundary}`"
+        f"证据边界 `{_display_evidence_boundary(report)}`"
     )
 
 
