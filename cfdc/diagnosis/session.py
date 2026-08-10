@@ -13,7 +13,6 @@ from cfdc.diagnosis.measurements import (
     apply_description_guidance,
     build_diagnostic_checklist,
     build_measurement_plan,
-    merge_measurement_assessment,
     reduce_measurement_history_to_diagnosis,
     render_measurement_evidence,
     validate_grounded_measurement_assessment,
@@ -175,8 +174,16 @@ def continue_description_session(
         raise ValueError("maximum description turns already reached")
 
     evidence = f"Supplemental description: {text}"
+    text_parts = [state.initial_description.text]
+    for turn in state.turns:
+        prior_supplement = turn.answers.get("supplemental_description")
+        if isinstance(prior_supplement, str) and prior_supplement.strip():
+            text_parts.append(
+                f"Supplemental description: {prior_supplement.strip()}"
+            )
+    text_parts.append(evidence)
     accumulated = state.accumulated_description.model_copy(
-        update={"text": f"{state.accumulated_description.text}\n\n{evidence}"}
+        update={"text": "\n\n".join(text_parts)}
     )
     guided = diagnostic_adapter is not None and hasattr(
         diagnostic_adapter, "guide_description"
@@ -315,11 +322,6 @@ def submit_measurement_assessment(
         typed_assessment,
         raw_response,
         previous_assessment=state.measurement_assessment,
-    )
-    typed_assessment = merge_measurement_assessment(
-        state.measurement_plan,
-        typed_assessment,
-        state.measurement_assessment,
     )
     round_count = state.measurement_round_count + 1
     updates = {

@@ -312,6 +312,7 @@ def test_diagnostic_rounds_accumulate_exact_grounded_facts_from_need_more():
     second = MeasurementAssessment(
         status="need_more",
         facts=[
+            first.facts[0],
             MeasuredFact(
                 request_id="minimum_phase",
                 source_excerpt=second_text,
@@ -321,7 +322,8 @@ def test_diagnostic_rounds_accumulate_exact_grounded_facts_from_need_more():
         gaps=[
             item.diagnostic_field_id
             for item in state.checklist
-            if item.diagnostic_field_id != "minimum_phase"
+            if item.diagnostic_field_id
+            not in {"open_loop_stability", "minimum_phase"}
         ],
     )
 
@@ -344,6 +346,67 @@ def test_diagnostic_rounds_accumulate_exact_grounded_facts_from_need_more():
         accumulated.model_dump(mode="json")
     )
     assert restored.measurement_assessment == accumulated.measurement_assessment
+
+
+def test_later_diagnostic_gap_explicitly_clears_a_previously_grounded_fact():
+    state = start_diagnostic_session(_description())
+    stability_text = _GROUNDED_FACTS["open_loop_stability"]
+    first = MeasurementAssessment(
+        status="need_more",
+        facts=[
+            MeasuredFact(
+                request_id="open_loop_stability",
+                source_excerpt=stability_text,
+                text_value=stability_text,
+            )
+        ],
+        gaps=[item.diagnostic_field_id for item in state.checklist[1:]],
+    )
+    after_first = submit_measurement_assessment(
+        state,
+        first,
+        raw_response=stability_text,
+        expected_revision=state.revision,
+    )
+    phase_text = _GROUNDED_FACTS["minimum_phase"]
+    explicit_gap = MeasurementAssessment(
+        status="need_more",
+        facts=[
+            MeasuredFact(
+                request_id="minimum_phase",
+                source_excerpt=phase_text,
+                text_value=phase_text,
+            )
+        ],
+        gaps=[
+            item.diagnostic_field_id
+            for item in state.checklist
+            if item.diagnostic_field_id != "minimum_phase"
+        ],
+    )
+
+    cleared = submit_measurement_assessment(
+        after_first,
+        explicit_gap,
+        raw_response=(
+            "The newer record marks open-loop stability unknown. " + phase_text
+        ),
+        expected_revision=after_first.revision,
+    )
+    reduced = reduce_measurement_history_to_diagnosis(
+        cleared.measurement_plan,
+        cleared.measurement_history,
+    )
+
+    assert cleared.status == "measurement_needs_more"
+    assert cleared.measurement_assessment == explicit_gap
+    assert all(
+        fact.request_id != "open_loop_stability"
+        for fact in cleared.measurement_assessment.facts
+    )
+    assert "open_loop_stability" in cleared.measurement_assessment.gaps
+    assert reduced.open_loop_stability.status == "unknown"
+    assert reduced.complete is False
 
 
 def test_later_diagnostic_round_rejects_changed_fact_not_grounded_in_current_raw():
@@ -791,8 +854,10 @@ def test_v4_schema_requires_aligned_nonempty_raw_measurement_responses():
         DiagnosticSessionState.model_validate(payload)
 
 
-def _post_measurement_payload() -> dict:
-    state = start_diagnostic_session(_description())
+def _post_measurement_payload(
+    state: DiagnosticSessionState | None = None,
+) -> dict:
+    state = state or start_diagnostic_session(_description())
     assessment = _grounded_ready_assessment(state)
     verified = submit_measurement_assessment(
         state,
@@ -834,6 +899,51 @@ def _post_measurement_payload() -> dict:
         }
     )
     return payload
+
+
+def test_description_supplement_discards_rendered_measurement_evidence_text():
+    prior_supplement = "A prior manual names temperature as the recorded output."
+    described = continue_description_session(
+        start_diagnostic_session(_description()),
+        prior_supplement,
+        expected_revision=0,
+    )
+    post_measurement = DiagnosticSessionState.model_validate(
+        _post_measurement_payload(described)
+    )
+    assert "Validated diagnostic measurement evidence:" in (
+        post_measurement.accumulated_description.text
+    )
+    supplement = "An existing manual lists the heater and temperature signal names."
+
+    restarted = continue_description_session(
+        post_measurement,
+        supplement,
+        expected_revision=post_measurement.revision,
+    )
+
+    assert restarted.accumulated_description.text == (
+        f"{post_measurement.initial_description.text}\n\n"
+        f"Supplemental description: {prior_supplement}\n\n"
+        f"Supplemental description: {supplement}"
+    )
+    assert "Validated diagnostic measurement evidence:" not in (
+        restarted.accumulated_description.text
+    )
+    assert _GROUNDED_FACTS["open_loop_stability"] not in (
+        restarted.accumulated_description.text
+    )
+    diagnosis_payload = restarted.current_diagnosis.model_dump_json()
+    assert all(
+        source_excerpt not in diagnosis_payload
+        for source_excerpt in _GROUNDED_FACTS.values()
+    )
+    assert restarted.status == "awaiting_measurements"
+    assert restarted.evidence_level == "description_only"
+    assert restarted.measurement_history == []
+    assert restarted.measurement_response_history == []
+    assert restarted.classification is None
+    assert restarted.semantic_selection is None
 
 
 def test_migration_rejects_forged_postmeasurement_state_without_grounded_history():

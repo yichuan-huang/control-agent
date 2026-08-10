@@ -234,47 +234,6 @@ def validate_grounded_measurement_assessment(
             )
 
 
-def merge_measurement_assessment(
-    plan: MeasurementPlan,
-    candidate: MeasurementAssessment,
-    previous: MeasurementAssessment | None,
-) -> MeasurementAssessment:
-    """Carry exact prior facts through fields omitted in a later response."""
-
-    validate_measurement_assessment(plan, candidate)
-    if previous is None:
-        return candidate
-    validate_measurement_assessment(plan, previous)
-    candidate_by_request = {fact.request_id: fact for fact in candidate.facts}
-    previous_by_request = {fact.request_id: fact for fact in previous.facts}
-    conflict_ids = set(candidate.conflict_request_ids)
-    facts = []
-    gaps = []
-    for request in plan.requests:
-        if request.request_id in candidate_by_request:
-            facts.append(candidate_by_request[request.request_id])
-        elif request.request_id in conflict_ids:
-            continue
-        elif request.request_id in previous_by_request:
-            facts.append(previous_by_request[request.request_id])
-        else:
-            gaps.append(request.diagnostic_field_id)
-    return MeasurementAssessment(
-        status=(
-            "conflict"
-            if candidate.conflicts
-            else "need_more"
-            if gaps
-            else "ready"
-        ),
-        facts=facts,
-        gaps=gaps,
-        conflicts=candidate.conflicts,
-        conflict_request_ids=candidate.conflict_request_ids,
-        rationale=candidate.rationale,
-    )
-
-
 def validate_phrased_measurement_plan(
     base_plan: MeasurementPlan,
     candidate: MeasurementPlan | dict,
