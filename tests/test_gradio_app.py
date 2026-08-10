@@ -20,6 +20,7 @@ from cfdc.runtime import run_cfdc_route
 from cfdc.web import linked_tuning_service as linked_service
 from cfdc.web import linked_tuning_ui as linked_ui
 from cfdc.web import service as web_service
+from cfdc.web import ui as web_ui
 from cfdc.web.linked_tuning_service import (
     decode_lab_state,
     link_stage5_report,
@@ -56,6 +57,44 @@ _GUIDED_FACTS = {
     "uncertainty_magnitude": "change the response rate and final level by a modest amount",
 }
 
+_COMPLETE_GUIDED_RESPONSE = "\n".join(
+    f"{request_id}: {source_excerpt}"
+    for request_id, source_excerpt in _GUIDED_FACTS.items()
+)
+
+
+def _guided_facts_for_description(description_text: str) -> dict[str, str]:
+    facts_by_id = dict(_GUIDED_FACTS)
+    lowered = description_text.lower()
+    if "motor" in lowered and "drifting" in lowered:
+        facts_by_id["open_loop_stability"] = (
+            "after the input is removed, speed remains constant and position keeps drifting"
+        )
+    if "低摩擦小车" in description_text:
+        facts_by_id["open_loop_stability"] = (
+            "after the input is removed, speed retains an offset or keeps drifting"
+        )
+    if "往复运动" in description_text:
+        facts_by_id["relative_degree"] = (
+            "one or two dominant storage or integration processes with repeated peaks"
+        )
+    if "开始时会先沿不利或相反方向运动" in description_text:
+        facts_by_id["minimum_phase"] = (
+            "moves in an unfavorable or opposite direction before turning"
+        )
+    if "改变任一执行器都会明显改变多个输出" in description_text:
+        facts_by_id["coupling_severity"] = "改变任一执行器都会明显改变多个输出"
+    return facts_by_id
+
+
+def _guided_response_for_description(description_text: str) -> str:
+    return "\n".join(
+        f"{request_id}: {source_excerpt}"
+        for request_id, source_excerpt in _guided_facts_for_description(
+            description_text
+        ).items()
+    )
+
 
 class _CompleteGuidedAdapter:
     def diagnose(self, description):
@@ -77,29 +116,7 @@ class _CompleteGuidedAdapter:
         self, description, measurement_plan, measurement_response, previous_assessment
     ):
         del measurement_response, previous_assessment
-        facts_by_id = dict(_GUIDED_FACTS)
-        if "motor" in description.text.lower() and "drifting" in description.text.lower():
-            facts_by_id.update(
-                {
-                    "open_loop_stability": (
-                        "after the input is removed, speed remains constant and position keeps drifting"
-                    ),
-                }
-            )
-        if "低摩擦小车" in description.text:
-            facts_by_id["open_loop_stability"] = (
-                "after the input is removed, speed retains an offset or keeps drifting"
-            )
-        if "往复运动" in description.text:
-            facts_by_id["relative_degree"] = (
-                "one or two dominant storage or integration processes with repeated peaks"
-            )
-        if "开始时会先沿不利或相反方向运动" in description.text:
-            facts_by_id["minimum_phase"] = (
-                "moves in an unfavorable or opposite direction before turning"
-            )
-        if "改变任一执行器都会明显改变多个输出" in description.text:
-            facts_by_id["coupling_severity"] = "改变任一执行器都会明显改变多个输出"
+        facts_by_id = _guided_facts_for_description(description.text)
         return MeasurementAssessment(
             status="ready",
             facts=[
@@ -137,7 +154,7 @@ def _start_verified_app_run(*args, **kwargs):
     assert report.semantic_selection is None
     report, state = submit_app_measurement_response(
         state,
-        "all existing records supplied",
+        _guided_response_for_description(str(args[0])),
     )
     return report, state
 
@@ -1410,7 +1427,7 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
 
     report, _ = submit_app_measurement_response(
         state,
-        "all existing records supplied",
+        _COMPLETE_GUIDED_RESPONSE,
         base_url="https://provider.example/v1",
         model="provider-model",
         api_key="test-key",
@@ -1463,7 +1480,7 @@ def test_type_i_to_v_examples_wait_for_measurements_before_releasing_route(
 
     released, _ = submit_app_measurement_response(
         state,
-        "all existing records supplied",
+        _guided_response_for_description(description),
         base_url="https://provider.example/v1",
         model="provider-model",
         api_key="test-key",
@@ -1628,7 +1645,7 @@ def test_description_and_measurement_rounds_release_profile_only_after_verificat
 
     completed, _ = submit_app_measurement_response(
         state,
-        "all existing records supplied",
+        _COMPLETE_GUIDED_RESPONSE,
         base_url="https://provider.example/v1",
         model="provider-model",
         api_key="test-key",
@@ -1820,6 +1837,87 @@ def test_guided_measurement_plan_and_timeline_are_auditable():
     assert "heater and temperature are logged" in view["timeline"]
     assert "测量回填 · 第 1 轮" in view["timeline"]
     assert "record for open_loop_stability" in view["timeline"]
+
+
+def test_profile_stage_replaces_diagnostic_plan_with_profile_questions(
+    guided_adapter,
+):
+    report, _state = _start_verified_app_run(
+        "A measured first order heater settles after a small power change.",
+        "temperature",
+        "heater power",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        True,
+        "https://provider.example/v1",
+        "provider-model",
+        "test-key",
+    )
+
+    view = render_report(report)
+
+    assert "补充当前设备的已知规格" in view["measurement_guidance"]
+    assert "为什么需要" in view["measurement_guidance"]
+    assert "可以从哪里找" in view["measurement_guidance"]
+    assert "单位提示" in view["measurement_guidance"]
+    assert "existing_records_only" not in view["measurement_guidance"]
+    assert "open_loop_stability" not in view["measurement_guidance"]
+
+
+def test_started_measurement_session_exposes_description_supplement_and_refreshes_plan(
+    monkeypatch,
+):
+    class CountingAdapter(_CompleteGuidedAdapter):
+        def __init__(self):
+            self.phrase_calls = 0
+
+        def phrase_measurement_plan(self, description, checklist, plan):
+            self.phrase_calls += 1
+            return super().phrase_measurement_plan(description, checklist, plan)
+
+    adapter = CountingAdapter()
+    monkeypatch.setattr(web_service, "build_adapter", lambda *args: adapter)
+    app = build_app()
+    component_props = [component["props"] for component in app.config["components"]]
+    assert any(props.get("label") == "补充描述" for props in component_props)
+    assert any(props.get("value") == "提交描述补充" for props in component_props)
+
+    report, state = _start_app_run(
+        "A heater and temperature record are available.",
+        "",
+        "",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        True,
+        "https://provider.example/v1",
+        "provider-model",
+        "test-key",
+    )
+    outputs = web_ui._outputs(report, state)
+    assert report.status == "awaiting_measurements"
+    assert outputs[16]["visible"] is True
+    assert outputs[21]["visible"] is True
+    assert outputs[22]["visible"] is True
+    assert outputs[23]["visible"] is True
+    assert adapter.phrase_calls == 1
+
+    continued, next_state = continue_app_run(
+        state,
+        [None, None, None, None],
+        "The existing manual identifies heater power and recorded temperature.",
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="test-key",
+    )
+
+    assert continued.status == "awaiting_measurements"
+    assert next_state["session"] is not None
+    assert next_state["session"]["description_turn_count"] == 1
+    assert "existing manual identifies heater power" in next_state["session"][
+        "accumulated_description"
+    ]["text"]
+    assert next_state["session"]["measurement_plan"] is not None
+    assert adapter.phrase_calls == 2
 
 
 def test_guided_run_callback_forces_llm_and_blank_internal_domain_fields(monkeypatch):

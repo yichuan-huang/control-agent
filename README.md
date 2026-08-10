@@ -15,7 +15,7 @@ This repository is an independent implementation of the Core-Feature-Driven Cont
 → 6 Effect Validation and Tuning
 ```
 
-The generic Web and CLI flow requires an OpenAI-compatible LLM provider. Start with one natural-language problem description; an optional description supplement may add facts from an existing record or manual. The AI then presents the fixed eight-item diagnostic checklist and measurement plan. Description supplements and measurement responses are separately limited to eight rounds. Unknown facts remain gaps and are never filled with invented defaults.
+The generic Web and CLI flow requires an OpenAI-compatible LLM provider. Start with one natural-language problem description; an optional description supplement may add facts from an existing record or manual. The AI then presents the fixed eight-item diagnostic checklist and measurement plan. Description supplements, diagnostic measurement responses, and selected-Profile responses each have their own eight-round limit. Unknown facts remain gaps and are never filled with invented defaults.
 
 Measurement requests are `existing_records_only`: they tell you what existing record or manual passage to find and how to report it. They never prescribe physical-hardware amplitudes, durations, actions, or commands. The same measurement-response path later collects the numeric facts required by the selected Profile; there is no separate shortcut around the evidence gate.
 

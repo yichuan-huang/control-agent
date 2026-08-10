@@ -850,6 +850,22 @@ def clarification_items(report: CFDCRunReport) -> list[tuple[str, str]]:
 
 
 def render_report(report: CFDCRunReport) -> dict[str, Any]:
+    session = report.diagnostic_session
+    profile_guidance_active = bool(
+        report.specification_assessment is not None
+        and session is not None
+        and session.status
+        in {
+            "awaiting_profile_measurements",
+            "specification_conflict",
+            "specification_model_ready",
+        }
+    )
+    shared_measurement_guidance = (
+        specification_guidance_markdown(report)
+        if profile_guidance_active
+        else measurement_guidance_markdown(report)
+    )
     return {
         "status": status_markdown(report),
         "progress": stage_progress_html(report),
@@ -864,7 +880,7 @@ def render_report(report: CFDCRunReport) -> dict[str, Any]:
         "performance": performance_rows(report),
         "raw": _compact_report(report),
         "checklist": checklist_rows(report),
-        "measurement_guidance": measurement_guidance_markdown(report),
+        "measurement_guidance": shared_measurement_guidance,
         "timeline": guided_timeline_markdown(report),
         "technical_visibility": technical_visibility(report),
         "clarifications": clarification_items(report),

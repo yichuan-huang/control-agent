@@ -15,10 +15,10 @@ from cfdc.diagnosis import (
     build_measurement_plan,
     continue_diagnostic_session,
     reduce_measurement_history_to_diagnosis,
-    render_measurement_evidence,
     start_diagnostic_session,
     submit_evidence_to_session,
     submit_measurement_assessment,
+    submit_profile_measurement_assessment,
     submit_specifications_to_session,
     validate_measurement_assessment,
     validate_phrased_measurement_plan,
@@ -829,29 +829,47 @@ def _diagnosis_signature(diagnosis: StructuralDiagnosis) -> tuple[str, ...]:
     )
 
 
-def _persist_profile_measurement_assessment(
+def _carry_forward_profile_diagnostic_assessment(
     session: DiagnosticSessionState,
-    assessment: MeasurementAssessment,
-) -> DiagnosticSessionState:
-    """Persist one validated public response without consuming a second revision."""
+    candidate: MeasurementAssessment,
+) -> MeasurementAssessment:
+    """Treat Profile-response omissions as unchanged diagnostic facts."""
 
-    if session.measurement_round_count >= session.maximum_turns:
-        raise ValueError("maximum measurement rounds already reached")
-    history = [*session.measurement_history, assessment]
-    evidence_text = render_measurement_evidence([assessment])
-    accumulated = session.accumulated_description.model_copy(
-        update={"text": f"{session.accumulated_description.text}\n\n{evidence_text}"}
+    if session.measurement_plan is None:
+        raise ValueError("diagnostic session is missing its measurement plan")
+    previous = session.measurement_assessment
+    if previous is None or previous.status != "ready":
+        raise ValueError("profile collection requires a ready diagnostic assessment")
+    validate_measurement_assessment(session.measurement_plan, candidate)
+    previous_by_request = {fact.request_id: fact for fact in previous.facts}
+    candidate_by_request = {fact.request_id: fact for fact in candidate.facts}
+    conflict_ids = set(candidate.conflict_request_ids)
+    facts = []
+    gaps = []
+    for request in session.measurement_plan.requests:
+        request_id = request.request_id
+        if request_id in candidate_by_request:
+            facts.append(candidate_by_request[request_id])
+        elif request_id in conflict_ids:
+            continue
+        elif request_id in previous_by_request:
+            facts.append(previous_by_request[request_id])
+        else:
+            gaps.append(request.diagnostic_field_id)
+    return MeasurementAssessment(
+        status=(
+            "conflict"
+            if candidate.conflicts
+            else "need_more"
+            if gaps
+            else "ready"
+        ),
+        facts=facts,
+        gaps=gaps,
+        conflicts=candidate.conflicts,
+        conflict_request_ids=candidate.conflict_request_ids,
+        rationale=candidate.rationale,
     )
-    payload = session.model_dump(mode="python")
-    payload.update(
-        {
-            "accumulated_description": accumulated,
-            "measurement_assessment": assessment,
-            "measurement_history": history,
-            "measurement_round_count": len(history),
-        }
-    )
-    return DiagnosticSessionState.model_validate(payload)
 
 
 def run_cfdc_route(
@@ -944,7 +962,10 @@ def run_cfdc_route(
                     session.measurement_assessment,
                 )
                 session = submit_measurement_assessment(
-                    session, assessment, expected_revision=session.revision
+                    session,
+                    assessment,
+                    raw_response=text,
+                    expected_revision=session.revision,
                 )
                 if session.status == "measurement_verified":
                     diagnosis = reduce_measurement_history_to_diagnosis(
@@ -1053,9 +1074,9 @@ def run_cfdc_route(
                     )
                 if session.measurement_plan is None:
                     raise ValueError("diagnostic session is missing its measurement plan")
-                if session.measurement_round_count >= session.maximum_turns:
-                    raise ValueError("maximum measurement rounds already reached")
-                newest_assessment = MeasurementAssessment.model_validate(
+                if session.profile_measurement_round_count >= session.maximum_turns:
+                    raise ValueError("maximum Profile measurement rounds already reached")
+                extracted_assessment = MeasurementAssessment.model_validate(
                     diagnostic_adapter.extract_measurements(
                         session.accumulated_description,
                         session.measurement_plan,
@@ -1063,17 +1084,32 @@ def run_cfdc_route(
                         session.measurement_assessment,
                     )
                 )
-                validate_measurement_assessment(
-                    session.measurement_plan, newest_assessment
+                newest_assessment = _carry_forward_profile_diagnostic_assessment(
+                    session, extracted_assessment
                 )
-                session = _persist_profile_measurement_assessment(
-                    session, newest_assessment
+                old_signature = _diagnosis_signature(session.current_diagnosis)
+                old_primary_class = session.classification.primary_class
+                session = submit_profile_measurement_assessment(
+                    session,
+                    newest_assessment,
+                    raw_response=text,
                 )
+                if session.status not in {
+                    "awaiting_profile_measurements",
+                    "specification_conflict",
+                }:
+                    return run_cfdc_route(
+                        route_id,
+                        diagnostic_session_state=session,
+                        diagnostic_adapter=diagnostic_adapter,
+                        include_trajectory=include_trajectory,
+                        run_id=run_id,
+                        use_mechanism_cards=use_mechanism_cards,
+                    )
                 new_diagnosis = reduce_measurement_history_to_diagnosis(
                     session.measurement_plan,
                     session.measurement_history,
                 )
-                old_signature = _diagnosis_signature(session.current_diagnosis)
                 new_signature = _diagnosis_signature(new_diagnosis)
                 new_primary_class = None
                 if new_diagnosis.complete:
@@ -1082,7 +1118,7 @@ def run_cfdc_route(
                     ).primary_class
                 if (
                     new_signature != old_signature
-                    or new_primary_class != session.classification.primary_class
+                    or new_primary_class != old_primary_class
                 ):
                     preliminary_checklist = build_diagnostic_checklist(
                         session.accumulated_description, new_diagnosis
@@ -1156,6 +1192,25 @@ def run_cfdc_route(
                         specification_adapter=diagnostic_adapter,
                         simulation_bounds_confirmed=simulation_bounds_confirmed,
                     )
+                    if (
+                        session.status
+                        in {
+                            "awaiting_profile_measurements",
+                            "specification_conflict",
+                        }
+                        and session.profile_measurement_round_count
+                        >= session.maximum_turns
+                    ):
+                        payload = session.model_dump(mode="python")
+                        payload.update(
+                            {
+                                "status": "refused",
+                                "refusal_reason": (
+                                    "maximum_profile_measurement_rounds_reached"
+                                ),
+                            }
+                        )
+                        session = DiagnosticSessionState.model_validate(payload)
             else:
                 raise ValueError(
                     f"session status {session.status!r} does not accept measurement_response"

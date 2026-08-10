@@ -116,7 +116,16 @@ def _question_updates(items: list[tuple[str, str]]):
 def _outputs(report, state):
     view = render_report(report)
     session = report.diagnostic_session
-    show_questions = bool(session and session.status == "collecting_description")
+    show_questions = bool(
+        session
+        and session.status
+        in {
+            "collecting_description",
+            "awaiting_measurements",
+            "measurement_needs_more",
+            "measurement_conflict",
+        }
+    )
     show_measurement = bool(
         session
         and session.status

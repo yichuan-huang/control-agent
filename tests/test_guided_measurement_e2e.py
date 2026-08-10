@@ -50,6 +50,16 @@ _FIELD_IDS = [
     "uncertainty_magnitude",
 ]
 
+_DIAGNOSTIC_RESPONSE = "\n".join(
+    f"{request_id}: {source_excerpt}"
+    for request_id, source_excerpt in _DIAGNOSTIC_FACTS.items()
+)
+_CONFLICT_RESPONSE = "One saved record settles while another grows."
+_PARTIAL_RESPONSE = (
+    f"{_DIAGNOSTIC_FACTS['open_loop_stability']}. "
+    "The remaining fields are unknown."
+)
+
 _GUIDANCE_PAYLOADS = [
     {
         "diagnostic_field_id": "open_loop_stability",
@@ -397,7 +407,7 @@ class StructuredGuidedLLM(DiagnosticAdapter):
                 "conflict_request_ids": [],
                 "rationale": "No field-specific record excerpt was supplied.",
             }
-        if measurement_response == "Two saved records conflict about settling.":
+        if measurement_response == _CONFLICT_RESPONSE:
             assert previous_assessment.status == "need_more"
             self.calls.append("extract:conflict")
             return {
@@ -410,7 +420,7 @@ class StructuredGuidedLLM(DiagnosticAdapter):
                     "The stability evidence conflicts and other facts are unknown."
                 ),
             }
-        if measurement_response == "The remaining fields are unknown.":
+        if measurement_response == _PARTIAL_RESPONSE:
             assert previous_assessment.status == "conflict"
             self.calls.append("extract:unknown")
             return {
@@ -434,7 +444,7 @@ class StructuredGuidedLLM(DiagnosticAdapter):
                 "rationale": "Only stability is known; seven fields remain unknown.",
             }
         if measurement_response not in {
-            "All eight record excerpts are verified.",
+            _DIAGNOSTIC_RESPONSE,
             _PROFILE_RESPONSE,
         }:
             raise AssertionError(
@@ -443,6 +453,16 @@ class StructuredGuidedLLM(DiagnosticAdapter):
         if measurement_response == _PROFILE_RESPONSE:
             assert previous_assessment.status == "ready"
             self.calls.append("extract:profile")
+            return {
+                "status": "need_more",
+                "facts": [],
+                "gaps": list(_FIELD_IDS),
+                "conflicts": [],
+                "conflict_request_ids": [],
+                "rationale": (
+                    "The selected-Profile response supplies no new diagnostic fact."
+                ),
+            }
         else:
             assert previous_assessment.status == "need_more"
             self.calls.append("extract:ready")
@@ -624,13 +644,13 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
             list(_FIELD_IDS),
         ),
         (
-            "Two saved records conflict about settling.",
+            _CONFLICT_RESPONSE,
             "measurement_conflict",
             3,
             list(_FIELD_IDS[1:]),
         ),
         (
-            "The remaining fields are unknown.",
+            _PARTIAL_RESPONSE,
             "measurement_needs_more",
             4,
             list(_FIELD_IDS[1:]),
@@ -658,7 +678,7 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
         "generic",
         diagnostic_session_state=prior.diagnostic_session,
         diagnostic_adapter=adapter,
-        measurement_response="All eight record excerpts are verified.",
+        measurement_response=_DIAGNOSTIC_RESPONSE,
         run_id="guided-e2e",
     )
 
@@ -684,6 +704,13 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
         assessment.conflicts
         for assessment in verified.diagnostic_session.measurement_history
     ] == [[], ["One saved record settles while another grows."], [], []]
+    assert verified.diagnostic_session.measurement_response_history[-1] == (
+        _DIAGNOSTIC_RESPONSE
+    )
+    assert all(
+        fact.source_excerpt in _DIAGNOSTIC_RESPONSE
+        for fact in verified.diagnostic_session.measurement_assessment.facts
+    )
     assert adapter.calls == [
         "guide",
         "phrase",
@@ -708,7 +735,8 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
     assert completed.status == "candidate_unvalidated"
     assert completed.evidence_boundary == "declared_specification_model_only"
     assert completed.diagnostic_session.revision == 7
-    assert completed.diagnostic_session.measurement_round_count == 5
+    assert completed.diagnostic_session.measurement_round_count == 4
+    assert completed.diagnostic_session.profile_measurement_round_count == 1
     assert [
         assessment.status
         for assessment in completed.diagnostic_session.measurement_history
@@ -747,6 +775,13 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
     assert completed.diagnostic_session.specification_answer_history == [
         _PROFILE_RESPONSE
     ]
+    assert completed.diagnostic_session.measurement_response_history[-1] == (
+        _PROFILE_RESPONSE
+    )
+    assert all(
+        diagnostic_excerpt not in _PROFILE_RESPONSE
+        for diagnostic_excerpt in _DIAGNOSTIC_FACTS.values()
+    )
     assert (
         completed.diagnostic_session.accumulated_description.simulation_boundary_confirmation.scope
         == "software_simulation_only"
