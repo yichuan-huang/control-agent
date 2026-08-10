@@ -628,6 +628,65 @@ def test_profile_only_response_keeps_ready_diagnosis_and_compiles_specifications
     assert completed.controller is not None
 
 
+def test_truncated_profile_llm_json_keeps_ui_flow_and_uses_grounded_local_facts(
+    monkeypatch,
+):
+    description = _description()
+    bootstrap_adapter = GuidedFakeAdapter()
+    initial = run_cfdc_route(
+        "generic", description=description, diagnostic_adapter=bootstrap_adapter
+    )
+    routed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=bootstrap_adapter,
+        measurement_response=_complete_diagnostic_response(),
+    )
+
+    class TruncatedCompletions:
+        def create(self, **kwargs):
+            del kwargs
+            content = '{"status":"need_more","facts":[],"rationale":"截断'
+            message = type("Message", (), {"content": content})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class TruncatedOpenAI:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.chat = type(
+                "Chat", (), {"completions": TruncatedCompletions()}
+            )()
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", TruncatedOpenAI)
+    live_adapter = OpenAICompatibleDiagnosticAdapter(
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="provider-secret",
+    )
+    measurement_response = (
+        "在 65 mph 附近令油门角变化 1 deg，并采用每度油门对应 10 mph "
+        "稳态车速变化；把 1% 上坡作为 -5 mph 扰动，为动态仿真补入 5 s "
+        "响应时间，并比较开环与比例增益 10 的反馈。\n\n"
+        "为便于未启用 LLM 时一次解析，可在同一次提交末尾附上："
+        "`input_change=1 deg; steady_output_change=10 mph; "
+        "response_time_s=5 s; input_min=-3 deg; input_max=3 deg; "
+        "output_min=45 mph; output_max=80 mph;`"
+    )
+
+    completed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=routed.diagnostic_session,
+        diagnostic_adapter=live_adapter,
+        measurement_response=measurement_response,
+        simulation_bounds_confirmed=True,
+    )
+
+    assert completed.status == "candidate_unvalidated"
+    assert completed.compiled_specification_model is not None
+    assert completed.controller is not None
+
+
 def test_explicit_profile_unknown_gap_retracts_prior_fact_and_invalidates_release():
     unknown_response = (
         "The current record does not establish the initial response direction; "

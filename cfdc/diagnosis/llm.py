@@ -582,9 +582,23 @@ class OpenAICompatibleDiagnosticAdapter:
         content = response.choices[0].message.content
         if not isinstance(content, str) or not content.strip():
             raise ValueError("measurement extraction returned empty content")
-        return MeasurementAssessment.model_validate(
-            parse_json_content(content)
-        ).model_dump(mode="json")
+        try:
+            assessment = MeasurementAssessment.model_validate(
+                parse_json_content(content)
+            )
+        except json.JSONDecodeError:
+            assessment = previous_assessment or MeasurementAssessment(
+                status="need_more",
+                gaps=[
+                    request.diagnostic_field_id
+                    for request in measurement_plan.requests
+                ],
+                rationale=(
+                    "The AI response was incomplete JSON. Please submit the same "
+                    "measurement record again."
+                ),
+            )
+        return assessment.model_dump(mode="json")
 
     def select_profile(self, description, diagnosis, classification, catalog):
         compatible = [
@@ -684,7 +698,26 @@ class OpenAICompatibleDiagnosticAdapter:
         content = response.choices[0].message.content
         if not isinstance(content, str) or not content.strip():
             raise ValueError("specification assessment returned empty content")
-        payload = parse_json_content(content)
+        try:
+            payload = parse_json_content(content)
+        except json.JSONDecodeError:
+            if previous_assessment is not None:
+                return previous_assessment.model_dump(mode="json")
+            if not allowed_specification_templates:
+                raise ValueError(
+                    "specification assessment requires an allowed template"
+                )
+            template = allowed_specification_templates[0]
+            return SpecificationAssessment(
+                status="need_more",
+                template_id=template.template_id,
+                missing_fact_ids=[field.fact_id for field in template.fields],
+                rationale=(
+                    "The AI response was incomplete JSON. Please submit the same "
+                    "measurement record again."
+                ),
+                no_progress=True,
+            ).model_dump(mode="json")
         if not isinstance(payload, dict):
             raise ValueError("specification assessment must return one JSON object")
         return payload
