@@ -32,7 +32,9 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** binary heater command changes by 1 binary-command level.
 - **Final output change:** room temperature changes by 50 degF at steady state.
@@ -42,6 +44,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 64.5 degF for room temperature.
 - **Output simulation upper bound:** 65.5 degF for room temperature.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 21600 s.
+
 Additional information:
 
 Use an outdoor temperature of 50 degF, a 65 degF setpoint, heat capacity 20000 Btu/degF, heat-loss coefficient 500 Btu/(h*degF), furnace rate 25000 Btu/h, and a 0.5 degF hysteresis half-width. Start at 64.5 degF with the furnace on and simulate for 6 h at 60 s sampling.
@@ -50,9 +56,7 @@ The declared software model is a transfer function from binary heater command in
 
 The accompanying existing software record uses a 60 s sample interval for 21600 s, starts the primary output at 64.5, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 2. Automobile cruise control, open versus closed loop
 
@@ -78,7 +82,9 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** throttle angle changes by 1 deg.
 - **Final output change:** vehicle speed changes by 10 mph at steady state.
@@ -88,6 +94,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 45 mph for vehicle speed.
 - **Output simulation upper bound:** 80 mph for vehicle speed.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 60 s.
+
 Additional information:
 
 Around 65 mph, change throttle angle by 1 deg and use a 10 mph steady speed change per degree. Treat a 1% uphill grade as a -5 mph disturbance, use a 5 s response time for the dynamic simulation, and compare open loop with proportional feedback gain 10.
@@ -96,9 +106,7 @@ The declared software model is a transfer function from throttle angle in deg to
 
 The accompanying existing software record uses a 0.1 s sample interval for 60 s, starts the primary output at 65, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 3. Manual automobile steering
 
@@ -124,7 +132,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** steering wheel angle changes by 5 deg.
 - **Final output change:** heading angle changes by 8 deg at steady state.
@@ -134,6 +144,10 @@ The seven required answers are:
 - **Output simulation lower bound:** -180 deg for heading angle.
 - **Output simulation upper bound:** 180 deg for heading angle.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 12 s.
+
 Additional information:
 
 In a safe simulation, change steering wheel angle by 5 deg; expect a final heading angle, lane error change of 8 deg with a 63% response time of 1.5 s. Use an input range of -30 to 30 deg and an output range of -180 to 180 deg; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -142,9 +156,7 @@ The declared software model is a transfer function from steering wheel angle in 
 
 The accompanying existing software record uses a 0.03 s sample interval for 12 s, starts the primary output at 0, contains input amplitudes -5, -2.5, 2.5, 5, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 4. Drebbel incubator temperature regulator
 
@@ -170,7 +182,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** air or fuel valve position changes by 10 %.
 - **Final output change:** incubator temperature changes by 2 degC at steady state.
@@ -180,6 +194,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 30 degC for incubator temperature.
 - **Output simulation upper bound:** 42 degC for incubator temperature.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 960 s.
+
 Additional information:
 
 In a safe simulation, change air or fuel valve position by 10 %; expect a final incubator temperature change of 2 degC with a 63% response time of 120 s. Use an input range of 0 to 100 % and an output range of 30 to 42 degC; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -188,9 +206,7 @@ The declared software model is a transfer function from air or fuel valve positi
 
 The accompanying existing software record uses a 2.4 s sample interval for 960 s, starts the primary output at 36, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 5. Float-valve water-level regulator
 
@@ -216,7 +232,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** inlet valve opening changes by 10 %.
 - **Final output change:** tank liquid level changes by 0.08 m at steady state.
@@ -226,6 +244,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 0.2 m for tank liquid level.
 - **Output simulation upper bound:** 1.2 m for tank liquid level.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 160 s.
+
 Additional information:
 
 In a safe simulation, change inlet valve opening by 10 %; expect a final tank liquid level change of 0.08 m with a 63% response time of 20 s. Use an input range of 0 to 100 % and an output range of 0.2 to 1.2 m; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -234,9 +256,7 @@ The declared software model is a transfer function from inlet valve opening in %
 
 The accompanying existing software record uses a 0.4 s sample interval for 160 s, starts the primary output at 0.7, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 6. Watt fly-ball steam-engine governor
 
@@ -262,7 +282,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** steam valve opening changes by 10 %.
 - **Final output change:** engine shaft speed changes by 20 rpm at steady state.
@@ -272,6 +294,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 400 rpm for engine shaft speed.
 - **Output simulation upper bound:** 900 rpm for engine shaft speed.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 64 s.
+
 Additional information:
 
 In a safe simulation, change steam valve opening by 10 %; expect a final engine shaft speed, governor displacement change of 20 rpm with a 63% response time of 8 s. Use an input range of 0 to 100 % and an output range of 400 to 900 rpm; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -280,9 +306,7 @@ The declared software model is a transfer function from steam valve opening in %
 
 The accompanying existing software record uses a 0.16 s sample interval for 64 s, starts the primary output at 650, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 7. Paper-machine stock-consistency control
 
@@ -308,7 +332,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** dilution water valve changes by 5 %.
 - **Final output change:** stock consistency changes by -0.4 % at steady state.
@@ -318,6 +344,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 2 % for stock consistency.
 - **Output simulation upper bound:** 6 % for stock consistency.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 240 s.
+
 Additional information:
 
 In a safe simulation, change dilution water valve by 5 %; expect a final stock consistency change of -0.4 % with a 63% response time of 30 s. Use an input range of 0 to 100 % and an output range of 2 to 6 %; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -326,9 +356,7 @@ The declared software model is a transfer function from dilution water valve in 
 
 The accompanying existing software record uses a 0.6 s sample interval for 240 s, starts the primary output at 4, contains input amplitudes -5, -2.5, 2.5, 5, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 8. Paper-machine moisture control
 
@@ -354,15 +382,21 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** dryer steam command changes by 10 %.
 - **Final output change:** paper moisture changes by -1.2 % at steady state.
-- **63% response time:** 60 s. The recorded dead time is 8 s.
+- **63% response time:** 60 s.
 - **Input simulation lower bound:** 0 % for dryer steam command.
 - **Input simulation upper bound:** 100 % for dryer steam command.
 - **Output simulation lower bound:** 2 % for paper moisture.
 - **Output simulation upper bound:** 12 % for paper moisture.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 480 s.
 
 Additional information:
 
@@ -372,9 +406,7 @@ The declared software model is a transfer function from dryer steam command in %
 
 The accompanying existing software record uses a 1.2 s sample interval for 480 s, starts the primary output at 7, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 9. Human blood-pressure regulation
 
@@ -400,15 +432,20 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
+
+- **Complete numeric model:** The declared software model is a transfer function from neural cardiac and vascular commands in neural_command to arterial pressure in mmHg. Its numerator coefficients are 80; its denominator coefficients are 6, 1; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
 
 - **Known input change:** neural cardiac and vascular commands changes by 0.1 neural_command.
-- **Final output change:** arterial pressure changes by 8 mmHg at steady state.
-- **63% response time:** 6 s.
 - **Input simulation lower bound:** -0.5 neural_command for neural cardiac and vascular commands.
 - **Input simulation upper bound:** 0.5 neural_command for neural cardiac and vascular commands.
 - **Output simulation lower bound:** 60 mmHg for arterial pressure.
 - **Output simulation upper bound:** 140 mmHg for arterial pressure.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 12 s.
 
 Additional information:
 
@@ -418,9 +455,7 @@ The declared software model is a transfer function from neural cardiac and vascu
 
 The accompanying existing software record uses a 0.12 s sample interval for 48 s, starts the primary output at 100, contains input amplitudes -0.1, -0.05, 0.05, 0.1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 10. Human blood-glucose regulation
 
@@ -446,15 +481,20 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
+
+- **Complete numeric model:** The declared software model is a transfer function from endogenous insulin and counterregulation in insulin_command to blood glucose in mg/dL. Its numerator coefficients are -120; its denominator coefficients are 20, 1; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
 
 - **Known input change:** endogenous insulin and counterregulation changes by 0.1 insulin_command.
-- **Final output change:** blood glucose changes by -12 mg/dL at steady state.
-- **63% response time:** 20 s.
 - **Input simulation lower bound:** -0.5 insulin_command for endogenous insulin and counterregulation.
 - **Input simulation upper bound:** 0.5 insulin_command for endogenous insulin and counterregulation.
 - **Output simulation lower bound:** 60 mg/dL for blood glucose.
 - **Output simulation upper bound:** 180 mg/dL for blood glucose.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 40 s.
 
 Additional information:
 
@@ -464,9 +504,7 @@ The declared software model is a transfer function from endogenous insulin and c
 
 The accompanying existing software record uses a 0.4 s sample interval for 160 s, starts the primary output at 120, contains input amplitudes -0.1, -0.05, 0.05, 0.1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 11. Human heart-rate regulation
 
@@ -492,15 +530,20 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
+
+- **Complete numeric model:** The declared software model is a transfer function from sympathetic and parasympathetic drive in autonomic_command to heart rate in bpm. Its numerator coefficients are 80; its denominator coefficients are 5, 1; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
 
 - **Known input change:** sympathetic and parasympathetic drive changes by 0.1 autonomic_command.
-- **Final output change:** heart rate changes by 8 bpm at steady state.
-- **63% response time:** 5 s.
 - **Input simulation lower bound:** -0.5 autonomic_command for sympathetic and parasympathetic drive.
 - **Input simulation upper bound:** 0.5 autonomic_command for sympathetic and parasympathetic drive.
 - **Output simulation lower bound:** 45 bpm for heart rate.
 - **Output simulation upper bound:** 160 bpm for heart rate.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 10 s.
 
 Additional information:
 
@@ -510,9 +553,7 @@ The declared software model is a transfer function from sympathetic and parasymp
 
 The accompanying existing software record uses a 0.1 s sample interval for 40 s, starts the primary output at 102.5, contains input amplitudes -0.1, -0.05, 0.05, 0.1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 12. Eye-pointing-angle control
 
@@ -538,15 +579,20 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
+
+- **Complete numeric model:** The declared software model is a transfer function from ocular muscle torque in Nm to eye angle in rad. Its numerator coefficients are 60; its denominator coefficients are 0.18, 1; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
 
 - **Known input change:** ocular muscle torque changes by 0.002 Nm.
-- **Final output change:** eye angle changes by 0.12 rad at steady state.
-- **63% response time:** 0.18 s.
 - **Input simulation lower bound:** -0.01 Nm for ocular muscle torque.
 - **Input simulation upper bound:** 0.01 Nm for ocular muscle torque.
 - **Output simulation lower bound:** -0.5 rad for eye angle.
 - **Output simulation upper bound:** 0.5 rad for eye angle.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 0.36 s.
 
 Additional information:
 
@@ -556,9 +602,7 @@ The declared software model is a transfer function from ocular muscle torque in 
 
 The accompanying existing software record uses a 0.01 s sample interval for 1.44 s, starts the primary output at 0, contains input amplitudes -0.002, -0.001, 0.001, 0.002, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 13. Pupil-diameter light regulation
 
@@ -584,15 +628,20 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
+
+- **Complete numeric model:** The declared software model is a transfer function from iris muscle activation in iris_command to pupil diameter in mm. Its numerator coefficients are -8; its denominator coefficients are 0.8, 1; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
 
 - **Known input change:** iris muscle activation changes by 0.1 iris_command.
-- **Final output change:** pupil diameter changes by -0.8 mm at steady state.
-- **63% response time:** 0.8 s.
 - **Input simulation lower bound:** -1 iris_command for iris muscle activation.
 - **Input simulation upper bound:** 1 iris_command for iris muscle activation.
 - **Output simulation lower bound:** 2 mm for pupil diameter.
 - **Output simulation upper bound:** 8 mm for pupil diameter.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 1.6 s.
 
 Additional information:
 
@@ -602,9 +651,7 @@ The declared software model is a transfer function from iris muscle activation i
 
 The accompanying existing software record uses a 0.016 s sample interval for 6.4 s, starts the primary output at 5, contains input amplitudes -0.1, -0.05, 0.05, 0.1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 14. Elevator position control with coarse/fine sensing and cable stretch
 
@@ -630,7 +677,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** hoist motor torque and brake changes by 100 Nm.
 - **Final output change:** car position changes by 0.15 m at steady state.
@@ -640,6 +689,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 0 m for car position.
 - **Output simulation upper bound:** 120 m for car position.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
+
 Additional information:
 
 In a safe simulation, change hoist motor torque and brake by 100 Nm; expect a final car position, landing error, cable stretch change of 0.15 m with a 63% response time of 2.5 s. Use an input range of -1500 to 1500 Nm and an output range of 0 to 120 m; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -648,9 +701,7 @@ The declared software model is a transfer function from hoist motor torque and b
 
 The accompanying existing software record uses a 0.05 s sample interval for 20 s, starts the primary output at 60, contains input amplitudes -100, -50, 50, 100, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 15. Electrical temperature sensing and actuation
 
@@ -676,7 +727,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** electrical heater voltage changes by 5 V.
 - **Final output change:** temperature changes by 8 degC at steady state.
@@ -686,6 +739,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 15 degC for temperature.
 - **Output simulation upper bound:** 90 degC for temperature.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 640 s.
+
 Additional information:
 
 In a safe simulation, change electrical heater voltage by 5 V; expect a final temperature, sensor voltage change of 8 degC with a 63% response time of 80 s. Use an input range of 0 to 48 V and an output range of 15 to 90 degC; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -694,9 +751,7 @@ The declared software model is a transfer function from electrical heater voltag
 
 The accompanying existing software record uses a 1.6 s sample interval for 640 s, starts the primary output at 52.5, contains input amplitudes -5, -2.5, 2.5, 5, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 16. Electrical pressure sensing and actuation
 
@@ -722,7 +777,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** valve command changes by 10 %.
 - **Final output change:** pressure changes by 30 kPa at steady state.
@@ -732,6 +789,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 0 kPa for pressure.
 - **Output simulation upper bound:** 500 kPa for pressure.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 96 s.
+
 Additional information:
 
 In a safe simulation, change valve command by 10 %; expect a final pressure, sensor voltage change of 30 kPa with a 63% response time of 12 s. Use an input range of 0 to 100 % and an output range of 0 to 500 kPa; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -740,9 +801,7 @@ The declared software model is a transfer function from valve command in % to pr
 
 The accompanying existing software record uses a 0.24 s sample interval for 96 s, starts the primary output at 250, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 17. Electrical liquid-level sensing and actuation
 
@@ -768,7 +827,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** pump speed or valve position changes by 10 %.
 - **Final output change:** liquid level changes by 0.1 m at steady state.
@@ -778,6 +839,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 0.1 m for liquid level.
 - **Output simulation upper bound:** 1.5 m for liquid level.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 200 s.
+
 Additional information:
 
 In a safe simulation, change pump speed or valve position by 10 %; expect a final liquid level, transmitter signal change of 0.1 m with a 63% response time of 25 s. Use an input range of 0 to 100 % and an output range of 0.1 to 1.5 m; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -786,9 +851,7 @@ The declared software model is a transfer function from pump speed or valve posi
 
 The accompanying existing software record uses a 0.5 s sample interval for 200 s, starts the primary output at 0.8, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 18. Electrical pipe-flow sensing and actuation
 
@@ -814,7 +877,9 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** control valve position changes by 10 %.
 - **Final output change:** pipe flow rate changes by 0.02 m^3/s at steady state.
@@ -824,6 +889,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 0 m^3/s for pipe flow rate.
 - **Output simulation upper bound:** 0.2 m^3/s for pipe flow rate.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 32 s.
+
 Additional information:
 
 In a safe simulation, change control valve position by 10 %; expect a final pipe flow rate change of 0.02 m^3/s with a 63% response time of 4 s. Use an input range of 0 to 100 % and an output range of 0 to 0.2 m^3/s; sample at no more than one fiftieth of the time constant, run for at least eight time constants, and repeat the four amplitude levels and 0.9/1.0/1.1 parameter cases.
@@ -832,9 +901,7 @@ The declared software model is a transfer function from control valve position i
 
 The accompanying existing software record uses a 0.08 s sample interval for 32 s, starts the primary output at 0.1, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 19. HPA-axis stress-hormone negative feedback
 
@@ -860,15 +927,20 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
+
+- **Complete numeric model:** The declared software model is a transfer function from endogenous secretion rates in ng/(mL*min) to hormone concentrations in ng/mL. Its numerator coefficients are 1; its denominator coefficients are 216000000, 1080000, 1800, 2; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
 
 - **Known input change:** endogenous secretion rates changes by 1 ng/(mL*min).
-- **Final output change:** hormone concentrations changes by 0.8 ng/mL at steady state.
-- **63% response time:** 600 s.
 - **Input simulation lower bound:** 0 ng/(mL*min) for endogenous secretion rates.
 - **Input simulation upper bound:** 5 ng/(mL*min) for endogenous secretion rates.
 - **Output simulation lower bound:** 0 ng/mL for hormone concentrations.
 - **Output simulation upper bound:** 20 ng/mL for hormone concentrations.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 1200 s.
 
 Additional information:
 
@@ -878,9 +950,7 @@ The declared software model is a transfer function from endogenous secretion rat
 
 The accompanying existing software record uses a 12 s sample interval for 4800 s, starts the primary output at 10, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 20. Oxytocin-mediated childbirth positive feedback
 
@@ -906,15 +976,20 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
+
+- **Complete numeric model:** The declared software model is a transfer function from endogenous oxytocin release in normalized release units/min to oxytocin level in normalized contraction units. Its numerator coefficients are 30, 1; its denominator coefficients are 600, 50, -0.2; and its input delay is 0 s.
+
+Supplemental simulation measurements:
 
 - **Known input change:** endogenous oxytocin release changes by 1 normalized release units/min.
-- **Final output change:** oxytocin level changes by 1 normalized contraction units at steady state.
-- **63% response time:** 30 s.
 - **Input simulation lower bound:** 0 normalized release units/min for endogenous oxytocin release.
 - **Input simulation upper bound:** 5 normalized release units/min for endogenous oxytocin release.
 - **Output simulation lower bound:** 0 normalized contraction units for oxytocin level.
 - **Output simulation upper bound:** 10 normalized contraction units for oxytocin level.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 60 s.
 
 Additional information:
 
@@ -924,9 +999,7 @@ The declared software model is a transfer function from endogenous oxytocin rele
 
 The accompanying existing software record uses a 0.6 s sample interval for 240 s, starts the primary output at 5, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 21. First-order automobile cruise dynamics
 
@@ -952,7 +1025,9 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** longitudinal drive force changes by 500 N.
 - **Final output change:** vehicle speed changes by 10 m/s at steady state.
@@ -962,6 +1037,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 0 m/s for vehicle speed.
 - **Output simulation upper bound:** 50 m/s for vehicle speed.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 120 s.
+
 Additional information:
 
 Use vehicle mass 1000 kg, viscous drag 50 N*s/m, and a 500 N force step. The force-to-speed DC gain is 0.02 (m/s)/N, the time constant is 20 s, and the predicted final speed change is 10 m/s.
@@ -970,9 +1049,7 @@ The declared software model is a transfer function from longitudinal drive force
 
 The accompanying existing software record uses a 0.1 s sample interval for 120 s, starts the primary output at 25, contains input amplitudes -500, -250, 250, 500, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 22. Quarter-car road-input two-mass suspension
 
@@ -998,18 +1075,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use sprung mass 375 kg, wheel mass 20 kg, suspension stiffness 130000 N/m, tire stiffness 1000000 N/m, and damping 9800 N*s/m. Apply bounded 0.01, 0.025, and 0.05 m road steps and record body displacement, wheel displacement, and suspension travel at 1 ms.
-- **Executable software model:** The declared software model is a transfer function from prescribed road-displacement test input in m to body displacement in m. Its numerator coefficients are 1310000, 17423000; its denominator coefficients are 1, 516.1, 56850, 1307000, 17330000; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 0.05 m.
+- **Final output change:** the model-derived steady output change is 0.0502683 m.
+- **63% response time:** the model-derived response time is 0.037 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.05 m.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.05 m.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -0.0860838 m.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 0.0860838 m.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use sprung mass 375 kg, wheel mass 20 kg, suspension stiffness 130000 N/m, tire stiffness 1000000 N/m, and damping 9800 N*s/m. Apply bounded 0.01, 0.025, and 0.05 m road steps and record body displacement, wheel displacement, and suspension travel at 1 ms.
+
+**Executable software model:** The declared software model is a transfer function from prescribed road-displacement test input in m to body displacement in m. Its numerator coefficients are 1310000, 17423000; its denominator coefficients are 1, 516.1, 56850, 1307000, 17330000; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -0.05, -0.025, 0.025, 0.05, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 23. Rigid-satellite single-axis attitude
 
@@ -1035,18 +1125,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use a single-axis inertia of 1200 kg*m^2. A 12 Nm torque change gives 0.01 rad/s^2 angular acceleration; keep torque within +/-50 Nm and attitude within +/-0.2 rad. The existing record reports that changing thruster force or body torque by 12 Nm produces an initial acceleration change of 0.01 rad/s^2 with a software motion time scale of 20 s. For software simulation, thruster force or body torque is limited from -50 Nm to 50 Nm. The simulation stops if attitude angle leaves -0.2 rad to 0.2 rad.
-- **Executable software model:** The declared software model is a transfer function from thruster force or body torque in Nm to attitude angle. Its numerator coefficients are 0.000833333333333; its denominator coefficients are 1, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 12 Nm.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.01 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 20 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -50 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 50 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -0.2 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 0.2 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 40 s.
 
 Additional information:
 
+**Supporting physical context:** Use a single-axis inertia of 1200 kg*m^2. A 12 Nm torque change gives 0.01 rad/s^2 angular acceleration; keep torque within +/-50 Nm and attitude within +/-0.2 rad. The existing record reports that changing thruster force or body torque by 12 Nm produces an initial acceleration change of 0.01 rad/s^2 with a software motion time scale of 20 s. For software simulation, thruster force or body torque is limited from -50 Nm to 50 Nm. The simulation stops if attitude angle leaves -0.2 rad to 0.2 rad.
+
+**Executable software model:** The declared software model is a transfer function from thruster force or body torque in Nm to attitude angle. Its numerator coefficients are 0.000833333333333; its denominator coefficients are 1, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.05 s sample interval for 40 s, starts the primary output at 0, contains input amplitudes -12, -6, 6, 12, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 24. Flexible-satellite collocated/noncollocated model
 
@@ -1072,18 +1175,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use main-body inertia 800 kg*m^2, remote inertia 200 kg*m^2, torsional stiffness 80 Nm/rad, and torsional damping 2 Nm*s/rad. Apply +/-5 and +/-10 Nm torque pulses and log both angles and rates at 0.01 s.
-- **Executable software model:** The existing software record supplies a state-space model with state order body_angle, body_rate, instrument_angle, instrument_rate; matrix A has rows [0, 1, 0, 0]; [-0.1, -0.0025, 0.1, 0.0025]; [0, 0, 0, 1]; [0.4, 0.01, -0.4, -0.01]; matrix B has rows [0]; [0.00125]; [0]; [0]; matrix C has rows [1, 0, 0, 0]; [0, 0, 1, 0]; and matrix D has rows [0]; [0]. The input channels are body torque on the main inertia, the output channels are both body angles and rates channel 1, both body angles and rates channel 2, and the initial state is 0, 0, 0, 0.
+- **Complete numeric model:** The existing software record supplies a state-space model with state order body_angle, body_rate, instrument_angle, instrument_rate; matrix A has rows [0, 1, 0, 0]; [-0.1, -0.0025, 0.1, 0.0025]; [0, 0, 0, 1]; [0.4, 0.01, -0.4, -0.01]; matrix B has rows [0]; [0.00125]; [0]; [0]; matrix C has rows [1, 0, 0, 0]; [0, 0, 1, 0]; and matrix D has rows [0]; [0]. The input channels are body torque on the main inertia, the output channels are both body angles and rates channel 1, both body angles and rates channel 2, and the initial state is 0, 0, 0, 0. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 10 Nm.
+- **Input simulation lower bound:** the declared input simulation lower bound is -10 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 10 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 15 s.
 
 Additional information:
 
+**Supporting physical context:** Use main-body inertia 800 kg*m^2, remote inertia 200 kg*m^2, torsional stiffness 80 Nm/rad, and torsional damping 2 Nm*s/rad. Apply +/-5 and +/-10 Nm torque pulses and log both angles and rates at 0.01 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 60 s, starts the primary output at 0, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 25. Quadrotor roll/pitch/yaw allocation
 
@@ -1109,18 +1222,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use roll and pitch inertia 0.02 kg*m^2 and yaw inertia 0.05 kg*m^2. Use four signed rotor-torque deviations limited to +/-0.1 Nm; excite the roll, pitch, and yaw mixer columns separately.
-- **Executable software model:** The existing software record supplies a state-space model with state order roll, roll_rate, pitch, pitch_rate, yaw, yaw_rate; matrix A has rows [0, 1, 0, 0, 0, 0]; [0, 0, 0, 0, 0, 0]; [0, 0, 0, 1, 0, 0]; [0, 0, 0, 0, 0, 0]; [0, 0, 0, 0, 0, 1]; [0, 0, 0, 0, 0, 0]; matrix B has rows [0, 0, 0, 0]; [50, -50, -50, 50]; [0, 0, 0, 0]; [50, 50, -50, -50]; [0, 0, 0, 0]; [20, -20, 20, -20]; matrix C has rows [1, 0, 0, 0, 0, 0]; [0, 0, 1, 0, 0, 0]; [0, 0, 0, 0, 1, 0]; and matrix D has rows [0, 0, 0, 0]; [0, 0, 0, 0]; [0, 0, 0, 0]. The input channels are rotor 1 torque perturbation, rotor 2 torque perturbation, rotor 3 torque perturbation, rotor 4 torque perturbation, the output channels are roll, pitch, yaw response, and the initial state is 0, 0, 0, 0, 0, 0.
+- **Local input-output gain matrix:** local_gain_matrix=[[1.0, 0.2], [0.2, 1.0]] output/input; this matrix applies to the first two named inputs and outputs.
+- **Local response time:** the local time constant is 1.5 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 0.02 Nm.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.02 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.02 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 3 s.
 
 Additional information:
 
+**Supporting physical context:** Use roll and pitch inertia 0.02 kg*m^2 and yaw inertia 0.05 kg*m^2. Use four signed rotor-torque deviations limited to +/-0.1 Nm; excite the roll, pitch, and yaw mixer columns separately.
+
+**Executable software model:** The existing software record supplies a state-space model with state order roll, roll_rate, pitch, pitch_rate, yaw, yaw_rate; matrix A has rows [0, 1, 0, 0, 0, 0]; [0, 0, 0, 0, 0, 0]; [0, 0, 0, 1, 0, 0]; [0, 0, 0, 0, 0, 0]; [0, 0, 0, 0, 0, 1]; [0, 0, 0, 0, 0, 0]; matrix B has rows [0, 0, 0, 0]; [50, -50, -50, 50]; [0, 0, 0, 0]; [50, 50, -50, -50]; [0, 0, 0, 0]; [20, -20, 20, -20]; matrix C has rows [1, 0, 0, 0, 0, 0]; [0, 0, 1, 0, 0, 0]; [0, 0, 0, 0, 1, 0]; and matrix D has rows [0, 0, 0, 0]; [0, 0, 0, 0]; [0, 0, 0, 0]. The input channels are rotor 1 torque perturbation, rotor 2 torque perturbation, rotor 3 torque perturbation, rotor 4 torque perturbation, the output channels are roll, pitch, yaw response, and the initial state is 0, 0, 0, 0, 0, 0.
+
 The accompanying existing software record uses a 0.002 s sample interval for 12 s, starts the primary output at 0, contains input amplitudes -0.02, -0.01, 0.01, 0.02, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 26. Pendulum nonlinear model, small-angle linearization, and nonlinear simulation
 
@@ -1146,18 +1272,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use mass 1 kg, length 1 m, gravity 9.81 m/s^2, and compare 1 Nm and 4 Nm torque steps for 10 s at 0.02 s sampling in both the sine model and its small-angle model.
-- **Executable software model:** The declared software model is a transfer function from pivot torque in Nm to pendulum angle and angular rate in rad. Its numerator coefficients are 1; its denominator coefficients are 1, 0, 9.81; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from pivot torque in Nm to pendulum angle and angular rate in rad. Its numerator coefficients are 1; its denominator coefficients are 1, 0, 9.81; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 4 Nm.
+- **Input simulation lower bound:** the declared input simulation lower bound is -4 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 4 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use mass 1 kg, length 1 m, gravity 9.81 m/s^2, and compare 1 Nm and 4 Nm torque steps for 10 s at 0.02 s sampling in both the sine model and its small-angle model.
+
 The accompanying existing software record uses a 0.02 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -4, -1, 1, 4, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 27. Hanging-crane and inverted-pendulum coupled model
 
@@ -1183,18 +1319,37 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use trolley mass 1 kg, pendulum mass 0.2 kg, center-of-mass length 0.5 m, inertia 0.006 kg*m^2, friction 0.1 N*s/m, force limit 20 N, travel limit 1.5 m, and an initial 0.05 rad angle.
-- **Executable software model:** The existing software record uses the registered nonlinear template underactuated_cartpole. Its declared parameters are cart mass kg 1, pole mass kg 0.2, com length m 0.5, pole inertia kg m2 0.006, cart friction n s m 0.1, gravity m s2 9.81, force limit n 20, cart position limit m 1.5; its initial state is position m 0, velocity m s 0, angle rad 0.05, angular rate rad s 0; its input channels are cart force; and its output channels are cart position, pendulum angle.
+- **Cart mass:** 1 kg.
+- **Pole mass:** 0.2 kg.
+- **Center-of-mass length:** 0.5 m.
+- **Pole inertia:** 0.006 kg*m^2.
+- **Cart friction:** 0.1 N*s/m.
+- **Gravity:** 9.81 m/s^2.
+- **Force limit:** 20 N.
+- **Cart travel limit:** the cart position limit is 1.5 m.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 5 N.
+- **Input simulation lower bound:** the declared input simulation lower bound is -20 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 20 N.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1.5 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1.5 m.
+- **Typical motion time scale:** a typical cart-and-pole motion uses a time scale of 3 s.
 
 Additional information:
 
+**Supporting physical context:** Use trolley mass 1 kg, pendulum mass 0.2 kg, center-of-mass length 0.5 m, inertia 0.006 kg*m^2, friction 0.1 N*s/m, force limit 20 N, travel limit 1.5 m, and an initial 0.05 rad angle.
+
+**Executable software model:** The existing software record uses the registered nonlinear template underactuated_cartpole. Its declared parameters are cart mass kg 1, pole mass kg 0.2, com length m 0.5, pole inertia kg m2 0.006, cart friction n s m 0.1, gravity m s2 9.81, force limit n 20, cart position limit m 1.5; its initial state is position m 0, velocity m s 0, angle rad 0.05, angular rate rad s 0; its input channels are cart force; and its output channels are cart position, pendulum angle.
+
 The accompanying existing software record uses a 0.005 s sample interval for 12 s, starts the primary output at 0, contains input amplitudes -5, -2.5, 2.5, 5, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 28. Bridged-tee RC circuit
 
@@ -1220,18 +1375,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Set R1=R2=10 kohm and C1=C2=10 uF, giving G(s)=(0.01 s^2+0.2 s+1)/(0.01 s^2+0.3 s+1). Use +/-1 V tests to verify the unity low- and high-frequency gains and the bridged mid-band response.
-- **Executable software model:** The declared software model is a transfer function from input voltage in V to output and capacitor voltages in V. Its numerator coefficients are 0.01, 0.2, 1; its denominator coefficients are 0.01, 0.3, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 V.
+- **Final output change:** the model-derived steady output change is 1 V.
+- **63% response time:** the model-derived response time is 0.0005 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.32 V.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.32 V.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 1 s.
 
 Additional information:
 
+**Supporting physical context:** Set R1=R2=10 kohm and C1=C2=10 uF, giving G(s)=(0.01 s^2+0.2 s+1)/(0.01 s^2+0.3 s+1). Use +/-1 V tests to verify the unity low- and high-frequency gains and the bridged mid-band response.
+
+**Executable software model:** The declared software model is a transfer function from input voltage in V to output and capacitor voltages in V. Its numerator coefficients are 0.01, 0.2, 1; its denominator coefficients are 0.01, 0.3, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.0005 s sample interval for 1 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 29. Current-driven RLC circuit
 
@@ -1257,18 +1425,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use R1=R2=10 ohm, C1=C2=0.01 F, and L=0.1 H, with a 0.1 A bounded current step and all capacitor voltages plus inductor current logged.
-- **Executable software model:** The existing software record supplies a state-space model with state order capacitor_voltage_1, capacitor_voltage_2, inductor_current; matrix A has rows [-10, 0, -100]; [0, -10, 100]; [10, -10, 0]; matrix B has rows [100]; [0]; [0]; matrix C has rows [1, 0, 0]; [0, 1, 0]; [0, 0, 1]; and matrix D has rows [0]; [0]; [0]. The input channels are source current, the output channels are capacitor voltage 1, capacitor voltage 2, inductor current, and the initial state is 0, 0, 0.
+- **Known input change:** the declared input changes by 0.1 V.
+- **Final output change:** the primary output changes by 0.5 normalized_output at steady state.
+- **63% response time:** the response time is 0.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.1 V.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 2 s.
 
 Additional information:
 
+**Supporting physical context:** Use R1=R2=10 ohm, C1=C2=0.01 F, and L=0.1 H, with a 0.1 A bounded current step and all capacitor voltages plus inductor current logged.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 5, denominator coefficients 0.25, 1, and input delay 0 s.
+
+**Executable software model:** The existing software record supplies a state-space model with state order capacitor_voltage_1, capacitor_voltage_2, inductor_current; matrix A has rows [-10, 0, -100]; [0, -10, 100]; [10, -10, 0]; matrix B has rows [100]; [0]; [0]; matrix C has rows [1, 0, 0]; [0, 1, 0]; [0, 0, 1]; and matrix D has rows [0]; [0]; [0]. The input channels are source current, the output channels are capacitor voltage 1, capacitor voltage 2, inductor current, and the initial state is 0, 0, 0.
+
 The accompanying existing software record uses a 0.0002 s sample interval for 2 s, starts the primary output at 0, contains input amplitudes -0.1, -0.05, 0.05, 0.1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 30. Ideal op-amp weighted summer
 
@@ -1294,18 +1477,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Choose Rf=20 kohm, R1=10 kohm, and R2=20 kohm, giving vout=-2 v1-v2; limit each input to +/-5 V and the output to +/-12 V.
-- **Executable software model:** The existing software record supplies a state-space model with state order amplifier_output_state; matrix A has rows [-1000]; matrix B has rows [2000, 1000]; matrix C has rows [-1]; and matrix D has rows [0, 0]. The input channels are input voltage 1, input voltage 2, the output channels are summed output voltage, and the initial state is 0.
+- **Known input change:** the declared input changes by 1 V.
+- **Final output change:** the primary output changes by 2.5 V at steady state.
+- **63% response time:** the response time is 0.0025 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -5 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 5 V.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -16.4945 V.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 16.4945 V.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 0.02 s.
 
 Additional information:
 
+**Supporting physical context:** Choose Rf=20 kohm, R1=10 kohm, and R2=20 kohm, giving vout=-2 v1-v2; limit each input to +/-5 V and the output to +/-12 V.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 2.5, denominator coefficients 0.0025, 1, and input delay 0 s.
+
+**Executable software model:** The existing software record supplies a state-space model with state order amplifier_output_state; matrix A has rows [-1000]; matrix B has rows [2000, 1000]; matrix C has rows [-1]; and matrix D has rows [0, 0]. The input channels are input voltage 1, input voltage 2, the output channels are summed output voltage, and the initial state is 0.
+
 The accompanying existing software record uses a 1e-05 s sample interval for 0.02 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 31. Ideal op-amp integrator
 
@@ -1331,18 +1529,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use Rin=100 kohm and C=10 uF so Rin*C=1 s. A +1 V input produces a -1 V/s output slope; stop before the output reaches +/-10 V.
-- **Executable software model:** The declared software model is a transfer function from input voltage in V to integrator output voltage in V. Its numerator coefficients are -1; its denominator coefficients are 1, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 V.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 6.4 V/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 1.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the primary output simulation lower bound is -10 V.
+- **Output simulation upper bound:** the primary output simulation upper bound is 10 V.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use Rin=100 kohm and C=10 uF so Rin*C=1 s. A +1 V input produces a -1 V/s output slope; stop before the output reaches +/-10 V.
+
+**Executable software model:** The declared software model is a transfer function from input voltage in V to integrator output voltage in V. Its numerator coefficients are -1; its denominator coefficients are 1, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 5 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 32. Loudspeaker electromechanical model with drive circuit
 
@@ -1368,18 +1579,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use magnetic flux 0.5 T, 20 turns at 2 cm diameter so Bl=0.63 N/A, together with M=0.02 kg, b=0.2 N*s/m, L=1 mH, and R=8 ohm.
-- **Executable software model:** The declared software model is a transfer function from amplifier voltage in V to cone displacement in m. Its numerator coefficients are 0.63; its denominator coefficients are 2e-05, 0.1602, 1.9969, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from amplifier voltage in V to cone displacement in m. Its numerator coefficients are 0.63; its denominator coefficients are 2e-05, 0.1602, 1.9969, 0; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 V.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 0.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use magnetic flux 0.5 T, 20 turns at 2 cm diameter so Bl=0.63 N/A, together with M=0.02 kg, b=0.2 N*s/m, L=1 mH, and R=8 ohm.
+
 The accompanying existing software record uses a 5e-05 s sample interval for 2 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 33. DC-motor position and speed models
 
@@ -1405,18 +1626,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use J=0.01 kg*m^2, b=0.1 Nm*s/rad, Kt=Ke=0.01, R=1 ohm, and L=0.5 H; test +/-1 V and log current, speed, and position.
-- **Executable software model:** The declared software model is a transfer function from armature voltage in V to motor position in rad. Its numerator coefficients are 0.01; its denominator coefficients are 0.005, 0.06, 0.1001, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from armature voltage in V to motor position in rad. Its numerator coefficients are 0.01; its denominator coefficients are 0.005, 0.06, 0.1001, 0; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 V.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use J=0.01 kg*m^2, b=0.1 Nm*s/rad, Kt=Ke=0.01, R=1 ohm, and L=0.5 H; test +/-1 V and log current, speed, and position.
+
 The accompanying existing software record uses a 0.0005 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 34. Gear-train torque multiplication and reflected inertia
 
@@ -1442,18 +1673,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use gear ratio n=4, motor-side inertia J1=0.002 kg*m^2, load inertia J2=0.03 kg*m^2, b1=0.001 and b2=0.02 Nm*s/rad.
-- **Executable software model:** The declared software model is a transfer function from motor torque in Nm to motor and load angle in rad. Its numerator coefficients are 4; its denominator coefficients are 0.062, 0.036, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 Nm.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.16 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use gear ratio n=4, motor-side inertia J1=0.002 kg*m^2, load inertia J2=0.03 kg*m^2, b1=0.001 and b2=0.02 Nm*s/rad.
+
+**Executable software model:** The declared software model is a transfer function from motor torque in Nm to motor and load angle in rad. Its numerator coefficients are 4; its denominator coefficients are 0.062, 0.036, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 35. Room heat-loss model
 
@@ -1479,7 +1723,9 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** heating rate in the labeled control extension changes by 1 binary-command level.
 - **Final output change:** room temperature changes by 214.6597 degF at steady state.
@@ -1489,6 +1735,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 32 degF for room temperature.
 - **Output simulation upper bound:** 90 degF for room temperature.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 120000 s.
+
 Additional information:
 
 Use furnace rating 90000 Btu/h. At outdoor temperature 32 degF and indoor temperature 60 degF, heating raises temperature 2 degF in 0.1 h, while furnace-off cooling lowers it 2 degF in 40 min. These measurements give C=3913.04 Btu/degF and R=0.002385 degF/(Btu/h).
@@ -1497,9 +1747,7 @@ The declared software model is a transfer function from heating rate in the labe
 
 The accompanying existing software record uses a 60 s sample interval for 120000 s, starts the primary output at 61, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 36. Two-thermal-mass controlled process
 
@@ -1525,18 +1773,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use C1=10000 J/degC, C2=15000 J/degC, Hx=200 W/degC, H1=100 W/degC, and H2=150 W/degC; apply 250, 500, 750, and 1000 W heat steps.
-- **Executable software model:** The declared software model is a transfer function from heater power in W to two body temperatures in degC. Its numerator coefficients are 200; its denominator coefficients are 150000000, 8000000, 105000; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1000 W.
+- **Final output change:** the model-derived steady output change is 1.90476 degC.
+- **63% response time:** the model-derived response time is 81.6 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1000 W.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1000 W.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is 64.9857 degC.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 70.0143 degC.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 1000 s.
 
 Additional information:
 
+**Supporting physical context:** Use C1=10000 J/degC, C2=15000 J/degC, Hx=200 W/degC, H1=100 W/degC, and H2=150 W/degC; apply 250, 500, 750, and 1000 W heat steps.
+
+**Executable software model:** The declared software model is a transfer function from heater power in W to two body temperatures in degC. Its numerator coefficients are 200; its denominator coefficients are 150000000, 8000000, 105000; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.2 s sample interval for 1000 s, starts the primary output at 67.5, contains input amplitudes -1000, -500, 500, 1000, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 37. Heat exchanger with nonlinear valve and measurement delay
 
@@ -1562,18 +1823,32 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use a two-lag model with 30 s and 60 s thermal time constants, DC gain 0.5 degC/%, and 10 s downstream measurement delay. Test 2.5%, 5%, 7.5%, and 10% valve changes.
-- **Executable software model:** The declared software model is a transfer function from steam inlet valve area in % to measured outlet water temperature in degC. Its numerator coefficients are 0.5; its denominator coefficients are 1800, 90, 1; and its input delay is 10 s.
+- **Known input change:** the declared input changes by 10 %.
+- **Final output change:** the model-derived steady output change is 5 degC.
+- **63% response time:** the model-derived response time is 95.2 s.
+- **Pure waiting time:** the visible response waits 10 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -10 %.
+- **Input simulation upper bound:** the declared input simulation upper bound is 10 %.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is 53.4 degC.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 66.6 degC.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 800 s.
 
 Additional information:
 
+**Supporting physical context:** Use a two-lag model with 30 s and 60 s thermal time constants, DC gain 0.5 degC/%, and 10 s downstream measurement delay. Test 2.5%, 5%, 7.5%, and 10% valve changes.
+
+**Executable software model:** The declared software model is a transfer function from steam inlet valve area in % to measured outlet water temperature in degC. Its numerator coefficients are 0.5; its denominator coefficients are 1800, 90, 1; and its input delay is 10 s.
+
 The accompanying existing software record uses a 0.2 s sample interval for 800 s, starts the primary output at 60, contains input amplitudes -10, -5, 5, 10, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 38. Water-tank continuity, square-root outflow, and operating-point linearization
 
@@ -1599,7 +1874,9 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
-The seven required answers are:
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
+Profile-specific required answers:
 
 - **Known input change:** inlet mass flow changes by 50 g/min.
 - **Final output change:** tank level and outlet flow changes by 0.1 m at steady state.
@@ -1609,6 +1886,10 @@ The seven required answers are:
 - **Output simulation lower bound:** 0 m for tank level and outlet flow.
 - **Output simulation upper bound:** 0.5 m for tank level and outlet flow.
 
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 900 s.
+
 Additional information:
 
 Use water density 1000 kg/m^3, tank area 0.05 m^2, nominal height 0.15 m, and nominal outflow 200 g/min; linearize the square-root outlet law and test +/-25 and +/-50 g/min pump-flow changes.
@@ -1617,9 +1898,7 @@ The declared software model is a transfer function from inlet mass flow in g/min
 
 The accompanying existing software record uses a 1 s sample interval for 900 s, starts the primary output at 0.25, contains input amplitudes -50, -25, 25, 50, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 39. Pressure-driven hydraulic piston
 
@@ -1645,18 +1924,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use piston mass 50 kg and area 0.01 m^2. A 100 kPa chamber-pressure change gives 1000 N and 20 m/s^2 initial acceleration; limit displacement to +/-0.5 m. The existing record reports that changing chamber pressure difference by 100 kPa produces an initial acceleration change of 20 m/s^2 with a software motion time scale of 2 s. For software simulation, chamber pressure difference is limited from 0 kPa to 500 kPa. The simulation stops if piston position and velocity leaves -0.5 m/s to 0.5 m/s.
-- **Executable software model:** The declared software model is a transfer function from chamber pressure difference in kPa to piston position and velocity. Its numerator coefficients are 0.2; its denominator coefficients are 1, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 100 kPa.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 20 m/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is 0 kPa.
+- **Input simulation upper bound:** the declared input simulation upper bound is 500 kPa.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 m.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 3 s.
 
 Additional information:
 
+**Supporting physical context:** Use piston mass 50 kg and area 0.01 m^2. A 100 kPa chamber-pressure change gives 1000 N and 20 m/s^2 initial acceleration; limit displacement to +/-0.5 m. The existing record reports that changing chamber pressure difference by 100 kPa produces an initial acceleration change of 20 m/s^2 with a software motion time scale of 2 s. For software simulation, chamber pressure difference is limited from 0 kPa to 500 kPa. The simulation stops if piston position and velocity leaves -0.5 m/s to 0.5 m/s.
+
+**Executable software model:** The declared software model is a transfer function from chamber pressure difference in kPa to piston position and velocity. Its numerator coefficients are 0.2; its denominator coefficients are 1, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 3 s, starts the primary output at 0, contains input amplitudes -100, -50, 50, 100, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 40. Hydraulic control-surface actuator and load-dependent integrator model
 
@@ -1682,18 +1974,28 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use a no-load local valve-to-angle-rate gain of 0.8 rad/(s*mm), valve travel +/-5 mm, and angle limit +/-0.5 rad. Repeat with load reducing the gain to 0.72 and 0.64 rad/(s*mm).
-- **Executable software model:** The declared software model is a transfer function from servo valve displacement in mm to surface angle and load force in rad. Its numerator coefficients are 0.8; its denominator coefficients are 1, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from servo valve displacement in mm to surface angle and load force in rad. Its numerator coefficients are 0.8; its denominator coefficients are 1, 0; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 mm.
+- **Input simulation lower bound:** the declared input simulation lower bound is -5 mm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 5 mm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -5 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 5 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 0.75 s.
 
 Additional information:
 
+**Supporting physical context:** Use a no-load local valve-to-angle-rate gain of 0.8 rad/(s*mm), valve travel +/-5 mm, and angle limit +/-0.5 rad. Repeat with load reducing the gain to 0.72 and 0.64 rad/(s*mm).
+
 The accompanying existing software record uses a 0.001 s sample interval for 3 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 41. Test linearity and time invariance by superposition and shift
 
@@ -1719,18 +2021,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Set k=2 s^-1. Use u1(t)=1, u2(t)=sin(t), coefficients 1.5 and -0.5, and a 1 s shift; sample at 0.01 s for 8 s and compare superposed and shifted responses.
-- **Executable software model:** The declared software model is a transfer function from prescribed test signal in unit/s to system output response in unit. Its numerator coefficients are 1; its denominator coefficients are 1, 2; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 unit/s.
+- **Final output change:** the model-derived steady output change is 0.5 unit.
+- **63% response time:** the model-derived response time is 0.504 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 unit/s.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 unit/s.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -0.66 unit.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 0.66 unit.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Set k=2 s^-1. Use u1(t)=1, u2(t)=sin(t), coefficients 1.5 and -0.5, and a 1 s shift; sample at 0.01 s for 8 s and compare superposed and shifted responses.
+
+**Executable software model:** The declared software model is a transfer function from prescribed test signal in unit/s to system output response in unit. Its numerator coefficients are 1; its denominator coefficients are 1, 2; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 42. Derive a first-order impulse response and arbitrary-input convolution
 
@@ -1756,18 +2071,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use k=0.5 s^-1. Simulate a unit impulse and a unit step at 0.01 s resolution for 16 s, then compare direct integration with convolution by exp(-0.5 t).
-- **Executable software model:** The declared software model is a transfer function from input signal in normalized impulse units to output response in unit. Its numerator coefficients are 1; its denominator coefficients are 1, 0.5; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_impulse.
+- **Final output change:** the model-derived steady output change is 2 unit.
+- **63% response time:** the model-derived response time is 2 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_impulse.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_impulse.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -2.63911 unit.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 2.63911 unit.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 16 s.
 
 Additional information:
 
+**Supporting physical context:** Use k=0.5 s^-1. Simulate a unit impulse and a unit step at 0.01 s resolution for 16 s, then compare direct integration with convolution by exp(-0.5 t).
+
+**Executable software model:** The declared software model is a transfer function from input signal in normalized impulse units to output response in unit. Its numerator coefficients are 1; its denominator coefficients are 1, 0.5; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 16 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 43. Convert an ODE to a transfer function under zero initial conditions
 
@@ -1793,18 +2121,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use y_ddot+5 y_dot+4 y=2 u with zero initial conditions. Apply +/-0.5 and +/-1 N steps, sample at 0.01 s for 8 s, and verify G(s)=2/(s^2+5s+4).
-- **Executable software model:** The declared software model is a transfer function from prescribed forcing signal in N to system output response in m. Its numerator coefficients are 2; its denominator coefficients are 1, 5, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 N.
+- **Final output change:** the model-derived steady output change is 0.5 m.
+- **63% response time:** the model-derived response time is 1.288 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 N.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -0.659705 m.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 0.659705 m.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use y_ddot+5 y_dot+4 y=2 u with zero initial conditions. Apply +/-0.5 and +/-1 N steps, sample at 0.01 s for 8 s, and verify G(s)=2/(s^2+5s+4).
+
+**Executable software model:** The declared software model is a transfer function from prescribed forcing signal in N to system output response in m. Its numerator coefficients are 2; its denominator coefficients are 1, 5, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 44. Derive the RC low-pass transfer function and impulse response
 
@@ -1830,18 +2171,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use R=10 kohm and C=100 uF, giving RC=1 s. Apply 0.25, 0.5, 0.75, and 1 V steps at 0.01 s sampling for 8 s.
-- **Executable software model:** The declared software model is a transfer function from input voltage in V to capacitor voltage in V. Its numerator coefficients are 1; its denominator coefficients are 1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 V.
+- **Final output change:** the model-derived steady output change is 1 V.
+- **63% response time:** the model-derived response time is 1 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.31956 V.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.31956 V.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use R=10 kohm and C=100 uF, giving RC=1 s. Apply 0.25, 0.5, 0.75, and 1 V steps at 0.01 s sampling for 8 s.
+
+**Executable software model:** The declared software model is a transfer function from input voltage in V to capacitor voltage in V. Its numerator coefficients are 1; its denominator coefficients are 1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 45. Compute magnitude and phase of first-order sinusoidal response
 
@@ -1867,18 +2221,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Set k=1 s^-1, sinusoidal amplitude 1 V, and omega=10 rad/s. Sample at 0.002 s for 12 s and estimate steady amplitude and phase after the exponential transient.
-- **Executable software model:** The declared software model is a transfer function from sinusoidal input in V to sinusoidal output amplitude and phase in V. Its numerator coefficients are 1; its denominator coefficients are 1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 V.
+- **Final output change:** the model-derived steady output change is 1 V.
+- **63% response time:** the model-derived response time is 1 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.31999 V.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.31999 V.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 12 s.
 
 Additional information:
 
+**Supporting physical context:** Set k=1 s^-1, sinusoidal amplitude 1 V, and omega=10 rad/s. Sample at 0.002 s for 12 s and estimate steady amplitude and phase after the exponential transient.
+
+**Executable software model:** The declared software model is a transfer function from sinusoidal input in V to sinusoidal output amplitude and phase in V. Its numerator coefficients are 1; its denominator coefficients are 1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 12 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 46. Transform canonical step, ramp, impulse, and sinusoidal inputs
 
@@ -1904,18 +2271,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G(s)=1/(s+1), step amplitude 2, ramp slope 0.5, unit impulse area 1, and sinusoid omega=3 rad/s. Sample at 0.005 s for 12 s.
-- **Executable software model:** The declared software model is a transfer function from canonical test signal in canonical_input to transformed system response in unit. Its numerator coefficients are 1; its denominator coefficients are 1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 canonical_input.
+- **Final output change:** the model-derived steady output change is 1 unit.
+- **63% response time:** the model-derived response time is 1 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 canonical_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 canonical_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.31999 unit.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.31999 unit.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 12 s.
 
 Additional information:
 
+**Supporting physical context:** Use G(s)=1/(s+1), step amplitude 2, ramp slope 0.5, unit impulse area 1, and sinusoid omega=3 rad/s. Sample at 0.005 s for 12 s.
+
+**Executable software model:** The declared software model is a transfer function from canonical test signal in canonical_input to transformed system response in unit. Its numerator coefficients are 1; its denominator coefficients are 1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 12 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 47. Recover a time response by partial-fraction expansion
 
@@ -1941,18 +2321,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use Y(s)=(s+2)(s+4)/[s(s+1)(s+3)]. Simulate a unit impulse at 0.005 s sampling for 12 s and compare residues 8/3, -3/2, and -1/6.
-- **Executable software model:** The declared software model is a transfer function from prescribed transformed input in normalized impulse units to time-domain output response in unit. Its numerator coefficients are 1, 6, 8; its denominator coefficients are 1, 4, 3, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_impulse.
+- **Final output change:** the primary output changes by 0.5 unit at steady state.
+- **63% response time:** the response time is 1.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_impulse.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_impulse.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 unit.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 unit.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 12 s.
 
 Additional information:
 
+**Supporting physical context:** Use Y(s)=(s+2)(s+4)/[s(s+1)(s+3)]. Simulate a unit impulse at 0.005 s sampling for 12 s and compare residues 8/3, -3/2, and -1/6.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 1.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from prescribed transformed input in normalized impulse units to time-domain output response in unit. Its numerator coefficients are 1, 6, 8; its denominator coefficients are 1, 4, 3, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 12 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 48. Apply the Final Value Theorem and reject invalid unstable use
 
@@ -1978,18 +2373,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Evaluate Y1=3(s+2)/[s(s^2+2s+10)] and Y2=3/[s(s-2)] side by side, using 0.002 s sampling for 8 s and a stop threshold of absolute output 100.
-- **Executable software model:** The declared software model is a transfer function from test input in normalized step units to steady-state output in unit. Its numerator coefficients are 3, 6; its denominator coefficients are 1, 2, 10, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_step.
+- **Final output change:** the primary output changes by 0.5 unit at steady state.
+- **63% response time:** the response time is 1 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_step.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_step.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 unit.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 unit.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Evaluate Y1=3(s+2)/[s(s^2+2s+10)] and Y2=3/[s(s-2)] side by side, using 0.002 s sampling for 8 s and a stop threshold of absolute output 100.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 1, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from test input in normalized step units to steady-state output in unit. Its numerator coefficients are 3, 6; its denominator coefficients are 1, 2, 10, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 49. Compute stable-system DC gain from the transfer function
 
@@ -2015,18 +2425,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G(s)=3(s+2)/(s^2+2s+10). Apply step amplitudes 0.25, 0.5, 0.75, and 1, sample at 0.005 s for 12 s, and verify the 0.6 DC gain.
-- **Executable software model:** The declared software model is a transfer function from unit-step input in normalized step units to steady output in unit. Its numerator coefficients are 3, 6; its denominator coefficients are 1, 2, 10; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_step.
+- **Final output change:** the model-derived steady output change is 0.6 unit.
+- **63% response time:** the model-derived response time is 0.13 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_step.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_step.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.45838 unit.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.45838 unit.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 12 s.
 
 Additional information:
 
+**Supporting physical context:** Use G(s)=3(s+2)/(s^2+2s+10). Apply step amplitudes 0.25, 0.5, 0.75, and 1, sample at 0.005 s for 12 s, and verify the 0.6 DC gain.
+
+**Executable software model:** The declared software model is a transfer function from unit-step input in normalized step units to steady output in unit. Its numerator coefficients are 3, 6; its denominator coefficients are 1, 2, 10; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 12 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 50. Solve homogeneous and forced ODEs with initial conditions
 
@@ -2052,18 +2475,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use y_ddot+5 y_dot+4 y=u. Run initial states (y0,ydot0)=(1,0) and (0,1), then the zero-initial input u=2 exp(-2t), at 0.005 s for 10 s.
-- **Executable software model:** The declared software model is a transfer function from forcing input and prescribed initial-state release in N to state and output response in m. Its numerator coefficients are 1; its denominator coefficients are 1, 5, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 N.
+- **Final output change:** the model-derived steady output change is 0.25 m.
+- **63% response time:** the model-derived response time is 1.285 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 N.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -0.32998 m.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 0.32998 m.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use y_ddot+5 y_dot+4 y=u. Run initial states (y0,ydot0)=(1,0) and (0,1), then the zero-initial input u=2 exp(-2t), at 0.005 s for 10 s.
+
+**Executable software model:** The declared software model is a transfer function from forcing input and prescribed initial-state release in N to state and output response in m. Its numerator coefficients are 1; its denominator coefficients are 1, 5, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 51. Analyze automobile position dynamics from the cruise model
 
@@ -2089,18 +2525,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use m=1000 kg, b=50 N*s/m, and a 500 N force step. Sample speed and position at 0.05 s for 120 s; position uses Gx=0.001/[s(s+0.05)].
-- **Executable software model:** The declared software model is a transfer function from drive force in N to vehicle position and speed in m. Its numerator coefficients are 0.001; its denominator coefficients are 1, 0.05, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 500 N.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.00111111 m/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 30 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -500 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 500 N.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 m.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 120 s.
 
 Additional information:
 
+**Supporting physical context:** Use m=1000 kg, b=50 N*s/m, and a 500 N force step. Sample speed and position at 0.05 s for 120 s; position uses Gx=0.001/[s(s+0.05)].
+
+**Executable software model:** The declared software model is a transfer function from drive force in N to vehicle position and speed in m. Its numerator coefficients are 0.001; its denominator coefficients are 1, 0.05, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.05 s sample interval for 120 s, starts the primary output at 0, contains input amplitudes -500, -250, 250, 500, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 52. Analyze DC-motor position and speed poles with numerical parameters
 
@@ -2126,18 +2575,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use J=0.01 kg*m^2, b=0.001 Nm*s/rad, Kt=Ke=1, Ra=10 ohm, and La=1 H. Test +/-1 V and record current, speed, and angle at 0.001 s for 5 s.
-- **Executable software model:** The declared software model is a transfer function from armature voltage in V to motor speed and position in rad. Its numerator coefficients are 100; its denominator coefficients are 1, 10.1, 101, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 V.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.64 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 1.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use J=0.01 kg*m^2, b=0.001 Nm*s/rad, Kt=Ke=1, Ra=10 ohm, and La=1 H. Test +/-1 V and record current, speed, and angle at 0.001 s for 5 s.
+
+**Executable software model:** The declared software model is a transfer function from armature voltage in V to motor speed and position in rad. Its numerator coefficients are 100; its denominator coefficients are 1, 10.1, 101, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 5 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 53. Predict rigid-satellite response to a finite thrust pulse
 
@@ -2163,18 +2625,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use lever arm d=1 m and inertia I=5000 kg*m^2. Apply a 25 N pulse from 5.0 to 5.1 s and sample at 0.01 s through 10 s. The existing record reports that changing finite thruster-force pulse by 25 N produces an initial acceleration change of 0.005 rad/s^2 with a software motion time scale of 10 s. For software simulation, finite thruster-force pulse is limited from -50 N to 50 N. The simulation stops if attitude angle and rate leaves -0.02 rad to 0.02 rad.
-- **Executable software model:** The declared software model is a transfer function from finite thruster-force pulse in N to attitude angle and rate in rad. Its numerator coefficients are 0.0002; its denominator coefficients are 1, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 25 N.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.005 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 10 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -50 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 50 N.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use lever arm d=1 m and inertia I=5000 kg*m^2. Apply a 25 N pulse from 5.0 to 5.1 s and sample at 0.01 s through 10 s. The existing record reports that changing finite thruster-force pulse by 25 N produces an initial acceleration change of 0.005 rad/s^2 with a software motion time scale of 10 s. For software simulation, finite thruster-force pulse is limited from -50 N to 50 N. The simulation stops if attitude angle and rate leaves -0.02 rad to 0.02 rad.
+
+**Executable software model:** The declared software model is a transfer function from finite thruster-force pulse in N to attitude angle and rate in rad. Its numerator coefficients are 0.0002; its denominator coefficients are 1, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -25, -12.5, 12.5, 25, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 54. Reduce nested control block diagrams to one transfer function
 
@@ -2200,18 +2675,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use parallel controller branches 2 and 4/s, plant 1/s, and unity negative feedback. Apply +/-0.5 and +/-1 reference steps at 0.005 s for 10 s.
-- **Executable software model:** The declared software model is a transfer function from reference input in normalized reference units to closed-loop output in normalized output units. Its numerator coefficients are 2, 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_reference.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.344 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_reference.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_reference.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.71393 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.71393 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use parallel controller branches 2 and 4/s, plant 1/s, and unity negative feedback. Apply +/-0.5 and +/-1 reference steps at 0.005 s for 10 s.
+
+**Executable software model:** The declared software model is a transfer function from reference input in normalized reference units to closed-loop output in normalized output units. Its numerator coefficients are 2, 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 55. Derive a closed-loop transfer function with Mason's signal-flow rule
 
@@ -2237,18 +2725,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use one forward path P=6 and one signed touching loop L=0.2, so the Mason gain is 6/(1-0.2)=7.5. Repeat after setting the loop to -0.2 and zero.
-- **Executable software model:** The declared software model is a transfer function from prescribed source-node signal in path_input to signal-flow output response in path_output. Its numerator coefficients are 6; its denominator coefficients are 1, -0.2; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 path_input.
+- **Final output change:** the primary output changes by -0.5 path_output at steady state.
+- **63% response time:** the response time is 1 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 path_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 path_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 path_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 path_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use one forward path P=6 and one signed touching loop L=0.2, so the Mason gain is 6/(1-0.2)=7.5. Repeat after setting the loop to -0.2 and zero.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients -0.5, denominator coefficients 1, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from prescribed source-node signal in path_input to signal-flow output response in path_output. Its numerator coefficients are 6; its denominator coefficients are 1, -0.2; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 56. Infer transient form and decay rate from pole locations
 
@@ -2274,18 +2777,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use H(s)=(2s+1)/(s^2+3s+2). Apply unit signed impulses, sample at 0.005 s for 10 s, and fit the -1 and -2 modes with residues -1 and 3.
-- **Executable software model:** The declared software model is a transfer function from bounded impulse test in normalized impulse units to transient output response in unit. Its numerator coefficients are 2, 1; its denominator coefficients are 1, 3, 2; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_impulse.
+- **Final output change:** the model-derived steady output change is 0.5 unit.
+- **63% response time:** the model-derived response time is 0.208 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_impulse.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_impulse.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -0.879998 unit.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 0.879998 unit.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use H(s)=(2s+1)/(s^2+3s+2). Apply unit signed impulses, sample at 0.005 s for 10 s, and fit the -1 and -2 modes with residues -1 and 3.
+
+**Executable software model:** The declared software model is a transfer function from bounded impulse test in normalized impulse units to transient output response in unit. Its numerator coefficients are 2, 1; its denominator coefficients are 1, 3, 2; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 57. Map second-order rise time, overshoot, settling time, and peak time to pole regions
 
@@ -2311,18 +2827,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use omega_n=3 rad/s and zeta=0.6, with a unit-DC-gain model 9/(s^2+3.6s+9). Sample at 0.002 s for 8 s and measure rise, peak, and 1% settling times.
-- **Executable software model:** The declared software model is a transfer function from bounded command step in normalized reference units to step response and its transient features in normalized output units. Its numerator coefficients are 9; its denominator coefficients are 1, 3.6, 9; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_reference.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.546666 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_reference.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_reference.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.44511 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.44511 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 2.66666 s.
 
 Additional information:
 
+**Supporting physical context:** Use omega_n=3 rad/s and zeta=0.6, with a unit-DC-gain model 9/(s^2+3.6s+9). Sample at 0.002 s for 8 s and measure rise, peak, and 1% settling times.
+
+**Executable software model:** The declared software model is a transfer function from bounded command step in normalized reference units to step response and its transient features in normalized output units. Its numerator coefficients are 9; its denominator coefficients are 1, 3.6, 9; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.00666666 s sample interval for 2.666664 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 58. Explain and quantify Boeing 747 nonminimum-phase altitude response
 
@@ -2348,18 +2877,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use h/delta_e=30(s-6)/[s(s^2+4s+13)] with a -1 deg impulsive elevator input. Sample at 0.002 s for 12 s and retain the initial altitude dip and final offset.
-- **Executable software model:** The declared software model is a transfer function from impulsive elevator deflection in deg to aircraft altitude in ft. Its numerator coefficients are -30, 180; its denominator coefficients are 1, 4, 13, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from impulsive elevator deflection in deg to aircraft altitude in ft. Its numerator coefficients are -30, 180; its denominator coefficients are 1, 4, 13, 0; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 deg.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 deg.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 deg.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 ft.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 ft.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 1 s.
 
 Additional information:
 
+**Supporting physical context:** Use h/delta_e=30(s-6)/[s(s^2+4s+13)] with a -1 deg impulsive elevator input. Sample at 0.002 s for 12 s and retain the initial altitude dip and final offset.
+
 The accompanying existing software record uses a 0.01 s sample interval for 4 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 59. Test BIBO stability of a current-driven capacitor
 
@@ -2385,18 +2924,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use C=0.01 F. Apply constant currents +/-0.1 A with a 50 V stop bound; sample at 0.01 s and verify the voltage ramp and BIBO counterexample.
-- **Executable software model:** The declared software model is a transfer function from bounded source current in A to capacitor voltage in V. Its numerator coefficients are 100; its denominator coefficients are 1, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 A.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.25 V/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 A.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 A.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 V.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 V.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use C=0.01 F. Apply constant currents +/-0.1 A with a 50 V stop bound; sample at 0.01 s and verify the voltage ramp and BIBO counterexample.
+
+**Executable software model:** The declared software model is a transfer function from bounded source current in A to capacitor voltage in V. Its numerator coefficients are 100; its denominator coefficients are 1, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 60. Determine proportional and PI gain stability regions with the Routh criterion
 
@@ -2422,18 +2974,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** For the proportional case use K=13, then compare K=7.5 and 25. For the PI case use (K,Ki)=(2,6), compare the boundary Ki=6+3K, and sample at 0.005 s for 20 s.
-- **Executable software model:** The declared software model is a transfer function from bounded controller command during proportional and integral setting sweeps in normalized reference units to regulated output response across the tested settings in normalized output units. Its numerator coefficients are 13, 13; its denominator coefficients are 1, 5, 7, 13; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from bounded controller command during proportional and integral setting sweeps in normalized reference units to regulated output response across the tested settings in normalized output units. Its numerator coefficients are 13, 13; its denominator coefficients are 1, 5, 7, 13; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_reference.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_reference.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_reference.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2 s.
 
 Additional information:
 
+**Supporting physical context:** For the proportional case use K=13, then compare K=7.5 and 25. For the PI case use (K,Ki)=(2,6), compare the boundary Ki=6+3K, and sample at 0.005 s for 20 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 61. Derive closed-loop reference, disturbance, sensor-noise, control, and error maps using sensitivity and complementary sensitivity
 
@@ -2459,18 +3021,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/(s+1), D=9; excite reference, plant disturbance, and sensor noise separately at +/-0.5 and +/-1, sampled at 0.01 s for 8 s.
-- **Executable software model:** The declared software model is a transfer function from reference command with prescribed plant disturbance and sensor noise in normalized input units to regulated output in normalized output units. Its numerator coefficients are 9; its denominator coefficients are 1, 10; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 0.9 normalized_output.
+- **63% response time:** the model-derived response time is 0.104 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.188 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.188 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/(s+1), D=9; excite reference, plant disturbance, and sensor noise separately at +/-0.5 and +/-1, sampled at 0.01 s for 8 s.
+
+**Executable software model:** The declared software model is a transfer function from reference command with prescribed plant disturbance and sensor noise in normalized input units to regulated output in normalized output units. Its numerator coefficients are 9; its denominator coefficients are 1, 10; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 62. Stabilize an unstable inverted-pendulum model by feedback characteristic-equation design
 
@@ -2496,18 +3071,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** For G=1/(s^2-1), use zeta=0.7, wn=2 rad/s, gamma=1, delta=3.8, K=7.8; sample +/-0.25 steps at 0.005 s for 8 s.
-- **Executable software model:** The declared software model is a transfer function from bounded dynamic-compensator command in normalized input units to pendulum angle and compensator output in normalized output units. Its numerator coefficients are 7.8, 7.8; its denominator coefficients are 1, 3.8, 6.8, 4; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from bounded dynamic-compensator command in normalized input units to pendulum angle and compensator output in normalized output units. Its numerator coefficients are 7.8, 7.8; its denominator coefficients are 1, 3.8, 6.8, 4; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 0.25 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.25 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.25 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2 s.
 
 Additional information:
 
+**Supporting physical context:** For G=1/(s^2-1), use zeta=0.7, wn=2 rad/s, gamma=1, delta=3.8, K=7.8; sample +/-0.25 steps at 0.005 s for 8 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -0.25, -0.125, 0.125, 0.25, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 63. Quantify feedback reduction of plant-gain sensitivity
 
@@ -2533,18 +3118,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use P=1, C=99 at the test frequency and repeat with P times 0.9 and 1.1; use plant 1/(s+1) for the bounded time response.
-- **Executable software model:** The declared software model is a transfer function from bounded controller command in normalized input units to regulated output and tracking error in normalized output units. Its numerator coefficients are 99; its denominator coefficients are 1, 100; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 0.99 normalized_output.
+- **63% response time:** the model-derived response time is 0.01 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.3068 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.3068 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 2 s.
 
 Additional information:
 
+**Supporting physical context:** Use P=1, C=99 at the test frequency and repeat with P times 0.9 and 1.1; use plant 1/(s+1) for the bounded time response.
+
+**Executable software model:** The declared software model is a transfer function from bounded controller command in normalized input units to regulated output and tracking error in normalized output units. Its numerator coefficients are 99; its denominator coefficients are 1, 100; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 2 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 64. Resolve low-frequency plant-disturbance rejection versus high-frequency sensor-noise attenuation
 
@@ -2570,18 +3168,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use L=100/(s+1); test a low-frequency plant disturbance and sensor-noise sinusoids at 1, 10, 100, 1000 rad/s.
-- **Executable software model:** The declared software model is a transfer function from plant disturbance and sensor-noise test inputs in normalized input units to regulated output in normalized output units. Its numerator coefficients are 100; its denominator coefficients are 1, 101; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 0.990099 normalized_output.
+- **63% response time:** the model-derived response time is 0.01 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.30693 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.30693 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use L=100/(s+1); test a low-frequency plant disturbance and sensor-noise sinusoids at 1, 10, 100, 1000 rad/s.
+
+**Executable software model:** The declared software model is a transfer function from plant disturbance and sensor-noise test inputs in normalized input units to regulated output in normalized output units. Its numerator coefficients are 100; its denominator coefficients are 1, 101; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.0002 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 65. Compute Type 0 speed-control error with proportional feedback
 
@@ -2607,18 +3218,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use A=2, tau=5 s, kP=4; apply +/-0.5 and +/-1 speed steps at 0.02 s for 20 s.
-- **Executable software model:** The declared software model is a transfer function from proportional control command in normalized input units to speed and tracking error in normalized output units. Its numerator coefficients are 8; its denominator coefficients are 5, 9; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 0.888889 normalized_output.
+- **63% response time:** the model-derived response time is 0.56 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.17333 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.17333 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use A=2, tau=5 s, kP=4; apply +/-0.5 and +/-1 speed steps at 0.02 s for 20 s.
+
+**Executable software model:** The declared software model is a transfer function from proportional control command in normalized input units to speed and tracking error in normalized output units. Its numerator coefficients are 8; its denominator coefficients are 5, 9; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 66. Raise speed control to Type 1 with integral action
 
@@ -2644,18 +3268,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use A=2, tau=5 s, kP=2, kI=0.5; run unit step and ramp references at 0.02 s for 30 s.
-- **Executable software model:** The declared software model is a transfer function from PI control command in normalized input units to speed and tracking error in normalized output units. Its numerator coefficients are 4, 1; its denominator coefficients are 5, 5, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 1.22 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.3434 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.3434 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Use A=2, tau=5 s, kP=2, kI=0.5; run unit step and ramp references at 0.02 s for 30 s.
+
+**Executable software model:** The declared software model is a transfer function from PI control command in normalized input units to speed and tracking error in normalized output units. Its numerator coefficients are 4, 1; its denominator coefficients are 5, 5, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 67. Evaluate system type and velocity constant with tachometer feedback
 
@@ -2681,18 +3318,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use tau=1 s, kP=4, kt=0.25 s; apply step and ramp references at 0.01 s for 15 s.
-- **Executable software model:** The declared software model is a transfer function from armature voltage under tachometer feedback in normalized input units to motor position in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0711111 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 3.75 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 15 s.
 
 Additional information:
 
+**Supporting physical context:** Use tau=1 s, kP=4, kt=0.25 s; apply step and ramp references at 0.01 s for 15 s.
+
+**Executable software model:** The declared software model is a transfer function from armature voltage under tachometer feedback in normalized input units to motor position in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 15 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 68. Compare P and PI rejection of DC-motor torque disturbances
 
@@ -2718,18 +3368,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use A=B=tau=1; compare P kP=4 with PI kP=4, kI=2 under a unit torque disturbance.
-- **Executable software model:** The declared software model is a transfer function from armature voltage with prescribed load-torque disturbance in normalized input units to motor position in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 1, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use A=B=tau=1; compare P kP=4 with PI kP=4, kI=2 under a unit torque disturbance.
+
+**Executable software model:** The declared software model is a transfer function from armature voltage with prescribed load-torque disturbance in normalized input units to motor position in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 1, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 69. Tune proportional control while exposing speed/offset/damping tradeoffs
 
@@ -2755,18 +3418,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use A=1, a1=1.4, a2=1; compare kP=1.5 and 6 for a unit step at 0.01 s for 15 s.
-- **Executable software model:** The declared software model is a transfer function from proportional actuator command in normalized input units to regulated output in normalized output units. Its numerator coefficients are 1.5; its denominator coefficients are 1, 1.4, 2.5; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 0.6 normalized_output.
+- **63% response time:** the model-derived response time is 0.95 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -0.959906 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 0.959906 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 15 s.
 
 Additional information:
 
+**Supporting physical context:** Use A=1, a1=1.4, a2=1; compare kP=1.5 and 6 for a unit step at 0.01 s for 15 s.
+
+**Executable software model:** The declared software model is a transfer function from proportional actuator command in normalized input units to regulated output in normalized output units. Its numerator coefficients are 1.5; its denominator coefficients are 1, 1.4, 2.5; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 15 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 70. Use integral control for robust zero step error and constant-disturbance rejection
 
@@ -2792,18 +3468,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/(s^2+1.4s+1), kI=0.5; apply reference and plant-disturbance steps separately with anti-windup.
-- **Executable software model:** The declared software model is a transfer function from integral control command and test disturbance in normalized input units to tracking error in normalized output units. Its numerator coefficients are 0.5; its denominator coefficients are 1, 1.4, 1, 0.5; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 2.87 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.62288 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.62288 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/(s^2+1.4s+1), kI=0.5; apply reference and plant-disturbance steps separately with anti-windup.
+
+**Executable software model:** The declared software model is a transfer function from integral control command and test disturbance in normalized input units to tracking error in normalized output units. Its numerator coefficients are 0.5; its denominator coefficients are 1, 1.4, 1, 0.5; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 71. Use derivative/rate feedback to add damping without derivative kick
 
@@ -2829,18 +3518,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/(s^2+1.4s+1), kP=6; compare kD=0 and output-rate kD=2 at 0.005 s for 12 s.
-- **Executable software model:** The declared software model is a transfer function from proportional and rate command in normalized input units to output and output rate in normalized output units. Its numerator coefficients are 6; its denominator coefficients are 1, 3.4, 7; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 0.857143 normalized_output.
+- **63% response time:** the model-derived response time is 0.64 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.21262 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.21262 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 12 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/(s^2+1.4s+1), kP=6; compare kD=0 and output-rate kD=2 at 0.005 s for 12 s.
+
+**Executable software model:** The declared software model is a transfer function from proportional and rate command in normalized input units to output and output rate in normalized output units. Its numerator coefficients are 6; its denominator coefficients are 1, 3.4, 7; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 12 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 72. Design PI control for a two-thermal-mass process
 
@@ -2866,18 +3568,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use Ko=1000, tau1=1 s, tau2=10 s; compare P kP=0.03 and PI kP=0.03, kI=0.003 for a 30 degC/s ramp capped at 300 degC.
-- **Executable software model:** The declared software model is a transfer function from heater command in degC to controlled temperature and control effort in degC. Its numerator coefficients are 3; its denominator coefficients are 1, 1, 3; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 degC.
+- **Final output change:** the model-derived steady output change is 1 degC.
+- **63% response time:** the model-derived response time is 0.8 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 degC.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 degC.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.8319 degC.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.8319 degC.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 50 s.
 
 Additional information:
 
+**Supporting physical context:** Use Ko=1000, tau1=1 s, tau2=10 s; compare P kP=0.03 and PI kP=0.03, kI=0.003 for a 30 degC/s ramp capped at 300 degC.
+
+**Executable software model:** The declared software model is a transfer function from heater command in degC to controlled temperature and control effort in degC. Its numerator coefficients are 3; its denominator coefficients are 1, 1, 3; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 50 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 73. Compare P, PI, and PID on DC-motor speed
 
@@ -2903,18 +3618,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use Jm=0.0113, b=0.028, La=0.1, Ra=1, Kt=Ke=0.067; compare P/PI/PID using kP=3, kI=15, kD=0.3.
-- **Executable software model:** The declared software model is a transfer function from armature voltage with prescribed load-torque disturbance in V to motor speed in rad/s. Its numerator coefficients are 0.0201, 0.201, 1.005; its denominator coefficients are 0.00113, 0.0342, 0.233489, 1.005; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 V.
+- **Final output change:** the model-derived steady output change is 1 rad/s.
+- **63% response time:** the model-derived response time is 0.06 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.42157 rad/s.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.42157 rad/s.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use Jm=0.0113, b=0.028, La=0.1, Ra=1, Kt=Ke=0.067; compare P/PI/PID using kP=3, kI=15, kD=0.3.
+
+**Executable software model:** The declared software model is a transfer function from armature voltage with prescribed load-torque disturbance in V to motor speed in rad/s. Its numerator coefficients are 0.0201, 0.201, 1.005; its denominator coefficients are 0.00113, 0.0342, 0.233489, 1.005; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 74. Analyze P/PI DC-motor position disturbance types with non-unity sensing
 
@@ -2940,18 +3668,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use A=B=tau=1, h=0.8; compare P kP=4 and PI kP=4, kI=2 for reference and torque disturbance.
-- **Executable software model:** The declared software model is a transfer function from motor voltage with prescribed disturbance torque in normalized input units to motor position in normalized output units. Its numerator coefficients are 4, 2; its denominator coefficients are 1, 1, 3.2, 1.6; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0256 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 6.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 25 s.
 
 Additional information:
 
+**Supporting physical context:** Use A=B=tau=1, h=0.8; compare P kP=4 and PI kP=4, kI=2 for reference and torque disturbance.
+
+**Executable software model:** The declared software model is a transfer function from motor voltage with prescribed disturbance torque in normalized input units to motor position in normalized output units. Its numerator coefficients are 4, 2; its denominator coefficients are 1, 1, 3.2, 1.6; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 25 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 75. Compare satellite PD and PID system type for reference and disturbance inputs
 
@@ -2977,18 +3718,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use J=1, kP=4, kD=3; for PID add kI=1. Test reference and torque inputs one at a time.
-- **Executable software model:** The declared software model is a transfer function from body-torque command with prescribed disturbance torque in normalized input units to attitude angle in normalized output units. Its numerator coefficients are 3, 4; its denominator coefficients are 1, 3, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0256 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 6.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 25 s.
 
 Additional information:
 
+**Supporting physical context:** Use J=1, kP=4, kD=3; for PID add kI=1. Test reference and torque inputs one at a time.
+
+**Executable software model:** The declared software model is a transfer function from body-torque command with prescribed disturbance torque in normalized input units to attitude angle in normalized output units. Its numerator coefficients are 3, 4; its denominator coefficients are 1, 3, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 25 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 76. Tune a PID from a process reaction curve for quarter-decay behavior
 
@@ -3014,18 +3768,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=2 exp(-3s)/(20s+1), R=0.1 s^-1, L=3 s; test reaction-curve P/PI/PID at 0.02 s for 100 s.
-- **Executable software model:** The declared software model is a transfer function from P in normalized input units to process output and quarter-decay response in normalized output units. Its numerator coefficients are 2; its denominator coefficients are 20, 1; and its input delay is 3 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 2 normalized_output.
+- **63% response time:** the model-derived response time is 20 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -2.62221 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 2.62221 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=2 exp(-3s)/(20s+1), R=0.1 s^-1, L=3 s; test reaction-curve P/PI/PID at 0.02 s for 100 s.
+
+**Executable software model:** The declared software model is a transfer function from P in normalized input units to process output and quarter-decay response in normalized output units. Its numerator coefficients are 2; its denominator coefficients are 20, 1; and its input delay is 3 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 77. Tune P/PI/PID from ultimate gain and ultimate period
 
@@ -3051,18 +3818,32 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s+1)(s+2)], whose Ku=6 and Pu=4.44288 s; measure marginal oscillation then apply P/PI/PID table settings.
-- **Executable software model:** The declared software model is a transfer function from proportional or PID process command in normalized input units to marginal oscillation and tuned response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 3, 2, 0; and its input delay is 0 s.
+- **Oscillation period:** the interval between same-direction peaks is 4.44288 s.
+- **Successive peak ratio:** the successive same-direction peak ratio is 0.8 ratio.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding motion change:** the initial acceleration change is 0.01 normalized_output/s^2 for the known input step.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 40 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s+1)(s+2)], whose Ku=6 and Pu=4.44288 s; measure marginal oscillation then apply P/PI/PID table settings.
+
+**Executable software model:** The declared software model is a transfer function from proportional or PID process command in normalized input units to marginal oscillation and tuned response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 3, 2, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 40 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 78. Apply reaction-curve Ziegler-Nichols tuning to a heat exchanger
 
@@ -3088,18 +3869,32 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use reaction-curve R=1/90 s^-1, L=13 s and model exp(-13s)/(90s+1); compare P 6.92 and PI 6.22, TI=43.3 s, then half gains.
-- **Executable software model:** The declared software model is a transfer function from steam-valve P or PI command in normalized input units to heat-exchanger temperature and step response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 90, 1; and its input delay is 13 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 90 s.
+- **Pure waiting time:** the visible response waits 13 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.3149 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.3149 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 500 s.
 
 Additional information:
 
+**Supporting physical context:** Use reaction-curve R=1/90 s^-1, L=13 s and model exp(-13s)/(90s+1); compare P 6.92 and PI 6.22, TI=43.3 s, then half gains.
+
+**Executable software model:** The declared software model is a transfer function from steam-valve P or PI command in normalized input units to heat-exchanger temperature and step response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 90, 1; and its input delay is 13 s.
+
 The accompanying existing software record uses a 0.1 s sample interval for 500 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 79. Apply ultimate-sensitivity Ziegler-Nichols tuning to a heat exchanger
 
@@ -3125,18 +3920,32 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use measured Ku=15.3, Pu=42 s; compare P kP=7.65 and PI kP=6.885, TI=35 s, then repeat with half gain.
-- **Executable software model:** The declared software model is a transfer function from steam-valve P or PI command in normalized input units to heat-exchanger temperature and oscillation in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 90, 1; and its input delay is 13 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 90 s.
+- **Pure waiting time:** the visible response waits 13 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.3149 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.3149 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 500 s.
 
 Additional information:
 
+**Supporting physical context:** Use measured Ku=15.3, Pu=42 s; compare P kP=7.65 and PI kP=6.885, TI=35 s, then repeat with half gain.
+
+**Executable software model:** The declared software model is a transfer function from steam-valve P or PI command in normalized input units to heat-exchanger temperature and oscillation in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 90, 1; and its input delay is 13 s.
+
 The accompanying existing software record uses a 0.1 s sample interval for 500 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 80. Add inverse-DC-gain feedforward to DC-motor tracking and measured-disturbance rejection
 
@@ -3162,18 +3971,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/(s^2+1.4s+1), G(0)=1; compare kP=1.5 and 6 with kff=1 for reference and measured-disturbance feedforward.
-- **Executable software model:** The declared software model is a transfer function from armature voltage combining feedback and feedforward in normalized input units to motor speed in normalized output units. Its numerator coefficients are 2.5; its denominator coefficients are 1, 1.4, 2.5; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.95 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.59984 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.59984 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/(s^2+1.4s+1), G(0)=1; compare kP=1.5 and 6 with kff=1 for reference and measured-disturbance feedforward.
+
+**Executable software model:** The declared software model is a transfer function from armature voltage combining feedback and feedforward in normalized input units to motor speed in normalized output units. Its numerator coefficients are 2.5; its denominator coefficients are 1, 1.4, 2.5; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 81. Draw and parameterize the DC-motor position-control root locus
 
@@ -3199,18 +4021,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s+1)] and sweep K over 0.1, 0.25, 1, 4; sample unit steps at 0.01 s for 20 s.
-- **Executable software model:** The declared software model is a transfer function from motor armature voltage in normalized input units to motor position and tracking response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s+1)] and sweep K over 0.1, 0.25, 1, 4; sample unit steps at 0.01 s for 20 s.
+
+**Executable software model:** The declared software model is a transfer function from motor armature voltage in normalized input units to motor position and tracking response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 82. Draw a root locus with respect to a physical damping/pole parameter
 
@@ -3236,18 +4071,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use characteristic s^2+c s+1 and sweep physical damping c=0,1,2,4; sample free and step responses.
-- **Executable software model:** The declared software model is a transfer function from bounded modal test input while damping is varied in normalized input units to modal response and decay envelope in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 2, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use characteristic s^2+c s+1 and sweep physical damping c=0,1,2,4; sample free and step responses.
+
+**Executable software model:** The declared software model is a transfer function from bounded modal test input while damping is varied in normalized input units to modal response and decay envelope in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 2, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 83. Construct a higher-order locus from Evans phase, real-axis, asymptote, departure, and gain rules
 
@@ -3273,18 +4121,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use L=1/[s((s+4)^2+16)] and sweep K near 10, 32, 65, 100; sample at 0.01 s for 30 s.
-- **Executable software model:** The declared software model is a transfer function from bounded command during a loop-strength sweep in normalized input units to controlled output and transient response in normalized output units. Its numerator coefficients are 65; its denominator coefficients are 1, 8, 32, 65; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from bounded command during a loop-strength sweep in normalized input units to controlled output and transient response in normalized output units. Its numerator coefficients are 65; its denominator coefficients are 1, 8, 32, 65; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use L=1/[s((s+4)^2+16)] and sweep K near 10, 32, 65, 100; sample at 0.01 s for 30 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 84. Stabilize a satellite double integrator with PD control
 
@@ -3310,18 +4168,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use satellite G=1/s^2 and PD D=K(s+1); sweep K=0.25,1,4,9 with filtered derivative.
-- **Executable software model:** The declared software model is a transfer function from PD body-torque command in normalized input units to satellite attitude and angular rate in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 1, 1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use satellite G=1/s^2 and PD D=K(s+1); sweep K=0.25,1,4,9 with filtered derivative.
+
+**Executable software model:** The declared software model is a transfer function from PD body-torque command in normalized input units to satellite attitude and angular rate in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 1, 1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 85. Quantify how a finite lead pole changes the satellite PD locus, including the 9:1 transition
 
@@ -3347,18 +4218,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use L=(s+1)/[s^2(s+p)] and compare p=4,9,12 at K=1,5,20, with 0.005 s sampling.
-- **Executable software model:** The declared software model is a transfer function from lead-compensated body torque in normalized input units to satellite attitude and angular rate in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 1, 12, 1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0177778 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Use L=(s+1)/[s^2(s+p)] and compare p=4,9,12 at K=1,5,20, with 0.005 s sampling.
+
+**Executable software model:** The declared software model is a transfer function from lead-compensated body torque in normalized input units to satellite attitude and angular rate in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 1, 12, 1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 86. Analyze collocated satellite flexibility and flexible-mode damping
 
@@ -3384,18 +4268,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use collocated flexible satellite G=[(s+0.1)^2+36]/{s^2[(s+0.1)^2+43.56]} and lead K(s+1)/(s+12); sweep K.
-- **Executable software model:** The declared software model is a transfer function from collocated body torque in normalized input units to collocated attitude and flexible deflection in normalized output units. Its numerator coefficients are 1, 1.2, 36.01; its denominator coefficients are 1, 12.2, 45.97, 522.84, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0177778 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Use collocated flexible satellite G=[(s+0.1)^2+36]/{s^2[(s+0.1)^2+43.56]} and lead K(s+1)/(s+12); sweep K.
+
+**Executable software model:** The declared software model is a transfer function from collocated body torque in normalized input units to collocated attitude and flexible deflection in normalized output units. Its numerator coefficients are 1, 1.2, 36.01; its denominator coefficients are 1, 12.2, 45.97, 522.84, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 87. Analyze noncollocated satellite flexibility and spillover instability
 
@@ -3421,18 +4318,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use noncollocated G=1/{s^2[(s+0.1)^2+43.56]} with lead K(s+1)/(s+12); start K at 1e-4 and stop on instability.
-- **Executable software model:** The declared software model is a transfer function from main-body torque in normalized input units to remote attitude and flexible deflection in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 1, 12.2, 45.97, 522.84, 0, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from main-body torque in normalized input units to remote attitude and flexible deflection in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 1, 12.2, 45.97, 522.84, 0, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 0.01 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.01 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.01 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use noncollocated G=1/{s^2[(s+0.1)^2+43.56]} with lead K(s+1)/(s+12); start K at 1e-4 and stop on instability.
+
 The accompanying existing software record uses a 0.002 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -0.01, -0.005, 0.005, 0.01, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 88. Handle complex multiple roots on a fourth-order locus
 
@@ -3458,18 +4365,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use L=1/[s(s+2)((s+1)^2+4)] and sweep K across 6.25; sample at 0.005 s for 20 s.
-- **Executable software model:** The declared software model is a transfer function from bounded command during a loop-strength sweep in normalized input units to closed-loop output near the repeated-root condition in normalized output units. Its numerator coefficients are 6.25; its denominator coefficients are 1, 4, 8, 8, 6.25; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from bounded command during a loop-strength sweep in normalized input units to closed-loop output near the repeated-root condition in normalized output units. Its numerator coefficients are 6.25; its denominator coefficients are 1, 4, 8, 8, 6.25; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use L=1/[s(s+2)((s+1)^2+4)] and sweep K across 6.25; sample at 0.005 s for 20 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 89. Design lead compensation to meet rise-time and overshoot limits
 
@@ -3495,18 +4412,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s+1)] and lead D=91(s+2)/(s+13); test +/-1 steps at 0.002 s for 5 s.
-- **Executable software model:** The declared software model is a transfer function from lead-compensated servo command in normalized input units to servo position in normalized output units. Its numerator coefficients are 91, 182; its denominator coefficients are 1, 14, 104, 182; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.64 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 1.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s+1)] and lead D=91(s+2)/(s+13); test +/-1 steps at 0.002 s for 5 s.
+
+**Executable software model:** The declared software model is a transfer function from lead-compensated servo command in normalized input units to servo position in normalized output units. Its numerator coefficients are 91, 182; its denominator coefficients are 1, 14, 104, 182; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 5 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 90. Add lag compensation to improve velocity-error constant without moving dominant roots
 
@@ -3532,18 +4462,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Add lag (s+0.05)/(s+0.01) to the K=91 lead design; run ramp and step tests for 300 s.
-- **Executable software model:** The declared software model is a transfer function from lead-lag servo command in normalized input units to servo position in normalized output units. Its numerator coefficients are 91, 186.55, 9.1; its denominator coefficients are 1, 14.01, 104.14, 186.68, 9.1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.000177778 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 75 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 300 s.
 
 Additional information:
 
+**Supporting physical context:** Add lag (s+0.05)/(s+0.01) to the K=91 lead design; run ramp and step tests for 300 s.
+
+**Executable software model:** The declared software model is a transfer function from lead-lag servo command in normalized input units to servo position in normalized output units. Its numerator coefficients are 91, 186.55, 9.1; its denominator coefficients are 1, 14.01, 104.14, 186.68, 9.1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 91. Add notch compensation for an unmodeled flexible resonance
 
@@ -3569,18 +4512,28 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use flexible plant 2500/[s(s+1)(s^2+s+2500)], the K=91 lead-lag, and notch (s^2+0.8s+3600)/(s+60)^2; sweep flexible frequency by +/-10%.
-- **Executable software model:** The declared software model is a transfer function from notch-filtered actuator command in normalized input units to nominal output and flexible displacement in normalized output units. Its numerator coefficients are 2500; its denominator coefficients are 1, 2, 2501, 2500, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from notch-filtered actuator command in normalized input units to nominal output and flexible displacement in normalized output units. Its numerator coefficients are 2500; its denominator coefficients are 1, 2, 2501, 2500, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use flexible plant 2500/[s(s+1)(s^2+s+2500)], the K=91 lead-lag, and notch (s^2+0.8s+3600)/(s+60)^2; sweep flexible frequency by +/-10%.
+
 The accompanying existing software record uses a 0.0005 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 92. Realize a lead compensator with an operational-amplifier circuit
 
@@ -3606,18 +4559,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Realize -5(s+2)/(s+10) with C=10 uF, R1=50 kohm, R2=200 kohm, Rf=250 kohm; sweep component tolerances +/-10%.
-- **Executable software model:** The declared software model is a transfer function from input error voltage in V to lead-network output voltage in V. Its numerator coefficients are -5, -10; its denominator coefficients are 1, 10; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 V.
+- **Final output change:** the model-derived steady output change is -1 V.
+- **63% response time:** the model-derived response time is 0.001 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -6.6 V.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 6.6 V.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 5 s.
 
 Additional information:
 
+**Supporting physical context:** Realize -5(s+2)/(s+10) with C=10 uF, R1=50 kohm, R2=200 kohm, Rf=250 kohm; sweep component tolerances +/-10%.
+
+**Executable software model:** The declared software model is a transfer function from input error voltage in V to lead-network output voltage in V. Its numerator coefficients are -5, -10; its denominator coefficients are 1, 10; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 5 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 93. Design quadrotor pitch-axis lead compensation
 
@@ -3643,18 +4609,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use quadrotor pitch plant 1/[s^2(s+2)] and lead 30(s+0.5)/(s+15); test +/-0.1 rad commands at 0.002 s for 15 s.
-- **Executable software model:** The declared software model is a transfer function from pitch rotor-torque command in rad to quadrotor pitch angle and angular rate in rad. Its numerator coefficients are 30, 15; its denominator coefficients are 1, 17, 30, 30, 15; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 rad.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0711111 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 3.75 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 rad.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 rad.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 15 s.
 
 Additional information:
 
+**Supporting physical context:** Use quadrotor pitch plant 1/[s^2(s+2)] and lead 30(s+0.5)/(s+15); test +/-0.1 rad commands at 0.002 s for 15 s.
+
+**Executable software model:** The declared software model is a transfer function from pitch rotor-torque command in rad to quadrotor pitch angle and angular rate in rad. Its numerator coefficients are 30, 15; its denominator coefficients are 1, 17, 30, 30, 15; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 15 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 94. Design a small-airplane pitch autopilot and integral trim loop
 
@@ -3680,18 +4659,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use airplane G=160(s+2.5)(s+0.7)/[(s^2+5s+40)(s^2+0.03s+0.06)], lead K=1.5,z=3,p=20, and trim integrator KI=0.15.
-- **Executable software model:** The declared software model is a transfer function from elevator and trim-tab commands in normalized input units to pitch attitude in normalized output units. Its numerator coefficients are 160, 512, 280; its denominator coefficients are 1, 5.03, 40.21, 1.5, 2.4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 116.667 normalized_output.
+- **63% response time:** the model-derived response time is 3.445 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -289.556 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 289.556 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 40 s.
 
 Additional information:
 
+**Supporting physical context:** Use airplane G=160(s+2.5)(s+0.7)/[(s^2+5s+40)(s^2+0.03s+0.06)], lead K=1.5,z=3,p=20, and trim integrator KI=0.15.
+
+**Executable software model:** The declared software model is a transfer function from elevator and trim-tab commands in normalized input units to pitch attitude in normalized output units. Its numerator coefficients are 160, 512, 280; its denominator coefficients are 1, 5.03, 40.21, 1.5, 2.4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 40 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 95. Use a negative root locus for nonminimum-phase airplane altitude dynamics
 
@@ -3717,18 +4709,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use airplane altitude G=(6-s)/[s(s^2+4s+13)] and sweep positive physical gain using the corresponding negative root locus; apply +/-1 degree pulses.
-- **Executable software model:** The declared software model is a transfer function from elevator command in deg to aircraft altitude response in ft. Its numerator coefficients are -1, 6; its denominator coefficients are 1, 4, 13, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from elevator command in deg to aircraft altitude response in ft. Its numerator coefficients are -1, 6; its denominator coefficients are 1, 4, 13, 0; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 deg.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 deg.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 deg.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 ft.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 ft.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use airplane altitude G=(6-s)/[s(s^2+4s+13)] and sweep positive physical gain using the corresponding negative root locus; apply +/-1 degree pulses.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 96. Select tachometer and amplifier gains by successive loop closure
 
@@ -3754,18 +4756,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use s^2+s+KA+KT s=0; choose KA=4 then KT=1 and repeat after +/-10% changes.
-- **Executable software model:** The declared software model is a transfer function from servo amplifier voltage under tachometer feedback in normalized input units to servomechanism position and speed response in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0711111 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 3.75 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 15 s.
 
 Additional information:
 
+**Supporting physical context:** Use s^2+s+KA+KT s=0; choose KA=4 then KT=1 and repeat after +/-10% changes.
+
+**Executable software model:** The declared software model is a transfer function from servo amplifier voltage under tachometer feedback in normalized input units to servomechanism position and speed response in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 15 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 97. Design inner-attitude/outer-position quadrotor cascade control
 
@@ -3791,18 +4806,40 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use inner pitch plant 1/[s^2(s+2)] with 30(s+0.5)/(s+15), outer position plant -32.2/s^2, and outer lead 0.081(s+0.1)/(s+10).
-- **Executable software model:** The declared software model is a transfer function from outer position command and inner rotor-torque command in ft to horizontal position in ft. Its numerator coefficients are 2.6082, 0.26082; its denominator coefficients are 1, 10, 2.6082, 0.26082; and its input delay is 0 s.
+- **Vehicle mass:** the vehicle effective mass is 1 kg.
+- **Pitch inertia:** the pitch inertia is 0.02 kg*m^2.
+- **Gravity:** 9.81 m/s^2.
+- **Linear drag:** 0.25 N*s/m.
+- **Pitch damping:** 0.02 Nm*s/rad.
+- **Minimum thrust:** 0 N.
+- **Maximum thrust:** 20 N.
+- **Torque limit:** the torque limit is 1 Nm.
+- **Typical response time:** 2 s.
+- **Maximum tilt:** the maximum tilt is 0.35 rad.
+- **Maximum altitude error:** 2 m.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 N.
+- **Input simulation lower bound:** the declared input simulation lower bound is 0 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 20 N.
+- **Output simulation lower bound:** the primary output simulation lower bound is -2 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 2 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use inner pitch plant 1/[s^2(s+2)] with 30(s+0.5)/(s+15), outer position plant -32.2/s^2, and outer lead 0.081(s+0.1)/(s+10).
+
+**Executable software model:** The declared software model is a transfer function from outer position command and inner rotor-torque command in ft to horizontal position in ft. Its numerator coefficients are 2.6082, 0.26082; its denominator coefficients are 1, 10, 2.6082, 0.26082; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 40 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 98. Design a lead compensator for a numerically controlled machine-tool servo
 
@@ -3828,18 +4865,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use machine-tool G=1/[s(s+1)] and lead 10(s+1)/(s+2); test +/-1 position steps and +/-10% pole variation.
-- **Executable software model:** The declared software model is a transfer function from lead-compensated servo command in normalized input units to machine-tool position in normalized output units. Its numerator coefficients are 10, 10; its denominator coefficients are 1, 3, 12, 10; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0711111 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 3.75 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 15 s.
 
 Additional information:
 
+**Supporting physical context:** Use machine-tool G=1/[s(s+1)] and lead 10(s+1)/(s+2); test +/-1 position steps and +/-10% pole variation.
+
+**Executable software model:** The declared software model is a transfer function from lead-compensated servo command in normalized input units to machine-tool position in normalized output units. Its numerator coefficients are 10, 10; its denominator coefficients are 1, 3, 12, 10; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 15 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 99. Linearize and stabilize an elementary magnetic suspension
 
@@ -3865,18 +4915,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use m=0.02 kg, g=9.8, e=100x, f=0.5i+20x, and lead (s+10)/(s+20) with K=1; sample at 0.001 s.
-- **Executable software model:** The declared software model is a transfer function from electromagnet current command in V to ball position in m. Its numerator coefficients are 50, 500; its denominator coefficients are 1, 20, 1500, 5000; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from electromagnet current command in V to ball position in m. Its numerator coefficients are 50, 500; its denominator coefficients are 1, 20, 1500, 5000; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 V.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use m=0.02 kg, g=9.8, e=100x, f=0.5i+20x, and lead (s+10)/(s+20) with K=1; sample at 0.001 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 100. Design yaw-rate-aided heading control for the USCG cutter Tampa under wind disturbance
 
@@ -3902,18 +4962,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use Tampa rudder plant -0.0184(s+0.0068)/[s(s+0.2647)(s+0.0063)]. With sign absorbed, use Kpsi=0.1, Kr=1, KI=0.0001 and enforce rudder limits.
-- **Executable software model:** The declared software model is a transfer function from rudder command and prescribed wind-gust input in rad to ship heading in rad. Its numerator coefficients are 0.00184, 1.4352e-05, 1.2512e-08; its denominator coefficients are 1, 0.2894, 0.00363273, 1.4352e-05, 1.2512e-08; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 rad.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 4e-06 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 500 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 rad.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 rad.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 2000 s.
 
 Additional information:
 
+**Supporting physical context:** Use Tampa rudder plant -0.0184(s+0.0068)/[s(s+0.2647)(s+0.0063)]. With sign absorbed, use Kpsi=0.1, Kr=1, KI=0.0001 and enforce rudder limits.
+
+**Executable software model:** The declared software model is a transfer function from rudder command and prescribed wind-gust input in rad to ship heading in rad. Its numerator coefficients are 0.00184, 1.4352e-05, 1.2512e-08; its denominator coefficients are 1, 0.2894, 0.00363273, 1.4352e-05, 1.2512e-08; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.1 s sample interval for 2000 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 101. Compute the current response of a voltage-driven capacitor
 
@@ -3939,18 +5012,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use C=100 uF and voltage sinusoids of 1 V at 1, 10, 100, and 1000 rad/s; sample current with at least 50 points per cycle.
-- **Executable software model:** The declared software model is a transfer function from sinusoidal voltage in V to capacitor current magnitude and phase in A. Its numerator coefficients are 0.0001, 0; its denominator coefficients are 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 V.
+- **Final output change:** 0.5 A.
+- **63% response time:** the response time is 1 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 A.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 A.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 8 s.
 
 Additional information:
 
+**Supporting physical context:** Use C=100 uF and voltage sinusoids of 1 V at 1, 10, 100, and 1000 rad/s; sample current with at least 50 points per cycle.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 1, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from sinusoidal voltage in V to capacitor current magnitude and phase in A. Its numerator coefficients are 0.0001, 0; its denominator coefficients are 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 5e-05 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 102. Derive the magnitude and phase of a first-order lead element
 
@@ -3976,18 +5064,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use lead D=(s+1)/(0.1s+1), sweep 0.1 to 100 rad/s, and verify magnitude and phase at 1, sqrt(10), and 10 rad/s.
-- **Executable software model:** The declared software model is a transfer function from sinusoidal error signal in normalized input units to lead-compensator magnitude and phase in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 0.1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.001 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -13.2 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 13.2 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use lead D=(s+1)/(0.1s+1), sweep 0.1 to 100 rad/s, and verify magnitude and phase at 1, sqrt(10), and 10 rad/s.
+
+**Executable software model:** The declared software model is a transfer function from sinusoidal error signal in normalized input units to lead-compensator magnitude and phase in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 0.1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 103. Build an asymptotic Bode plot from real poles and zeros
 
@@ -4013,18 +5114,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use L=2000(s+0.5)/[s(s+10)(s+50)] and evaluate 0.01 to 1000 rad/s on a logarithmic grid.
-- **Executable software model:** The declared software model is a transfer function from sinusoidal plant input in normalized input units to open-loop magnitude and phase in normalized output units. Its numerator coefficients are 2000, 1000; its denominator coefficients are 1, 60, 500, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use L=2000(s+0.5)/[s(s+10)(s+50)] and evaluate 0.01 to 1000 rad/s on a logarithmic grid.
+
+**Executable software model:** The declared software model is a transfer function from sinusoidal plant input in normalized input units to open-loop magnitude and phase in normalized output units. Its numerator coefficients are 2000, 1000; its denominator coefficients are 1, 60, 500, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 104. Include complex pole/zero factors in ordinary and flexible-system Bode plots
 
@@ -4050,18 +5164,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Compare L1=10/[s(s^2+0.4s+4)] with the flexible pole-zero doublet 0.01(s^2+0.01s+1)/{s^2(s^2/4+0.01s+1)}.
-- **Executable software model:** The declared software model is a transfer function from sinusoidal applied force in normalized input units to plant displacement magnitude and phase in normalized output units. Its numerator coefficients are 10; its denominator coefficients are 1, 0.4, 4, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from sinusoidal applied force in normalized input units to plant displacement magnitude and phase in normalized output units. Its numerator coefficients are 10; its denominator coefficients are 1, 0.4, 4, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
 
 Additional information:
 
+**Supporting physical context:** Compare L1=10/[s(s^2+0.4s+4)] with the flexible pole-zero doublet 0.01(s^2+0.01s+1)/{s^2(s^2/4+0.01s+1)}.
+
 The accompanying existing software record uses a 0.001 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 105. Infer low-frequency error constants and system type from a Bode plot
 
@@ -4087,18 +5211,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use L=10/[s(s+1)], run a unit ramp for 50 s at 0.01 s sampling, and fit the final error.
-- **Executable software model:** The declared software model is a transfer function from unit-ramp reference in normalized input units to tracking error and regulated output in normalized output units. Its numerator coefficients are 10; its denominator coefficients are 1, 1, 10; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0064 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 12.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 50 s.
 
 Additional information:
 
+**Supporting physical context:** Use L=10/[s(s+1)], run a unit ramp for 50 s at 0.01 s sampling, and fit the final error.
+
+**Executable software model:** The declared software model is a transfer function from unit-ramp reference in normalized input units to tracking error and regulated output in normalized output units. Its numerator coefficients are 10; its denominator coefficients are 1, 1, 10; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 50 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 106. Apply the Nyquist criterion to a second-order loop stable for every positive gain
 
@@ -4124,18 +5261,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/(s+1)^2 and sweep K=0.1,1,10,100; also test negative K=-0.5,-1,-2.
-- **Executable software model:** The declared software model is a transfer function from bounded loop command during a gain sweep in normalized input units to closed-loop output and frequency response in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 2, 5; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 0.8 normalized_output.
+- **63% response time:** the model-derived response time is 0.67 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.27552 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.27552 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/(s+1)^2 and sweep K=0.1,1,10,100; also test negative K=-0.5,-1,-2.
+
+**Executable software model:** The declared software model is a transfer function from bounded loop command during a gain sweep in normalized input units to closed-loop output and frequency response in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 2, 5; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 107. Apply Nyquist indentation to a third-order loop with a pole at the origin
 
@@ -4161,18 +5311,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s+1)^2] and sweep K=0.5,1,2,3; apply Nyquist indentation at the origin.
-- **Executable software model:** The declared software model is a transfer function from bounded loop command during a gain sweep in normalized input units to closed-loop output and frequency response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 2, 1, 1; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from bounded loop command during a gain sweep in normalized input units to closed-loop output and frequency response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 2, 1, 1; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s+1)^2] and sweep K=0.5,1,2,3; apply Nyquist indentation at the origin.
+
 The accompanying existing software record uses a 0.01 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 108. Compare special Nyquist cases with an RHP pole and imaginary-axis zeros
 
@@ -4198,18 +5358,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** For G1=(s+1)/[s(s/10-1)] use K=0.5,1,2; separately test G2=(s^2+3)/(s+1)^2 for positive gains.
-- **Executable software model:** The declared software model is a transfer function from bounded commands used in the two loop tests in normalized input units to closed-loop outputs and frequency responses of both cases in normalized output units. Its numerator coefficients are 20, 20; its denominator coefficients are 1, 10, 20; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from bounded commands used in the two loop tests in normalized input units to closed-loop outputs and frequency responses of both cases in normalized output units. Its numerator coefficients are 20, 20; its denominator coefficients are 1, 10, 20; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** For G1=(s+1)/[s(s/10-1)] use K=0.5,1,2; separately test G2=(s^2+3)/(s+1)^2 for positive gains.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 109. Diagnose conditional stability and misleading gain margin
 
@@ -4235,18 +5405,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use L=K(s+10)^2/s^3 and compare K=4.9,5,7,10; at K=7 measure both directions of gain margin.
-- **Executable software model:** The declared software model is a transfer function from bounded loop command during a gain sweep in normalized input units to closed-loop output and frequency response in normalized output units. Its numerator coefficients are 7, 140, 700; its denominator coefficients are 1, 7, 140, 700; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use L=K(s+10)^2/s^3 and compare K=4.9,5,7,10; at K=7 measure both directions of gain margin.
+
+**Executable software model:** The declared software model is a transfer function from bounded loop command during a gain sweep in normalized input units to closed-loop output and frequency response in normalized output units. Its numerator coefficients are 7, 140, 700; its denominator coefficients are 1, 7, 140, 700; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 110. Interpret multiple unity-gain crossings and stability margins
 
@@ -4272,18 +5455,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=85(s+1)(s^2+2s+43.25)/{s^2(s^2+2s+82)(s^2+2s+101)} and resolve every unity crossing.
-- **Executable software model:** The declared software model is a transfer function from bounded sinusoidal loop excitation in normalized input units to closed-loop output and open-loop frequency response in normalized output units. Its numerator coefficients are 85, 255, 3846.25, 3676.25; its denominator coefficients are 1, 4, 187, 366, 8282, 0, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from bounded sinusoidal loop excitation in normalized input units to closed-loop output and open-loop frequency response in normalized output units. Its numerator coefficients are 85, 255, 3846.25, 3676.25; its denominator coefficients are 1, 4, 187, 366, 8282, 0, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=85(s+1)(s^2+2s+43.25)/{s^2(s^2+2s+82)(s^2+2s+101)} and resolve every unity crossing.
+
 The accompanying existing software record uses a 0.0005 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 111. Use Bode's gain-phase slope rule to design spacecraft PD control
 
@@ -4309,18 +5502,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use spacecraft G=1/s^2 and KD=0.01(20s+1); apply +/-0.1 rad steps at 0.05 s for 200 s.
-- **Executable software model:** The declared software model is a transfer function from body-torque command in rad to attitude in rad. Its numerator coefficients are 0.2, 0.01; its denominator coefficients are 1, 0.2, 0.01; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 rad.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0004 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 50 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 rad.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 rad.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 200 s.
 
 Additional information:
 
+**Supporting physical context:** Use spacecraft G=1/s^2 and KD=0.01(20s+1); apply +/-0.1 rad steps at 0.05 s for 200 s.
+
+**Executable software model:** The declared software model is a transfer function from body-torque command in rad to attitude in rad. Its numerator coefficients are 0.2, 0.01; its denominator coefficients are 1, 0.2, 0.01; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.05 s sample interval for 200 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 112. Relate crossover frequency, phase margin, resonant peak, and closed-loop bandwidth
 
@@ -4346,18 +5552,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use representative L=1/[s(s+1)], calculate exact T=L/(1+L), and compare crossover, phase margin, resonance, and -3 dB bandwidth.
-- **Executable software model:** The declared software model is a transfer function from bounded sinusoidal command sweep in normalized input units to closed-loop output and bandwidth response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 1.55 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.5352 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.5352 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Use representative L=1/[s(s+1)], calculate exact T=L/(1+L), and compare crossover, phase margin, resonance, and -3 dB bandwidth.
+
+**Executable software model:** The declared software model is a transfer function from bounded sinusoidal command sweep in normalized input units to closed-loop output and bandwidth response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 113. Design lead compensation for DC-motor position control
 
@@ -4383,18 +5602,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use motor G=1/[s(s+1)] and lead D=10(s/2+1)/(s/10+1); test ramp and step commands.
-- **Executable software model:** The declared software model is a transfer function from lead-compensated motor command in normalized input units to motor position in normalized output units. Its numerator coefficients are 50, 100; its denominator coefficients are 1, 11, 60, 100; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use motor G=1/[s(s+1)] and lead D=10(s/2+1)/(s/10+1); test ramp and step commands.
+
+**Executable software model:** The declared software model is a transfer function from lead-compensated motor command in normalized input units to motor position in normalized output units. Its numerator coefficients are 50, 100; its denominator coefficients are 1, 11, 60, 100; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 114. Design single- and double-lead compensation for a thermal plant and servomechanism
 
@@ -4420,18 +5652,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** For the thermal plant use K=9 and lead (s/1.5+1)/(s/15+1); for the servo use the double lead (s/2+1)(s/4+1)/[(s/20+1)(s/40+1)].
-- **Executable software model:** The declared software model is a transfer function from single- or double-lead command in normalized input units to temperature or servo output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 3.5, 3.5, 1; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from single- or double-lead command in normalized input units to temperature or servo output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 3.5, 3.5, 1; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
 
 Additional information:
 
+**Supporting physical context:** For the thermal plant use K=9 and lead (s/1.5+1)/(s/15+1); for the servo use the double lead (s/2+1)(s/4+1)/[(s/20+1)(s/40+1)].
+
 The accompanying existing software record uses a 0.005 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 115. Design lag compensation for a thermal plant and DC motor, and compare it with lead
 
@@ -4457,18 +5699,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** For the thermal plant use lag 3(5s+1)/(15s+1); for the motor use K=10 with lag zero 0.1 and pole 0.01 rad/s.
-- **Executable software model:** The declared software model is a transfer function from lag-compensated command in normalized input units to thermal or motor response and slow tail in normalized output units. Its numerator coefficients are 100, 10; its denominator coefficients are 100, 110, 10, 10; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from lag-compensated command in normalized input units to thermal or motor response and slow tail in normalized output units. Its numerator coefficients are 100, 10; its denominator coefficients are 100, 110, 10, 10; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 75 s.
 
 Additional information:
 
+**Supporting physical context:** For the thermal plant use lag 3(5s+1)/(15s+1); for the motor use K=10 with lag zero 0.1 and pole 0.01 rad/s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 116. Design spacecraft PID control with a sensor lag and constant torque disturbance
 
@@ -4494,18 +5746,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use spacecraft G=0.9/s^2, sensor H=2/(s+2), and PID D=0.05(10s+1)(s+0.005)/s; test command and constant torque separately.
-- **Executable software model:** The declared software model is a transfer function from body-torque command with prescribed disturbance torque in normalized input units to attitude in normalized output units. Its numerator coefficients are 0.9, 0.0945, 0.00045; its denominator coefficients are 1, 2, 0, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 4e-06 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 500 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 2000 s.
 
 Additional information:
 
+**Supporting physical context:** Use spacecraft G=0.9/s^2, sensor H=2/(s+2), and PID D=0.05(10s+1)(s+0.005)/s; test command and constant torque separately.
+
+**Executable software model:** The declared software model is a transfer function from body-torque command with prescribed disturbance torque in normalized input units to attitude in normalized output units. Its numerator coefficients are 0.9, 0.0945, 0.00045; its denominator coefficients are 1, 2, 0, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 2000 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 117. Convert a sinusoidal tracking-error requirement into a loop-gain performance bound
 
@@ -4531,18 +5796,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Require unit-amplitude sinusoidal tracking error <=0.005 from 0 to 100 Hz; use an exact sensitivity test with S=1/201 over the band.
-- **Executable software model:** The declared software model is a transfer function from prescribed sinusoidal reference command in normalized input units to tracking error and regulated output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 201; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 4 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 0.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 2 s.
 
 Additional information:
 
+**Supporting physical context:** Require unit-amplitude sinusoidal tracking error <=0.005 from 0 to 100 Hz; use an exact sensitivity test with S=1/201 over the band.
+
+**Executable software model:** The declared software model is a transfer function from prescribed sinusoidal reference command in normalized input units to tracking error and regulated output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 201; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.0001 s sample interval for 2 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 118. Enforce robust-stability and sensitivity bounds under plant uncertainty
 
@@ -4568,18 +5846,33 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use antenna G=1/[s(s+1)] and D=10(0.5s+1)/(0.1s+1); compute S and T, then apply the stated high-frequency uncertainty weight.
-- **Executable software model:** The declared software model is a transfer function from loop-shaped feedback command under prescribed plant variation in normalized input units to regulated output in normalized output units. Its numerator coefficients are 0.1, 1.1, 1, 0; its denominator coefficients are 0.1, 1.1, 6, 10; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** 0.5 normalized_output.
+- **63% response time:** the response time is 6.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 50 s.
 
 Additional information:
 
+**Supporting physical context:** Use antenna G=1/[s(s+1)] and D=10(0.5s+1)/(0.1s+1); compute S and T, then apply the stated high-frequency uncertainty weight.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 6.25, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from loop-shaped feedback command under prescribed plant variation in normalized input units to regulated output in normalized output units. Its numerator coefficients are 0.1, 1.1, 1, 0; its denominator coefficients are 0.1, 1.1, 6, 10; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 50 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 119. Quantify the phase-margin loss caused by sampling-equivalent time delay
 
@@ -4605,18 +5898,34 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Insert equivalent delay Td=0.025 s into the lead-compensated motor loop with crossover 5 rad/s; compare Ts=0.05 and 0.14 s.
-- **Executable software model:** The declared software model is a transfer function from digitally sampled control command in normalized input units to sampled plant output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1; and its input delay is 0.025 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 1 normalized_output at steady state.
+- **63% response time:** the response time is 2.5 s.
+- **Pure waiting time:** the visible response waits 0.025 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -1.31955 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 1.31955 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Insert equivalent delay Td=0.025 s into the lead-compensated motor loop with crossover 5 rad/s; compare Ts=0.05 and 0.14 s.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 1, denominator coefficients 2.5, 1, and input delay 0.025 s.
+
+**Executable software model:** The declared software model is a transfer function from digitally sampled control command in normalized input units to sampled plant output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1; and its input delay is 0.025 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 120. Read closed-loop bandwidth, resonant peak, and stability margins from a Nichols chart
 
@@ -4642,18 +5951,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the PID-loop frequency samples and read Nichols contours; verify bandwidth 0.8 rad/s, resonant peak 1.2, PM 37 degrees, and GM 1.26.
-- **Executable software model:** The declared software model is a transfer function from bounded frequency-swept input in normalized input units to closed-loop output and frequency response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0.9, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0177778 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Use the PID-loop frequency samples and read Nichols contours; verify bandwidth 0.8 rad/s, resonant peak 1.2, PM 37 degrees, and GM 1.26.
+
+**Executable software model:** The declared software model is a transfer function from bounded frequency-swept input in normalized input units to closed-loop output and frequency response in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0.9, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 121. Put rigid-satellite attitude dynamics into state-variable form
 
@@ -4679,18 +6001,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use lever arm d=1 m, inertia I=5000 kg*m^2, state [angle, rate], and +/-25 N pulses; sample at 0.01 s for 20 s.
-- **Executable software model:** The existing software record supplies a state-space model with state order angle, rate; matrix A has rows [0, 1]; [0, 0]; matrix B has rows [0]; [0.0002]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are thruster force, the output channels are attitude angle and angular rate channel 1, attitude angle and angular rate channel 2, and the initial state is 0, 0.
+- **Known input change:** the declared input changes by 25 N.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -25 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 25 N.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use lever arm d=1 m, inertia I=5000 kg*m^2, state [angle, rate], and +/-25 N pulses; sample at 0.01 s for 20 s.
+
+**Executable software model:** The existing software record supplies a state-space model with state order angle, rate; matrix A has rows [0, 1]; [0, 0]; matrix B has rows [0]; [0.0002]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are thruster force, the output channels are attitude angle and angular rate channel 1, attitude angle and angular rate channel 2, and the initial state is 0, 0.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -25, -12.5, 12.5, 25, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 122. Derive a DC-motor state model from coupled mechanical and electrical equations
 
@@ -4716,18 +6051,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use J=0.0113, b=0.028, La=0.1, Ra=1, Kt=Ke=0.067; apply +/-1 V steps and log angle, speed, current at 0.001 s.
-- **Executable software model:** The existing software record supplies a state-space model with state order angle, speed, current; matrix A has rows [0, 1, 0]; [0, -2.477876, 5.929204]; [0, -0.67, -10]; matrix B has rows [0]; [0]; [10]; matrix C has rows [1, 0, 0]; [0, 1, 0]; [0, 0, 1]; and matrix D has rows [0]; [0]; [0]. The input channels are armature voltage, the output channels are motor position, speed, current, and the initial state is 0, 0, 0.
+- **Complete numeric model:** The existing software record supplies a state-space model with state order angle, speed, current; matrix A has rows [0, 1, 0]; [0, -2.477876, 5.929204]; [0, -0.67, -10]; matrix B has rows [0]; [0]; [10]; matrix C has rows [1, 0, 0]; [0, 1, 0]; [0, 0, 1]; and matrix D has rows [0]; [0]; [0]. The input channels are armature voltage, the output channels are motor position, speed, current, and the initial state is 0, 0, 0. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 V.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 V.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2 s.
 
 Additional information:
 
+**Supporting physical context:** Use J=0.0113, b=0.028, La=0.1, Ra=1, Kt=Ke=0.067; apply +/-1 V steps and log angle, speed, current at 0.001 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 8 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 123. Realize a quarter-car transfer function in real modal canonical form
 
@@ -4753,18 +6098,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=(2s+4)/[s^2(s^2+2s+4)] and realize the rigid-body and flexible modes separately; sample impulse response at 0.005 s.
-- **Executable software model:** The declared software model is a transfer function from realization input in normalized input units to quarter-car output and modal states in normalized output units. Its numerator coefficients are 2, 4; its denominator coefficients are 1, 2, 4, 0, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from realization input in normalized input units to quarter-car output and modal states in normalized output units. Its numerator coefficients are 2, 4; its denominator coefficients are 1, 2, 4, 0, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=(2s+4)/[s^2(s^2+2s+4)] and realize the rigid-body and flexible modes separately; sample impulse response at 0.005 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 124. Transform a thermal system from control canonical form to modal form
 
@@ -4790,18 +6145,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use Ac=[[-7,-12],[1,0]], Bc=[1,0], Cc=[1,2] and T=[[4,-3],[-1,1]]; compare transformed trajectories.
-- **Executable software model:** The declared software model is a transfer function from heat input in normalized input units to thermal modal states and output in normalized output units. Its numerator coefficients are 1, 2; its denominator coefficients are 1, 7, 12; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 0.166667 normalized_output.
+- **63% response time:** the model-derived response time is 0.16 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -0.233749 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 0.233749 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use Ac=[[-7,-12],[1,0]], Bc=[1,0], Cc=[1,2] and T=[[4,-3],[-1,1]]; compare transformed trajectories.
+
+**Executable software model:** The declared software model is a transfer function from heat input in normalized input units to thermal modal states and output in normalized output units. Its numerator coefficients are 1, 2; its denominator coefficients are 1, 7, 12; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 125. Recover poles, zeros, and transfer function from the Piper Dakota state model
 
@@ -4827,18 +6195,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the supplied four-state Piper Dakota matrices; excite elevator by +/-1 degree pulses and compute poles, zeros, and pitch response.
-- **Executable software model:** The declared software model is a transfer function from elevator input in deg to pitch attitude and modal states in deg. Its numerator coefficients are 160, 512, 280; its denominator coefficients are 1, 5.03, 40.21, 1.5, 2.4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 deg.
+- **Final output change:** the model-derived steady output change is 116.667 deg.
+- **63% response time:** the model-derived response time is 3.445 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 deg.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 deg.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -289.556 deg.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 289.556 deg.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 40 s.
 
 Additional information:
 
+**Supporting physical context:** Use the supplied four-state Piper Dakota matrices; excite elevator by +/-1 degree pulses and compute poles, zeros, and pitch response.
+
+**Executable software model:** The declared software model is a transfer function from elevator input in deg to pitch attitude and modal states in deg. Its numerator coefficients are 160, 512, 280; its denominator coefficients are 1, 5.03, 40.21, 1.5, 2.4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 40 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 126. Test controllability and observability and interpret pole-zero cancellation physically
 
@@ -4864,18 +6245,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use A=diag(-3,-4), B=[1,1]^T, C=[0,1], D=0, so the -3 mode is controllable but unobservable; compare internal state and reduced transfer output.
-- **Executable software model:** The existing software record supplies a state-space model with state order hidden_mode, visible_mode; matrix A has rows [-3, 0]; [0, -4]; matrix B has rows [1]; [1]; matrix C has rows [0, 1]; and matrix D has rows [0]. The input channels are bounded state-space test excitation, the output channels are state trajectories and declared output response, and the initial state is 1, 0.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 0.5 rad at steady state.
+- **63% response time:** the response time is 1.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 rad.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use A=diag(-3,-4), B=[1,1]^T, C=[0,1], D=0, so the -3 mode is controllable but unobservable; compare internal state and reduced transfer output.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 1.25, 1, and input delay 0 s.
+
+**Executable software model:** The existing software record supplies a state-space model with state order hidden_mode, visible_mode; matrix A has rows [-3, 0]; [0, -4]; matrix B has rows [1]; [1]; matrix C has rows [0, 1]; and matrix D has rows [0]. The input channels are bounded state-space test excitation, the output channels are state trajectories and declared output response, and the initial state is 1, 0.
+
 The accompanying existing software record uses a 0.01 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 127. Place repeated closed-loop poles for an undamped pendulum by full-state feedback
 
@@ -4901,18 +6297,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use omega0=1 rad/s and feedback K=[3,4]; release from angle 0.1 rad and compare with open-loop pendulum.
-- **Executable software model:** The existing software record supplies a state-space model with state order angle, rate; matrix A has rows [0, 1]; [-4, -4]; matrix B has rows [0]; [1]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are pivot torque, the output channels are pendulum angle and rate channel 1, pendulum angle and rate channel 2, and the initial state is 0.1, 0.
+- **Known input change:** the declared input changes by 1 Nm.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.16 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use omega0=1 rad/s and feedback K=[3,4]; release from angle 0.1 rad and compare with open-loop pendulum.
+
+**Executable software model:** The existing software record supplies a state-space model with state order angle, rate; matrix A has rows [0, 1]; [-4, -4]; matrix B has rows [0]; [1]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are pivot torque, the output channels are pendulum angle and rate channel 1, pendulum angle and rate channel 2, and the initial state is 0.1, 0.
+
 The accompanying existing software record uses a 0.005 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 128. Apply Ackermann pole placement and diagnose gain growth near a weakly controllable zero
 
@@ -4938,18 +6347,31 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use target s^2+2s+4. Compare z0=2 giving K=[-3.8,0.6] with z0=-2.99 giving K=[2052.5,-688.1].
-- **Executable software model:** The declared software model is a transfer function from bounded state-feedback command in normalized input units to closed-loop state response and control effort in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.78 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.5352 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.5352 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use target s^2+2s+4. Compare z0=2 giving K=[-3.8,0.6] with z0=-2.99 giving K=[2052.5,-688.1].
+
+**Executable software model:** The declared software model is a transfer function from bounded state-feedback command in normalized input units to closed-loop state response and control effort in normalized output units. Its numerator coefficients are 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 129. Introduce a step reference robustly into a Type 1 DC-motor loop
 
@@ -4975,18 +6397,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use motor A=[[0,1],[0,-1]], B=[0,1], K=[8,3], and reference gain Nbar=8; apply +/-1 position steps.
-- **Executable software model:** The declared software model is a transfer function from state feedback voltage in normalized input units to motor position and speed in normalized output units. Its numerator coefficients are 8; its denominator coefficients are 1, 4, 8; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0711111 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 3.75 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 15 s.
 
 Additional information:
 
+**Supporting physical context:** Use motor A=[[0,1],[0,-1]], B=[0,1], K=[8,3], and reference gain Nbar=8; apply +/-1 position steps.
+
+**Executable software model:** The declared software model is a transfer function from state feedback voltage in normalized input units to motor position and speed in normalized output units. Its numerator coefficients are 8; its denominator coefficients are 1, 4, 8; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 15 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 130. Select dominant second-order poles for a third-order drone model
 
@@ -5012,18 +6447,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the three-state drone model, K=[14,56,96], and Nbar=96; apply unit altitude steps at 0.005 s for 10 s.
-- **Executable software model:** The declared software model is a transfer function from control moment in normalized input units to drone attitude response in normalized output units. Its numerator coefficients are 96; its denominator coefficients are 1, 16, 56, 96; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from control moment in normalized input units to drone attitude response in normalized output units. Its numerator coefficients are 96; its denominator coefficients are 1, 16, 56, 96; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use the three-state drone model, K=[14,56,96], and Nbar=96; apply unit altitude steps at 0.005 s for 10 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 131. Balance tracking error and effort with LQR for the drone
 
@@ -5049,18 +6494,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the drone model with Q=100 C^T C, R=1 and LQR K=[2.8728,9.8720,10]; compare rho=10,100,1000.
-- **Executable software model:** The declared software model is a transfer function from optimal control moment in normalized input units to drone state and control effort in normalized output units. Its numerator coefficients are 10; its denominator coefficients are 1, 4.8728, 9.872, 10; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from optimal control moment in normalized input units to drone state and control effort in normalized output units. Its numerator coefficients are 10; its denominator coefficients are 1, 4.8728, 9.872, 10; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 3.75 s.
 
 Additional information:
 
+**Supporting physical context:** Use the drone model with Q=100 C^T C, R=1 and LQR K=[2.8728,9.8720,10]; compare rho=10,100,1000.
+
 The accompanying existing software record uses a 0.005 s sample interval for 15 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 132. Design and validate a full-order pendulum state estimator
 
@@ -5086,18 +6541,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use omega0=1 and full-order estimator L=[20,99]; initialize the estimate at [0.2,-0.1] while the plant starts at zero.
-- **Executable software model:** The existing software record supplies a state-space model with state order angle_error, rate_error; matrix A has rows [-20, 1]; [-100, 0]; matrix B has rows [0]; [0]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are known pivot torque, the output channels are measured angle and estimated state channel 1, measured angle and estimated state channel 2, and the initial state is 0.2, -0.1.
+- **Known input change:** the declared input changes by 1 Nm.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 4 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 0.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 2 s.
 
 Additional information:
 
+**Supporting physical context:** Use omega0=1 and full-order estimator L=[20,99]; initialize the estimate at [0.2,-0.1] while the plant starts at zero.
+
+**Executable software model:** The existing software record supplies a state-space model with state order angle_error, rate_error; matrix A has rows [-20, 1]; [-100, 0]; matrix B has rows [0]; [0]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are known pivot torque, the output channels are measured angle and estimated state channel 1, measured angle and estimated state channel 2, and the initial state is 0.2, -0.1.
+
 The accompanying existing software record uses a 0.001 s sample interval for 2 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 133. Design a reduced-order pendulum estimator without differentiating the measurement
 
@@ -5123,18 +6591,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use omega0=1 and reduced observer gain L=10; estimate rate from measured angle without numerical differentiation.
-- **Executable software model:** The declared software model is a transfer function from known pivot torque in normalized input units to measured angle and estimated rate in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 10; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.64 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 1.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use omega0=1 and reduced observer gain L=10; estimate rate from measured angle without numerical differentiation.
+
+**Executable software model:** The declared software model is a transfer function from known pivot torque in normalized input units to measured angle and estimated rate in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 10; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 5 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 134. Select estimator poles from a symmetric root locus under process/sensor noise tradeoffs
 
@@ -5160,18 +6641,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use omega0=1, noise ratio q=365, and estimator poles -3+/-j3.18; compare q/10, q, 10q with identical noise seeds.
-- **Executable software model:** The declared software model is a transfer function from known plant input in normalized input units to state estimate and innovation in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 6, 19.1124; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use omega0=1, noise ratio q=365, and estimator poles -3+/-j3.18; compare q/10, q, 10q with identical noise seeds.
+
+**Executable software model:** The declared software model is a transfer function from known plant input in normalized input units to state estimate and innovation in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 6, 19.1124; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 135. Combine controller and estimator by the separation principle and form a DC-servo compensator
 
@@ -5197,18 +6691,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use servo G=10/[s(s+2)(s+8)], K=[-46.4,5.76,-0.65], L=[0.56,1.42,16]; sweep loop gain only within a stopped simulation.
-- **Executable software model:** The declared software model is a transfer function from dynamic compensator voltage in normalized input units to servo output in normalized output units. Its numerator coefficients are 10; its denominator coefficients are 1, 10, 16, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from dynamic compensator voltage in normalized input units to servo output in normalized output units. Its numerator coefficients are 10; its denominator coefficients are 1, 10, 16, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use servo G=10/[s(s+2)(s+8)], K=[-46.4,5.76,-0.65], L=[0.56,1.42,16]; sweep loop gain only within a stopped simulation.
+
 The accompanying existing software record uses a 0.002 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 136. Assign controller feedforward zeros to increase a servomechanism velocity constant
 
@@ -5234,18 +6738,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s+1)], K=[8,3], estimator pole -0.1, controller zero -0.096, and verify Kv=10 with a unit ramp.
-- **Executable software model:** The declared software model is a transfer function from two-input or equivalent lag-lead command in normalized input units to servo position in normalized output units. Its numerator coefficients are 8.32, 8.32, 0.8; its denominator coefficients are 1, 4.0996, 0.08; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0004 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 50 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 200 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s+1)], K=[8,3], estimator pole -0.1, controller zero -0.096, and verify Kv=10 with a unit ramp.
+
+**Executable software model:** The declared software model is a transfer function from two-input or equivalent lag-lead command in normalized input units to servo position in normalized output units. Its numerator coefficients are 8.32, 8.32, 0.8; its denominator coefficients are 1, 4.0996, 0.08; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 200 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 137. Add integral state feedback for robust motor-speed tracking and constant-disturbance rejection
 
@@ -5271,18 +6788,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use motor xdot=-3x+u+w, integral state xI_dot=y-r, gains [25,7], and observer L=7; test reference and constant load separately.
-- **Executable software model:** The declared software model is a transfer function from motor voltage in normalized input units to motor speed and integral error in normalized output units. Its numerator coefficients are 25; its denominator coefficients are 1, 10, 25; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.43 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.32 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.32 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use motor xdot=-3x+u+w, integral state xI_dot=y-r, gains [25,7], and observer L=7; test reference and constant load separately.
+
+**Executable software model:** The declared software model is a transfer function from motor voltage in normalized input units to motor speed and integral error in normalized output units. Its numerator coefficients are 25; its denominator coefficients are 1, 10, 25; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 138. Embed a sinusoidal internal model for disk-drive tracking and rejection
 
@@ -5308,18 +6838,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use omega0=1 and controller gain vector [2.0718,16.3923,13.9282,4.4641]; track and reject sinusoids at 0.9,1.0,1.1 rad/s.
-- **Executable software model:** The declared software model is a transfer function from voice-coil force in normalized input units to disk-head position and sinusoidal error in normalized output units. Its numerator coefficients are 100; its denominator coefficients are 1, 8, 32, 80, 100; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0016 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use omega0=1 and controller gain vector [2.0718,16.3923,13.9282,4.4641]; track and reject sinusoids at 0.9,1.0,1.1 rad/s.
+
+**Executable software model:** The declared software model is a transfer function from voice-coil force in normalized input units to disk-head position and sinusoidal error in normalized output units. Its numerator coefficients are 100; its denominator coefficients are 1, 8, 32, 80, 100; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 139. Recover LQR loop shape with an LTR estimator while quantifying sensor-noise actuator activity
 
@@ -5345,18 +6888,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use satellite LQR K=[1,1.414] and LTR estimators q=1,10,100; inject identical unit sensor noise and record control RMS.
-- **Executable software model:** The declared software model is a transfer function from body torque under prescribed sensor noise in normalized input units to attitude response and body-torque activity in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 1.414, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0016 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use satellite LQR K=[1,1.414] and LTR estimators q=1,10,100; inject identical unit sensor noise and record control RMS.
+
+**Executable software model:** The declared software model is a transfer function from body torque under prescribed sensor noise in normalized input units to attitude response and body-torque activity in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 1.414, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 140. Control a delayed heat exchanger with a Smith predictor and state-space pole placement
 
@@ -5382,18 +6938,32 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G0=1/[(10s+1)(60s+1)] with 5 s delay, K=[5.2,-0.17], L=[0.18,4.2], and Nbar=1.2055; perturb delay to 4.5 and 5.5 s.
-- **Executable software model:** The declared software model is a transfer function from steam command through Smith predictor in normalized input units to delayed heat-exchanger temperature in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 600, 70, 1; and its input delay is 5 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 70.95 s.
+- **Pure waiting time:** the visible response waits 5 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.31798 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.31798 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 400 s.
 
 Additional information:
 
+**Supporting physical context:** Use G0=1/[(10s+1)(60s+1)] with 5 s delay, K=[5.2,-0.17], L=[0.18,4.2], and Nbar=1.2055; perturb delay to 4.5 and 5.5 s.
+
+**Executable software model:** The declared software model is a transfer function from steam command through Smith predictor in normalized input units to delayed heat-exchanger temperature in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 600, 70, 1; and its input delay is 5 s.
+
 The accompanying existing software record uses a 0.05 s sample interval for 400 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 141. Digitize a DC-motor lead controller with Tustin's bilinear approximation
 
@@ -5419,18 +6989,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use continuous lead 10(0.5s+1)/(0.1s+1), T=0.025 s, and Tustin coefficients u[k]=0.7778u[k-1]+45.56e[k]-43.33e[k-1].
-- **Executable software model:** The declared software model is a transfer function from digital motor voltage in normalized error units to sampled motor position and error in normalized control units. Its numerator coefficients are 45.56, -43.33; its denominator coefficients are 1, -0.7778; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_error.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.16 normalized_control/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_error.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_error.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_control.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_control.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use continuous lead 10(0.5s+1)/(0.1s+1), T=0.025 s, and Tustin coefficients u[k]=0.7778u[k-1]+45.56e[k]-43.33e[k-1].
+
+**Executable software model:** The declared software model is a transfer function from digital motor voltage in normalized error units to sampled motor position and error in normalized control units. Its numerator coefficients are 45.56, -43.33; its denominator coefficients are 1, -0.7778; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.025 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 142. Digitize the same lead controller with the zero-order-hold approximation
 
@@ -5456,18 +7039,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the same continuous lead and T=0.025 s with ZOH recursion u[k]=0.7788u[k-1]+50e[k]-47.79e[k-1].
-- **Executable software model:** The declared software model is a transfer function from held motor voltage in normalized error units to sampled motor position and error in normalized control units. Its numerator coefficients are 50, -47.79; its denominator coefficients are 1, -0.7788; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_error.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.16 normalized_control/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_error.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_error.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_control.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_control.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use the same continuous lead and T=0.025 s with ZOH recursion u[k]=0.7788u[k-1]+50e[k]-47.79e[k-1].
+
+**Executable software model:** The declared software model is a transfer function from held motor voltage in normalized error units to sampled motor position and error in normalized control units. Its numerator coefficients are 50, -47.79; its denominator coefficients are 1, -0.7788; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.025 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 143. Design a space-station attitude controller with matched pole-zero emulation
 
@@ -5493,18 +7089,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use space-station G=1/s^2, continuous lead 0.81(s+0.2)/(s+2), MPZ T=1 s controller 0.389(z-0.82)/(z-0.135), then repeat at T=0.5 s.
-- **Executable software model:** The declared software model is a transfer function from digital body torque in rad to space station attitude in normalized torque units. Its numerator coefficients are 0.389, -0.319; its denominator coefficients are 1, -0.135; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 rad.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0025 normalized_torque/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 20 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 rad.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 rad.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_torque.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_torque.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 80 s.
 
 Additional information:
 
+**Supporting physical context:** Use space-station G=1/s^2, continuous lead 0.81(s+0.2)/(s+2), MPZ T=1 s controller 0.389(z-0.82)/(z-0.135), then repeat at T=0.5 s.
+
+**Executable software model:** The declared software model is a transfer function from digital body torque in rad to space station attitude in normalized torque units. Its numerator coefficients are 0.389, -0.319; its denominator coefficients are 1, -0.135; and its input delay is 0 s.
+
 The accompanying existing software record uses a 1 s sample interval for 80 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 144. Compare continuous and sampled root loci for a first-order plant
 
@@ -5530,18 +7139,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use a=1 s^-1, T=0.1 s, alpha=exp(-0.1), and sweep proportional K across the exact sampled stability limit.
-- **Executable software model:** The declared software model is a transfer function from held proportional command in normalized input units to sampled first-order output in normalized output units. Its numerator coefficients are 0, 0.0951626; its denominator coefficients are 1, -0.904837; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by -0.105171 normalized_output at steady state.
+- **63% response time:** the response time is 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.138779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.138779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use a=1 s^-1, T=0.1 s, alpha=exp(-0.1), and sweep proportional K across the exact sampled stability limit.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients -0.105171, denominator coefficients 2.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from held proportional command in normalized input units to sampled first-order output in normalized output units. Its numerator coefficients are 0, 0.0951626; its denominator coefficients are 1, -0.904837; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.1 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 145. Design the space-station controller directly in the z-plane
 
@@ -5567,18 +7191,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use exact ZOH Gd=0.5(z+1)/(z-1)^2 at T=1 s and direct controller 0.374(z-0.85)/z.
-- **Executable software model:** The declared software model is a transfer function from digital body torque in rad to space station attitude in normalized torque units. Its numerator coefficients are 0.374, -0.3179; its denominator coefficients are 1, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 rad.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0025 normalized_torque/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 20 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 rad.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 rad.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_torque.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_torque.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 80 s.
 
 Additional information:
 
+**Supporting physical context:** Use exact ZOH Gd=0.5(z+1)/(z-1)^2 at T=1 s and direct controller 0.374(z-0.85)/z.
+
+**Executable software model:** The declared software model is a transfer function from digital body torque in rad to space station attitude in normalized torque units. Its numerator coefficients are 0.374, -0.3179; its denominator coefficients are 1, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 1 s sample interval for 80 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 146. Compare continuous, emulated, and direct-discrete damping and step response
 
@@ -5604,18 +7241,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** At T=1 s compare continuous lead, MPZ 0.389(z-0.82)/(z-0.135), and direct 0.374(z-0.85)/z on the same exact ZOH plant.
-- **Executable software model:** The declared software model is a transfer function from continuous or digital command in rad to continuous and sampled step responses in normalized torque units. Its numerator coefficients are 0.374, -0.3179; its denominator coefficients are 1, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 rad.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0025 normalized_torque/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 20 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 rad.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 rad.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_torque.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_torque.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 80 s.
 
 Additional information:
 
+**Supporting physical context:** At T=1 s compare continuous lead, MPZ 0.389(z-0.82)/(z-0.135), and direct 0.374(z-0.85)/z on the same exact ZOH plant.
+
+**Executable software model:** The declared software model is a transfer function from continuous or digital command in rad to continuous and sampled step responses in normalized torque units. Its numerator coefficients are 0.374, -0.3179; its denominator coefficients are 1, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 1 s sample interval for 80 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 147. Recover a filter difference equation, pole damping, and stability from its z transfer function
 
@@ -5641,18 +7291,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use H(z)=(1+0.5z^-1)/[(1-0.5z^-1)(1+z^-1/3)] at 1 Hz and excite impulse, step, and alternating inputs.
-- **Executable software model:** The declared software model is a transfer function from discrete filter input in normalized input units to filter output in normalized output units. Its numerator coefficients are 1, 0.5; its denominator coefficients are 1, -0.1666667, -0.1666667; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by -0.5 normalized_output at steady state.
+- **63% response time:** the response time is 20 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.570679 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.570679 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 40 s.
 
 Additional information:
 
+**Supporting physical context:** Use H(z)=(1+0.5z^-1)/[(1-0.5z^-1)(1+z^-1/3)] at 1 Hz and excite impulse, step, and alternating inputs.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients -0.5, denominator coefficients 20, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from discrete filter input in normalized input units to filter output in normalized output units. Its numerator coefficients are 1, 0.5; its denominator coefficients are 1, -0.1666667, -0.1666667; and its input delay is 0 s.
+
 The accompanying existing software record uses a 1 s sample interval for 40 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 148. Solve a forced second-order difference equation by the z-transform
 
@@ -5678,18 +7343,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use y[k]-3y[k-1]+2y[k-2]=2u[k-1]-2u[k-2], u[k]=k, and zero prehistory for k=0..15.
-- **Executable software model:** The declared software model is a transfer function from ramp sequence input in normalized input units to discrete sequence output in normalized output units. Its numerator coefficients are 0, 2; its denominator coefficients are 1, -2; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by -1 normalized_output at steady state.
+- **63% response time:** the response time is 20 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.696476 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.696476 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 15 s.
 
 Additional information:
 
+**Supporting physical context:** Use y[k]-3y[k-1]+2y[k-2]=2u[k-1]-2u[k-2], u[k]=k, and zero prehistory for k=0..15.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients -1, denominator coefficients 20, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from ramp sequence input in normalized input units to discrete sequence output in normalized output units. Its numerator coefficients are 0, 2; its denominator coefficients are 1, -2; and its input delay is 0 s.
+
 The accompanying existing software record uses a 1 s sample interval for 15 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 149. Prove and use the mapping properties between the s-plane and z-plane
 
@@ -5715,18 +7395,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** With T=0.1 s map s=-1+/-j2 and compare s=-1+/-j(2+2pi/T); verify identical z poles and aliasing.
-- **Executable software model:** The declared software model is a transfer function from prescribed modal mapping test in normalized input units to continuous and sampled free-response modes in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, -1.773602, 0.818731; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 0.5 normalized_output at steady state.
+- **63% response time:** the response time is 2 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.655553 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.655553 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** With T=0.1 s map s=-1+/-j2 and compare s=-1+/-j(2+2pi/T); verify identical z poles and aliasing.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 2, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from prescribed modal mapping test in normalized input units to continuous and sampled free-response modes in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, -1.773602, 0.818731; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.1 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 150. Map a continuous lag compensator to a 20 Hz digital implementation
 
@@ -5752,18 +7447,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use lag (0.8s+1)/(50s+1), fs=20 Hz, and MPZ recursion with zero 0.93941, pole 0.99900, gain 0.01650.
-- **Executable software model:** The declared software model is a transfer function from digital lag command in normalized error units to regulated output and digital error in normalized control units. Its numerator coefficients are 0.0165, -0.0155; its denominator coefficients are 1, -0.999; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_error.
+- **Final output change:** the primary output changes by 0.0155155 normalized_control at steady state.
+- **63% response time:** the response time is 37.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_error.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_error.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.0204736 normalized_control.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.0204736 normalized_control.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 300 s.
 
 Additional information:
 
+**Supporting physical context:** Use lag (0.8s+1)/(50s+1), fs=20 Hz, and MPZ recursion with zero 0.93941, pole 0.99900, gain 0.01650.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.0155155, denominator coefficients 37.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from digital lag command in normalized error units to regulated output and digital error in normalized control units. Its numerator coefficients are 0.0165, -0.0155; its denominator coefficients are 1, -0.999; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.05 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 151. Compare Tustin and matched pole-zero digitizations of a lead network
 
@@ -5789,18 +7499,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Digitize H=(s+1)/(s+10.1) at T=0.25 s by Tustin and MPZ; compare phase at 3 rad/s.
-- **Executable software model:** The declared software model is a transfer function from sampled error in normalized input units to lead network magnitude and phase in normalized output units. Its numerator coefficients are 0.49724, -0.38675; its denominator coefficients are 1, 0.11602; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is -3.33348 normalized_output.
+- **63% response time:** the model-derived response time is 9.84 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -4.2445 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 4.2445 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Digitize H=(s+1)/(s+10.1) at T=0.25 s by Tustin and MPZ; compare phase at 3 rad/s.
+
+**Executable software model:** The declared software model is a transfer function from sampled error in normalized input units to lead network magnitude and phase in normalized output units. Its numerator coefficients are 0.49724, -0.38675; its denominator coefficients are 1, 0.11602; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.25 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 152. Compare Tustin and matched pole-zero digitizations of a lag network
 
@@ -5826,18 +7549,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Digitize H=(10s+1)/(100s+1) at T=0.25 s by Tustin and MPZ; evaluate at 3 rad/s.
-- **Executable software model:** The declared software model is a transfer function from sampled error in normalized input units to lag network magnitude and phase in normalized output units. Its numerator coefficients are 0.101124, -0.098627; its denominator coefficients are 1, -0.997503; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 0.0988739 normalized_output at steady state.
+- **63% response time:** the response time is 37.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.13047 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.13047 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 300 s.
 
 Additional information:
 
+**Supporting physical context:** Digitize H=(10s+1)/(100s+1) at T=0.25 s by Tustin and MPZ; evaluate at 3 rad/s.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.0988739, denominator coefficients 37.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from sampled error in normalized input units to lag network magnitude and phase in normalized output units. Its numerator coefficients are 0.101124, -0.098627; its denominator coefficients are 1, -0.997503; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.25 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 153. Digitize a PID at three sample periods and assess transient degradation
 
@@ -5863,18 +7601,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s+1)] and PID K=15.2,Td=0.3816 s,Ti=0.95 s; discretize at T=1,0.1,0.01 s and record output plus control.
-- **Executable software model:** The declared software model is a transfer function from digital PID command in normalized error units to sampled step response in normalized control units. Its numerator coefficients are 74.003, -130.406, 58.003; its denominator coefficients are 1, -1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_error.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_control/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_error.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_error.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_control.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_control.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s+1)] and PID K=15.2,Td=0.3816 s,Ti=0.95 s; discretize at T=1,0.1,0.01 s and record output plus control.
+
+**Executable software model:** The declared software model is a transfer function from digital PID command in normalized error units to sampled step response in normalized control units. Its numerator coefficients are 74.003, -130.406, 58.003; its denominator coefficients are 1, -1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.1 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 154. Determine the sampled-data stability-gain range of a plant with an unstable mode
 
@@ -5900,18 +7651,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the exact T=1 s ZOH model Gd=(7.96703z^2+1.33509z-0.324537)/(z^3-3.57119z^2+1.000162z-0.0000454) and scan K>0.
-- **Executable software model:** The declared software model is a transfer function from held proportional command in normalized input units to sampled plant output in normalized output units. Its numerator coefficients are 7.96703, 1.33509, -0.324537; its denominator coefficients are 1, -3.57119, 1.000162, -4.54e-05; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from held proportional command in normalized input units to sampled plant output in normalized output units. Its numerator coefficients are 7.96703, 1.33509, -0.324537; its denominator coefficients are 1, -3.57119, 1.000162, -4.54e-05; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 25 s.
 
 Additional information:
 
+**Supporting physical context:** Use the exact T=1 s ZOH model Gd=(7.96703z^2+1.33509z-0.324537)/(z^3-3.57119z^2+1.000162z-0.0000454) and scan K>0.
+
 The accompanying existing software record uses a 1 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 155. Design discrete proportional-plus-velocity satellite attitude feedback
 
@@ -5937,18 +7698,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use T=0.1 s exact double-integrator model and state feedback Kp=1.8097,Kv=1.9032 targeting z=exp((-1+/-j1)T).
-- **Executable software model:** The existing software record supplies a state-space model with state order angle, rate; matrix A has rows [0.9909515, 0.0904841]; [-0.18097, 0.8096825]; matrix B has rows [0.0090485]; [0.18097]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are digital torque, the output channels are satellite attitude and sampled rate channel 1, satellite attitude and sampled rate channel 2, and the initial state is 0, 0.
+- **Known input change:** the declared input changes by 1 Nm.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use T=0.1 s exact double-integrator model and state feedback Kp=1.8097,Kv=1.9032 targeting z=exp((-1+/-j1)T).
+
+**Executable software model:** The existing software record supplies a state-space model with state order angle, rate; matrix A has rows [0.9909515, 0.0904841]; [-0.18097, 0.8096825]; matrix B has rows [0.0090485]; [0.18097]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are digital torque, the output channels are satellite attitude and sampled rate channel 1, satellite attitude and sampled rate channel 2, and the initial state is 0, 0.
+
 The accompanying existing software record uses a 0.1 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 156. Linearize and digitally stabilize a magnetic-levitation ball subject to sensor/current limits
 
@@ -5974,18 +7748,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use m=0.02 kg,k1=20 N/m,k2=0.4 N/A,T=0.02 s; test state feedback Kx=94 A/m,Kv=2.08 A*s/m from x0=+/-0.25 cm with 1 A current limit.
-- **Executable software model:** The existing software record supplies a state-space model with state order position, velocity; matrix A has rows [1.206756, 0.0213603]; [21.360255, 1.206756]; matrix B has rows [0.00413512]; [0.4272051]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are electromagnet current, the output channels are ball displacement and current channel 1, ball displacement and current channel 2, and the initial state is 0.0025, 0.
+- **Complete numeric model:** The existing software record supplies a state-space model with state order position, velocity; matrix A has rows [1.206756, 0.0213603]; [21.360255, 1.206756]; matrix B has rows [0.00413512]; [0.4272051]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are electromagnet current, the output channels are ball displacement and current channel 1, ball displacement and current channel 2, and the initial state is 0.0025, 0. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 0.25 V.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.25 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.25 V.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 0.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use m=0.02 kg,k1=20 N/m,k2=0.4 N/A,T=0.02 s; test state feedback Kx=94 A/m,Kv=2.08 A*s/m from x0=+/-0.25 cm with 1 A current limit.
+
 The accompanying existing software record uses a 0.02 s sample interval for 2 s, starts the primary output at 0, contains input amplitudes -0.25, -0.125, 0.125, 0.25, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 157. Redesign a lead-lag servomechanism directly in the z-plane
 
@@ -6011,18 +7795,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=10/[s(s+1)(s+10)], fs=15 Hz and its exact ZOH coefficients; design directly for Mp<=16%,tr<=0.4 s,Kv_d>1.333.
-- **Executable software model:** The declared software model is a transfer function from digital servo voltage in normalized input units to servo position and ramp error in normalized output units. Its numerator coefficients are 0, 0.00041424, 0.0013906, 0.00028724; its denominator coefficients are 1, -2.4489241, 1.92922941, -0.4803053; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from digital servo voltage in normalized input units to servo position and ramp error in normalized output units. Its numerator coefficients are 0, 0.00041424, 0.0013906, 0.00028724; its denominator coefficients are 1, -2.4489241, 1.92922941, -0.4803053; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=10/[s(s+1)(s+10)], fs=15 Hz and its exact ZOH coefficients; design directly for Mp<=16%,tr<=0.4 s,Kv_d>1.333.
+
 The accompanying existing software record uses a 0.0666667 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 158. Design an antenna-servo controller by emulation and direct z-plane root locus
 
@@ -6048,18 +7842,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use antenna J=600000,B=20000 and T=10 s; compare emulation and direct z design on the same exact ZOH plant.
-- **Executable software model:** The declared software model is a transfer function from digital motor torque in Nm to antenna angle in rad. Its numerator coefficients are 0, 7.479697e-05, 6.693738e-05; its denominator coefficients are 1, -1.71653131, 0.71653131; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 Nm.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 1.6e-05 rad/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 250 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 1000 s.
 
 Additional information:
 
+**Supporting physical context:** Use antenna J=600000,B=20000 and T=10 s; compare emulation and direct z design on the same exact ZOH plant.
+
+**Executable software model:** The declared software model is a transfer function from digital motor torque in Nm to antenna angle in rad. Its numerator coefficients are 0, 7.479697e-05, 6.693738e-05; its denominator coefficients are 1, -1.71653131, 0.71653131; and its input delay is 0 s.
+
 The accompanying existing software record uses a 10 s sample interval for 1000 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 159. Design discrete compensation for a two-real-pole plant under rise-time and overshoot limits
 
@@ -6085,18 +7892,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use exact T=0.1 s Gd=(0.00451991z+0.00407643)/(z^2-1.73086805z+0.73344696) and D=6.1882(z-0.27594)/z.
-- **Executable software model:** The declared software model is a transfer function from digital compensated command in normalized error units to sampled plant output in normalized control units. Its numerator coefficients are 6.1882, -1.70762; its denominator coefficients are 1, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_error.
+- **Final output change:** the primary output changes by 0.5 normalized_control at steady state.
+- **63% response time:** the response time is 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_error.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_error.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_control.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_control.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use exact T=0.1 s Gd=(0.00451991z+0.00407643)/(z^2-1.73086805z+0.73344696) and D=6.1882(z-0.27594)/z.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 2.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from digital compensated command in normalized error units to sampled plant output in normalized control units. Its numerator coefficients are 6.1882, -1.70762; its denominator coefficients are 1, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.1 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 160. Explain the unavoidable one-sample delay in a causal discrete derivative
 
@@ -6122,18 +7944,34 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use backward difference with T=0.1 s and KTd=1, so u[k]=10(e[k]-e[k-1]); compare with the noncausal forward difference offline only.
-- **Executable software model:** The declared software model is a transfer function from sampled error sequence in normalized error units to estimated error-rate response in normalized control units. Its numerator coefficients are 10, -10; its denominator coefficients are 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_error.
+- **Final output change:** the primary output changes by -0.5 normalized_control at steady state.
+- **63% response time:** the response time is 2 s.
+- **Pure waiting time:** the visible response waits 0.1 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_error.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_error.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.655325 normalized_control.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.655325 normalized_control.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use backward difference with T=0.1 s and KTd=1, so u[k]=10(e[k]-e[k-1]); compare with the noncausal forward difference offline only.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients -0.5, denominator coefficients 2, 1, and input delay 0.1 s.
+
+**Executable software model:** The declared software model is a transfer function from sampled error sequence in normalized error units to estimated error-rate response in normalized control units. Its numerator coefficients are 10, -10; its denominator coefficients are 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.1 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 161. Find pendulum equilibria and classify their small-signal stability
 
@@ -6159,18 +7997,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use g=9.81 m/s^2,l=1 m and test equilibria theta=0 and pi with +/-0.05 rad perturbations for 10 s.
-- **Executable software model:** The existing software record supplies a state-space model with state order angle, rate; matrix A has rows [0, 1]; [-9.81, 0]; matrix B has rows [0]; [1]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are pivot torque, the output channels are pendulum angle and angular rate channel 1, pendulum angle and angular rate channel 2, and the initial state is 0.05, 0.
+- **Complete numeric model:** The existing software record supplies a state-space model with state order angle, rate; matrix A has rows [0, 1]; [-9.81, 0]; matrix B has rows [0]; [1]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are pivot torque, the output channels are pendulum angle and angular rate channel 1, pendulum angle and angular rate channel 2, and the initial state is 0.05, 0. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 Nm.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use g=9.81 m/s^2,l=1 m and test equilibria theta=0 and pi with +/-0.05 rad perturbations for 10 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 162. Linearize a magnetic ball levitator from experimentally measured force curves
 
@@ -6196,18 +8044,28 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use m=0.0084 kg, equilibrium current 0.6 A, A=[[0,1],[1667,0]], B=[0,47.6]; test +/-10 mA around equilibrium.
-- **Executable software model:** The existing software record supplies a state-space model with state order position_perturbation, velocity; matrix A has rows [0, 1]; [1667, 0]; matrix B has rows [0]; [47.6]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are electromagnet current perturbation, the output channels are ball displacement, velocity, and the initial state is 0.0001, 0.
+- **Complete numeric model:** The existing software record supplies a state-space model with state order position_perturbation, velocity; matrix A has rows [0, 1]; [1667, 0]; matrix B has rows [0]; [47.6]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are electromagnet current perturbation, the output channels are ball displacement, velocity, and the initial state is 0.0001, 0. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 0.01 V.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.01 V.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.01 V.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 0.25 s.
 
 Additional information:
 
+**Supporting physical context:** Use m=0.0084 kg, equilibrium current 0.6 A, A=[[0,1],[1667,0]], B=[0,47.6]; test +/-10 mA around equilibrium.
+
 The accompanying existing software record uses a 0.0002 s sample interval for 1 s, starts the primary output at 0, contains input amplitudes -0.01, -0.005, 0.005, 0.01, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 163. Linearize nonlinear square-root water-tank outflow around an operating point
 
@@ -6233,18 +8091,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use A=1 m^2,rho=1000 kg/m^3,R=0.5, h0=1 m, pa=0; perturb inflow by +/-10 kg/s and keep h positive.
-- **Executable software model:** The declared software model is a transfer function from inlet mass flow in kg/s to tank level and outlet flow in m. Its numerator coefficients are 0.001; its denominator coefficients are 1, 0.09905; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 kg/s.
+- **Final output change:** the model-derived steady output change is 0.0100959 m.
+- **63% response time:** the model-derived response time is 10.1 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 kg/s.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 kg/s.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -0.0133259 m.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 0.0133259 m.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use A=1 m^2,rho=1000 kg/m^3,R=0.5, h0=1 m, pa=0; perturb inflow by +/-10 kg/s and keep h positive.
+
+**Executable software model:** The declared software model is a transfer function from inlet mass flow in kg/s to tank level and outlet flow in m. Its numerator coefficients are 0.001; its denominator coefficients are 1, 0.09905; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.05 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 164. Cancel pendulum gravity by computed-torque nonlinear feedback
 
@@ -6270,18 +8141,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use m=l=1,g=9.81 and computed torque Tc=mgl sin(theta)+u with u=-4(theta-r)-4 theta_dot; test commands up to +/-1 rad.
-- **Executable software model:** The declared software model is a transfer function from computed pivot torque in rad to pendulum angle and angular rate in rad. Its numerator coefficients are 4; its denominator coefficients are 1, 4, 4; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from computed pivot torque in rad to pendulum angle and angular rate in rad. Its numerator coefficients are 4; its denominator coefficients are 1, 4, 4; and its input delay is 0 s. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 rad.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 rad.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 rad.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use m=l=1,g=9.81 and computed torque Tc=mgl sin(theta)+u with u=-4(theta-r)-4 theta_dot; test commands up to +/-1 rad.
+
 The accompanying existing software record uses a 0.002 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 165. Cancel a rapid-thermal-processing lamp square law with an inverse nonlinearity
 
@@ -6307,18 +8188,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use lamp law P=V^2, voltage limit 0..10 V, virtual power 0..100 W, inverse V=sqrt(Pcmd), and thermal G=1/(10s+1).
-- **Executable software model:** The declared software model is a transfer function from commanded lamp voltage in W to lamp voltage and delivered power in normalized temperature units. Its numerator coefficients are 1; its denominator coefficients are 10, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 W.
+- **Final output change:** the model-derived steady output change is 1 normalized_temperature.
+- **63% response time:** the model-derived response time is 10 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 W.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 W.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.31994 normalized_temperature.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.31994 normalized_temperature.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use lamp law P=V^2, voltage limit 0..10 V, virtual power 0..100 W, inverse V=sqrt(Pcmd), and thermal G=1/(10s+1).
+
+**Executable software model:** The declared software model is a transfer function from commanded lamp voltage in W to lamp voltage and delivered power in normalized temperature units. Its numerator coefficients are 1; its denominator coefficients are 10, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 166. Predict amplitude-dependent overshoot caused by actuator saturation
 
@@ -6344,18 +8238,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=(s+1)/s^2,K=1,symmetric actuator limit +/-0.4, and step amplitudes 2,4,6,8,10,12.
-- **Executable software model:** The declared software model is a transfer function from amplitude-limited command in normalized input units to output in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 1, 1, 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0064 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 12.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 50 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=(s+1)/s^2,K=1,symmetric actuator limit +/-0.4, and step amplitudes 2,4,6,8,10,12.
+
+**Executable software model:** The declared software model is a transfer function from amplitude-limited command in normalized input units to output in normalized output units. Its numerator coefficients are 1, 1; its denominator coefficients are 1, 1, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 50 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 167. Expose large-signal instability in a conditionally stable saturated loop
 
@@ -6381,18 +8288,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=(s+1)^2/s^3,K=2, saturation +/-1, and steps 1,2,3,3.5; stop if state bounds are crossed.
-- **Executable software model:** The declared software model is a transfer function from saturated proportional command in normalized input units to regulated output in normalized output units. Its numerator coefficients are 2, 4, 2; its denominator coefficients are 1, 2, 4, 2; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from saturated proportional command in normalized input units to regulated output in normalized output units. Its numerator coefficients are 2, 4, 2; its denominator coefficients are 1, 2, 4, 2; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 25 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=(s+1)^2/s^3,K=2, saturation +/-1, and steps 1,2,3,3.5; stop if state bounds are crossed.
+
 The accompanying existing software record uses a 0.002 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 168. Predict a saturation-induced flexible-mode limit cycle and eliminate it with a notch
 
@@ -6418,18 +8335,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s^2+0.2s+1)],K=0.5,saturation +/-0.1; compare with notch 123(s^2+0.18s+0.81)/(s+10)^2.
-- **Executable software model:** The declared software model is a transfer function from notch-shaped limited command in normalized input units to flexible displacement and saturated command in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0.2, 1, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from notch-shaped limited command in normalized input units to flexible displacement and saturated command in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0.2, 1, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 50 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s^2+0.2s+1)],K=0.5,saturation +/-0.1; compare with notch 123(s^2+0.18s+0.81)/(s+10)^2.
+
 The accompanying existing software record uses a 0.002 s sample interval for 200 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 169. Add back-calculation antiwindup to a saturated PI-controlled integrator
 
@@ -6455,18 +8382,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use plant 1/s, PI kp=2,ki=4, actuator +/-1, and back-calculation Ka=10; compare a 4-unit step with Ka=0.
-- **Executable software model:** The declared software model is a transfer function from saturated PI command in normalized input units to integrator output in normalized output units. Its numerator coefficients are 2, 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.04 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use plant 1/s, PI kp=2,ki=4, actuator +/-1, and back-calculation Ka=10; compare a 4-unit step with Ka=0.
+
+**Executable software model:** The declared software model is a transfer function from saturated PI command in normalized input units to integrator output in normalized output units. Its numerator coefficients are 2, 4; its denominator coefficients are 1, 2, 4; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 170. Derive the describing function of a saturation nonlinearity
 
@@ -6492,18 +8432,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use saturation slope k=1,limit N=0.1 and sine amplitudes 0.05,0.1,0.2,0.5,1 at 1 rad/s; extract the first harmonic.
-- **Executable software model:** The declared software model is a transfer function from bounded sinusoidal nonlinearity test in normalized input units to nonlinear input and fundamental output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 1 normalized_output at steady state.
+- **63% response time:** the response time is 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -1.31956 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 1.31956 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use saturation slope k=1,limit N=0.1 and sine amplitudes 0.05,0.1,0.2,0.5,1 at 1 rad/s; extract the first harmonic.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 1, denominator coefficients 2.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from bounded sinusoidal nonlinearity test in normalized input units to nonlinear input and fundamental output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 171. Derive the describing function of an ideal relay
 
@@ -6529,18 +8484,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use ideal relay levels +/-1 and sine amplitudes 0.25,0.5,1,2; extract fundamental and odd harmonics.
-- **Executable software model:** The declared software model is a transfer function from binary relay command in normalized input units to relay input and fundamental output in normalized output units. Its numerator coefficients are 1.27324; its denominator coefficients are 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 0.5 normalized_output at steady state.
+- **63% response time:** the response time is 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 20 s.
 
 Additional information:
 
+**Supporting physical context:** Use ideal relay levels +/-1 and sine amplitudes 0.25,0.5,1,2; extract fundamental and odd harmonics.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 2.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from binary relay command in normalized input units to relay input and fundamental output in normalized output units. Its numerator coefficients are 1.27324; its denominator coefficients are 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 172. Derive the complex describing function of a relay with hysteresis
 
@@ -6566,18 +8536,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use relay levels +/-1,hysteresis h=0.1 and sine amplitudes 0.08,0.12,0.24,0.5; preserve relay memory.
-- **Executable software model:** The declared software model is a transfer function from hysteretic relay command in normalized input units to hysteresis input and fundamental output in normalized output units. Its numerator coefficients are 5.30516; its denominator coefficients are 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 0.5 normalized_output at steady state.
+- **63% response time:** the response time is 3.75 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Use relay levels +/-1,hysteresis h=0.1 and sine amplitudes 0.08,0.12,0.24,0.5; preserve relay memory.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 3.75, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from hysteretic relay command in normalized input units to hysteresis input and fundamental output in normalized output units. Its numerator coefficients are 5.30516; its denominator coefficients are 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 173. Predict a saturation limit cycle from a Nyquist/describing-function intersection
 
@@ -6603,18 +8588,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s^2+0.2s+1)] with saturation k=1,N=0.1; start near amplitudes 0.3,0.63,0.9 and measure steady oscillation.
-- **Executable software model:** The declared software model is a transfer function from saturated loop command in normalized input units to oscillation amplitude and frequency in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0.2, 1, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from saturated loop command in normalized input units to oscillation amplitude and frequency in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0.2, 1, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 75 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s^2+0.2s+1)] with saturation k=1,N=0.1; start near amplitudes 0.3,0.63,0.9 and measure steady oscillation.
+
 The accompanying existing software record uses a 0.002 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 174. Predict a hysteresis-induced limit cycle from the same construction
 
@@ -6640,18 +8635,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use G=1/[s(s+1)], relay N=1,h=0.1; simulate from several initial relay states and measure the limit cycle.
-- **Executable software model:** The declared software model is a transfer function from hysteretic relay command in normalized input units to hysteretic oscillation amplitude and frequency in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 1, 0; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from hysteretic relay command in normalized input units to hysteretic oscillation amplitude and frequency in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 1, 0; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 25 s.
 
 Additional information:
 
+**Supporting physical context:** Use G=1/[s(s+1)], relay N=1,h=0.1; simulate from several initial relay states and measure the limit cycle.
+
 The accompanying existing software record uses a 0.002 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 175. Derive bang-bang minimum-time switching and a chatter-reducing PTOS law for a double integrator
 
@@ -6677,18 +8682,31 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use double integrator, |u|<=1, initial states (1,0),(1,-1),(-1,1); compare bang-bang switching with a smoothed PTOS band.
-- **Executable software model:** The declared software model is a transfer function from bounded acceleration command in normalized input units to position and velocity in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.16 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 2.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use double integrator, |u|<=1, initial states (1,0),(1,-1),(-1,1); compare bang-bang switching with a smoothed PTOS band.
+
+**Executable software model:** The declared software model is a transfer function from bounded acceleration command in normalized input units to position and velocity in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 176. Prove parameter-dependent stability of a second-order linear system with a Lyapunov equation
 
@@ -6714,18 +8732,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use alpha=1,beta=2, A=[[-1,2],[-2,-1]], Q=I, and initial states on radii 0.5,1,2.
-- **Executable software model:** The existing software record supplies a state-space model with state order x1, x2; matrix A has rows [-1, 2]; [-2, -1]; matrix B has rows [0]; [0]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are prescribed initial-state release, the output channels are state trajectory and decay behavior channel 1, state trajectory and decay behavior channel 2, and the initial state is 1, 0.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 0.5 normalized_output at steady state.
+- **63% response time:** the response time is 1.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use alpha=1,beta=2, A=[[-1,2],[-2,-1]], Q=I, and initial states on radii 0.5,1,2.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 1.25, 1, and input delay 0 s.
+
+**Executable software model:** The existing software record supplies a state-space model with state order x1, x2; matrix A has rows [-1, 2]; [-2, -1]; matrix B has rows [0]; [0]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are prescribed initial-state release, the output channels are state trajectory and decay behavior channel 1, state trajectory and decay behavior channel 2, and the initial state is 1, 0.
+
 The accompanying existing software record uses a 0.005 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 177. Construct a direct Lyapunov function for nonlinear position feedback
 
@@ -6751,18 +8784,28 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use T=1 and f(e)=e+e^3; simulate initial states e=+/-2,x2=+/-1 and evaluate V=0.5e^2+0.25e^4+0.5x2^2.
-- **Executable software model:** The existing software record supplies a state-space model with state order error, velocity; matrix A has rows [0, -1]; [1, -1]; matrix B has rows [0]; [0]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are nonlinear restoring feedback, the output channels are position error, velocity, and the initial state is 2, 1.
+- **Complete numeric model:** The existing software record supplies a state-space model with state order error, velocity; matrix A has rows [0, -1]; [1, -1]; matrix B has rows [0]; [0]; matrix C has rows [1, 0]; [0, 1]; and matrix D has rows [0]; [0]. The input channels are nonlinear restoring feedback, the output channels are position error, velocity, and the initial state is 2, 1. Matrix entries use the declared input/output units.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 7.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use T=1 and f(e)=e+e^3; simulate initial states e=+/-2,x2=+/-1 and evaluate V=0.5e^2+0.25e^4+0.5x2^2.
+
 The accompanying existing software record uses a 0.002 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 178. Bound a signum nonlinearity by a sector
 
@@ -6788,18 +8831,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use f(e)=sign(e) over logarithmic amplitudes 1e-3 to 10 and compute the secant slope f(e)/e.
-- **Executable software model:** The declared software model is a transfer function from bounded signum test signal in normalized input units to nonlinearity input and output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 1 normalized_output at steady state.
+- **63% response time:** the response time is 1.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -1.31956 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 1.31956 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use f(e)=sign(e) over logarithmic amplitudes 1e-3 to 10 and compute the secant slope f(e)/e.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 1, denominator coefficients 1.25, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from bounded signum test signal in normalized input units to nonlinearity input and output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 179. Bound actuator saturation by a sector
 
@@ -6825,18 +8883,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use unit-slope saturation +/-0.1 and amplitudes from 0.01 to 10; verify sector inequalities pointwise.
-- **Executable software model:** The declared software model is a transfer function from amplitude-limited actuator command in normalized input units to saturation input and output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 1 normalized_output at steady state.
+- **63% response time:** the response time is 1.25 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -1.31956 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 1.31956 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 10 s.
 
 Additional information:
 
+**Supporting physical context:** Use unit-slope saturation +/-0.1 and amplitudes from 0.01 to 10; verify sector inequalities pointwise.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 1, denominator coefficients 1.25, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from amplitude-limited actuator command in normalized input units to saturation input and output in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 10 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 180. Certify absolute stability of a saturated loop with the circle criterion
 
@@ -6862,18 +8935,33 @@ When load, components, or operating conditions are varied safely and the trial i
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use linear block G=(s+1)^2/s^3 with unit-slope saturation sector [0,1]; plot Nyquist against the Re(G)=-1 boundary and simulate bounded initial conditions.
-- **Executable software model:** The declared software model is a transfer function from sector-bounded actuator command in normalized input units to loop input in normalized output units. Its numerator coefficients are 1, 2, 1; its denominator coefficients are 1, 0, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the primary output changes by 0.5 normalized_output at steady state.
+- **63% response time:** the response time is 12.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use linear block G=(s+1)^2/s^3 with unit-slope saturation sector [0,1]; plot Nyquist against the Re(G)=-1 boundary and simulate bounded initial conditions.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 12.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from sector-bounded actuator command in normalized input units to loop input in normalized output units. Its numerator coefficients are 1, 2, 1; its denominator coefficients are 1, 0, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 181. Model a flexible two-body satellite and translate pointing specifications into robust design targets
 
@@ -6899,18 +8987,31 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use J1=1,J2=0.1,k=0.091,b=0.0036 and G=0.036(s+25)/[s^2(s^2+0.04s+1)]; test k,b corners and pointing steps.
-- **Executable software model:** The declared software model is a transfer function from body control torque in normalized input units to two satellite angles in normalized output units. Its numerator coefficients are 0.036, 0.9; its denominator coefficients are 1, 0.04, 1, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0004 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 50 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 200 s.
 
 Additional information:
 
+**Supporting physical context:** Use J1=1,J2=0.1,k=0.091,b=0.0036 and G=0.036(s+25)/[s^2(s^2+0.04s+1)]; test k,b corners and pointing steps.
+
+**Executable software model:** The declared software model is a transfer function from body control torque in normalized input units to two satellite angles in normalized output units. Its numerator coefficients are 0.036, 0.9; its denominator coefficients are 1, 0.04, 1, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 200 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 182. Compare gain stabilization and notch-based phase stabilization of the flexible satellite
 
@@ -6936,18 +9037,31 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** On the nominal flexible satellite compare Dc1=0.25(2s+1), Dc2=0.001(30s+1), and Dc3=Dc1[((s/0.9)^2+1)/(s/25+1)^2] over all k,b corners.
-- **Executable software model:** The declared software model is a transfer function from gain-shaped or notch-shaped torque in normalized input units to satellite pointing and flexible deflection in normalized output units. Its numerator coefficients are 0.036, 0.9; its denominator coefficients are 1, 0.04, 1, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 6.4e-05 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 125 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 500 s.
 
 Additional information:
 
+**Supporting physical context:** On the nominal flexible satellite compare Dc1=0.25(2s+1), Dc2=0.001(30s+1), and Dc3=Dc1[((s/0.9)^2+1)/(s/25+1)^2] over all k,b corners.
+
+**Executable software model:** The declared software model is a transfer function from gain-shaped or notch-shaped torque in normalized input units to satellite pointing and flexible deflection in normalized output units. Its numerator coefficients are 0.036, 0.9; its denominator coefficients are 1, 0.04, 1, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 500 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 183. Design satellite state feedback and an estimator from symmetric-root-locus pole choices
 
@@ -6973,18 +9087,31 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use control poles -0.45+/-j0.34,-0.15+/-j1.05, K=[-0.2788,0.0546,0.6814,1.1655], and L=[222,42.3,1515.4,5503.9].
-- **Executable software model:** The declared software model is a transfer function from estimated-state feedback torque in normalized input units to measured attitude and estimated flexible states in normalized output units. Its numerator coefficients are 0.3578625; its denominator coefficients are 1, 1.2, 1.7131, 1.10793, 0.3578625; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0004 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 50 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 200 s.
 
 Additional information:
 
+**Supporting physical context:** Use control poles -0.45+/-j0.34,-0.15+/-j1.05, K=[-0.2788,0.0546,0.6814,1.1655], and L=[222,42.3,1515.4,5503.9].
+
+**Executable software model:** The declared software model is a transfer function from estimated-state feedback torque in normalized input units to measured attitude and estimated flexible states in normalized output units. Its numerator coefficients are 0.3578625; its denominator coefficients are 1, 1.2, 1.7131, 1.10793, 0.3578625; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 200 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 184. Redesign the satellite by collocating the attitude sensor with the torque actuator
 
@@ -7010,18 +9137,31 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use collocated Gco=[(s+0.018)^2+0.954^2]/{s^2[(s+0.02)^2+1]} and controller 0.25(2s+1); compare with remote sensing.
-- **Executable software model:** The declared software model is a transfer function from collocated body torque in normalized input units to collocated attitude and remote flexible angle in normalized output units. Its numerator coefficients are 1, 0.036, 0.91044; its denominator coefficients are 1, 0.04, 1.0004, 0, 0; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Corresponding acceleration change:** the initial acceleration or second-derivative change is 0.0004 normalized_output/s^2 for the known input step.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 50 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 200 s.
 
 Additional information:
 
+**Supporting physical context:** Use collocated Gco=[(s+0.018)^2+0.954^2]/{s^2[(s+0.02)^2+1]} and controller 0.25(2s+1); compare with remote sensing.
+
+**Executable software model:** The declared software model is a transfer function from collocated body torque in normalized input units to collocated attitude and remote flexible angle in normalized output units. Its numerator coefficients are 1, 0.036, 0.91044; its denominator coefficients are 1, 0.04, 1.0004, 0, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 200 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 185. Linearize Boeing 747 longitudinal/lateral dynamics and identify Dutch-roll, spiral, roll, phugoid, and short-period modes
 
@@ -7047,18 +9187,32 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use a representative Dutch-roll mode wn=1 rad/s,zeta=0.03 plus recorded spiral, roll, phugoid, and short-period modal estimates; excite rudder/elevator separately.
-- **Executable software model:** The declared software model is a transfer function from rudder in normalized input units to aircraft rates in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0.06, 1; and its input delay is 0 s.
+- **Local input-output gain matrix:** local_gain_matrix=[[1.0, 0.2], [0.2, 1.0]] output/input; this matrix applies to the first two named inputs and outputs.
+- **Local response time:** the local time constant is 37.5 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Final output change:** the primary output changes by 1 normalized_output at steady state.
+- **63% response time:** the response time is 37.5 s.
 
 Additional information:
 
+**Supporting physical context:** Use a representative Dutch-roll mode wn=1 rad/s,zeta=0.03 plus recorded spiral, roll, phugoid, and short-period modal estimates; excite rudder/elevator separately.
+
+**Executable software model:** The declared software model is a transfer function from rudder in normalized input units to aircraft rates in normalized output units. Its numerator coefficients are 1; its denominator coefficients are 1, 0.06, 1; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 186. Design a yaw damper with rudder actuation, yaw-rate sensing, actuator dynamics, and washout
 
@@ -7084,18 +9238,33 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use yaw gain Kr=2.6, washout s/(s+1/3), and rudder actuator 10/(s+10); test yaw-rate pulses and steady-turn commands.
-- **Executable software model:** The declared software model is a transfer function from rudder command in normalized input units to yaw rate in normalized output units. Its numerator coefficients are 26, 0; its denominator coefficients are 1, 10.333333, 3.333333; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** 0.5 normalized_output.
+- **63% response time:** the response time is 12.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use yaw gain Kr=2.6, washout s/(s+1/3), and rudder actuator 10/(s+10); test yaw-rate pulses and steady-turn commands.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients 0.5, denominator coefficients 12.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from rudder command in normalized input units to yaw rate in normalized output units. Its numerator coefficients are 26, 0; its denominator coefficients are 1, 10.333333, 3.333333; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 187. Compare the practical yaw damper with a higher-order SRL controller-estimator design
 
@@ -7121,18 +9290,31 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Compare the practical Kr=2.6 yaw damper with six-state feedback K=[1.059,-0.191,-2.32,0.0992,0.037,0.486] and its estimator under sensor noise.
-- **Executable software model:** The declared software model is a transfer function from rudder command from low or high order control in normalized input units to yaw rate and estimated lateral states in normalized output units. Its numerator coefficients are 0.472225; its denominator coefficients are 1, 0.558, 0.472225; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 2.13 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.64691 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.64691 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 200 s.
 
 Additional information:
 
+**Supporting physical context:** Compare the practical Kr=2.6 yaw damper with six-state feedback K=[1.059,-0.191,-2.32,0.0992,0.037,0.486] and its estimator under sensor noise.
+
+**Executable software model:** The declared software model is a transfer function from rudder command from low or high order control in normalized input units to yaw rate and estimated lateral states in normalized output units. Its numerator coefficients are 0.472225; its denominator coefficients are 1, 0.558, 0.472225; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.005 s sample interval for 200 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 188. Design an altitude-hold autopilot with pitch-rate/pitch inner loops and altitude outer-loop feedback
 
@@ -7158,18 +9340,40 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use an altitude channel with RHP zero +5.61, fast pitch inner loop, slower altitude outer loop, and compare with full-state K=[-0.0009,0.0016,-1.883,-7.603,-0.001].
-- **Executable software model:** The declared software model is a transfer function from elevator command in deg to altitude in ft. Its numerator coefficients are -1, 5.61; its denominator coefficients are 1, 3, 2, 0; and its input delay is 0 s.
+- **Vehicle mass:** the vehicle effective mass is 1 kg.
+- **Pitch inertia:** the pitch inertia is 0.02 kg*m^2.
+- **Gravity:** 9.81 m/s^2.
+- **Linear drag:** 0.25 N*s/m.
+- **Pitch damping:** 0.02 Nm*s/rad.
+- **Minimum thrust:** 0 N.
+- **Maximum thrust:** 20 N.
+- **Torque limit:** the torque limit is 1 Nm.
+- **Typical response time:** 2 s.
+- **Maximum tilt:** the maximum tilt is 0.35 rad.
+- **Maximum altitude error:** 2 m.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 N.
+- **Input simulation lower bound:** the declared input simulation lower bound is 0 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 20 N.
+- **Output simulation lower bound:** the primary output simulation lower bound is -2 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 2 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 75 s.
 
 Additional information:
 
+**Supporting physical context:** Use an altitude channel with RHP zero +5.61, fast pitch inner loop, slower altitude outer loop, and compare with full-state K=[-0.0009,0.0016,-1.883,-7.603,-0.001].
+
+**Executable software model:** The declared software model is a transfer function from elevator command in deg to altitude in ft. Its numerator coefficients are -1, 5.61; its denominator coefficients are 1, 3, 2, 0; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.01 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 189. Model and tune PI feedback for a delayed automotive fuel-air process
 
@@ -7195,18 +9399,32 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use fast/slow fuel time constants 0.02 and 1 s, equal weights 0.5, transport delay 0.2 s, sensor lag 0.1 s, and PI aggregate gain KsKp=2.2.
-- **Executable software model:** The declared software model is a transfer function from fuel injection command in normalized input units to fuel air ratio and oxygen sensor signal in normalized output units. Its numerator coefficients are 0.51, 1; its denominator coefficients are 0.002, 0.122, 1.12, 1; and its input delay is 0.2 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.434 s.
+- **Pure waiting time:** the visible response waits 0.2 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.32 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.32 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 30 s.
 
 Additional information:
 
+**Supporting physical context:** Use fast/slow fuel time constants 0.02 and 1 s, equal weights 0.5, transport delay 0.2 s, sensor lag 0.1 s, and PI aggregate gain KsKp=2.2.
+
+**Executable software model:** The declared software model is a transfer function from fuel injection command in normalized input units to fuel air ratio and oxygen sensor signal in normalized output units. Its numerator coefficients are 0.51, 1; its denominator coefficients are 0.002, 0.122, 1.12, 1; and its input delay is 0.2 s.
+
 The accompanying existing software record uses a 0.002 s sample interval for 30 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 190. Predict the nonlinear oxygen-sensor limit cycle by effective gain and describing function
 
@@ -7232,18 +9450,32 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the fuel-air dynamics, sensor output 0.1..0.9 with center slope 20, Kp=0.1, small-signal loop gain 6, and preserve saturation; measure the limit cycle.
-- **Executable software model:** The declared software model is a transfer function from fuel injection command in normalized input units to air fuel error and oxygen sensor oscillation in normalized output units. Its numerator coefficients are 0.51, 1; its denominator coefficients are 0.002, 0.122, 1.12, 1; and its input delay is 0.2 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.433 s.
+- **Pure waiting time:** the visible response waits 0.2 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.32 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.32 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use the fuel-air dynamics, sensor output 0.1..0.9 with center slope 20, Kp=0.1, small-signal loop gain 6, and preserve saturation; measure the limit cycle.
+
+**Executable software model:** The declared software model is a transfer function from fuel injection command in normalized input units to air fuel error and oxygen sensor oscillation in normalized output units. Its numerator coefficients are 0.51, 1; its denominator coefficients are 0.002, 0.122, 1.12, 1; and its input delay is 0.2 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 191. Replace sensor-slope dependence by relay feedback to obtain robust average stoichiometry
 
@@ -7269,18 +9501,32 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use relay q=N sign(vs-vstar) with illustrative N=0.05, the same fuel-air/PI dynamics, and test sensor slopes multiplied by 0.5,1,2.
-- **Executable software model:** The declared software model is a transfer function from fuel injection command through relay-conditioned sensing in normalized input units to average fuel-air ratio and switching signal in normalized output units. Its numerator coefficients are 0.51, 1; its denominator coefficients are 0.002, 0.122, 1.12, 1; and its input delay is 0.2 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** the model-derived steady output change is 1 normalized_output.
+- **63% response time:** the model-derived response time is 0.433 s.
+- **Pure waiting time:** the visible response waits 0.2 s before the dynamic response begins.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon output stopping bound is -1.32 normalized_output.
+- **Output simulation upper bound:** the finite-horizon output stopping bound is 1.32 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 100 s.
 
 Additional information:
 
+**Supporting physical context:** Use relay q=N sign(vs-vstar) with illustrative N=0.05, the same fuel-air/PI dynamics, and test sensor slopes multiplied by 0.5,1,2.
+
+**Executable software model:** The declared software model is a transfer function from fuel injection command through relay-conditioned sensing in normalized input units to average fuel-air ratio and switching signal in normalized output units. Its numerator coefficients are 0.51, 1; its denominator coefficients are 0.002, 0.122, 1.12, 1; and its input delay is 0.2 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 100 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 192. Build decoupled longitudinal, lateral, yaw, and altitude state models for a quadrotor and map four rotor commands
 
@@ -7306,18 +9552,31 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use a 1 kg, Iyy=0.02 kg*m^2 VTOL/quadrotor slice with thrust 0..20 N and torque +/-1 Nm; log all states and test rotor mixing columns one at a time.
-- **Executable software model:** The existing software record uses the registered nonlinear template vtol_cascaded. Its declared parameters are mass kg 1, pitch inertia kg m2 0.02, gravity m s2 9.81, linear drag n s m 0.25, pitch damping n m s 0.02, thrust min n 0, thrust max n 20, torque limit n m 1; its initial state is x m 0, z m 0, pitch rad 0, x velocity m s 0, z velocity m s 0, pitch rate rad s 0; its input channels are four rotor thrust commands channel 1, four rotor thrust commands channel 2; and its output channels are position, attitude, angular rates, altitude channel 1, altitude channel 2, altitude channel 3.
+- **Local input-output gain matrix:** local_gain_matrix=[[1.0, 0.2], [0.2, 1.0]] output/input; this matrix applies to the first two named inputs and outputs.
+- **Local response time:** the local time constant is 2.5 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 0.5 Nm.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.5 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.5 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use a 1 kg, Iyy=0.02 kg*m^2 VTOL/quadrotor slice with thrust 0..20 N and torque +/-1 Nm; log all states and test rotor mixing columns one at a time.
+
+**Executable software model:** The existing software record uses the registered nonlinear template vtol_cascaded. Its declared parameters are mass kg 1, pitch inertia kg m2 0.02, gravity m s2 9.81, linear drag n s m 0.25, pitch damping n m s 0.02, thrust min n 0, thrust max n 20, torque limit n m 1; its initial state is x m 0, z m 0, pitch rad 0, x velocity m s 0, z velocity m s 0, pitch rate rad s 0; its input channels are four rotor thrust commands channel 1, four rotor thrust commands channel 2; and its output channels are position, attitude, angular rates, altitude channel 1, altitude channel 2, altitude channel 3.
+
 The accompanying existing software record uses a 0.002 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -0.5, -0.25, 0.25, 0.5, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 193. Design cascaded inner-attitude and outer-position PD loops for quadrotor trajectory following
 
@@ -7343,18 +9602,40 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use Gtheta=0.4(s+0.25)/[(s^2-3.2s+10.4)(s+3.4)(s+20)] and Gx=-131/[s times the same denominator]; close attitude faster than position.
-- **Executable software model:** The declared software model is a transfer function from mixed rotor thrusts in normalized input units to quadrotor position in normalized output units. Its numerator coefficients are 0.4, 0.1; its denominator coefficients are 1, 20.2, 3.52, 25.76, 707.2; and its input delay is 0 s.
+- **Vehicle mass:** the vehicle effective mass is 1 kg.
+- **Pitch inertia:** the pitch inertia is 0.02 kg*m^2.
+- **Gravity:** 9.81 m/s^2.
+- **Linear drag:** 0.25 N*s/m.
+- **Pitch damping:** 0.02 Nm*s/rad.
+- **Minimum thrust:** 0 N.
+- **Maximum thrust:** 20 N.
+- **Torque limit:** the torque limit is 1 Nm.
+- **Typical response time:** 2 s.
+- **Maximum tilt:** the maximum tilt is 0.35 rad.
+- **Maximum altitude error:** 2 m.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 N.
+- **Input simulation lower bound:** the declared input simulation lower bound is 0 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 20 N.
+- **Output simulation lower bound:** the primary output simulation lower bound is -2 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 2 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use Gtheta=0.4(s+0.25)/[(s^2-3.2s+10.4)(s+3.4)(s+20)] and Gx=-131/[s times the same denominator]; close attitude faster than position.
+
+**Executable software model:** The declared software model is a transfer function from mixed rotor thrusts in normalized input units to quadrotor position in normalized output units. Its numerator coefficients are 0.4, 0.1; its denominator coefficients are 1, 20.2, 3.52, 25.76, 707.2; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.001 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 194. Design LQR/estimator controllers for quadrotor longitudinal, lateral, and yaw axes
 
@@ -7380,18 +9661,31 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the complete VTOL state and constraints, then compare the listed longitudinal/lateral/yaw LQR gains with rho and estimator q multiplied by 0.1,1,10.
-- **Executable software model:** The existing software record uses the registered nonlinear template vtol_cascaded. Its declared parameters are mass kg 1, pitch inertia kg m2 0.02, gravity m s2 9.81, linear drag n s m 0.25, pitch damping n m s 0.02, thrust min n 0, thrust max n 20, torque limit n m 1; its initial state is x m 0, z m 0, pitch rad 0, x velocity m s 0, z velocity m s 0, pitch rate rad s 0; its input channels are LQR mixed rotor commands channel 1, LQR mixed rotor commands channel 2; and its output channels are measured and estimated quadrotor axis states channel 1, measured and estimated quadrotor axis states channel 2, measured and estimated quadrotor axis states channel 3, measured and estimated quadrotor axis states channel 4, measured and estimated quadrotor axis states channel 5, measured and estimated quadrotor axis states channel 6.
+- **Local input-output gain matrix:** local_gain_matrix=[[1.0, 0.2], [0.2, 1.0]] output/input; this matrix applies to the first two named inputs and outputs.
+- **Local response time:** the local time constant is 2.5 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 0.5 Nm.
+- **Input simulation lower bound:** the declared input simulation lower bound is -0.5 Nm.
+- **Input simulation upper bound:** the declared input simulation upper bound is 0.5 Nm.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 rad.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 rad.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 5 s.
 
 Additional information:
 
+**Supporting physical context:** Use the complete VTOL state and constraints, then compare the listed longitudinal/lateral/yaw LQR gains with rho and estimator q multiplied by 0.1,1,10.
+
+**Executable software model:** The existing software record uses the registered nonlinear template vtol_cascaded. Its declared parameters are mass kg 1, pitch inertia kg m2 0.02, gravity m s2 9.81, linear drag n s m 0.25, pitch damping n m s 0.02, thrust min n 0, thrust max n 20, torque limit n m 1; its initial state is x m 0, z m 0, pitch rad 0, x velocity m s 0, z velocity m s 0, pitch rate rad s 0; its input channels are LQR mixed rotor commands channel 1, LQR mixed rotor commands channel 2; and its output channels are measured and estimated quadrotor axis states channel 1, measured and estimated quadrotor axis states channel 2, measured and estimated quadrotor axis states channel 3, measured and estimated quadrotor axis states channel 4, measured and estimated quadrotor axis states channel 5, measured and estimated quadrotor axis states channel 6.
+
 The accompanying existing software record uses a 0.001 s sample interval for 20 s, starts the primary output at 0, contains input amplitudes -0.5, -0.25, 0.25, 0.5, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 195. Identify nonlinear radiation/conduction dynamics and a three-state small-signal model for an RTP chamber
 
@@ -7417,18 +9711,28 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the three-state RTP common-input transfer 0.5226(s+0.0876)(s+0.1438)/[(s+0.1482)(s+0.0863)(s+0.0527)] and test three lamp levels.
-- **Executable software model:** The declared software model is a transfer function from common command to three lamps in normalized input units to plate center and support temperatures in normalized output units. Its numerator coefficients are 0.5226, 0.12092964, 0.006583129488; its denominator coefficients are 1, 0.2872, 0.02514781, 0.000674015082; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from common command to three lamps in normalized input units to plate center and support temperatures in normalized output units. Its numerator coefficients are 0.5226, 0.12092964, 0.006583129488; its denominator coefficients are 1, 0.2872, 0.02514781, 0.000674015082; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 75 s.
 
 Additional information:
 
+**Supporting physical context:** Use the three-state RTP common-input transfer 0.5226(s+0.0876)(s+0.1438)/[(s+0.1482)(s+0.0863)(s+0.0527)] and test three lamp levels.
+
 The accompanying existing software record uses a 0.05 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 196. Apply PI temperature-trajectory control while respecting the absence of active cooling
 
@@ -7454,18 +9758,28 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the RTP plant and PI D=(s+0.0527)/s with nonnegative lamp power; track heating ramps and physically passive cooling ramps separately.
-- **Executable software model:** The declared software model is a transfer function from nonnegative lamp power in normalized input units to temperature trajectory and tracking error in normalized output units. Its numerator coefficients are 0.5226, 0.12092964, 0.006583129488; its denominator coefficients are 1, 0.7571, 0.1337193, 0.006583129488; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from nonnegative lamp power in normalized input units to temperature trajectory and tracking error in normalized output units. Its numerator coefficients are 0.5226, 0.12092964, 0.006583129488; its denominator coefficients are 1, 0.7571, 0.1337193, 0.006583129488; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 75 s.
 
 Additional information:
 
+**Supporting physical context:** Use the RTP plant and PI D=(s+0.0527)/s with nonnegative lamp power; track heating ramps and physically passive cooling ramps separately.
+
 The accompanying existing software record uses a 0.05 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 197. Design an error-space LQG regulator that balances tracking, actuation, and wafer-temperature uniformity
 
@@ -7491,18 +9805,28 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use the three-state RTP model, K1=1,K0=[0.1221,2.0788,-0.2140], L=[16.1461,16.4710,13.2001], Rw=1,Rv=0.001; log node-temperature spread.
-- **Executable software model:** The declared software model is a transfer function from common lamp command in normalized input units to center temperature in normalized output units. Its numerator coefficients are 0.5226, 0.12092964, 0.006583129488; its denominator coefficients are 1, 0.2872, 0.02514781, 0.000674015082; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from common lamp command in normalized input units to center temperature in normalized output units. Its numerator coefficients are 0.5226, 0.12092964, 0.006583129488; its denominator coefficients are 1, 0.2872, 0.02514781, 0.000674015082; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 normalized_output.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 normalized_output.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 75 s.
 
 Additional information:
 
+**Supporting physical context:** Use the three-state RTP model, K1=1,K0=[0.1221,2.0788,-0.2140], L=[16.1461,16.4710,13.2001], Rw=1,Rv=0.001; log node-temperature spread.
+
 The accompanying existing software record uses a 0.02 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 198. Verify RTP control with lamp inversion, saturation, antiwindup, and a digital prototype
 
@@ -7528,18 +9852,28 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Use lamp P=V^1.6, inverse V=P^0.625, voltage limits 1..4 V, reference filter 0.2/(s+0.2), Ts=0.1 s, and antiwindup recovery 1 s as an explicit trial value.
-- **Executable software model:** The declared software model is a transfer function from digitally commanded lamp voltage in normalized power units to wafer temperatures in degC. Its numerator coefficients are 0, 0.0521145, -0.10303042, 0.05092241; its denominator coefficients are 1, -2.97144027, 2.94312943, -0.9716885; and its input delay is 0 s.
+- **Complete numeric model:** The declared software model is a transfer function from digitally commanded lamp voltage in normalized power units to wafer temperatures in degC. Its numerator coefficients are 0, 0.0521145, -0.10303042, 0.05092241; its denominator coefficients are 1, -2.97144027, 2.94312943, -0.9716885; and its input delay is 0 s.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 W.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 W.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 W.
+- **Output simulation lower bound:** the primary output simulation lower bound is -1 degC.
+- **Output simulation upper bound:** the primary output simulation upper bound is 1 degC.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 75 s.
 
 Additional information:
 
+**Supporting physical context:** Use lamp P=V^1.6, inverse V=P^0.625, voltage limits 1..4 V, reference filter 0.2/(s+0.2), Ts=0.1 s, and antiwindup recovery 1 s as an explicit trial value.
+
 The accompanying existing software record uses a 0.1 s sample interval for 300 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 199. Model exact adaptation in E. coli chemotaxis as integral feedback of receptor activity
 
@@ -7565,18 +9899,33 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** For a numerical illustration choose K=1,Km=0.2 s^-1, CheRbar=0.5; step ligand by 1 at 20 s and run 60 s.
-- **Executable software model:** The declared software model is a transfer function from ligand concentration as the prescribed pathway input in normalized input units to receptor activity and methylation state in normalized output units. Its numerator coefficients are -1, 0; its denominator coefficients are 1, 0.2; and its input delay is 0 s.
+- **Known input change:** the declared input changes by 1 normalized_input.
+- **Final output change:** -0.5 normalized_output.
+- **63% response time:** the response time is 7.5 s.
+- **Input simulation lower bound:** the declared input simulation lower bound is -1 normalized_input.
+- **Input simulation upper bound:** the declared input simulation upper bound is 1 normalized_input.
+- **Output simulation lower bound:** the finite-horizon Profile-proxy output stopping bound is -0.659779 normalized_output.
+- **Output simulation upper bound:** the finite-horizon Profile-proxy output stopping bound is 0.659779 normalized_output.
+
+Supplemental simulation measurements:
+
+- **Simulation horizon:** the finite software simulation horizon is 60 s.
 
 Additional information:
 
+**Supporting physical context:** For a numerical illustration choose K=1,Km=0.2 s^-1, CheRbar=0.5; step ligand by 1 at 20 s and run 60 s.
+
+**Executable first-order Profile proxy:** To keep the selected Profile runnable while preserving the incompatible or nonconvergent source model below, use a separate software-only transfer function with numerator coefficients -0.5, denominator coefficients 7.5, 1, and input delay 0 s.
+
+**Executable software model:** The declared software model is a transfer function from ligand concentration as the prescribed pathway input in normalized input units to receptor activity and methylation state in normalized output units. Its numerator coefficients are -1, 0; its denominator coefficients are 1, 0.2; and its input delay is 0 s.
+
 The accompanying existing software record uses a 0.02 s sample interval for 60 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 
-All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.
-
----
+All ranges stated here are software-simulation stopping boundaries only; they are not commands or permissions for a physical system.---
 
 ## 200. Map CheY activity into the one-dimensional mean chemotaxis motion model
 
@@ -7602,12 +9951,36 @@ When operating point, load, or actuator authority is varied safely and the trial
 
 ### Profile Measurement Response (Natural Language)
 
+The values below preserve source data where available; values not stated or derivable from the model are synthetic software-simulation assumptions chosen to keep this dataset executable.
+
 Profile-specific required answers:
 
-- **Declared Profile parameters:** Continue the chemotaxis illustration with Ka=1,Kx=0.5, baseline w=0; step ligand by 1 and integrate mean position.
-- **Executable software model:** The declared software model is a transfer function from ligand perturbation as the prescribed pathway input in normalized input units to mean cell position in normalized output units. Its numerator coefficients are 0.5; its denominator coefficients are 1, 0.2; and its input delay is 0 s.
+- **Vehicle mass:** the vehicle effective mass is 1 kg.
+- **Pitch inertia:** the pitch inertia is 0.02 kg*m^2.
+- **Gravity:** 9.81 m/s^2.
+- **Linear drag:** 0.25 N*s/m.
+- **Pitch damping:** 0.02 Nm*s/rad.
+- **Minimum thrust:** 0 N.
+- **Maximum thrust:** 20 N.
+- **Torque limit:** the torque limit is 1 Nm.
+- **Typical response time:** 2 s.
+- **Maximum tilt:** the maximum tilt is 0.35 rad.
+- **Maximum altitude error:** 2 m.
+
+Supplemental simulation measurements:
+
+- **Known input change:** the declared input changes by 1 N.
+- **Input simulation lower bound:** the declared input simulation lower bound is 0 N.
+- **Input simulation upper bound:** the declared input simulation upper bound is 20 N.
+- **Output simulation lower bound:** the primary output simulation lower bound is -2 m.
+- **Output simulation upper bound:** the primary output simulation upper bound is 2 m.
+- **Typical motion time scale:** a typical controlled motion uses a time scale of 15 s.
 
 Additional information:
+
+**Supporting physical context:** Continue the chemotaxis illustration with Ka=1,Kx=0.5, baseline w=0; step ligand by 1 and integrate mean position.
+
+**Executable software model:** The declared software model is a transfer function from ligand perturbation as the prescribed pathway input in normalized input units to mean cell position in normalized output units. Its numerator coefficients are 0.5; its denominator coefficients are 1, 0.2; and its input delay is 0 s.
 
 The accompanying existing software record uses a 0.02 s sample interval for 60 s, starts the primary output at 0, contains input amplitudes -1, -0.5, 0.5, 1, and records parameter-variation multipliers 0.9, 1, 1.1.
 

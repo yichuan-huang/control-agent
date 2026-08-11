@@ -1,13 +1,29 @@
+import math
 import re
 from collections import Counter
+from functools import cache
 from pathlib import Path
 from typing import ClassVar
 
+import numpy as np
 import pytest
+from scipy import signal
 
 from cfdc.diagnosis import start_diagnostic_session
+from cfdc.diagnosis.engine import DiagnosticEngine
 from cfdc.diagnosis.measurements import description_excerpt_answers_field
 from cfdc.models import SystemDescription
+from cfdc.specifications import (
+    assess_specification_text,
+    build_initial_specification_assessment,
+    compile_specification_model,
+    default_specification_template_catalog,
+)
+from cfdc.workflow import (
+    default_simulation_profile_catalog,
+    deterministic_profile_selection,
+    validate_semantic_selection,
+)
 
 TECHNICAL_PATH = Path("dataset/control_problems.md")
 ENGLISH_PATH = Path("dataset/control_problem_prompts.md")
@@ -21,25 +37,119 @@ CHINESE_HEADINGS = [
     "控制问题描述",
     "Profile 测量回复（自然语言）",
 ]
-SEVEN_FIELD_PROFILE_IDS = {*range(1, 22), 35, 38}
-ENGLISH_PROFILE_LABELS = [
+UNIVERSAL_ENGLISH_PROFILE_LABELS = [
     "Known input change",
-    "Final output change",
-    "63% response time",
     "Input simulation lower bound",
     "Input simulation upper bound",
     "Output simulation lower bound",
     "Output simulation upper bound",
 ]
-CHINESE_PROFILE_LABELS = [
+UNIVERSAL_CHINESE_PROFILE_LABELS = [
     "已知输入变化量",
-    "最终输出变化量",
-    "63% 响应时间",
     "输入仿真下限",
     "输入仿真上限",
     "输出仿真下限",
     "输出仿真上限",
 ]
+PROFILE_REQUIRED_ENGLISH_LABELS = {
+    "first_order_lag": [
+        "Final output change",
+        "63% response time",
+    ],
+    "first_order_lag_with_delay": [
+        "Final output change",
+        "63% response time",
+        "Pure waiting time",
+    ],
+    "second_order_oscillator": [
+        "Oscillation period",
+        "Successive peak ratio",
+        "Corresponding motion change",
+    ],
+    "double_integrator": [
+        "Corresponding acceleration change",
+        "Typical motion time scale",
+    ],
+    "nmp_inverse_response": [
+        "Final output change",
+        "Initial inverse change",
+        "Inverse recovery time",
+        "63% response time",
+    ],
+    "generic_unstable_higher_order": ["Complete numeric model"],
+    "underactuated_cartpole": [
+        "Cart mass",
+        "Pole mass",
+        "Center-of-mass length",
+        "Pole inertia",
+        "Cart friction",
+        "Gravity",
+        "Force limit",
+        "Cart travel limit",
+    ],
+    "vtol_cascaded": [
+        "Vehicle mass",
+        "Pitch inertia",
+        "Gravity",
+        "Linear drag",
+        "Pitch damping",
+        "Minimum thrust",
+        "Maximum thrust",
+        "Torque limit",
+        "Typical response time",
+        "Maximum tilt",
+        "Maximum altitude error",
+    ],
+    "mimo_2x2_coupled": [
+        "Local input-output gain matrix",
+        "Local response time",
+    ],
+}
+PROFILE_REQUIRED_CHINESE_LABELS = {
+    "first_order_lag": ["最终输出变化量", "63% 响应时间"],
+    "first_order_lag_with_delay": [
+        "最终输出变化量",
+        "63% 响应时间",
+        "纯等待时间",
+    ],
+    "second_order_oscillator": [
+        "相邻同向峰值间隔",
+        "相邻峰值幅度比例",
+        "对应运动变化",
+    ],
+    "double_integrator": ["对应加速度变化", "典型运动时间尺度"],
+    "nmp_inverse_response": [
+        "最终输出变化量",
+        "初始反向变化",
+        "反向恢复时间",
+        "63% 响应时间",
+    ],
+    "generic_unstable_higher_order": ["完整数值模型"],
+    "underactuated_cartpole": [
+        "小车质量",
+        "摆杆质量",
+        "摆杆质心距离",
+        "摆杆转动惯量",
+        "小车摩擦",
+        "重力加速度",
+        "推力限制",
+        "小车行程",
+    ],
+    "vtol_cascaded": [
+        "飞行器质量",
+        "俯仰转动惯量",
+        "重力加速度",
+        "平移阻力",
+        "俯仰阻尼",
+        "最小推力",
+        "最大推力",
+        "最大俯仰转矩",
+        "典型响应时间",
+        "最大安全倾角",
+        "最大高度误差",
+    ],
+    "mimo_2x2_coupled": ["局部输入输出影响矩阵", "局部响应时间"],
+}
 ENGLISH_OLD_HEADINGS = [
     "Observable Outputs",
     "Actuators",
@@ -71,6 +181,20 @@ ASSIGNMENT_TOKENS = [
     "motion_time_scale_s=",
 ]
 HAN_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+NUMERIC_TOKEN = re.compile(
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+)
+EXPECTED_PROFILE_COUNTS = {
+    "first_order_lag": 79,
+    "first_order_lag_with_delay": 9,
+    "second_order_oscillator": 1,
+    "double_integrator": 55,
+    "generic_unstable_higher_order": 47,
+    "underactuated_cartpole": 1,
+    "vtol_cascaded": 4,
+    "mimo_2x2_coupled": 4,
+}
+SOURCE_MEASUREMENT_IDS = {*range(1, 22), 35, 38}
 
 
 def _technical_ids() -> list[int]:
@@ -303,75 +427,554 @@ def test_bilingual_prompts_have_strict_two_stage_structural_parity():
         assert len(english_item["paragraphs"]) == len(chinese_item["paragraphs"]), index
 
 
+@cache
+def _selected_profile_id(description_text: str, language: str) -> str:
+    if language == "cn":
+        # Use the English technical selection as the canonical locked Profile
+        # assignment.  This keeps bilingual entries aligned when a translated
+        # phrase is classified differently by the language-sensitive adapter.
+        chinese_entries = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+        english_entries = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+        for index, entry in enumerate(chinese_entries):
+            if entry["description"] == description_text:
+                return _selected_profile_id(english_entries[index]["description"], "en")
+
+    description = SystemDescription(text=description_text)
+    adapter = _DatasetDescriptionGuidanceAdapter(language)
+    session = start_diagnostic_session(description, diagnostic_adapter=adapter)
+    diagnosis = session.current_diagnosis
+    classification = DiagnosticEngine().classify(diagnosis, description)
+    selection = deterministic_profile_selection(
+        description,
+        diagnosis,
+        classification,
+        default_simulation_profile_catalog(),
+    )
+    return selection.simulation_profile_id
+
+
+def _profile_required_labels(profile_id: str, language: str) -> list[str]:
+    universal = (
+        UNIVERSAL_CHINESE_PROFILE_LABELS
+        if language == "cn"
+        else UNIVERSAL_ENGLISH_PROFILE_LABELS
+    )
+    required = (
+        PROFILE_REQUIRED_CHINESE_LABELS
+        if language == "cn"
+        else PROFILE_REQUIRED_ENGLISH_LABELS
+    )
+    profile_fields = required[profile_id]
+    if profile_id == "first_order_lag":
+        return [universal[0], *profile_fields, *universal[1:]]
+    if profile_id == "first_order_lag_with_delay":
+        return [universal[0], *profile_fields, *universal[1:]]
+    if profile_id == "second_order_oscillator":
+        return [profile_fields[0], profile_fields[1], universal[0], profile_fields[2], *universal[1:]]
+    if profile_id == "double_integrator":
+        return [universal[0], *profile_fields, *universal[1:]]
+    if profile_id == "nmp_inverse_response":
+        return [universal[0], *profile_fields, *universal[1:]]
+    return [*profile_fields, *universal]
+
+
 @pytest.mark.parametrize(
-    ("path", "headings", "language", "labels", "extra_heading"),
+    ("path", "headings", "language", "extra_heading"),
     [
         (
             ENGLISH_PATH,
             ENGLISH_HEADINGS,
             "en",
-            ENGLISH_PROFILE_LABELS,
             "Additional information:",
         ),
         (
             CHINESE_PATH,
             CHINESE_HEADINGS,
             "cn",
-            CHINESE_PROFILE_LABELS,
             "额外信息：",
         ),
     ],
 )
 def test_every_profile_response_lists_its_required_answers_before_additional_information(
-    path, headings, language, labels, extra_heading
+    path, headings, language, extra_heading
 ):
     entries = _parse_document(path, headings, language)
     for index, entry in enumerate(entries, 1):
         profile = entry["profile"]
-        if index in SEVEN_FIELD_PROFILE_IDS:
-            markers = [
-                f"**{label}：**" if language == "cn" else f"**{label}:**"
-                for label in labels
-            ]
-            positions = [profile.index(marker) for marker in markers]
-            assert positions == sorted(positions), (language, index)
-            assert all(profile.count(marker) == 1 for marker in markers), (
+        required_heading = (
+            "Profile 专用必填回答："
+            if language == "cn"
+            else "Profile-specific required answers:"
+        )
+        assumption = (
+            "以下数值优先采用原控制问题或现有软件模型中的数据"
+            if language == "cn"
+            else "The values below preserve source data where available"
+        )
+        assert profile.count(required_heading) == 1, (language, index)
+        assert assumption in profile, (language, index)
+        assert "已声明的 Profile 参数" not in profile
+        assert "Declared Profile parameters" not in profile
+        labels = _profile_required_labels(
+            _selected_profile_id(entry["description"], language), language
+        )
+        markers = [
+            f"**{label}：**" if language == "cn" else f"**{label}:**"
+            for label in labels
+        ]
+        positions = [profile.index(marker) for marker in markers]
+        assert positions == sorted(positions), (language, index)
+        for marker in markers:
+            assert profile.count(marker) == 1, (language, index, marker)
+            answer = re.search(
+                rf"^- {re.escape(marker)} (.+)$", profile, re.MULTILINE
+            )
+            assert answer is not None and re.search(r"\d", answer.group(1)), (
                 language,
                 index,
+                marker,
             )
-            for marker in markers:
-                answer = re.search(
-                    rf"^- {re.escape(marker)} (.+)$", profile, re.MULTILINE
-                )
-                assert answer is not None and re.search(r"\d", answer.group(1)), (
-                    language,
-                    index,
-                    marker,
-                )
-            required_end = positions[-1]
-        else:
-            required_heading = (
-                "Profile 专用必填回答："
-                if language == "cn"
-                else "Profile-specific required answers:"
-            )
-            parameters = (
-                "**已声明的 Profile 参数：**"
-                if language == "cn"
-                else "**Declared Profile parameters:**"
-            )
-            model = (
-                "**可执行软件模型：**"
-                if language == "cn"
-                else "**Executable software model:**"
-            )
-            for marker in (required_heading, parameters, model):
-                assert profile.count(marker) == 1, (language, index, marker)
-            assert not any(label in profile for label in labels), (language, index)
-            required_end = profile.index(model)
-
+        required_end = positions[-1]
+        supplemental_heading = (
+            "补充仿真测量：" if language == "cn" else "Supplemental simulation measurements:"
+        )
+        assert profile.count(supplemental_heading) == 1, (language, index)
         assert profile.count(extra_heading) == 1, (language, index)
         assert required_end < profile.index(extra_heading), (language, index)
+
+
+def _profile_answers(entry: dict, language: str) -> tuple[str, dict[str, str]]:
+    profile_id = _selected_profile_id(entry["description"], language)
+    labels = _profile_required_labels(profile_id, language)
+    answers = {}
+    for label in labels:
+        colon = "：" if language == "cn" else ":"
+        marker = f"**{label}{colon}**"
+        match = re.search(rf"^- {re.escape(marker)} (.+)$", entry["profile"], re.MULTILINE)
+        assert match is not None, (language, label)
+        answers[label] = match.group(1)
+    return profile_id, answers
+
+
+def _numbers(text: str) -> list[float]:
+    return [float(token) for token in NUMERIC_TOKEN.findall(text)]
+
+
+def _time_numbers(text: str) -> list[float]:
+    return [
+        float(token)
+        for token in re.findall(
+            rf"({NUMERIC_TOKEN.pattern})\s*(?:s|秒)", text, re.IGNORECASE
+        )
+    ]
+
+
+def test_profile_distribution_is_locked_and_every_numeric_answer_is_finite():
+    time_labels = {
+        "63% response time",
+        "Pure waiting time",
+        "Oscillation period",
+        "Typical motion time scale",
+        "Inverse recovery time",
+        "Local response time",
+        "63% 响应时间",
+        "纯等待时间",
+        "相邻同向峰值间隔",
+        "典型运动时间尺度",
+        "反向恢复时间",
+        "局部响应时间",
+        "典型响应时间",
+    }
+    for path, headings, language in (
+        (ENGLISH_PATH, ENGLISH_HEADINGS, "en"),
+        (CHINESE_PATH, CHINESE_HEADINGS, "cn"),
+    ):
+        entries = _parse_document(path, headings, language)
+        distribution = Counter(
+            _selected_profile_id(entry["description"], language) for entry in entries
+        )
+        assert distribution == EXPECTED_PROFILE_COUNTS, language
+        for index, entry in enumerate(entries, 1):
+            profile_id, answers = _profile_answers(entry, language)
+            for label, answer in answers.items():
+                values = _numbers(answer)
+                assert values and all(math.isfinite(value) for value in values), (
+                    language,
+                    index,
+                    label,
+                    answer,
+                )
+                assert re.search(
+                    r"(?:[A-Za-z]{1,}|%|单位|无量纲|档位|矩阵|模型|系数)", answer
+                ), (language, index, label, answer)
+
+            input_min = _numbers(answers["输入仿真下限" if language == "cn" else "Input simulation lower bound"])[0]
+            input_max = _numbers(answers["输入仿真上限" if language == "cn" else "Input simulation upper bound"])[0]
+            output_min = _numbers(answers["输出仿真下限" if language == "cn" else "Output simulation lower bound"])[0]
+            output_max = _numbers(answers["输出仿真上限" if language == "cn" else "Output simulation upper bound"])[0]
+            assert input_min < input_max, (language, index)
+            assert output_min < output_max, (language, index)
+
+            for label, answer in answers.items():
+                if label in time_labels:
+                    values = _time_numbers(answer)
+                    assert values and all(value > 0 for value in values), (
+                        language,
+                        index,
+                        label,
+                        answer,
+                    )
+
+            if profile_id == "second_order_oscillator":
+                ratio_label = "相邻峰值幅度比例" if language == "cn" else "Successive peak ratio"
+                ratio = _numbers(answers[ratio_label])[0]
+                assert 0 < ratio < 1, (language, index, ratio)
+            if profile_id == "mimo_2x2_coupled":
+                matrix_label = "局部输入输出影响矩阵" if language == "cn" else "Local input-output gain matrix"
+                matrix_match = re.search(
+                    r"\[\[([^\]]+)\],\s*\[([^\]]+)\]\]", answers[matrix_label]
+                )
+                assert matrix_match is not None, (language, index)
+                rows = [_numbers(row) for row in matrix_match.groups()]
+                assert len(rows) == 2 and all(len(row) == 2 for row in rows)
+                assert all(math.isfinite(value) for row in rows for value in row)
+            if profile_id == "generic_unstable_higher_order":
+                model_label = "完整数值模型" if language == "cn" else "Complete numeric model"
+                assert re.search(
+                    r"(?:numerator coefficients|matrix [ABCD]|registered nonlinear|分子系数|[ABCD]\s*(?:matrix|矩阵)|注册非线性)",
+                    answers[model_label],
+                    re.IGNORECASE,
+                ), (language, index, answers[model_label])
+
+
+def test_bilingual_profile_required_numbers_and_profile_headings_match():
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+    assert len(english) == len(chinese) == 200
+    for index, (english_entry, chinese_entry) in enumerate(zip(english, chinese), 1):
+        english_profile, english_answers = _profile_answers(english_entry, "en")
+        chinese_profile, chinese_answers = _profile_answers(chinese_entry, "cn")
+        assert english_profile == chinese_profile, index
+        english_labels = _profile_required_labels(english_profile, "en")
+        chinese_labels = _profile_required_labels(chinese_profile, "cn")
+        english_values = [
+            value
+            for label in english_labels
+            for value in _numbers(english_answers[label])
+        ]
+        chinese_values = [
+            value
+            for label in chinese_labels
+            for value in _numbers(chinese_answers[label])
+        ]
+        assert english_values == chinese_values, index
+
+
+def test_profile_selection_reaches_the_expected_candidate_model_stage():
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    representatives: dict[str, dict] = {}
+    for entry in english:
+        profile_id = _selected_profile_id(entry["description"], "en")
+        representatives.setdefault(profile_id, entry)
+    assert set(representatives) == set(EXPECTED_PROFILE_COUNTS)
+
+    catalog = default_simulation_profile_catalog()
+    adapter = _DatasetDescriptionGuidanceAdapter("en")
+    for profile_id, entry in representatives.items():
+        description = SystemDescription(text=entry["description"])
+        session = start_diagnostic_session(description, diagnostic_adapter=adapter)
+        classification = DiagnosticEngine().classify(
+            session.current_diagnosis, description
+        )
+        selection = deterministic_profile_selection(
+            description,
+            session.current_diagnosis,
+            classification,
+            catalog,
+        )
+        assert selection.simulation_profile_id == profile_id
+        selected_profile = validate_semantic_selection(
+            selection, classification, catalog
+        )
+        assert selected_profile.required_feature_ids
+        profile = entry["profile"]
+        if profile_id == "generic_unstable_higher_order":
+            assert "**Complete numeric model:**" in profile
+        else:
+            assert "Profile-specific required answers:" in profile
+
+
+def test_every_compilable_chinese_profile_response_reaches_a_candidate_model():
+    """Exercise the actual specification parser/compiler, not only label presence."""
+    entries = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+    templates = {
+        template.method_profile_id: template
+        for template in default_specification_template_catalog().templates
+    }
+    compiled_counts = Counter()
+
+    for index, entry in enumerate(entries, 1):
+        profile_id = _selected_profile_id(entry["description"], "cn")
+        if profile_id == "generic_unstable_higher_order":
+            # This route deliberately hands its complete numeric plant model to
+            # the higher-order workflow instead of compiling a scalar proxy.
+            _assert_complete_numeric_model_handoff(entry, "cn", index)
+            continue
+
+        description = SystemDescription(text=entry["description"])
+        template = templates[profile_id]
+        previous = build_initial_specification_assessment(description, template)
+        assessment = assess_specification_text(
+            description,
+            template,
+            entry["profile"],
+            previous=previous,
+            method_profile_id=profile_id,
+        )
+
+        assert assessment.status == "ready", (
+            index,
+            profile_id,
+            assessment.missing_fact_ids,
+            assessment.rejected_facts,
+            assessment.conflicts,
+        )
+        compiled = compile_specification_model(
+            description=description,
+            template=template,
+            assessment=assessment,
+        )
+        assert compiled.template_id == template.template_id, (index, profile_id)
+        compiled_counts[profile_id] += 1
+
+    expected_compilable = Counter(EXPECTED_PROFILE_COUNTS)
+    del expected_compilable["generic_unstable_higher_order"]
+    assert compiled_counts == expected_compilable
+
+
+def _transfer_function_coefficients(profile: str) -> tuple[np.ndarray, np.ndarray] | None:
+    match = re.search(
+        r"numerator coefficients are ([^;]+); its denominator coefficients are ([^;]+);",
+        profile,
+    )
+    if match is None:
+        return None
+    try:
+        numerator = np.array([float(item.strip()) for item in match.group(1).split(",")])
+        denominator = np.array(
+            [float(item.strip()) for item in match.group(2).split(",")]
+        )
+    except ValueError:
+        return None
+    return numerator, denominator
+
+
+def _assert_complete_numeric_model_handoff(entry: dict, language: str, index: int):
+    _profile_id, answers = _profile_answers(entry, language)
+    label = "完整数值模型" if language == "cn" else "Complete numeric model"
+    model = answers[label]
+    values = _numbers(model)
+    assert values and all(math.isfinite(value) for value in values), index
+
+    if "transfer function" in model or "传递函数" in model:
+        coefficient_patterns = (
+            (r"numerator coefficients are ([^;]+)", r"denominator coefficients are ([^;]+)"),
+            (r"分子系数为([^；]+)", r"分母系数为([^；]+)"),
+        )
+        for numerator_pattern, denominator_pattern in coefficient_patterns:
+            numerator = re.search(numerator_pattern, model)
+            denominator = re.search(denominator_pattern, model)
+            if numerator is not None and denominator is not None:
+                numerator_values = _numbers(numerator.group(1))
+                denominator_values = _numbers(denominator.group(1))
+                assert numerator_values and denominator_values, index
+                assert any(value != 0 for value in denominator_values), index
+                return
+        pytest.fail(f"entry {index} has no parseable transfer-function handoff")
+
+    assert "state-space" in model or "状态空间" in model, index
+    matrix_markers = (
+        ("matrix A", "matrix B", "matrix C", "matrix D")
+        if language == "en"
+        else ("A 矩阵", "B 矩阵", "C 矩阵", "D 矩阵")
+    )
+    assert all(marker in model for marker in matrix_markers), index
+    assert model.count("[") >= 4, index
+
+
+def test_first_order_measurements_match_source_models_or_explicit_proxies():
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+
+    for index, (entry, chinese_entry) in enumerate(zip(english, chinese), 1):
+        profile_id, answers = _profile_answers(entry, "en")
+        if profile_id not in {"first_order_lag", "first_order_lag_with_delay"}:
+            continue
+
+        coefficients = _transfer_function_coefficients(entry["profile"])
+        record = re.search(
+            r"uses a ([0-9.eE+-]+) s sample interval for ([0-9.eE+-]+) s,"
+            r" starts the primary output at ([0-9.eE+-]+),",
+            entry["profile"],
+        )
+        stable_model = False
+        if coefficients is not None and record is not None:
+            numerator, denominator = coefficients
+            if len(denominator) >= 2 and 0 < len(numerator) <= len(denominator):
+                poles = np.roots(denominator)
+                dc_gain = (
+                    numerator[-1] / denominator[-1]
+                    if abs(denominator[-1]) > 1e-12
+                    else math.nan
+                )
+                stable_model = (
+                    bool(np.all(np.real(poles) < -1e-9))
+                    and math.isfinite(dc_gain)
+                    and abs(dc_gain) > 1e-12
+                )
+
+        if stable_model and index not in SOURCE_MEASUREMENT_IDS:
+            dt, duration, initial_output = map(float, record.groups())
+            input_change = _numbers(answers["Known input change"])[0]
+            input_min = _numbers(answers["Input simulation lower bound"])[0]
+            input_max = _numbers(answers["Input simulation upper bound"])[0]
+            point_count = max(
+                1001,
+                min(100001, int(duration / max(dt, 1e-9)) + 1),
+            )
+            times = np.linspace(0.0, duration, point_count)
+            _, unit_step = signal.step((numerator, denominator), T=times)
+            expected_final = float(dc_gain * input_change)
+            target = 0.6321205588 * expected_final
+            response = unit_step * input_change
+            crossings = (
+                np.flatnonzero(response >= target)
+                if expected_final > 0
+                else np.flatnonzero(response <= target)
+            )
+            expected_time = (
+                max(dt, float(times[crossings[0]]))
+                if len(crossings)
+                else max(20 * dt, duration / 8)
+            )
+            amplitudes = (
+                -abs(input_min),
+                -0.5 * abs(input_min),
+                0.5 * abs(input_max),
+                abs(input_max),
+            )
+            trajectories = [
+                initial_output + multiplier * amplitude * unit_step
+                for multiplier in (0.9, 1.0, 1.1)
+                for amplitude in amplitudes
+            ]
+            raw_min = min(float(np.min(values)) for values in trajectories)
+            raw_max = max(float(np.max(values)) for values in trajectories)
+            span = raw_max - raw_min
+            expected_min = raw_min - 0.1 * span
+            expected_max = raw_max + 0.1 * span
+
+            assert "model-derived" in answers["Final output change"], index
+            assert _numbers(answers["Final output change"])[0] == pytest.approx(
+                expected_final, rel=2e-5, abs=1e-8
+            )
+            assert _time_numbers(answers["63% response time"])[0] == pytest.approx(
+                expected_time, rel=2e-5, abs=1e-8
+            )
+            assert _numbers(answers["Output simulation lower bound"])[0] == pytest.approx(
+                expected_min, rel=2e-5, abs=1e-8
+            )
+            assert _numbers(answers["Output simulation upper bound"])[0] == pytest.approx(
+                expected_max, rel=2e-5, abs=1e-8
+            )
+            continue
+
+        if index in SOURCE_MEASUREMENT_IDS:
+            continue
+
+        english_proxy = re.search(
+            r"\*\*Executable first-order Profile proxy:\*\* (.*?)(?=\n\n)",
+            entry["profile"],
+            re.DOTALL,
+        )
+        chinese_proxy = re.search(
+            r"\*\*可执行一阶 Profile 代理模型:\*\* (.*?)(?=\n\n)",
+            chinese_entry["profile"],
+            re.DOTALL,
+        )
+        assert english_proxy is not None and chinese_proxy is not None, index
+        proxy_values = _numbers(english_proxy.group(1))
+        assert proxy_values == _numbers(chinese_proxy.group(1)), index
+        input_change = _numbers(answers["Known input change"])[0]
+        final_change = _numbers(answers["Final output change"])[0]
+        response_time = _time_numbers(answers["63% response time"])[0]
+        delay = (
+            _time_numbers(answers["Pure waiting time"])[0]
+            if profile_id == "first_order_lag_with_delay"
+            else 0.0
+        )
+        assert final_change != 0, index
+        assert proxy_values[:4] == pytest.approx(
+            [final_change / input_change, response_time, 1.0, delay]
+        )
+
+        assert record is not None, index
+        dt, duration, initial_output = map(float, record.groups())
+        times = np.linspace(
+            0.0,
+            duration,
+            max(1001, min(100001, int(duration / max(dt, 1e-9)) + 1)),
+        )
+        elapsed = np.maximum(times - delay, 0.0)
+        unit_step = (final_change / input_change) * (
+            1.0 - np.exp(-elapsed / response_time)
+        )
+        input_min = _numbers(answers["Input simulation lower bound"])[0]
+        input_max = _numbers(answers["Input simulation upper bound"])[0]
+        amplitudes = (
+            -abs(input_min),
+            -0.5 * abs(input_min),
+            0.5 * abs(input_max),
+            abs(input_max),
+        )
+        trajectories = [
+            initial_output + multiplier * amplitude * unit_step
+            for multiplier in (0.9, 1.0, 1.1)
+            for amplitude in amplitudes
+        ]
+        raw_min = min(float(np.min(values)) for values in trajectories)
+        raw_max = max(float(np.max(values)) for values in trajectories)
+        span = raw_max - raw_min
+        expected_min = raw_min - 0.1 * span
+        expected_max = raw_max + 0.1 * span
+        assert _numbers(answers["Output simulation lower bound"])[0] == pytest.approx(
+            expected_min, rel=2e-5, abs=1e-8
+        )
+        assert _numbers(answers["Output simulation upper bound"])[0] == pytest.approx(
+            expected_max, rel=2e-5, abs=1e-8
+        )
+
+
+def test_second_order_motion_answer_is_an_acceleration_measurement():
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+
+    for entry, language in ((english[76], "en"), (chinese[76], "cn")):
+        _profile_id, answers = _profile_answers(entry, language)
+        label = "对应运动变化" if language == "cn" else "Corresponding motion change"
+        assert "acceleration" in answers[label] or "加速度" in answers[label]
+        assert "/s^2" in answers[label]
+
+
+def test_declared_profile_parameter_shortcut_is_removed_everywhere():
+    for path in (ENGLISH_PATH, CHINESE_PATH):
+        text = path.read_text(encoding="utf-8")
+        assert text.count("Declared Profile parameters") == 0
+        assert text.count("已声明的 Profile 参数") == 0
+        if path == ENGLISH_PATH:
+            assert text.count("Profile-specific required answers:") == 200
+        else:
+            assert text.count("Profile 专用必填回答：") == 200
 
 
 def test_bilingual_descriptions_produce_the_same_eight_diagnostic_assessments():
