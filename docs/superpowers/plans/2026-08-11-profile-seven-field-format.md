@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Reformat all 200 English and 200 Chinese control-problem Profile responses so the seven common requested values are explicit, ordered natural-language answers followed by clearly marked additional Profile information.
+**Goal:** Reformat all 200 English and 200 Chinese control-problem Profile responses so each entry explicitly answers its actual Profile requirements, using the seven common fields only for the 23 entries whose existing records support them.
 
-**Architecture:** Keep the two prompt documents as the source of truth and extend their existing parser test as the format contract. The migration changes only the Profile response section of each entry: seven labeled answers come first, then all remaining model, record, timing, delay, and specialist Profile content is retained under an additional-information heading.
+**Architecture:** Keep the two prompt documents as the source of truth and extend their existing parser test as the format contract. The 23 grounded first-order entries receive seven labeled answers. The other 177 entries receive labeled Profile-specific parameters and executable-model answers without invented values; all remaining record and timing content is retained under an additional-information heading.
 
 **Tech Stack:** Markdown datasets, Python `re`, pytest, Ruff.
 
@@ -14,12 +14,13 @@
 - Preserve every control-problem description byte-for-byte.
 - Preserve existing case values, units, model meaning, specialist Profile parameters, record configuration, and software-only safety statement.
 - Do not add JSON, assignment tokens such as `input_change=`, or the removed eight-item measurement-response section.
-- Put the seven fixed labels in the approved order and exactly once per Profile response.
+- Put the seven fixed labels in the approved order and exactly once in the 23 applicable Profile responses.
+- For the other 177 responses, label the existing Profile parameters and executable software model instead of inventing seven common values.
 - Retain non-seven-field content under `Additional information` / `额外信息`.
 
 ---
 
-### Task 1: Lock the bilingual seven-field contract
+### Task 1: Lock the bilingual adaptive Profile contract
 
 **Files:**
 - Modify: `tests/test_control_problem_prompts.py`
@@ -27,11 +28,16 @@
 
 **Interfaces:**
 - Consumes: `_parse_document(path, headings, language) -> list[dict]` and each parsed entry's `profile` string.
-- Produces: `ENGLISH_PROFILE_LABELS`, `CHINESE_PROFILE_LABELS`, and regression assertions used to validate both prompt documents.
+- Produces: `SEVEN_FIELD_PROFILE_IDS`, bilingual seven-field labels, and regression assertions used to validate both prompt documents.
 
-- [ ] **Step 1: Add fixed bilingual label constants**
+- [ ] **Step 1: Add the literal applicable-ID set and bilingual label constants**
 
 ```python
+SEVEN_FIELD_PROFILE_IDS = {
+    *range(1, 22),
+    35,
+    38,
+}
 ENGLISH_PROFILE_LABELS = [
     "Known input change",
     "Final output change",
@@ -62,24 +68,32 @@ CHINESE_PROFILE_LABELS = [
         (CHINESE_PATH, CHINESE_HEADINGS, "cn", CHINESE_PROFILE_LABELS, "额外信息"),
     ],
 )
-def test_every_profile_response_lists_seven_answers_before_additional_information(
+def test_every_profile_response_lists_its_required_answers_before_additional_information(
     path, headings, language, labels, extra_heading
 ):
     entries = _parse_document(path, headings, language)
     for index, entry in enumerate(entries, 1):
         profile = entry["profile"]
-        positions = [profile.index(f"**{label}：**" if language == "cn" else f"**{label}:**") for label in labels]
-        assert positions == sorted(positions), (language, index)
-        assert all(profile.count(label) == 1 for label in labels), (language, index)
+        if index in SEVEN_FIELD_PROFILE_IDS:
+            positions = [profile.index(f"**{label}：**" if language == "cn" else f"**{label}:**") for label in labels]
+            assert positions == sorted(positions), (language, index)
+            assert all(profile.count(label) == 1 for label in labels), (language, index)
+        else:
+            required = "Profile 专用必填回答" if language == "cn" else "Profile-specific required answers"
+            parameters = "已声明的 Profile 参数" if language == "cn" else "Declared Profile parameters"
+            model = "可执行软件模型" if language == "cn" else "Executable software model"
+            assert profile.count(required) == 1, (language, index)
+            assert profile.count(parameters) == 1, (language, index)
+            assert profile.count(model) == 1, (language, index)
+            assert not any(label in profile for label in labels), (language, index)
         assert profile.count(extra_heading) == 1, (language, index)
-        assert positions[-1] < profile.index(extra_heading), (language, index)
 ```
 
 - [ ] **Step 3: Run the focused test and verify RED**
 
-Run: `pytest -q tests/test_control_problem_prompts.py -k seven_answers`
+Run: `pytest -q tests/test_control_problem_prompts.py -k required_answers`
 
-Expected: FAIL because the current compact paragraphs do not contain the seven fixed labels or the additional-information heading.
+Expected: FAIL because the current compact paragraphs contain neither labeled common/Profile-specific answers nor the additional-information heading.
 
 - [ ] **Step 4: Commit the RED test**
 
@@ -88,7 +102,7 @@ git add tests/test_control_problem_prompts.py
 git commit -m "test: require explicit profile prompt answers"
 ```
 
-### Task 2: Reformat all bilingual Profile responses
+### Task 2: Reformat all bilingual Profile responses without invented values
 
 **Files:**
 - Modify: `dataset/control_problem_prompts.md`
@@ -96,10 +110,10 @@ git commit -m "test: require explicit profile prompt answers"
 - Test: `tests/test_control_problem_prompts.py`
 
 **Interfaces:**
-- Consumes: the seven values already expressed by each entry's natural-language Profile material and all remaining Profile paragraphs.
-- Produces: the approved English and Chinese seven-answer blocks plus an additional-information block in every entry.
+- Consumes: the seven values expressed by the 23 first-order entries, the Profile-specific parameter/model paragraphs in the other 177 entries, and all remaining Profile paragraphs.
+- Produces: either the approved seven-answer block or a Profile-specific answer block, followed by an additional-information block in every entry.
 
-- [ ] **Step 1: Rewrite each English Profile lead block**
+- [ ] **Step 1: Rewrite the 23 applicable English Profile lead blocks**
 
 Use this exact structure, substituting the existing case-specific signal, number, and unit text without internal fact IDs:
 
@@ -119,7 +133,7 @@ Additional information:
 ...
 ```
 
-- [ ] **Step 2: Rewrite each Chinese Profile lead block**
+- [ ] **Step 2: Rewrite the 23 applicable Chinese Profile lead blocks**
 
 Use the bilingual-equivalent structure and retain the same values and units as the aligned English entry:
 
@@ -139,21 +153,39 @@ Use the bilingual-equivalent structure and retain the same values and units as t
 ...
 ```
 
-- [ ] **Step 3: Preserve the remaining Profile material**
+- [ ] **Step 3: Label the other 177 Profile-specific answers**
+
+Use these two bilingual-equivalent answer blocks without manufacturing common first-order values:
+
+```markdown
+Profile-specific required answers:
+
+- **Declared Profile parameters:** ...
+- **Executable software model:** ...
+```
+
+```markdown
+Profile 专用必填回答：
+
+- **已声明的 Profile 参数：** ...
+- **可执行软件模型：** ...
+```
+
+- [ ] **Step 4: Preserve the remaining Profile material**
 
 Move pure delay, physical constants, transfer-function/state-space/nonlinear model declarations, sample interval, duration, initial condition, amplitude levels, parameter-variation cases, and disturbances below the additional-information heading. Keep the final software-simulation-only safety sentence unchanged.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [ ] **Step 5: Run the focused tests and verify GREEN**
 
 Run: `pytest -q tests/test_control_problem_prompts.py`
 
 Expected: all prompt dataset tests PASS for 200 English and 200 Chinese entries.
 
-- [ ] **Step 5: Review representative entries**
+- [ ] **Step 6: Review representative entries**
 
-Inspect entries 1, 2, 25, 27, 80, 120, 160, and 200 in both files. Confirm seven labels are ordered, English/Chinese values align, specialist model data remains in additional information, and no description text changed.
+Inspect entries 1, 2, 23, 25, 27, 80, 120, 160, and 200 in both files. Confirm seven labels are ordered only for applicable entries, specialist parameters/models are labeled for the rest, English/Chinese values align, and no description text changed.
 
-- [ ] **Step 6: Commit the data migration**
+- [ ] **Step 7: Commit the data migration**
 
 ```bash
 git add dataset/control_problem_prompts.md dataset/control_problem_prompts_cn.md
