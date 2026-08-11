@@ -1701,6 +1701,232 @@ def test_live_measurement_extraction_rejects_non_strict_payload(monkeypatch):
         adapter.extract_measurements(_description(), plan, "record", None)
 
 
+def test_live_profile_recheck_falls_back_and_steering_reply_compiles(monkeypatch):
+    initial = run_cfdc_route(
+        "generic",
+        description=_description(),
+        diagnostic_adapter=GuidedFakeAdapter(),
+    )
+    previous = initial.diagnostic_session.description_assessment
+    assert previous is not None and previous.status == "ready"
+    invalid_delay_fact = MeasuredFact(
+        request_id="significant_delay",
+        source_excerpt="输入延迟为0 s",
+        numeric_value=1.5,
+        unit="s",
+    )
+    invalid_recheck = previous.model_copy(
+        update={
+            "facts": [
+                invalid_delay_fact
+                if fact.request_id == "significant_delay"
+                else fact
+                for fact in previous.facts
+            ],
+            "rationale": "The Profile response was incorrectly treated as delay evidence.",
+        }
+    )
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            del kwargs
+            message = type(
+                "Message", (), {"content": invalid_recheck.model_dump_json()}
+            )()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
+    live_adapter = OpenAICompatibleDiagnosticAdapter(
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="provider-secret",
+    )
+
+    class SteeringProfileAdapter(GuidedFakeAdapter):
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            return live_adapter.extract_measurements(
+                description,
+                measurement_plan,
+                measurement_response,
+                previous_assessment,
+            )
+
+        def assess_specifications(
+            self,
+            description,
+            diagnosis,
+            classification,
+            method_profile_id,
+            allowed_specification_templates,
+            accumulated_specification_answers,
+            previous_assessment,
+        ):
+            del (
+                description,
+                diagnosis,
+                classification,
+                method_profile_id,
+                accumulated_specification_answers,
+                previous_assessment,
+            )
+            template = allowed_specification_templates[0]
+            facts = [
+                (
+                    "input_change",
+                    5.0,
+                    "deg",
+                    "- **已知输入变化量：** 方向盘转角变化5 deg。",
+                ),
+                (
+                    "steady_output_change",
+                    8.0,
+                    "deg",
+                    "- **最终输出变化量：** 航向角的稳态变化为8 deg。",
+                ),
+                (
+                    "response_time_s",
+                    1.5,
+                    "s",
+                    "- **63% 响应时间：** 1.5 s。",
+                ),
+                (
+                    "input_min",
+                    -30.0,
+                    "deg",
+                    "- **输入仿真下限：** 方向盘转角采用-30 deg。",
+                ),
+                (
+                    "input_max",
+                    30.0,
+                    "deg",
+                    "- **输入仿真上限：** 方向盘转角采用30 deg。",
+                ),
+                (
+                    "output_min",
+                    -180.0,
+                    "deg",
+                    "- **输出仿真下限：** 航向角采用-180 deg作为停止下限。",
+                ),
+                (
+                    "output_max",
+                    180.0,
+                    "deg",
+                    "- **输出仿真上限：** 航向角采用180 deg作为停止上限。",
+                ),
+            ]
+            return {
+                "status": "ready",
+                "template_id": template.template_id,
+                "facts": [
+                    {
+                        "fact_id": fact_id,
+                        "value": value,
+                        "unit": unit,
+                        "source_type": "user_known_behavior",
+                        "source_text": source_text,
+                    }
+                    for fact_id, value, unit, source_text in facts
+                ],
+                "missing_fact_ids": [],
+                "conflicts": [],
+                "rejected_facts": [],
+                "questions": [],
+                "rationale": "All seven Profile values are grounded in the reply.",
+            }
+
+    response = """- **已知输入变化量：** 方向盘转角变化5 deg。
+- **最终输出变化量：** 航向角的稳态变化为8 deg。
+- **63% 响应时间：** 1.5 s。
+- **输入仿真下限：** 方向盘转角采用-30 deg。
+- **输入仿真上限：** 方向盘转角采用30 deg。
+- **输出仿真下限：** 航向角采用-180 deg作为停止下限。
+- **输出仿真上限：** 航向角采用180 deg作为停止上限。
+
+额外信息：
+
+已有软件模型采用从方向盘转角（单位 deg）到航向角（单位 deg）的传递函数。
+分子系数为1.6；分母系数为1.5, 1；输入延迟为0 s。"""
+
+    completed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=SteeringProfileAdapter(),
+        measurement_response=response,
+        simulation_bounds_confirmed=True,
+    )
+
+    assert completed.status == "candidate_unvalidated"
+    assert completed.diagnostic_session.current_diagnosis == initial.diagnosis
+    assert completed.compiled_specification_model is not None
+    assert completed.controller is not None
+
+
+def test_live_profile_recheck_preserves_a_grounded_changed_fact(monkeypatch):
+    description = _description()
+    plan = build_measurement_plan(build_diagnostic_checklist(description))
+    previous = MeasurementAssessment.model_validate(
+        GuidedFakeAdapter().extract_measurements(
+            description,
+            plan,
+            _complete_diagnostic_response(),
+            None,
+        )
+    )
+    changed_excerpt = "A newer record says the output grows without bound."
+    changed = previous.model_copy(
+        update={
+            "facts": [
+                MeasuredFact(
+                    request_id="open_loop_stability",
+                    source_excerpt=changed_excerpt,
+                    text_value=changed_excerpt,
+                )
+                if fact.request_id == "open_loop_stability"
+                else fact
+                for fact in previous.facts
+            ],
+            "rationale": "One diagnostic fact changed with explicit evidence.",
+        }
+    )
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            del kwargs
+            message = type("Message", (), {"content": changed.model_dump_json()})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
+
+    monkeypatch.setattr("cfdc.diagnosis.llm.OpenAI", FakeOpenAI)
+    adapter = OpenAICompatibleDiagnosticAdapter(
+        base_url="https://provider.example/v1",
+        model="provider-model",
+        api_key="provider-secret",
+    )
+
+    result = MeasurementAssessment.model_validate(
+        adapter.extract_measurements(description, plan, changed_excerpt, previous)
+    )
+
+    assert result == changed
+
+
 @pytest.mark.parametrize(
     ("operation", "content"),
     [
