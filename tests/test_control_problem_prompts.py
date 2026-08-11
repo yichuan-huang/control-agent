@@ -21,6 +21,25 @@ CHINESE_HEADINGS = [
     "控制问题描述",
     "Profile 测量回复（自然语言）",
 ]
+SEVEN_FIELD_PROFILE_IDS = {*range(1, 22), 35, 38}
+ENGLISH_PROFILE_LABELS = [
+    "Known input change",
+    "Final output change",
+    "63% response time",
+    "Input simulation lower bound",
+    "Input simulation upper bound",
+    "Output simulation lower bound",
+    "Output simulation upper bound",
+]
+CHINESE_PROFILE_LABELS = [
+    "已知输入变化量",
+    "最终输出变化量",
+    "63% 响应时间",
+    "输入仿真下限",
+    "输入仿真上限",
+    "输出仿真下限",
+    "输出仿真上限",
+]
 ENGLISH_OLD_HEADINGS = [
     "Observable Outputs",
     "Actuators",
@@ -286,6 +305,77 @@ def test_bilingual_prompts_have_strict_two_stage_structural_parity():
         assert len(english_item["paragraphs"]) == len(
             chinese_item["paragraphs"]
         ), index
+
+
+@pytest.mark.parametrize(
+    ("path", "headings", "language", "labels", "extra_heading"),
+    [
+        (
+            ENGLISH_PATH,
+            ENGLISH_HEADINGS,
+            "en",
+            ENGLISH_PROFILE_LABELS,
+            "Additional information:",
+        ),
+        (
+            CHINESE_PATH,
+            CHINESE_HEADINGS,
+            "cn",
+            CHINESE_PROFILE_LABELS,
+            "额外信息：",
+        ),
+    ],
+)
+def test_every_profile_response_lists_its_required_answers_before_additional_information(
+    path, headings, language, labels, extra_heading
+):
+    entries = _parse_document(path, headings, language)
+    for index, entry in enumerate(entries, 1):
+        profile = entry["profile"]
+        if index in SEVEN_FIELD_PROFILE_IDS:
+            markers = [
+                f"**{label}：**" if language == "cn" else f"**{label}:**"
+                for label in labels
+            ]
+            positions = [profile.index(marker) for marker in markers]
+            assert positions == sorted(positions), (language, index)
+            assert all(profile.count(marker) == 1 for marker in markers), (
+                language,
+                index,
+            )
+            for marker in markers:
+                answer = re.search(
+                    rf"^- {re.escape(marker)} (.+)$", profile, re.MULTILINE
+                )
+                assert answer is not None and re.search(r"\d", answer.group(1)), (
+                    language,
+                    index,
+                    marker,
+                )
+            required_end = positions[-1]
+        else:
+            required_heading = (
+                "Profile 专用必填回答："
+                if language == "cn"
+                else "Profile-specific required answers:"
+            )
+            parameters = (
+                "**已声明的 Profile 参数：**"
+                if language == "cn"
+                else "**Declared Profile parameters:**"
+            )
+            model = (
+                "**可执行软件模型：**"
+                if language == "cn"
+                else "**Executable software model:**"
+            )
+            for marker in (required_heading, parameters, model):
+                assert profile.count(marker) == 1, (language, index, marker)
+            assert not any(label in profile for label in labels), (language, index)
+            required_end = profile.index(model)
+
+        assert profile.count(extra_heading) == 1, (language, index)
+        assert required_end < profile.index(extra_heading), (language, index)
 
 
 def test_bilingual_descriptions_produce_the_same_eight_diagnostic_assessments():
