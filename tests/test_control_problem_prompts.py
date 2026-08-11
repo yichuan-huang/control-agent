@@ -81,29 +81,33 @@ def _sentences(description: str, language: str) -> list[str]:
     return re.findall(r"[^。！？]+[。！？]", description)
 
 
-class _DatasetDescriptionGuidanceAdapter:
-    """Select one real sentence that deterministically answers each checklist item."""
+def _paragraphs(description: str) -> list[str]:
+    return [item.strip() for item in re.split(r"\n\s*\n", description) if item.strip()]
 
-    _SENTENCE_BY_FIELD: ClassVar[dict[str, int]] = {
-        "minimum_phase": 2,
-        "significant_delay": 3,
-        "relative_degree": 4,
-        "open_loop_stability": 5,
-        "nonlinearity_strength": 6,
-        "controllability_observability": 7,
-        "coupling_severity": 8,
-        "uncertainty_magnitude": 9,
+
+class _DatasetDescriptionGuidanceAdapter:
+    """Select the dedicated real paragraph for each checklist item."""
+
+    _PARAGRAPH_BY_FIELD: ClassVar[dict[str, int]] = {
+        "minimum_phase": 1,
+        "significant_delay": 2,
+        "relative_degree": 3,
+        "open_loop_stability": 4,
+        "nonlinearity_strength": 5,
+        "controllability_observability": 6,
+        "coupling_severity": 7,
+        "uncertainty_magnitude": 8,
     }
 
     def __init__(self, language: str):
         self.language = language
 
     def guide_description(self, description, guidance):
-        sentences = _sentences(description.text, self.language)
+        paragraphs = _paragraphs(description.text)
         resolved = []
         for item in guidance:
-            sentence_index = self._SENTENCE_BY_FIELD[item.diagnostic_field_id]
-            candidate = sentences[sentence_index]
+            paragraph_index = self._PARAGRAPH_BY_FIELD[item.diagnostic_field_id]
+            candidate = paragraphs[paragraph_index]
             response = (
                 candidate
                 if description_excerpt_answers_field(
@@ -156,9 +160,17 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
         assert re.findall(r"^### (.+)$", entry, re.MULTILINE) == headings, index
 
         description = _field(entry, headings[0])
-        assert "\n\n" not in description, index
-        sentences = _sentences(description, language)
-        assert len(sentences) == 10, (language, index, len(sentences))
+        paragraphs = _paragraphs(description)
+        assert len(paragraphs) == 9, (language, index, len(paragraphs))
+        paragraph_sentences = [
+            _sentences(paragraph, language) for paragraph in paragraphs
+        ]
+        assert all(2 <= len(items) <= 3 for items in paragraph_sentences), (
+            language,
+            index,
+            [len(items) for items in paragraph_sentences],
+        )
+        sentences = [sentence for items in paragraph_sentences for sentence in items]
         assert "?" not in description and "？" not in description
         if language == "en":
             assert sentences[0].startswith(("This is ", "These are "))
@@ -189,6 +201,7 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
             {
                 "title": title,
                 "description": description,
+                "paragraphs": paragraphs,
                 "sentences": sentences,
                 "profile": profile,
             }
@@ -270,7 +283,37 @@ def test_bilingual_prompts_have_strict_two_stage_structural_parity():
 
     assert len(english) == len(chinese) == 200
     for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
-        assert len(english_item["sentences"]) == len(chinese_item["sentences"]), index
+        assert len(english_item["paragraphs"]) == len(
+            chinese_item["paragraphs"]
+        ), index
+
+
+def test_bilingual_descriptions_produce_the_same_eight_diagnostic_assessments():
+    fields = tuple(_DatasetDescriptionGuidanceAdapter._PARAGRAPH_BY_FIELD)
+    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
+    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+    english_adapter = _DatasetDescriptionGuidanceAdapter("en")
+    chinese_adapter = _DatasetDescriptionGuidanceAdapter("cn")
+
+    for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
+        english_session = start_diagnostic_session(
+            SystemDescription(text=english_item["description"]),
+            diagnostic_adapter=english_adapter,
+        )
+        chinese_session = start_diagnostic_session(
+            SystemDescription(text=chinese_item["description"]),
+            diagnostic_adapter=chinese_adapter,
+        )
+        english_assessments = tuple(
+            getattr(english_session.current_diagnosis, field).assessment
+            for field in fields
+        )
+        chinese_assessments = tuple(
+            getattr(chinese_session.current_diagnosis, field).assessment
+            for field in fields
+        )
+
+        assert english_assessments == chinese_assessments, index
 
 
 def test_profile_responses_preserve_representative_problem_data_as_natural_language():
