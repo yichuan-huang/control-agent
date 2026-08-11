@@ -1702,10 +1702,30 @@ def test_live_measurement_extraction_rejects_non_strict_payload(monkeypatch):
 
 
 def test_live_profile_recheck_falls_back_and_steering_reply_compiles(monkeypatch):
+    steering_description = SystemDescription(
+        text=(
+            "A first order steering-to-heading process uses 方向盘转角 to change 航向角. "
+            + " ".join(_VALID_FIELD_FACTS.values())
+        ),
+        observed_outputs=["航向角"],
+        actuators=["方向盘转角"],
+    )
+
+    class SteeringGuidedFakeAdapter(GuidedFakeAdapter):
+        def guide_description(self, description, guidance):
+            payload = super().guide_description(description, guidance)
+            payload["observed_outputs"] = [
+                {"name": "航向角", "source_excerpt": "航向角"}
+            ]
+            payload["actuators"] = [
+                {"name": "方向盘转角", "source_excerpt": "方向盘转角"}
+            ]
+            return payload
+
     initial = run_cfdc_route(
         "generic",
-        description=_description(),
-        diagnostic_adapter=GuidedFakeAdapter(),
+        description=steering_description,
+        diagnostic_adapter=SteeringGuidedFakeAdapter(),
     )
     previous = initial.diagnostic_session.description_assessment
     assert previous is not None and previous.status == "ready"
@@ -1748,7 +1768,7 @@ def test_live_profile_recheck_falls_back_and_steering_reply_compiles(monkeypatch
         api_key="provider-secret",
     )
 
-    class SteeringProfileAdapter(GuidedFakeAdapter):
+    class SteeringProfileAdapter(SteeringGuidedFakeAdapter):
         def extract_measurements(
             self,
             description,
