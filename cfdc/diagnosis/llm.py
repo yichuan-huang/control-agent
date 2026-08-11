@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from cfdc.diagnosis.measurements import (
     apply_description_guidance,
+    validate_grounded_measurement_assessment,
     validate_phrased_measurement_plan,
 )
 from cfdc.models import (
@@ -583,6 +584,13 @@ class OpenAICompatibleDiagnosticAdapter:
             assessment = MeasurementAssessment.model_validate(
                 parse_json_content(content)
             )
+            if previous_assessment is not None and previous_assessment.status == "ready":
+                validate_grounded_measurement_assessment(
+                    measurement_plan,
+                    assessment,
+                    measurement_response,
+                    previous_assessment=previous_assessment,
+                )
         except json.JSONDecodeError:
             assessment = previous_assessment or MeasurementAssessment(
                 status="need_more",
@@ -594,6 +602,10 @@ class OpenAICompatibleDiagnosticAdapter:
                     "measurement record again."
                 ),
             )
+        except ValueError:
+            if previous_assessment is None or previous_assessment.status != "ready":
+                raise
+            assessment = previous_assessment.model_copy(deep=True)
         return assessment.model_dump(mode="json")
 
     def select_profile(self, description, diagnosis, classification, catalog):

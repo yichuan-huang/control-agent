@@ -761,8 +761,17 @@ def _source_contains_unit(source_text: str, unit: str) -> bool:
     for candidate in candidates:
         if not candidate:
             continue
-        prefix = r"(?<!\w)" if candidate[0].isalnum() else ""
-        suffix = r"(?!\w)" if candidate[-1].isalnum() else ""
+        if candidate[0].isascii() and candidate[0].isalnum():
+            prefix = r"(?<![A-Za-z0-9_])"
+        elif candidate[0].isalnum():
+            prefix = r"(?<=[0-9.\s])"
+        else:
+            prefix = ""
+        suffix = (
+            r"(?![A-Za-z0-9_])"
+            if candidate[-1].isascii() and candidate[-1].isalnum()
+            else ""
+        )
         if re.search(
             prefix + re.escape(candidate) + suffix,
             normalized_source,
