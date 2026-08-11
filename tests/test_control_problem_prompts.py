@@ -1,8 +1,13 @@
 import re
 from collections import Counter
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
+
+from cfdc.diagnosis import start_diagnostic_session
+from cfdc.diagnosis.measurements import description_excerpt_answers_field
+from cfdc.models import SystemDescription
 
 TECHNICAL_PATH = Path("dataset/control_problems.md")
 ENGLISH_PATH = Path("dataset/control_problem_prompts.md")
@@ -76,6 +81,52 @@ def _sentences(description: str, language: str) -> list[str]:
     return re.findall(r"[^。！？]+[。！？]", description)
 
 
+class _DatasetDescriptionGuidanceAdapter:
+    """Select one real sentence that deterministically answers each checklist item."""
+
+    _SENTENCE_BY_FIELD: ClassVar[dict[str, int]] = {
+        "minimum_phase": 2,
+        "significant_delay": 3,
+        "relative_degree": 4,
+        "open_loop_stability": 5,
+        "nonlinearity_strength": 6,
+        "controllability_observability": 7,
+        "coupling_severity": 8,
+        "uncertainty_magnitude": 9,
+    }
+
+    def __init__(self, language: str):
+        self.language = language
+
+    def guide_description(self, description, guidance):
+        sentences = _sentences(description.text, self.language)
+        resolved = []
+        for item in guidance:
+            sentence_index = self._SENTENCE_BY_FIELD[item.diagnostic_field_id]
+            candidate = sentences[sentence_index]
+            response = (
+                candidate
+                if description_excerpt_answers_field(
+                    item.diagnostic_field_id,
+                    candidate,
+                    context=description.text,
+                )
+                else "unknown"
+            )
+            resolved.append(
+                {**item.model_dump(mode="json"), "response": response}
+            )
+        return {
+            "guidance": resolved,
+            "observed_outputs": [],
+            "actuators": [],
+        }
+
+    def phrase_measurement_plan(self, description, checklist, plan):
+        del description, checklist
+        return plan.model_dump(mode="json")
+
+
 def _parse_document(path: Path, headings: list[str], language: str) -> list[dict]:
     markdown = path.read_text(encoding="utf-8")
     title_matches = re.findall(r"^## (\d+)\. (.+)$", markdown, re.MULTILINE)
@@ -107,7 +158,7 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
         description = _field(entry, headings[0])
         assert "\n\n" not in description, index
         sentences = _sentences(description, language)
-        assert 6 <= len(sentences) <= 9, (language, index, len(sentences))
+        assert len(sentences) == 10, (language, index, len(sentences))
         assert "?" not in description and "？" not in description
         if language == "en":
             assert sentences[0].startswith(("This is ", "These are "))
@@ -143,6 +194,59 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
             }
         )
     return parsed
+
+
+@pytest.mark.parametrize(
+    ("path", "headings", "language"),
+    [
+        (ENGLISH_PATH, ENGLISH_HEADINGS, "en"),
+        (CHINESE_PATH, CHINESE_HEADINGS, "cn"),
+    ],
+)
+def test_every_dataset_description_releases_all_eight_grounded_fields(
+    path, headings, language
+):
+    entries = _parse_document(path, headings, language)
+    adapter = _DatasetDescriptionGuidanceAdapter(language)
+
+    for index, entry in enumerate(entries, 1):
+        description = entry["description"]
+        session = start_diagnostic_session(
+            SystemDescription(text=description),
+            diagnostic_adapter=adapter,
+        )
+
+        assert session.status == "description_grounded", (language, index)
+        assert session.description_assessment is not None, (language, index)
+        assert len(session.description_assessment.facts) == 8, (language, index)
+        assert session.current_diagnosis.complete, (language, index)
+        assert all(item.status == "inferred" for item in session.checklist), (
+            language,
+            index,
+        )
+
+
+@pytest.mark.parametrize(
+    ("path", "headings", "language"),
+    [
+        (ENGLISH_PATH, ENGLISH_HEADINGS, "en"),
+        (CHINESE_PATH, CHINESE_HEADINGS, "cn"),
+    ],
+)
+def test_pole_zero_cancellation_description_preserves_inadequate_observability(
+    path, headings, language
+):
+    entry = _parse_document(path, headings, language)[125]
+    session = start_diagnostic_session(
+        SystemDescription(text=entry["description"]),
+        diagnostic_adapter=_DatasetDescriptionGuidanceAdapter(language),
+    )
+
+    assert session.status == "description_grounded"
+    assert (
+        session.current_diagnosis.controllability_observability.assessment
+        == "inadequate"
+    )
 
 
 def test_english_prompts_match_the_guided_natural_language_ui_contract():
