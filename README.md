@@ -7,19 +7,19 @@ This repository is an independent implementation of the Core-Feature-Driven Cont
 ## Main workflow
 
 ```text
-1 Problem Description
-→ 2 AI Measurement Plan
-→ 3 Measurement Response
-→ 4 System Classification
+1 Problem Description and Eight-Item Checklist
+→ 2 System Classification
+→ 3 Core-Parameter Measurement Plan
+→ 4 Parameter Response and Model Compilation
 → 5 Initial Controller
 → 6 Effect Validation and Tuning
 ```
 
-The generic Web and CLI flow requires an OpenAI-compatible LLM provider. Start with one natural-language problem description; an optional description supplement may add facts from an existing record or manual. The AI then presents the fixed eight-item diagnostic checklist and measurement plan. Description supplements, diagnostic measurement responses, and selected-Profile responses each have their own eight-round limit. Unknown facts remain gaps and are never filled with invented defaults.
+The generic Web and CLI flow requires an OpenAI-compatible LLM provider. Start with one natural-language problem description. The eight checklist items are structural description checks, not a second measurement form: AI-proposed excerpts must occur verbatim in the description, and the deterministic diagnostic backend must be able to interpret them. Missing or uninterpretable items stay open, and the user continues in the original description field. Description supplements and selected-Profile responses each have their own eight-round limit; unknown values remain gaps and are never replaced with invented defaults.
 
-Measurement requests are `existing_records_only`: they tell you what existing record or manual passage to find and how to report it. They never prescribe physical-hardware amplitudes, durations, actions, or commands. The same measurement-response path later collects the numeric facts required by the selected Profile; there is no separate shortcut around the evidence gate.
+When all eight items are grounded, classification and closed-catalog Profile selection happen automatically. The completed checklist collapses to an auditable 8/8 summary, and the single response box shows only the concrete parameters still required by that Profile—for example, input/output changes and units, 63% response time, significant pure delay when applicable, and software-simulation input/output bounds. Parameters already stated explicitly in the description are prefilled. A response of “unknown” keeps the corresponding gap open.
 
-Formal classification and closed-catalog Profile selection remain absent until all eight diagnostic fields have verified evidence. Classification selects a model family but never supplies plant numbers. Every coefficient, matrix element, physical parameter, operating range, and experiment condition must come from the problem statement, submitted record/manual facts, or a reproducible deterministic derivation. Once those inputs are sufficient, the backend deterministically compiles the model and creates an initial controller candidate.
+Formal classification and Profile selection remain absent until all eight description fields have grounded evidence. Classification selects a model family but never supplies plant numbers. Every coefficient, matrix element, physical parameter, operating range, and experiment condition must come from the problem statement, submitted record/manual facts, or a reproducible deterministic derivation. Once the Profile inputs are sufficient, the backend deterministically compiles the model and creates an initial controller candidate.
 
 The runtime does not look up a model by question number, case ID, or Profile. The 200 Markdown problems under `dataset/` are offline research and evaluation data only.
 
@@ -40,9 +40,9 @@ Start the application:
 python app.py
 ```
 
-Open `http://127.0.0.1:7860`. The generic Web workflow has one domain input, **Control Problem Description**, plus the required provider Base URL, Model, and API Key. There is no optional no-LLM mode. Its six progress stages are exactly Problem Description, AI Measurement Plan, Measurement Response, System Classification, Initial Controller, and Effect Validation and Tuning.
+Open `http://127.0.0.1:7860`. The generic Web workflow has one domain input, **Control Problem Description**, plus the required provider Base URL, Model, and API Key. There is no optional no-LLM mode and the Gradio UI provides no example cases. Its six progress stages are exactly Problem Description and Eight-Item Checklist, System Classification, Core-Parameter Measurement Plan, Parameter Response and Model Compilation, Initial Controller, and Effect Validation and Tuning.
 
-Once the eight diagnostic fields and selected-Profile facts are complete:
+Once the eight description checks and selected-Profile facts are complete:
 
 1. Confirm that the declared input/output ranges are boundaries for software simulation only, not hardware-safety certification.
 2. The backend validates the Profile facts and deterministically compiles the plant model.
@@ -128,13 +128,15 @@ python main.py --use-llm \
 
 The resume commands below assume the `CFDC_LLM_BASE_URL`, `CFDC_LLM_MODEL`, and
 `CFDC_LLM_API_KEY` variables exported above are still set. Resume the saved v4
-session with either inline text or one UTF-8 response file:
+session with either inline text or one UTF-8 response file. Once the checklist is
+complete, this response is interpreted directly as selected-Profile parameters:
 
 ```bash
 python main.py --use-llm \
   --diagnostic-session-input session-v4.json \
   --diagnostic-session-output session-v4-next.json \
-  --measurement-response "Paste existing-record or manual findings here."
+  --measurement-response "Input change is 1 deg; steady output change is 10 mph; response time is 5 s; input range is -3 to 3 deg; output range is 45 to 80 mph." \
+  --confirm-simulation-bounds
 
 python main.py --use-llm \
   --diagnostic-session-input session-v4.json \
@@ -142,9 +144,9 @@ python main.py --use-llm \
   --measurement-response-file measurement-response.txt
 ```
 
-`--measurement-response` and `--measurement-response-file` are mutually exclusive. A response requires `--diagnostic-session-input`; use `--diagnostic-description` separately when adding a description supplement. When the selected-Profile response supplies complete numeric simulation ranges, also pass `--confirm-simulation-bounds` to confirm their software-only meaning.
+`--measurement-response` and `--measurement-response-file` are mutually exclusive. A response requires `--diagnostic-session-input`. If the checklist is incomplete, use `--diagnostic-description` instead to extend the problem description; do not repeat the eight checklist excerpts as a measurement response. When the selected-Profile response supplies complete numeric simulation ranges, also pass `--confirm-simulation-bounds` to confirm their software-only meaning.
 
-Persisted guided sessions use schema version `4.0`. Version 3 payloads are explicitly rejected rather than migrated, and older saved sessions are incompatible with this workflow; start a new v4 session from the original description.
+Persisted guided sessions use schema version `4.0`. Grounded, measurement-verified v4 sessions remain resumable; incomplete v4 sessions rebuild the checklist from their validated description excerpts instead of asking the user to repeat them. Version 3 payloads are explicitly rejected rather than migrated, and older saved sessions are incompatible with this workflow; start a new v4 session from the original description.
 
 ## Evidence boundary
 

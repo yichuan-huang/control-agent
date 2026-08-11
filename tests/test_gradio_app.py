@@ -33,7 +33,6 @@ from cfdc.web.service import (
     parse_safety_bounds,
     submit_app_evidence,
     submit_app_json,
-    submit_app_measurement_response,
     submit_app_specifications,
 )
 from cfdc.web.service import start_app_run as _start_app_run
@@ -123,14 +122,30 @@ def _guided_response_for_description(description_text: str) -> str:
     )
 
 
+def _description_with_guided_facts(description_text: str) -> str:
+    return description_text + "\n" + "\n".join(
+        _guided_facts_for_description(description_text).values()
+    )
+
+
 class _CompleteGuidedAdapter:
     def diagnose(self, description):
         return infer_structural_diagnosis(description).model_dump(mode="json")
 
     def guide_description(self, description, guidance):
-        del description
+        facts_by_id = _guided_facts_for_description(description.text)
         return {
-            "guidance": [item.model_dump(mode="json") for item in guidance],
+            "guidance": [
+                {
+                    **item.model_dump(mode="json"),
+                    "response": (
+                        facts_by_id[item.diagnostic_field_id]
+                        if facts_by_id[item.diagnostic_field_id] in description.text
+                        else "unknown"
+                    ),
+                }
+                for item in guidance
+            ],
             "observed_outputs": [],
             "actuators": [],
         }
@@ -198,19 +213,22 @@ def guided_adapter(monkeypatch):
 
 
 def _start_verified_app_run(*args, **kwargs):
-    """Advance an explicitly LLM-enabled test setup through the v4 record gate."""
+    """Start an explicitly LLM-enabled setup with eight grounded description facts."""
 
     use_llm = args[5] if len(args) > 5 else kwargs.get("use_llm")
     if use_llm is not True:
         raise AssertionError("verified test setup must explicitly enable the LLM")
+    args = list(args)
+    if args:
+        args[0] = _description_with_guided_facts(str(args[0]))
+    else:
+        kwargs["description"] = _description_with_guided_facts(
+            str(kwargs["description"])
+        )
     report, state = _start_app_run(*args, **kwargs)
-    assert report.status == "awaiting_measurements"
-    assert report.classification is None
-    assert report.semantic_selection is None
-    report, state = submit_app_measurement_response(
-        state,
-        _guided_response_for_description(str(args[0])),
-    )
+    assert report.status == "awaiting_profile_measurements"
+    assert report.classification is not None
+    assert report.semantic_selection is not None
     return report, state
 
 
@@ -273,7 +291,7 @@ def test_thermostat_checklist_renders_eight_hollow_missing_items():
 
     view = render_report(report)
 
-    assert session.status == "awaiting_measurements"
+    assert session.status == "collecting_description"
     assert len(view["checklist"]) == 8
     assert [row[1] for row in view["checklist"]] == ["○ 缺少描述"] * 8
     assert len(view["clarifications"]) == 8
@@ -298,7 +316,7 @@ def test_grounded_description_checks_only_answered_checklist_item():
     assert all(excerpt not in prompt for _, prompt in view["clarifications"])
 
 
-def test_complete_eight_item_description_switches_to_measurement_instruction():
+def test_complete_eight_item_description_does_not_render_a_repeated_plan():
     description_text = (
         "这是一个由恒温器监测房间温度并控制电加热器通断的住宅供暖系统。"
         "控制输入是二值加热命令，输出是由传感器或同步记录器连续获取的室温、加热器状态。"
@@ -350,13 +368,14 @@ def test_complete_eight_item_description_switches_to_measurement_instruction():
     view = render_report(report)
     outputs = web_ui._outputs(report, {"session": session.model_dump(mode="json")})
 
-    assert [row[1] for row in view["checklist"]] == ["✓ 已有线索"] * 8
+    assert [row[1] for row in view["checklist"]] == ["✓ 描述证据已核验"] * 8
     assert view["clarifications"] == []
-    assert outputs[16]["visible"] is True
-    assert outputs[17]["visible"] is True
-    assert outputs[18]["visible"] is True
-    assert "八项问题描述已完成" in view["measurement_guidance"]
-    assert "请把相应的值和原文摘录反馈给 AI" in view["measurement_guidance"]
+    assert outputs[5]["open"] is False
+    assert outputs[17]["visible"] is False
+    assert outputs[18]["visible"] is False
+    assert outputs[19]["visible"] is False
+    assert view["measurement_guidance"] == ""
+    assert "open_loop_stability" not in view["measurement_guidance"]
 
 
 @pytest.fixture(scope="module")
@@ -1337,8 +1356,8 @@ def test_gradio_exposes_guided_measurement_and_tuning_flow():
     }
 
     assert {
-        "现有记录与测量回复",
-        "诊断检查清单",
+        "核心参数与测量回复",
+        "诊断检查清单（0/8 已完成）",
         "我确认所提交的输入/输出范围仅作为本次软件仿真的停止边界",
         "已编译对象模型",
         "已载入控制器",
@@ -1364,7 +1383,7 @@ def test_gradio_exposes_guided_measurement_and_tuning_flow():
 
     progress = render_report(_guided_description_report())["progress"]
     assert progress.count('class="flow-step') == 6
-    assert "AI 测量计划" in progress
+    assert "核心参数测量计划" in progress
 
 
 def _ancestor_ids(layout, target_id, ancestors=()):
@@ -1568,7 +1587,9 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
     adapter = CountingAdapter()
     monkeypatch.setattr("cfdc.web.service.build_adapter", lambda *args: adapter)
     report, state = _start_app_run(
-        "A measured first order heater settles after a small power change.",
+        _description_with_guided_facts(
+            "A measured first order heater settles after a small power change."
+        ),
         "temperature",
         "heater",
         "",
@@ -1579,23 +1600,12 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
         "test-key",
     )
 
-    assert report.status == "awaiting_measurements"
-    assert report.classification is None
-    assert report.semantic_selection is None
-    assert calls == {"diagnose": 0, "select": 0}
-
-    report, _ = submit_app_measurement_response(
-        state,
-        _COMPLETE_GUIDED_RESPONSE,
-        base_url="https://provider.example/v1",
-        model="provider-model",
-        api_key="test-key",
-    )
-
     assert report.status == "awaiting_profile_measurements"
     assert report.classification is not None
     assert report.semantic_selection is not None
     assert calls == {"diagnose": 0, "select": 1}
+    assert report.diagnostic_session.measurement_round_count == 0
+    assert state["session"]["measurement_history"] == []
 
 
 @pytest.mark.parametrize(
@@ -1628,14 +1638,14 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
         ),
     ],
 )
-def test_type_i_to_v_behavior_descriptions_wait_for_measurements_before_releasing_route(
+def test_type_i_to_v_complete_descriptions_release_profile_without_repeated_measurements(
     description,
     expected_class,
     expected_profile,
     guided_adapter,
 ):
     initial, state = _start_app_run(
-        description,
+        _description_with_guided_facts(description),
         "",
         "",
         "",
@@ -1646,28 +1656,15 @@ def test_type_i_to_v_behavior_descriptions_wait_for_measurements_before_releasin
         "test-key",
     )
 
-    assert initial.status == "awaiting_measurements"
-    assert initial.classification is None
-    assert initial.semantic_selection is None
+    assert initial.status == "awaiting_profile_measurements"
+    assert str(initial.classification.primary_class) == expected_class
+    assert initial.semantic_selection.simulation_profile_id == expected_profile
     assert initial.experiment_results == []
     assert initial.features == []
     assert initial.controller is None
     assert state["session"] is not None
-
-    released, _ = submit_app_measurement_response(
-        state,
-        _guided_response_for_description(description),
-        base_url="https://provider.example/v1",
-        model="provider-model",
-        api_key="test-key",
-    )
-
-    assert released.status == "awaiting_profile_measurements"
-    assert str(released.classification.primary_class) == expected_class
-    assert released.semantic_selection.simulation_profile_id == expected_profile
-    assert released.experiment_results == []
-    assert released.features == []
-    assert released.controller is None
+    assert initial.diagnostic_session.measurement_round_count == 0
+    assert initial.diagnostic_session.measurement_history == []
 
 
 def test_main_ui_has_no_case_or_developer_route_selector():
@@ -1684,27 +1681,13 @@ def test_main_ui_has_no_case_or_developer_route_selector():
     assert "运行标准对象演示" not in source
 
 
-def test_description_and_measurement_rounds_release_profile_only_after_verification(
+def test_description_supplement_releases_profile_without_diagnostic_measurement_round(
     monkeypatch,
 ):
     calls = {"diagnose": 0, "select": 0}
-    incomplete = infer_structural_diagnosis(SystemDescription(text="I have a machine."))
-    complete = infer_structural_diagnosis(
-        SystemDescription(
-            text="A first order temperature process settles after a heater change.",
-            observed_outputs=["temperature"],
-            actuators=["heater"],
-        )
-    )
     delegate = DeterministicDiagnosticAdapter()
 
     class SequencedAdapter(_CompleteGuidedAdapter):
-        def diagnose(self, description):
-            calls["diagnose"] += 1
-            return (incomplete if calls["diagnose"] == 1 else complete).model_dump(
-                mode="json"
-            )
-
         def select_profile(self, description, diagnosis, classification, catalog):
             calls["select"] += 1
             return delegate.select_profile(
@@ -1728,9 +1711,10 @@ def test_description_and_measurement_rounds_release_profile_only_after_verificat
     assert "api_key" not in state
     assert "base_url" not in state
     assert "model" not in state
-    assert initial.status == "awaiting_measurements"
+    assert initial.status == "need_more_information"
     assert initial.classification is None
     assert initial.semantic_selection is None
+    assert state["session"]["status"] == "collecting_description"
 
     continued, state = continue_app_run(
         state,
@@ -1740,31 +1724,17 @@ def test_description_and_measurement_rounds_release_profile_only_after_verificat
             "It moves in the expected direction.",
             "It starts promptly.",
         ],
-        "It is a first order measured thermal process that settles.",
+        "\n".join(_GUIDED_FACTS.values()),
         base_url="https://provider.example/v1",
         model="provider-model",
         api_key="test-key",
     )
 
-    assert continued.status == "awaiting_measurements"
-    assert continued.classification is None
-    assert continued.semantic_selection is None
+    assert continued.status == "awaiting_profile_measurements"
+    assert continued.classification is not None
+    assert continued.semantic_selection is not None
     assert state["session"]["description_turn_count"] == 1
     assert state["session"]["measurement_round_count"] == 0
-    assert calls == {"diagnose": 0, "select": 0}
-
-    completed, _ = submit_app_measurement_response(
-        state,
-        _COMPLETE_GUIDED_RESPONSE,
-        base_url="https://provider.example/v1",
-        model="provider-model",
-        api_key="test-key",
-    )
-
-    assert completed.status == "awaiting_profile_measurements"
-    assert completed.classification is not None
-    assert completed.semantic_selection is not None
-    assert completed.diagnostic_session.measurement_round_count == 1
     assert calls == {"diagnose": 0, "select": 1}
 
 
@@ -1773,7 +1743,7 @@ def test_clear_resets_mode_credentials_session_and_report(monkeypatch):
     monkeypatch.setenv("CFDC_LLM_MODEL", "provider-model")
     reset = reset_ui()
 
-    assert len(reset) == 29
+    assert len(reset) == 30
     assert reset[:4] == (
         "",
         "https://provider.example/v1",
@@ -1843,8 +1813,8 @@ def test_guided_gradio_has_one_domain_input_and_no_optional_legacy_controls():
     labels = {component["props"].get("label") for component in app.config["components"]}
 
     assert "控制问题描述" in labels
-    assert "现有记录与测量回复" in labels
-    assert "诊断检查清单" in labels
+    assert "核心参数与测量回复" in labels
+    assert "诊断检查清单（0/8 已完成）" in labels
     assert {
         "控制问题",
         "可观察输出",
@@ -1862,10 +1832,10 @@ def test_guided_progress_and_pre_measurement_technical_gates():
 
     assert view["progress"].count('class="flow-step') == 6
     for label in (
-        "问题描述",
-        "AI 测量计划",
-        "测量回填",
+        "问题描述与八项 checklist",
         "系统分类",
+        "核心参数测量计划",
+        "参数回填与模型编译",
         "初始控制器",
         "效果验证与调优",
     ):
@@ -1916,7 +1886,7 @@ def test_guided_checklist_uses_status_icons_and_current_assessment_only():
     assert all(row[1] == "✓ 测量已验证" for row in rows[1:])
 
 
-def test_guided_measurement_plan_and_timeline_are_auditable():
+def test_internal_diagnostic_plan_remains_auditable_but_is_not_a_user_task():
     report = _guided_verified_report()
     session = report.diagnostic_session
     turn = DiagnosticTurn(
@@ -1929,13 +1899,11 @@ def test_guided_measurement_plan_and_timeline_are_auditable():
     session = session.model_copy(update={"turns": [turn], "description_turn_count": 1})
     view = render_report(report.model_copy(update={"diagnostic_session": session}))
 
-    assert "existing_records_only" in view["measurement_guidance"]
-    assert "open_loop_stability" in view["measurement_guidance"]
-    assert "来源：Review an existing record." in view["measurement_guidance"]
-    assert (
-        "回填：Report the source excerpt and recorded observation."
-        in view["measurement_guidance"]
-    )
+    assert "existing_records_only" not in view["measurement_guidance"]
+    assert "open_loop_stability" not in view["measurement_guidance"]
+    plan = view["raw"]["diagnostic_session"]["measurement_plan"]
+    assert plan["requests"][0]["request_id"] == "open_loop_stability"
+    assert plan["requests"][0]["safety_scope"] == "existing_records_only"
     assert "描述补充 · 第 1 轮" in view["timeline"]
     assert "heater and temperature are logged" in view["timeline"]
     assert "测量回填 · 第 1 轮" in view["timeline"]
@@ -1970,15 +1938,7 @@ def test_profile_stage_replaces_diagnostic_plan_with_profile_questions(
 def test_incomplete_description_uses_original_input_and_hides_measurement_controls(
     monkeypatch,
 ):
-    class CountingAdapter(_CompleteGuidedAdapter):
-        def __init__(self):
-            self.phrase_calls = 0
-
-        def phrase_measurement_plan(self, description, checklist, plan):
-            self.phrase_calls += 1
-            return super().phrase_measurement_plan(description, checklist, plan)
-
-    adapter = CountingAdapter()
+    adapter = _CompleteGuidedAdapter()
     monkeypatch.setattr(web_service, "build_adapter", lambda *args: adapter)
     app = build_app()
     component_props = [component["props"] for component in app.config["components"]]
@@ -1999,21 +1959,34 @@ def test_incomplete_description_uses_original_input_and_hides_measurement_contro
     )
     view = render_report(report)
     outputs = web_ui._outputs(report, state)
-    assert report.status == "awaiting_measurements"
+    assert report.status == "need_more_information"
     assert "请直接在左侧“控制问题描述”栏继续补充" in view["measurement_guidance"]
     assert "open_loop_stability" not in view["measurement_guidance"]
     assert "Review an existing record" not in view["measurement_guidance"]
     assert view["status"].startswith("### 补充问题描述")
     assert (
-        '<div class="flow-step waiting"><span>2</span><small>AI 测量计划</small>'
+        '<div class="flow-step waiting"><span>1</span><small>问题描述与八项 checklist</small>'
         in view["progress"]
     )
     assert view["raw"]["status"] == "need_more_information"
-    assert "AI 测量计划" in linked_ui._progress_output(view["raw"], {})
-    assert outputs[16]["visible"] is False
+    assert "核心参数测量计划" in linked_ui._progress_output(view["raw"], {})
     assert outputs[17]["visible"] is False
     assert outputs[18]["visible"] is False
-    assert adapter.phrase_calls == 1
+    assert outputs[19]["visible"] is False
+
+
+def test_linked_progress_accepts_description_collection_status_without_validation_error():
+    progress = linked_ui._progress_output(
+        {
+            "run_id": "description-collection",
+            "route_id": "generic",
+            "status": "collecting_description",
+        },
+        {},
+    )
+
+    assert "问题描述与八项 checklist" in progress
+    assert "核心参数测量计划" in progress
 
 
 def test_guided_run_callback_forces_llm_and_blank_internal_domain_fields(monkeypatch):

@@ -10,6 +10,7 @@ from cfdc.diagnosis import (
     build_diagnostic_checklist,
     build_measurement_plan,
     migrate_diagnostic_session_payload,
+    start_diagnostic_session,
 )
 from cfdc.diagnosis.engine import infer_structural_diagnosis
 from cfdc.diagnosis.llm import OpenAICompatibleDiagnosticAdapter
@@ -48,7 +49,18 @@ class GuidedFakeAdapter:
 
     def guide_description(self, description, guidance):
         return {
-            "guidance": [item.model_dump(mode="json") for item in guidance],
+            "guidance": [
+                {
+                    **item.model_dump(mode="json"),
+                    "response": (
+                        _VALID_FIELD_FACTS[item.diagnostic_field_id]
+                        if _VALID_FIELD_FACTS[item.diagnostic_field_id]
+                        in description.text
+                        else "unknown"
+                    ),
+                }
+                for item in guidance
+            ],
             "observed_outputs": [
                 {"name": "temperature", "source_excerpt": "temperature"}
             ],
@@ -143,7 +155,10 @@ class EvidenceDrivenAdapter(GuidedFakeAdapter):
 
 def _description() -> SystemDescription:
     return SystemDescription(
-        text="A first order temperature process settles after a heater change.",
+        text=(
+            "A first order temperature process settles after a heater change. "
+            + " ".join(_VALID_FIELD_FACTS.values())
+        ),
         observed_outputs=["temperature"],
         actuators=["heater power"],
     )
@@ -158,12 +173,11 @@ def _complete_diagnostic_response() -> str:
 
 def _migrated_measurement_verified_session():
     adapter = GuidedFakeAdapter()
-    initial = run_cfdc_route(
-        "generic", description=_description(), diagnostic_adapter=adapter
-    )
     routed = run_cfdc_route(
         "generic",
-        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_session_state=start_diagnostic_session(
+            _description(), route_id="generic"
+        ),
         diagnostic_adapter=adapter,
         measurement_response=_complete_diagnostic_response(),
     )
@@ -172,42 +186,23 @@ def _migrated_measurement_verified_session():
     )
 
 
-def test_generic_route_gates_classification_until_verified_measurements():
+def test_generic_route_releases_grounded_description_without_measurement_round():
     adapter = GuidedFakeAdapter()
 
     initial = run_cfdc_route(
         "generic", description=_description(), diagnostic_adapter=adapter
     )
 
-    assert initial.status == "awaiting_measurements"
-    assert initial.classification is None
-    assert initial.semantic_selection is None
+    assert initial.status == "awaiting_profile_measurements"
+    assert initial.classification is not None
+    assert initial.semantic_selection is not None
     assert initial.diagnostic_session is not None
     assert initial.diagnostic_session.schema_version == "4.0"
-
-    incomplete = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response="need another record",
-    )
-
-    assert incomplete.status == "measurement_needs_more"
-    assert incomplete.classification is None
-    assert incomplete.semantic_selection is None
-
-    released = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=incomplete.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_complete_diagnostic_response(),
-    )
-
-    assert released.status == "awaiting_profile_measurements"
-    assert released.classification is not None
-    assert released.semantic_selection is not None
-    assert released.diagnostic_session.status == "awaiting_profile_measurements"
-    assert released.specification_assessment.questions
+    assert initial.diagnostic_session.evidence_level == "description_grounded"
+    assert initial.diagnostic_session.description_assessment is not None
+    assert initial.diagnostic_session.measurement_round_count == 0
+    assert initial.diagnostic_session.measurement_history == []
+    assert initial.specification_assessment.questions
 
 
 def test_route_rejects_ungrounded_ready_adapter_output_without_releasing_session():
@@ -234,22 +229,20 @@ def test_route_rejects_ungrounded_ready_adapter_output_without_releasing_session
             ).model_dump(mode="json")
 
     adapter = UngroundedAdapter()
-    initial = run_cfdc_route(
-        "generic", description=_description(), diagnostic_adapter=adapter
-    )
+    initial = start_diagnostic_session(_description(), route_id="generic")
 
     with pytest.raises(ValueError, match="not grounded"):
         run_cfdc_route(
             "generic",
-            diagnostic_session_state=initial.diagnostic_session,
+            diagnostic_session_state=initial,
             diagnostic_adapter=adapter,
             measurement_response="The user supplied no field-specific excerpts.",
         )
 
-    assert initial.diagnostic_session.classification is None
-    assert initial.diagnostic_session.semantic_selection is None
-    assert initial.diagnostic_session.measurement_history == []
-    assert initial.diagnostic_session.measurement_response_history == []
+    assert initial.classification is None
+    assert initial.semantic_selection is None
+    assert initial.measurement_history == []
+    assert initial.measurement_response_history == []
 
 
 def test_formal_diagnosis_ignores_poisoned_adapter_diagnosis():
@@ -290,12 +283,11 @@ def test_formal_diagnosis_ignores_poisoned_adapter_diagnosis():
 
 def test_verified_measurement_facts_persist_across_session_serialization():
     adapter = GuidedFakeAdapter()
-    initial = run_cfdc_route(
-        "generic", description=_description(), diagnostic_adapter=adapter
-    )
     released = run_cfdc_route(
         "generic",
-        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_session_state=start_diagnostic_session(
+            _description(), route_id="generic"
+        ),
         diagnostic_adapter=adapter,
         measurement_response=_complete_diagnostic_response(),
     )
@@ -314,12 +306,11 @@ def test_persisted_measurement_facts_drive_later_deterministic_invalidation():
         observed_outputs=["temperature"],
         actuators=["heater"],
     )
-    initial = run_cfdc_route(
-        "generic", description=vague_description, diagnostic_adapter=adapter
-    )
     released = run_cfdc_route(
         "generic",
-        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_session_state=start_diagnostic_session(
+            vague_description, route_id="generic"
+        ),
         diagnostic_adapter=adapter,
         measurement_response=_complete_diagnostic_response(),
     )
@@ -336,7 +327,7 @@ def test_persisted_measurement_facts_drive_later_deterministic_invalidation():
         ),
     )
 
-    assert invalidated.status == "awaiting_measurements"
+    assert invalidated.status == "need_more_information"
     assert invalidated.diagnosis.open_loop_stability.assessment == "stable"
     assert invalidated.diagnosis.coupling_severity.assessment == "severe_mimo"
     assert "settles or remains bounded" in (
@@ -344,7 +335,7 @@ def test_persisted_measurement_facts_drive_later_deterministic_invalidation():
     )
 
 
-def test_invalidation_rejects_a_replacement_measurement_plan():
+def test_invalidation_does_not_request_a_replacement_measurement_plan():
     class InvalidationPlanMutator(EvidenceDrivenAdapter):
         phrase_calls = 0
 
@@ -357,31 +348,32 @@ def test_invalidation_rejects_a_replacement_measurement_plan():
             return payload
 
     adapter = InvalidationPlanMutator()
-    initial = run_cfdc_route(
-        "generic",
-        description=SystemDescription(
+    legacy_session = start_diagnostic_session(
+        SystemDescription(
             text="temperature and heater change records are available.",
             observed_outputs=["temperature"],
             actuators=["heater"],
         ),
-        diagnostic_adapter=adapter,
+        route_id="generic",
     )
     released = run_cfdc_route(
         "generic",
-        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_session_state=legacy_session,
         diagnostic_adapter=adapter,
         measurement_response=_complete_diagnostic_response(),
     )
 
-    with pytest.raises(ValueError, match="authoritative request"):
-        run_cfdc_route(
-            "generic",
-            diagnostic_session_state=released.diagnostic_session,
-            diagnostic_adapter=adapter,
-            measurement_response=(
-                "changing any one of several actuators noticeably changes several outputs"
-            ),
-        )
+    invalidated = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=released.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=(
+            "changing any one of several actuators noticeably changes several outputs"
+        ),
+    )
+
+    assert invalidated.status == "need_more_information"
+    assert adapter.phrase_calls == 0
 
 
 @pytest.mark.parametrize(
@@ -422,6 +414,7 @@ def test_description_guidance_extracts_only_verbatim_signals():
 
     class ExtractingAdapter(GuidedFakeAdapter):
         def guide_description(self, description, guidance):
+            del description
             return {
                 "guidance": [item.model_dump(mode="json") for item in guidance],
                 "observed_outputs": [
@@ -453,8 +446,6 @@ def test_description_guidance_extracts_only_verbatim_signals():
     [
         "extra",
         "order",
-        "provenance",
-        "invented_name",
         "hardware_prompt",
         "hardware_why_needed",
     ],
@@ -470,13 +461,6 @@ def test_description_guidance_rejects_shape_order_and_provenance_mutations(mutat
                     payload["guidance"][1],
                     payload["guidance"][0],
                 )
-            elif mutation == "provenance":
-                payload["observed_outputs"][0]["source_excerpt"] = "not in source"
-            elif mutation == "invented_name":
-                payload["observed_outputs"][0] = {
-                    "name": "pressure",
-                    "source_excerpt": "temperature",
-                }
             elif mutation == "hardware_prompt":
                 payload["guidance"][0]["prompt"] = (
                     "Review an existing record and apply 10 V to the heater."
@@ -493,6 +477,33 @@ def test_description_guidance_rejects_shape_order_and_provenance_mutations(mutat
             description=_description(),
             diagnostic_adapter=MutatingGuidanceAdapter(),
         )
+
+
+@pytest.mark.parametrize("mutation", ["provenance", "invented_name"])
+def test_description_guidance_ignores_ungrounded_signal_extraction(mutation):
+    class UngroundedSignalAdapter(GuidedFakeAdapter):
+        def guide_description(self, description, guidance):
+            payload = super().guide_description(description, guidance)
+            if mutation == "provenance":
+                payload["observed_outputs"][0]["source_excerpt"] = (
+                    "temperature appears only in a fictional source"
+                )
+            else:
+                payload["observed_outputs"][0] = {
+                    "name": "pressure",
+                    "source_excerpt": "pressure appears only in a fictional source",
+                }
+            return payload
+
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(text=_description().text),
+        diagnostic_adapter=UngroundedSignalAdapter(),
+    )
+
+    assert "pressure" not in report.system_description.observed_outputs
+    if mutation == "provenance":
+        assert "temperature" not in report.system_description.observed_outputs
 
 
 @pytest.mark.parametrize(
@@ -539,14 +550,8 @@ def test_web_guided_start_rejects_partial_adapter_capabilities(monkeypatch):
 
 def test_same_measurement_response_input_advances_profile_facts_to_model():
     adapter = GuidedFakeAdapter()
-    initial = run_cfdc_route(
-        "generic", description=_description(), diagnostic_adapter=adapter
-    )
     routed = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_complete_diagnostic_response(),
+        "generic", description=_description(), diagnostic_adapter=adapter
     )
 
     completed = run_cfdc_route(
@@ -566,11 +571,10 @@ def test_same_measurement_response_input_advances_profile_facts_to_model():
     assert completed.compiled_specification_model is not None
     assert completed.controller is not None
     assert completed.controller.release_level == "candidate_unvalidated"
-    assert len(completed.diagnostic_session.measurement_history) == 2
-    assert (
-        completed.diagnostic_session.measurement_assessment
-        == completed.diagnostic_session.measurement_history[-1]
-    )
+    assert completed.diagnostic_session.measurement_round_count == 0
+    assert completed.diagnostic_session.measurement_history == []
+    assert completed.diagnostic_session.measurement_assessment is None
+    assert completed.diagnostic_session.description_assessment is not None
 
 
 def test_profile_only_response_keeps_ready_diagnosis_and_compiles_specifications():
@@ -729,7 +733,13 @@ def test_chinese_ready_record_advances_web_state_and_accepts_profile_facts(
         def guide_description(self, description, guidance):
             del description
             return {
-                "guidance": [item.model_dump(mode="json") for item in guidance],
+                "guidance": [
+                    {
+                        **item.model_dump(mode="json"),
+                        "response": diagnostic_facts[item.diagnostic_field_id],
+                    }
+                    for item in guidance
+                ],
                 "observed_outputs": [{"name": "车速", "source_excerpt": "车速"}],
                 "actuators": [{"name": "油门角度", "source_excerpt": "油门角度"}],
             }
@@ -763,6 +773,7 @@ def test_chinese_ready_record_advances_web_state_and_accepts_profile_facts(
     monkeypatch.setattr("cfdc.web.service.build_adapter", lambda *args: adapter)
     description = (
         "这是一个在道路上行驶的汽车纵向运动系统。控制输入是油门角度，输出是车速。"
+        + "".join(diagnostic_facts.values())
     )
     report, state = start_app_run(
         description,
@@ -775,22 +786,12 @@ def test_chinese_ready_record_advances_web_state_and_accepts_profile_facts(
         "provider-model",
         "provider-secret",
     )
-    assert report.status == "awaiting_measurements"
-
-    released, released_state = submit_app_measurement_response(
-        state,
-        diagnostic_response,
-        base_url="https://provider.example/v1",
-        model="provider-model",
-        api_key="provider-secret",
-    )
-
-    assert released.status == "awaiting_profile_measurements"
-    assert released.diagnostic_session.status == "awaiting_profile_measurements"
-    assert released_state["session"]["status"] == "awaiting_profile_measurements"
+    assert report.status == "awaiting_profile_measurements"
+    assert report.diagnostic_session.status == "awaiting_profile_measurements"
+    assert state["session"]["status"] == "awaiting_profile_measurements"
 
     completed, completed_state = submit_app_measurement_response(
-        released_state,
+        state,
         (
             "input_change=1 deg; steady_output_change=10 mph; "
             "response_time_s=5 s; input_min=-3 deg; input_max=3 deg; "
@@ -836,17 +837,15 @@ def test_semantically_unresolved_ready_assessment_becomes_retryable_gaps():
             ).model_dump(mode="json")
 
     adapter = UnresolvedRecordAdapter()
-    initial = run_cfdc_route(
-        "generic", description=_description(), diagnostic_adapter=adapter
-    )
+    initial = start_diagnostic_session(_description(), route_id="generic")
     response = "\n".join(
         f"opaque record statement for {request.request_id}"
-        for request in initial.diagnostic_session.measurement_plan.requests
+        for request in initial.measurement_plan.requests
     )
 
     retryable = run_cfdc_route(
         "generic",
-        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_session_state=initial,
         diagnostic_adapter=adapter,
         measurement_response=response,
     )
@@ -910,22 +909,15 @@ def test_explicit_profile_unknown_gap_retracts_prior_fact_and_invalidates_releas
     initial = run_cfdc_route(
         "generic", description=_description(), diagnostic_adapter=adapter
     )
-    released = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_complete_diagnostic_response(),
-    )
-
     invalidated = run_cfdc_route(
         "generic",
-        diagnostic_session_state=released.diagnostic_session,
+        diagnostic_session_state=initial.diagnostic_session,
         diagnostic_adapter=adapter,
         measurement_response=unknown_response,
     )
 
-    assert invalidated.status == "measurement_needs_more"
-    assert invalidated.diagnostic_session.status == "measurement_needs_more"
+    assert invalidated.status == "need_more_information"
+    assert invalidated.diagnostic_session.status == "collecting_description"
     assert invalidated.diagnosis.minimum_phase.assessment == "unknown"
     assert invalidated.classification is None
     assert invalidated.semantic_selection is None
@@ -937,11 +929,69 @@ def test_explicit_profile_unknown_gap_retracts_prior_fact_and_invalidates_releas
     assert invalidated.diagnostic_session.candidate_route is None
     assert invalidated.diagnostic_session.compiled_route is None
     assert invalidated.controller is None
-    latest_assessment = invalidated.diagnostic_session.measurement_assessment
-    assert latest_assessment.gaps == ["minimum_phase"]
-    assert {fact.request_id for fact in latest_assessment.facts} == {
-        request_id for request_id in _VALID_FIELD_FACTS if request_id != "minimum_phase"
+    checklist = {
+        item.diagnostic_field_id: item
+        for item in invalidated.diagnostic_session.checklist
     }
+    assert checklist["minimum_phase"].status == "unknown"
+    assert checklist["minimum_phase"].evidence == []
+    assert sum(item.status != "unknown" for item in checklist.values()) == 7
+    assert invalidated.diagnostic_session.description_assessment is None
+    assert invalidated.diagnostic_session.measurement_assessment is None
+    assert invalidated.diagnostic_session.measurement_history == []
+
+
+def test_profile_gap_without_an_explicit_user_retraction_keeps_prior_diagnosis():
+    response = (
+        "I do not know the output limit. The previously established stability result "
+        "remains unchanged. Profile parameter response: input_change=1 W."
+    )
+
+    class HallucinatedGapAdapter(GuidedFakeAdapter):
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            if measurement_response == response:
+                assert previous_assessment.status == "ready"
+                return MeasurementAssessment(
+                    status="need_more",
+                    facts=[
+                        fact
+                        for fact in previous_assessment.facts
+                        if fact.request_id != "open_loop_stability"
+                    ],
+                    gaps=["open_loop_stability"],
+                    rationale="The provider hallucinated a diagnostic gap.",
+                ).model_dump(mode="json")
+            return super().extract_measurements(
+                description,
+                measurement_plan,
+                measurement_response,
+                previous_assessment,
+            )
+
+    adapter = HallucinatedGapAdapter()
+    initial = run_cfdc_route(
+        "generic", description=_description(), diagnostic_adapter=adapter
+    )
+    original_diagnosis = initial.diagnosis
+
+    updated = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=response,
+    )
+
+    assert updated.status == "awaiting_profile_measurements"
+    assert updated.diagnosis == original_diagnosis
+    assert updated.classification is not None
+    assert updated.semantic_selection is not None
+    assert all(item.status != "unknown" for item in updated.diagnostic_session.checklist)
 
 
 def test_migrated_session_ignores_tampered_compatible_profile_and_reselects():
@@ -949,13 +999,7 @@ def test_migrated_session_ignores_tampered_compatible_profile_and_reselects():
     initial = run_cfdc_route(
         "generic", description=_description(), diagnostic_adapter=source_adapter
     )
-    routed = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=source_adapter,
-        measurement_response=_complete_diagnostic_response(),
-    )
-    payload = routed.diagnostic_session.model_dump(mode="json")
+    payload = initial.diagnostic_session.model_dump(mode="json")
     payload["semantic_selection"].update(
         {
             "simulation_profile_id": "first_order_lag_with_delay",
@@ -982,7 +1026,7 @@ def test_migrated_session_ignores_tampered_compatible_profile_and_reselects():
         diagnostic_adapter=adapter,
     )
 
-    assert restored.status == "measurement_verified"
+    assert restored.status == "description_grounded"
     assert restored.semantic_selection is None
     assert adapter.selection_calls == 1
     assert resumed.status == "awaiting_profile_measurements"
@@ -1100,7 +1144,11 @@ def test_diagnostic_round_eight_can_enter_and_complete_profile_collection():
 
     adapter = RoundEightAdapter()
     report = run_cfdc_route(
-        "generic", description=_description(), diagnostic_adapter=adapter
+        "generic",
+        diagnostic_session_state=start_diagnostic_session(
+            _description(), route_id="generic"
+        ),
+        diagnostic_adapter=adapter,
     )
     for round_index in range(1, 8):
         report = run_cfdc_route(
@@ -1157,14 +1205,8 @@ def test_profile_collection_refuses_after_its_own_eighth_incomplete_round():
             )
 
     adapter = IncompleteProfileAdapter()
-    initial = run_cfdc_route(
-        "generic", description=_description(), diagnostic_adapter=adapter
-    )
     report = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_complete_diagnostic_response(),
+        "generic", description=_description(), diagnostic_adapter=adapter
     )
 
     for round_index in range(1, 8):
@@ -1236,18 +1278,17 @@ def test_cross_field_tokens_do_not_resolve_either_diagnostic_field():
             ).model_dump(mode="json")
 
     adapter = CrossFieldAdapter()
-    initial = run_cfdc_route(
-        "generic",
-        description=SystemDescription(
+    initial = start_diagnostic_session(
+        SystemDescription(
             text="temperature and heater change records are available.",
             observed_outputs=["temperature"],
             actuators=["heater"],
         ),
-        diagnostic_adapter=adapter,
+        route_id="generic",
     )
     released = run_cfdc_route(
         "generic",
-        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_session_state=initial,
         diagnostic_adapter=adapter,
         measurement_response=_complete_diagnostic_response(),
     )
@@ -1258,13 +1299,11 @@ def test_cross_field_tokens_do_not_resolve_either_diagnostic_field():
         measurement_response="cross-field fragments: initially points; opposite",
     )
 
-    assert invalidated.status == "awaiting_measurements"
+    assert invalidated.status == "need_more_information"
     assert invalidated.classification is None
     assert invalidated.diagnosis.minimum_phase.assessment == "unknown"
     assert invalidated.diagnosis.significant_delay.assessment == "unknown"
-    serialized = invalidated.diagnostic_session.model_dump_json()
-    assert "initially points" in serialized
-    assert "opposite" in serialized
+    assert invalidated.diagnostic_session.measurement_history == []
 
 
 def test_later_same_request_fact_supersedes_and_triggers_invalidation():
@@ -1308,47 +1347,36 @@ def test_later_same_request_fact_supersedes_and_triggers_invalidation():
     initial = run_cfdc_route(
         "generic", description=_description(), diagnostic_adapter=adapter
     )
-    released = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_complete_diagnostic_response(),
-    )
-
     invalidated = run_cfdc_route(
         "generic",
-        diagnostic_session_state=released.diagnostic_session,
+        diagnostic_session_state=initial.diagnostic_session,
         diagnostic_adapter=adapter,
         measurement_response=(
             "first moves in an unfavorable or opposite direction before turning"
         ),
     )
 
-    assert invalidated.status == "awaiting_measurements"
+    assert invalidated.status == "need_more_information"
     assert invalidated.classification is None
     assert invalidated.diagnosis.minimum_phase.assessment == "nonminimum_phase"
-    assert len(invalidated.diagnostic_session.measurement_history) == 2
-    assert (
-        invalidated.diagnostic_session.measurement_assessment
-        == invalidated.diagnostic_session.measurement_history[-1]
-    )
+    assert invalidated.diagnostic_session.measurement_history == []
+    assert invalidated.diagnostic_session.description_assessment is None
 
 
 def test_exact_eight_isolated_facts_produce_complete_diagnosis_and_classification():
     adapter = EvidenceDrivenAdapter()
-    initial = run_cfdc_route(
-        "generic",
-        description=SystemDescription(
+    initial = start_diagnostic_session(
+        SystemDescription(
             text="temperature and heater change records are available.",
             observed_outputs=["temperature"],
             actuators=["heater"],
         ),
-        diagnostic_adapter=adapter,
+        route_id="generic",
     )
 
     released = run_cfdc_route(
         "generic",
-        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_session_state=initial,
         diagnostic_adapter=adapter,
         measurement_response=_complete_diagnostic_response(),
     )
@@ -1362,13 +1390,7 @@ def test_profile_measurement_response_enforces_its_independent_session_round_cap
     initial = run_cfdc_route(
         "generic", description=_description(), diagnostic_adapter=adapter
     )
-    released = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_complete_diagnostic_response(),
-    )
-    capped = released.diagnostic_session.model_copy(update={"maximum_turns": 1})
+    capped = initial.diagnostic_session.model_copy(update={"maximum_turns": 1})
 
     refused = run_cfdc_route(
         "generic",
@@ -1427,12 +1449,7 @@ def test_grounded_profile_diagnostic_contradiction_clears_all_downstream_artifac
     initial = run_cfdc_route(
         "generic", description=_description(), diagnostic_adapter=adapter
     )
-    routed = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_complete_diagnostic_response(),
-    )
+    routed = initial
     assert routed.classification.primary_class == "class_i_first_order_lag"
 
     invalidated = run_cfdc_route(
@@ -1445,7 +1462,7 @@ def test_grounded_profile_diagnostic_contradiction_clears_all_downstream_artifac
         ),
     )
 
-    assert invalidated.status == "awaiting_measurements"
+    assert invalidated.status == "need_more_information"
     assert invalidated.classification is None
     assert invalidated.semantic_selection is None
     assert invalidated.specification_assessment is None
@@ -1456,6 +1473,13 @@ def test_grounded_profile_diagnostic_contradiction_clears_all_downstream_artifac
     assert invalidated.diagnostic_session.candidate_route is None
     assert invalidated.diagnostic_session.compiled_route is None
     assert invalidated.controller is None
+    checklist = {
+        item.diagnostic_field_id: item
+        for item in invalidated.diagnostic_session.checklist
+    }
+    assert checklist["coupling_severity"].status == "unknown"
+    assert checklist["coupling_severity"].evidence == []
+    assert sum(item.status != "unknown" for item in checklist.values()) == 7
 
 
 def test_grounded_profile_diagnostic_conflict_returns_to_measurement_collection():
@@ -1496,12 +1520,7 @@ def test_grounded_profile_diagnostic_conflict_returns_to_measurement_collection(
     initial = run_cfdc_route(
         "generic", description=_description(), diagnostic_adapter=adapter
     )
-    routed = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_complete_diagnostic_response(),
-    )
+    routed = initial
 
     invalidated = run_cfdc_route(
         "generic",
@@ -1510,7 +1529,7 @@ def test_grounded_profile_diagnostic_conflict_returns_to_measurement_collection(
         measurement_response=conflict_text,
     )
 
-    assert invalidated.status == "measurement_conflict"
+    assert invalidated.status == "need_more_information"
     assert invalidated.classification is None
     assert invalidated.semantic_selection is None
     assert invalidated.specification_assessment is None
@@ -1631,16 +1650,17 @@ def test_web_guided_flow_requires_llm_and_uses_measurement_callback(monkeypatch)
         "provider-model",
         "secret-that-must-not-be-persisted",
     )
-    assert report.status == "awaiting_measurements"
+    assert report.status == "awaiting_profile_measurements"
 
     advanced, next_state = submit_app_measurement_response(
         state,
-        _complete_diagnostic_response(),
+        "No selected-Profile parameter values are currently known.",
         base_url="https://provider.example/v1",
         model="provider-model",
         api_key="secret-that-must-not-be-persisted",
     )
     assert advanced.status == "awaiting_profile_measurements"
+    assert advanced.diagnostic_session.profile_measurement_round_count == 1
     assert "secret-that-must-not-be-persisted" not in str(next_state)
 
 

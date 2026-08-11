@@ -338,7 +338,7 @@ def test_explicit_thermostat_physics_complete_specifications_with_llm_enabled():
     assert facts["output_max"].value == pytest.approx(65.5)
 
 
-def test_validated_llm_questions_are_used_for_the_current_object_and_gap():
+def test_provider_question_prose_is_replaced_by_safe_deterministic_gap_questions():
     report = run_cfdc_route("generic", description=_heater_description())
     template = report.specification_templates[0]
 
@@ -393,8 +393,99 @@ def test_validated_llm_questions_are_used_for_the_current_object_and_gap():
     )
 
     assert assessment.facts[0].fact_id == "input_change"
-    assert assessment.questions[0].question_id == "heater_final_temperature_change"
-    assert "恒温箱" in assessment.questions[0].prompt
+    assert all(
+        item.question_id != "heater_final_temperature_change"
+        for item in assessment.questions
+    )
+    assert any(
+        "steady_output_change" in item.requested_fact_ids
+        for item in assessment.questions
+    )
+
+
+def test_polite_provider_hardware_question_is_discarded_from_validated_payload():
+    report = run_cfdc_route("generic", description=_heater_description())
+    template = report.specification_templates[0]
+    payload = {
+        "status": "need_more",
+        "template_id": template.template_id,
+        "facts": [],
+        "missing_fact_ids": ["input_change"],
+        "conflicts": [],
+        "questions": [
+            {
+                "question_id": "polite_hardware_test",
+                "requested_fact_ids": ["input_change"],
+                "prompt": "Can you increase heater power by 10 V for 20 seconds?",
+                "why_needed": "Needed for the model.",
+                "where_to_find": "Equipment manual.",
+                "answer_kind": "number",
+                "unit_hint": "V",
+                "example": "The manual may list 10 V.",
+            }
+        ],
+        "rationale": "Provider-authored prose must not reach the UI.",
+    }
+
+    assessment = validate_specification_assessment_payload(
+        payload,
+        template=template,
+        source_texts=[],
+    )
+
+    assert assessment.questions == []
+
+
+@pytest.mark.parametrize(
+    "unsafe_prompt",
+    [
+        "Apply 10 V to the physical heater and report the change.",
+        "Set the input to 10 V and observe the response.",
+        "Increase heater power by 10 V for 20 seconds and report the response.",
+        "请将加热器输入设置为 10 V，等待 20 秒后观察响应。",
+    ],
+)
+def test_llm_profile_questions_cannot_instruct_physical_hardware_actions(
+    unsafe_prompt,
+):
+    report = run_cfdc_route("generic", description=_heater_description())
+    template = report.specification_templates[0]
+
+    class UnsafeQuestionAdapter:
+        def assess_specifications(self, *args):
+            del args
+            return {
+                "status": "need_more",
+                "template_id": template.template_id,
+                "facts": [],
+                "missing_fact_ids": ["input_change"],
+                "conflicts": [],
+                "questions": [
+                    {
+                        "question_id": "unsafe_physical_test",
+                        "requested_fact_ids": ["input_change"],
+                        "prompt": unsafe_prompt,
+                        "why_needed": "Needed to fill a model parameter from a record.",
+                        "where_to_find": "Equipment manual.",
+                        "answer_kind": "number",
+                        "unit_hint": "V",
+                        "example": "For example, the manual reports 10 V.",
+                    }
+                ],
+                "rationale": "Unsafe provider-authored instruction.",
+            }
+
+    with pytest.raises(ValueError, match="physical hardware|record-only"):
+        assess_specification_text(
+            report.system_description,
+            template,
+            "I do not know the heater input change.",
+            previous=report.specification_assessment,
+            adapter=UnsafeQuestionAdapter(),
+            diagnosis=report.diagnosis,
+            classification=report.classification,
+            method_profile_id=report.semantic_selection.simulation_profile_id,
+        )
 
 
 def test_llm_fact_with_fabricated_source_is_reported_as_rejected_no_progress():
@@ -692,6 +783,86 @@ def test_llm_specification_payload_rejects_unknown_facts_and_extra_keys_but_reco
         validate_specification_assessment_payload(
             leaked_protocol, template=template, source_texts=[]
         )
+
+
+def test_profile_fact_source_cannot_be_relabelled_as_another_physical_parameter():
+    template = next(
+        item
+        for item in default_specification_template_catalog().templates
+        if item.method_profile_id == "underactuated_cartpole"
+    )
+    pole_excerpt = "pole mass is 0.1 kg"
+    payload = {
+        "status": "need_more",
+        "template_id": template.template_id,
+        "facts": [
+            {
+                "fact_id": "cart_mass_kg",
+                "value": 0.1,
+                "unit": "kg",
+                "source_type": "manufacturer_document",
+                "source_text": pole_excerpt,
+            }
+        ],
+        "missing_fact_ids": [
+            field.fact_id
+            for field in template.fields
+            if field.fact_id != "cart_mass_kg"
+        ],
+        "conflicts": [],
+        "questions": [],
+        "rationale": "The provider relabelled the pole mass as cart mass.",
+    }
+
+    assessment = validate_specification_assessment_payload(
+        payload,
+        template=template,
+        source_texts=[pole_excerpt],
+    )
+
+    assert assessment.facts == []
+    assert "cart_mass_kg" in assessment.missing_fact_ids
+    assert any("signal role" in item for item in assessment.rejected_facts)
+
+
+def test_profile_fact_value_must_share_a_clause_with_its_physical_role():
+    template = next(
+        item
+        for item in default_specification_template_catalog().templates
+        if item.method_profile_id == "underactuated_cartpole"
+    )
+    excerpt = "The cart mass is 1 kg and the pole mass is 0.2 kg."
+    payload = {
+        "status": "need_more",
+        "template_id": template.template_id,
+        "facts": [
+            {
+                "fact_id": "cart_mass_kg",
+                "value": 0.2,
+                "unit": "kg",
+                "source_type": "manufacturer_document",
+                "source_text": excerpt,
+            }
+        ],
+        "missing_fact_ids": [
+            field.fact_id
+            for field in template.fields
+            if field.fact_id != "cart_mass_kg"
+        ],
+        "conflicts": [],
+        "questions": [],
+        "rationale": "The provider copied the pole value into the cart field.",
+    }
+
+    assessment = validate_specification_assessment_payload(
+        payload,
+        template=template,
+        source_texts=[excerpt],
+    )
+
+    assert assessment.facts == []
+    assert "cart_mass_kg" in assessment.missing_fact_ids
+    assert any("same clause" in item for item in assessment.rejected_facts)
 
 
 def test_llm_registered_derivation_is_recomputed_from_verbatim_inputs():

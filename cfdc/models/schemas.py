@@ -1474,14 +1474,15 @@ class DiagnosticSessionState(CFDCModel):
     turns: list[DiagnosticTurn] = Field(default_factory=list)
     current_diagnosis: StructuralDiagnosis
     revision: int = Field(default=0, ge=0)
-    evidence_level: Literal["description_only", "measurement_verified"] = (
-        "description_only"
-    )
+    evidence_level: Literal[
+        "description_only", "description_grounded", "measurement_verified"
+    ] = "description_only"
     description_guidance: list[DescriptionGuidance] = Field(
         default_factory=list, max_length=8
     )
     checklist: list[DiagnosticChecklistItem] = Field(min_length=8, max_length=8)
     measurement_plan: MeasurementPlan | None = None
+    description_assessment: MeasurementAssessment | None = None
     measurement_assessment: MeasurementAssessment | None = None
     measurement_history: list[MeasurementAssessment] = Field(
         default_factory=list, max_length=16
@@ -1507,6 +1508,7 @@ class DiagnosticSessionState(CFDCModel):
         "awaiting_measurements",
         "measurement_needs_more",
         "measurement_conflict",
+        "description_grounded",
         "measurement_verified",
         "awaiting_profile_measurements",
         "specification_conflict",
@@ -1544,6 +1546,13 @@ class DiagnosticSessionState(CFDCModel):
             "coupling_severity",
             "uncertainty_magnitude",
         ]
+        for field_name in (
+            "description_turn_count",
+            "measurement_round_count",
+            "profile_measurement_round_count",
+        ):
+            if getattr(self, field_name) > self.maximum_turns:
+                raise ValueError(f"{field_name} cannot exceed maximum_turns")
         if [item.diagnostic_field_id for item in self.checklist] != required_field_ids:
             raise ValueError("v4 sessions require the fixed eight-field checklist")
         if [
@@ -1558,26 +1567,38 @@ class DiagnosticSessionState(CFDCModel):
             raise ValueError(
                 "classification and semantic_selection must be absent before measurement verification"
             )
-        if self.evidence_level == "measurement_verified" and (
+        if self.evidence_level in {"description_grounded", "measurement_verified"} and (
             has_classification != has_selection
         ):
             raise ValueError(
-                "classification and semantic_selection must be populated together after measurement verification"
+                "classification and semantic_selection must be populated together after diagnostic verification"
             )
         if self.description_turn_count != len(self.turns):
             raise ValueError(
                 "description_turn_count must match the description turn history"
             )
-        if self.measurement_round_count + self.profile_measurement_round_count != len(
-            self.measurement_history
-        ):
+        if self.measurement_round_count != len(self.measurement_history):
             raise ValueError(
-                "diagnostic and profile measurement round counts must match the "
-                "measurement history"
+                "diagnostic measurement round count must match the diagnostic history"
             )
         if len(self.measurement_response_history) != len(self.measurement_history):
             raise ValueError(
                 "measurement response history must align with measurement history"
+            )
+        if self.description_assessment is not None and (
+            self.measurement_assessment is not None
+            or self.measurement_history
+            or self.measurement_round_count
+        ):
+            raise ValueError(
+                "description and measurement diagnostic evidence sources are mutually exclusive"
+            )
+        if (
+            self.evidence_level == "measurement_verified"
+            and self.description_assessment is not None
+        ):
+            raise ValueError(
+                "measurement-verified sessions cannot retain description evidence"
             )
         if self.evidence_level == "measurement_verified":
             diagnostic_history = self.measurement_history[
@@ -1608,6 +1629,62 @@ class DiagnosticSessionState(CFDCModel):
                 raise ValueError(
                     "v4 sessions require the exact fixed eight-field measurement plan"
                 )
+        if self.description_assessment is not None:
+            if self.measurement_plan is None:
+                raise ValueError(
+                    "description assessments require the fixed diagnostic plan"
+                )
+            validate_measurement_assessment_for_plan(
+                self.measurement_plan, self.description_assessment
+            )
+            if self.description_assessment.status != "ready":
+                raise ValueError("description assessments must be ready")
+            from cfdc.diagnosis.measurements import (
+                reduce_measurement_history_to_diagnosis,
+                validate_description_assessment_semantics,
+                validate_grounded_measurement_assessment,
+            )
+
+            validate_grounded_measurement_assessment(
+                self.measurement_plan,
+                self.description_assessment,
+                self.accumulated_description.text,
+            )
+            validate_description_assessment_semantics(
+                self.measurement_plan,
+                self.description_assessment,
+                self.accumulated_description.text,
+            )
+            grounded_diagnosis = reduce_measurement_history_to_diagnosis(
+                self.measurement_plan, [self.description_assessment]
+            )
+            if not grounded_diagnosis.complete:
+                raise ValueError(
+                    "description assessment must resolve all eight diagnostic fields"
+                )
+            if grounded_diagnosis != self.current_diagnosis:
+                raise ValueError(
+                    "current diagnosis must match the grounded description assessment"
+                )
+        if self.evidence_level == "description_only" and self.description_assessment:
+            raise ValueError(
+                "description-only sessions cannot contain a ready description assessment"
+            )
+        if self.evidence_level == "description_grounded" and (
+            self.description_assessment is None or not self.current_diagnosis.complete
+        ):
+            raise ValueError(
+                "description-grounded sessions require a complete grounded assessment"
+            )
+        if self.status == "description_grounded":
+            if self.evidence_level != "description_grounded":
+                raise ValueError(
+                    "description_grounded status requires grounded description evidence"
+                )
+            if has_classification or has_selection:
+                raise ValueError(
+                    "classification and semantic_selection must remain absent during the description_grounded transition"
+                )
         if self.status == "measurement_verified":
             if self.evidence_level != "measurement_verified":
                 raise ValueError(
@@ -1631,6 +1708,7 @@ class DiagnosticSessionState(CFDCModel):
                     self.measurement_plan, assessment
                 )
             from cfdc.diagnosis.measurements import (
+                reduce_measurement_history_to_diagnosis,
                 validate_grounded_measurement_assessment,
             )
 
@@ -1649,6 +1727,15 @@ class DiagnosticSessionState(CFDCModel):
                     previous_assessment=(previous_assessment if index > 0 else None),
                 )
                 previous_assessment = assessment
+            if self.evidence_level == "measurement_verified":
+                grounded_diagnosis = reduce_measurement_history_to_diagnosis(
+                    self.measurement_plan,
+                    self.measurement_history,
+                )
+                if grounded_diagnosis != self.current_diagnosis:
+                    raise ValueError(
+                        "current diagnosis must match the grounded measurement history"
+                    )
         if self.measurement_assessment is not None:
             if self.measurement_plan is None:
                 raise ValueError(
@@ -1690,24 +1777,29 @@ class DiagnosticSessionState(CFDCModel):
             "complete",
         }
         if self.status in post_measurement_statuses:
-            if self.evidence_level != "measurement_verified":
+            if self.evidence_level not in {
+                "description_grounded",
+                "measurement_verified",
+            }:
                 raise ValueError(
-                    "post-measurement states require verified measurement evidence"
+                    "post-diagnosis states require grounded diagnostic evidence"
                 )
             if not has_classification or not has_selection:
                 raise ValueError(
                     "post-measurement states require classification and semantic_selection"
                 )
-            if (
-                self.measurement_plan is None
-                or not self.measurement_history
-                or self.measurement_assessment is None
-                or self.measurement_assessment.status != "ready"
-                or not self.current_diagnosis.complete
-            ):
+            has_ready_source = (
+                self.description_assessment is not None
+                if self.evidence_level == "description_grounded"
+                else bool(
+                    self.measurement_history
+                    and self.measurement_assessment is not None
+                    and self.measurement_assessment.status == "ready"
+                )
+            )
+            if self.measurement_plan is None or not has_ready_source or not self.current_diagnosis.complete:
                 raise ValueError(
-                    "post-measurement states require a complete grounded ready "
-                    "diagnostic history"
+                    "post-diagnosis states require complete grounded diagnostic evidence"
                 )
         elif self.evidence_level == "measurement_verified" and self.status not in {
             "measurement_verified",
@@ -1715,6 +1807,13 @@ class DiagnosticSessionState(CFDCModel):
         }:
             raise ValueError(
                 "verified measurement evidence must use a post-measurement status"
+            )
+        elif self.evidence_level == "description_grounded" and self.status not in {
+            "description_grounded",
+            "refused",
+        }:
+            raise ValueError(
+                "grounded description evidence must use a post-diagnosis status"
             )
         if self.status == "awaiting_profile_measurements" and (
             not self.specification_templates or self.specification_assessment is None
@@ -2154,6 +2253,8 @@ class CFDCRunReport(CFDCModel):
     run_id: str
     route_id: str = "generic"
     status: Literal[
+        "collecting_description",
+        "description_grounded",
         "need_more_information",
         "awaiting_measurements",
         "measurement_needs_more",

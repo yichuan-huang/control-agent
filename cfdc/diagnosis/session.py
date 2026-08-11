@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Mapping
 from copy import deepcopy
 from uuid import uuid4
@@ -12,10 +13,13 @@ from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.diagnosis.measurements import (
     apply_description_guidance,
     apply_guidance_responses_to_checklist,
+    build_description_assessment,
     build_diagnostic_checklist,
     build_measurement_plan,
+    filter_description_checklist_semantics,
     reduce_measurement_history_to_diagnosis,
     render_measurement_evidence,
+    validate_description_assessment_semantics,
     validate_grounded_measurement_assessment,
     validate_phrased_measurement_plan,
 )
@@ -79,6 +83,120 @@ def _diagnose(
     ).diagnose(description)
 
 
+_PROFILE_RETRACTION_MARKERS = re.compile(
+    r"(?:unknown|do not know|don't know|not establish|not available|"
+    r"cannot determine|retract|withdraw|未知|不知道|不清楚|无法确定|撤回|无记录)",
+    flags=re.IGNORECASE,
+)
+_PROFILE_RETRACTION_FIELD_MARKERS = {
+    "open_loop_stability": r"(?:stability|bounded|settle|稳定|有界|收敛)",
+    "minimum_phase": r"(?:minimum phase|initial direction|reverse|相位|初始方向|反向)",
+    "significant_delay": r"(?:delay|response start|时延|延迟|开始变化)",
+    "relative_degree": r"(?:relative degree|order|stage|相对阶|阶次|阶段)",
+    "controllability_observability": (
+        r"(?:controllability|observability|driven|recorded|可控|可观|带动|记录)"
+    ),
+    "nonlinearity_strength": (
+        r"(?:nonlinearity|proportional|hysteresis|非线性|比例|滞回)"
+    ),
+    "coupling_severity": r"(?:coupling|channel|input-output|耦合|通道|输入输出)",
+    "uncertainty_magnitude": (
+        r"(?:uncertainty|load|operating condition|不确定|负载|工况)"
+    ),
+}
+
+
+def _profile_gap_is_explicit(field_id: str, raw_response: str) -> bool:
+    for clause in re.split(r"[.!?。！？；;\n]+", raw_response):
+        if (
+            _PROFILE_RETRACTION_MARKERS.search(clause)
+            and re.search(
+                _PROFILE_RETRACTION_FIELD_MARKERS[field_id],
+                clause,
+                flags=re.IGNORECASE,
+            )
+            and re.search(
+                r"(?:remains? unchanged|still valid|保持不变|仍然有效|未改变)",
+                clause,
+                flags=re.IGNORECASE,
+            )
+            is None
+        ):
+            return True
+    return False
+
+
+def _restore_unattested_profile_gaps(
+    assessment: MeasurementAssessment,
+    previous_ready: MeasurementAssessment,
+    raw_response: str,
+) -> MeasurementAssessment:
+    previous_by_id = {fact.request_id: fact for fact in previous_ready.facts}
+    restored_ids = {
+        field_id
+        for field_id in assessment.gaps
+        if field_id in previous_by_id
+        and not _profile_gap_is_explicit(field_id, raw_response)
+    }
+    if not restored_ids:
+        return assessment
+    facts = [*assessment.facts]
+    existing_ids = {fact.request_id for fact in facts}
+    facts.extend(
+        previous_by_id[field_id]
+        for field_id in restored_ids
+        if field_id not in existing_ids
+    )
+    gaps = [field_id for field_id in assessment.gaps if field_id not in restored_ids]
+    status = (
+        "conflict"
+        if assessment.conflicts
+        else "need_more"
+        if gaps
+        else "ready"
+    )
+    return MeasurementAssessment(
+        status=status,
+        facts=facts,
+        gaps=gaps,
+        conflicts=assessment.conflicts,
+        conflict_request_ids=assessment.conflict_request_ids,
+        rationale=(
+            f"{assessment.rationale} Unattested Profile gaps retained their prior "
+            "grounded diagnostic facts."
+        ),
+    )
+
+
+def _ground_description_checklist(
+    checklist,
+    measurement_plan,
+    description_text: str,
+):
+    checklist = filter_description_checklist_semantics(checklist, description_text)
+    assessment, diagnosis = build_description_assessment(
+        measurement_plan, checklist, description_text
+    )
+    if diagnosis is not None and not diagnosis.complete:
+        checklist = [
+            (
+                item.model_copy(
+                    update={
+                        "status": "unknown",
+                        "evidence": [],
+                        "guidance": item.guidance.model_copy(
+                            update={"response": "unknown"}
+                        ),
+                    }
+                )
+                if getattr(diagnosis, item.diagnostic_field_id).status == "unknown"
+                else item
+            )
+            for item in checklist
+        ]
+    return checklist, assessment, diagnosis
+
+
 def start_diagnostic_session(
     description: SystemDescription,
     *,
@@ -89,23 +207,27 @@ def start_diagnostic_session(
 ) -> DiagnosticSessionState:
     """Create a v4 session without making a classification or profile selection."""
 
+    initial_description = description.model_copy(deep=True)
+    working_description = description.model_copy(deep=True)
     guided = diagnostic_adapter is not None and hasattr(
         diagnostic_adapter, "guide_description"
     )
-    accumulated_description = description
+    accumulated_description = working_description
     if guided:
         preliminary_diagnosis = DiagnosticEngine(
             adapter=None, use_mechanism_cards=use_mechanism_cards
-        ).diagnose(description)
+        ).diagnose(working_description)
         preliminary_checklist = build_diagnostic_checklist(
-            description, preliminary_diagnosis
+            working_description, preliminary_diagnosis
         )
+        expected_guidance = [item.guidance for item in preliminary_checklist]
         accumulated_description, guided_items = apply_description_guidance(
-            description,
+            working_description,
             diagnostic_adapter.guide_description(
-                description, [item.guidance for item in preliminary_checklist]
+                working_description.model_copy(deep=True),
+                deepcopy(expected_guidance),
             ),
-            [item.guidance for item in preliminary_checklist],
+            expected_guidance,
         )
         resolved_diagnosis = DiagnosticEngine(
             adapter=None, use_mechanism_cards=use_mechanism_cards
@@ -120,9 +242,11 @@ def start_diagnostic_session(
         )
     else:
         resolved_diagnosis = diagnosis or _diagnose(
-            description, diagnostic_adapter, use_mechanism_cards
+            working_description, diagnostic_adapter, use_mechanism_cards
         )
-        checklist = build_diagnostic_checklist(description, resolved_diagnosis)
+        checklist = build_diagnostic_checklist(
+            working_description, resolved_diagnosis
+        )
     measurement_plan = build_measurement_plan(checklist)
     if diagnostic_adapter is not None and hasattr(
         diagnostic_adapter, "phrase_measurement_plan"
@@ -130,20 +254,41 @@ def start_diagnostic_session(
         measurement_plan = validate_phrased_measurement_plan(
             measurement_plan,
             diagnostic_adapter.phrase_measurement_plan(
-                accumulated_description, checklist, measurement_plan
+                accumulated_description.model_copy(deep=True),
+                deepcopy(checklist),
+                measurement_plan.model_copy(deep=True),
             ),
         )
+    description_assessment = None
+    if guided:
+        checklist, description_assessment, grounded_diagnosis = (
+            _ground_description_checklist(
+                checklist, measurement_plan, accumulated_description.text
+            )
+        )
+        if description_assessment is not None:
+            resolved_diagnosis = grounded_diagnosis
     return DiagnosticSessionState(
         session_id=f"diagnostic-{uuid4().hex[:16]}",
         route_id=route_id,
-        initial_description=description,
-        accumulated_description=accumulated_description,
+        initial_description=initial_description,
+        accumulated_description=accumulated_description.model_copy(deep=True),
         current_diagnosis=resolved_diagnosis,
         description_guidance=[item.guidance for item in checklist],
         checklist=checklist,
         measurement_plan=measurement_plan,
+        description_assessment=description_assessment,
         pending_clarification_questions=[],
-        status="awaiting_measurements",
+        evidence_level=(
+            "description_grounded"
+            if description_assessment is not None
+            else "description_only"
+        ),
+        status=(
+            "description_grounded"
+            if description_assessment is not None
+            else ("collecting_description" if guided else "awaiting_measurements")
+        ),
     )
 
 
@@ -193,12 +338,14 @@ def continue_description_session(
             adapter=None, use_mechanism_cards=use_mechanism_cards
         ).diagnose(accumulated)
         preliminary_checklist = build_diagnostic_checklist(accumulated, preliminary)
+        expected_guidance = [item.guidance for item in preliminary_checklist]
         accumulated, guided_items = apply_description_guidance(
             accumulated,
             diagnostic_adapter.guide_description(
-                accumulated, [item.guidance for item in preliminary_checklist]
+                accumulated.model_copy(deep=True),
+                deepcopy(expected_guidance),
             ),
-            [item.guidance for item in preliminary_checklist],
+            expected_guidance,
         )
         diagnosis = DiagnosticEngine(
             adapter=None, use_mechanism_cards=use_mechanism_cards
@@ -226,9 +373,18 @@ def continue_description_session(
         measurement_plan = validate_phrased_measurement_plan(
             measurement_plan,
             diagnostic_adapter.phrase_measurement_plan(
-                accumulated, checklist, measurement_plan
+                accumulated.model_copy(deep=True),
+                deepcopy(checklist),
+                measurement_plan.model_copy(deep=True),
             ),
         )
+    description_assessment = None
+    if guided:
+        checklist, description_assessment, grounded_diagnosis = (
+            _ground_description_checklist(checklist, measurement_plan, accumulated.text)
+        )
+        if description_assessment is not None:
+            diagnosis = grounded_diagnosis
     updates = {
         "accumulated_description": accumulated,
         "turns": [*state.turns, turn],
@@ -236,13 +392,18 @@ def continue_description_session(
         "description_guidance": [item.guidance for item in checklist],
         "checklist": checklist,
         "measurement_plan": measurement_plan,
+        "description_assessment": description_assessment,
         "description_turn_count": state.description_turn_count + 1,
         "measurement_assessment": None,
         "measurement_history": [],
         "measurement_response_history": [],
         "measurement_round_count": 0,
         "profile_measurement_round_count": 0,
-        "evidence_level": "description_only",
+        "evidence_level": (
+            "description_grounded"
+            if description_assessment is not None
+            else "description_only"
+        ),
         "classification": None,
         "semantic_selection": None,
         "experiment_plan": None,
@@ -254,10 +415,17 @@ def continue_description_session(
         "compiled_specification_model": None,
         "candidate_route": None,
         "compiled_route": None,
-        "status": "awaiting_measurements",
+        "status": (
+            "description_grounded"
+            if description_assessment is not None
+            else ("collecting_description" if guided else "awaiting_measurements")
+        ),
         "refusal_reason": None,
     }
-    if updates["description_turn_count"] >= state.maximum_turns:
+    if (
+        description_assessment is None
+        and updates["description_turn_count"] >= state.maximum_turns
+    ):
         updates.update(
             {
                 "status": "refused",
@@ -424,9 +592,11 @@ def submit_profile_measurement_assessment(
     assessment: MeasurementAssessment | dict,
     *,
     raw_response: str,
+    expected_revision: int,
 ) -> DiagnosticSessionState:
-    """Persist one Profile reply's diagnostic assessment without using its counter."""
+    """Check a Profile reply for explicit diagnostic changes without persisting copies."""
 
+    _expect_revision(state, expected_revision)
     if state.status not in {
         "awaiting_profile_measurements",
         "specification_conflict",
@@ -439,10 +609,12 @@ def submit_profile_measurement_assessment(
     if state.measurement_plan is None:
         raise ValueError("diagnostic session is missing its measurement plan")
     typed_assessment = MeasurementAssessment.model_validate(assessment)
-    previous_ready = next(
+    previous_ready = state.description_assessment or next(
         (
             item
-            for item in reversed(state.measurement_history)
+            for item in reversed(
+                state.measurement_history[: state.measurement_round_count]
+            )
             if item.status == "ready"
         ),
         None,
@@ -451,42 +623,73 @@ def submit_profile_measurement_assessment(
         raise ValueError(
             "Profile measurement collection requires a prior ready diagnostic assessment"
         )
+    typed_assessment = _restore_unattested_profile_gaps(
+        typed_assessment,
+        previous_ready,
+        raw_response,
+    )
     validate_grounded_measurement_assessment(
         state.measurement_plan,
         typed_assessment,
         raw_response,
         previous_assessment=previous_ready,
     )
-    payload = state.model_dump(mode="python")
-    payload.update(
-        {
-            "measurement_assessment": typed_assessment,
-            "measurement_history": [*state.measurement_history, typed_assessment],
-            "measurement_response_history": [
-                *state.measurement_response_history,
-                raw_response,
-            ],
-            "profile_measurement_round_count": (
-                state.profile_measurement_round_count + 1
-            ),
-        }
+    diagnosis = reduce_measurement_history_to_diagnosis(
+        state.measurement_plan,
+        [previous_ready, typed_assessment],
     )
-    if typed_assessment.status != "ready":
-        history = [*state.measurement_history, typed_assessment]
-        diagnosis = reduce_measurement_history_to_diagnosis(
-            state.measurement_plan,
-            history,
-        )
-        checklist = build_diagnostic_checklist(
-            state.accumulated_description,
-            diagnosis,
-        )
+    payload = state.model_dump(mode="python")
+    payload["revision"] = state.revision + 1
+    payload["profile_measurement_round_count"] = (
+        state.profile_measurement_round_count + 1
+    )
+    if diagnosis != state.current_diagnosis:
+        description_budget_exhausted = state.description_turn_count >= state.maximum_turns
+        prior_checklist = {
+            item.diagnostic_field_id: item for item in state.checklist
+        }
+        checklist = []
+        for field_id in (
+            "open_loop_stability",
+            "minimum_phase",
+            "significant_delay",
+            "relative_degree",
+            "controllability_observability",
+            "nonlinearity_strength",
+            "coupling_severity",
+            "uncertainty_magnitude",
+        ):
+            prior_item = prior_checklist[field_id]
+            changed = getattr(diagnosis, field_id) != getattr(
+                state.current_diagnosis, field_id
+            )
+            if changed or getattr(diagnosis, field_id).status == "unknown":
+                checklist.append(
+                    prior_item.model_copy(
+                        update={
+                            "status": "unknown",
+                            "evidence": [],
+                            "guidance": prior_item.guidance.model_copy(
+                                update={"response": "unknown"}
+                            ),
+                        }
+                    )
+                )
+            else:
+                checklist.append(prior_item)
         payload.update(
             {
-                "revision": state.revision + 1,
                 "current_diagnosis": diagnosis,
+                "accumulated_description": state.accumulated_description.model_copy(
+                    update={"simulation_boundary_confirmation": None}
+                ),
                 "checklist": checklist,
                 "description_guidance": [item.guidance for item in checklist],
+                "description_assessment": None,
+                "measurement_assessment": None,
+                "measurement_history": [],
+                "measurement_response_history": [],
+                "measurement_round_count": 0,
                 "evidence_level": "description_only",
                 "classification": None,
                 "semantic_selection": None,
@@ -500,11 +703,15 @@ def submit_profile_measurement_assessment(
                 "candidate_route": None,
                 "compiled_route": None,
                 "status": (
-                    "measurement_conflict"
-                    if typed_assessment.status == "conflict"
-                    else "measurement_needs_more"
+                    "refused"
+                    if description_budget_exhausted
+                    else "collecting_description"
                 ),
-                "refusal_reason": None,
+                "refusal_reason": (
+                    "maximum_description_turns_reached"
+                    if description_budget_exhausted
+                    else None
+                ),
             }
         )
     return DiagnosticSessionState.model_validate(payload)
@@ -552,6 +759,7 @@ def submit_specifications_to_session(
     *,
     specification_adapter=None,
     simulation_bounds_confirmed: bool = False,
+    _revision_already_advanced: bool = False,
 ) -> DiagnosticSessionState:
     """Assess post-classification profile facts supplied through the shared textbox."""
 
@@ -562,9 +770,14 @@ def submit_specifications_to_session(
         raise ValueError(
             "only an awaiting_profile_measurements session accepts profile facts"
         )
+    def transition(updates: dict) -> DiagnosticSessionState:
+        if not _revision_already_advanced:
+            return _transition(state, updates=updates)
+        payload = deepcopy(state.model_dump(mode="python"))
+        payload.update(deepcopy(updates))
+        return DiagnosticSessionState.model_validate(payload)
+
     text = specification_text.strip()
-    if not text:
-        raise ValueError("measurement response must be non-empty")
     if state.semantic_selection is None or state.classification is None:
         raise ValueError("profile fact collection requires a selected method profile")
     template = (
@@ -574,22 +787,27 @@ def submit_specifications_to_session(
             state.semantic_selection.simulation_profile_id
         )
     )
-    assessment = assess_specification_text(
-        state.accumulated_description,
-        template,
-        text,
-        previous=state.specification_assessment,
-        adapter=specification_adapter,
-        diagnosis=state.current_diagnosis,
-        classification=state.classification,
-        method_profile_id=state.semantic_selection.simulation_profile_id,
-        answer_history=state.specification_answer_history,
-    )
-    history = [*state.specification_answer_history, text]
+    if text:
+        assessment = assess_specification_text(
+            state.accumulated_description.model_copy(deep=True),
+            template.model_copy(deep=True),
+            text,
+            previous=deepcopy(state.specification_assessment),
+            adapter=specification_adapter,
+            diagnosis=state.current_diagnosis.model_copy(deep=True),
+            classification=state.classification.model_copy(deep=True),
+            method_profile_id=state.semantic_selection.simulation_profile_id,
+            answer_history=state.specification_answer_history,
+        )
+        history = [*state.specification_answer_history, text]
+    else:
+        assessment = deepcopy(state.specification_assessment)
+        if assessment is None or assessment.status != "ready":
+            raise ValueError("measurement response must be non-empty")
+        history = list(state.specification_answer_history)
     if assessment.status == "conflict":
-        return _transition(
-            state,
-            updates={
+        return transition(
+            {
                 "specification_assessment": assessment,
                 "specification_answer_history": history,
                 "compiled_specification_model": None,
@@ -597,9 +815,8 @@ def submit_specifications_to_session(
             },
         )
     if assessment.status != "ready":
-        return _transition(
-            state,
-            updates={
+        return transition(
+            {
                 "specification_assessment": assessment,
                 "specification_answer_history": history,
                 "compiled_specification_model": None,
@@ -638,9 +855,8 @@ def submit_specifications_to_session(
             ),
         }
     )
-    return _transition(
-        state,
-        updates={
+    return transition(
+        {
             "accumulated_description": updated_description,
             "specification_assessment": assessment,
             "specification_answer_history": history,
@@ -674,7 +890,21 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             "complete",
         }
         persisted_status = payload.get("status")
+        if persisted_status in {
+            "collecting_description",
+            "awaiting_measurements",
+            "measurement_needs_more",
+            "measurement_conflict",
+            "description_grounded",
+            "measurement_verified",
+        }:
+            payload["profile_measurement_round_count"] = 0
         is_post_measurement = persisted_status in post_measurement_statuses
+        description_assessment_payload = payload.get("description_assessment")
+        persisted_description_grounded = (
+            payload.get("evidence_level") == "description_grounded"
+            and description_assessment_payload is not None
+        )
         if persisted_status == "measurement_verified" and (
             payload.get("classification") is not None
             or payload.get("semantic_selection") is not None
@@ -694,6 +924,15 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             )
         if any(not isinstance(item, str) for item in response_history):
             raise ValueError("measurement response history entries must be strings")
+        if persisted_description_grounded and (
+            history_payload
+            or response_history
+            or payload.get("measurement_assessment") is not None
+            or payload.get("measurement_round_count", 0)
+        ):
+            raise ValueError(
+                "description and measurement diagnostic evidence sources are mutually exclusive"
+            )
         plan = None
         assessments = []
         diagnosis = None
@@ -701,6 +940,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             history_payload
             or is_post_measurement
             or persisted_status == "measurement_verified"
+            or persisted_description_grounded
         ):
             from cfdc.models import MeasurementPlan
 
@@ -714,9 +954,13 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                 profile_round_count, int
             ):
                 raise ValueError("measurement round counts must be integers")
+            accepted_history_lengths = {
+                diagnostic_round_count,
+                diagnostic_round_count + profile_round_count,
+            }
             if (
                 len(assessments) != len(response_history)
-                or len(assessments) != diagnostic_round_count + profile_round_count
+                or len(assessments) not in accepted_history_lengths
             ):
                 raise ValueError(
                     "grounded measurement assessment and response histories must align"
@@ -732,7 +976,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                     previous_assessment=(previous_assessment if index > 0 else None),
                 )
                 previous_assessment = assessment
-            if is_post_measurement:
+            if len(assessments) > diagnostic_round_count:
                 assessments = assessments[:diagnostic_round_count]
                 response_history = response_history[:diagnostic_round_count]
                 payload.update(
@@ -746,10 +990,12 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                             if assessments
                             else None
                         ),
-                        "profile_measurement_round_count": 0,
                     }
                 )
-            diagnosis = reduce_measurement_history_to_diagnosis(plan, assessments)
+                if is_post_measurement:
+                    payload["profile_measurement_round_count"] = 0
+            if assessments:
+                diagnosis = reduce_measurement_history_to_diagnosis(plan, assessments)
 
         derived_fields = {
             "experiment_plan": None,
@@ -764,6 +1010,8 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             "compiled_route": None,
         }
         payload.update(derived_fields)
+        if is_post_measurement:
+            payload["profile_measurement_round_count"] = 0
         if diagnosis is not None:
             payload["current_diagnosis"] = diagnosis.model_dump(mode="python")
         if persisted_status == "refused":
@@ -785,7 +1033,8 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
 
         initial_description = SystemDescription.model_validate(
             payload.get("initial_description")
-        )
+        ).model_copy(update={"simulation_boundary_confirmation": None})
+        payload["initial_description"] = initial_description.model_dump(mode="python")
         persisted_accumulated = SystemDescription.model_validate(
             payload.get("accumulated_description")
         )
@@ -793,15 +1042,39 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
         turns_payload = payload.get("turns", [])
         if not isinstance(turns_payload, list):
             raise ValueError("diagnostic description turns must be an array")
-        for turn in turns_payload:
+        normalized_turns = []
+        for turn_index, turn in enumerate(turns_payload, start=1):
             if not isinstance(turn, Mapping):
                 raise TypeError("diagnostic description turns must be JSON objects")
             answers = turn.get("answers")
             if not isinstance(answers, Mapping):
                 raise TypeError("diagnostic description turn answers must be an object")
             supplemental = answers.get("supplemental_description")
-            if isinstance(supplemental, str) and supplemental.strip():
-                text_parts.append(f"Supplemental description: {supplemental.strip()}")
+            if not isinstance(supplemental, str) or not supplemental.strip():
+                raise ValueError(
+                    "diagnostic description turns require a non-empty supplemental_description"
+                )
+            normalized_supplemental = supplemental.strip()
+            evidence = f"Supplemental description: {normalized_supplemental}"
+            text_parts.append(evidence)
+            turn_description = initial_description.model_copy(
+                update={"text": "\n\n".join(text_parts)}
+            )
+            normalized_turns.append(
+                DiagnosticTurn(
+                    turn_index=turn_index,
+                    questions=["supplemental_description"],
+                    answers={"supplemental_description": normalized_supplemental},
+                    evidence=[evidence],
+                    diagnosis=DiagnosticEngine(adapter=None).diagnose(
+                        turn_description
+                    ),
+                )
+            )
+        payload["turns"] = [
+            turn.model_dump(mode="python") for turn in normalized_turns
+        ]
+        payload["description_turn_count"] = len(normalized_turns)
         if assessments:
             text_parts.append(render_measurement_evidence(assessments))
         rebuilt_text = "\n\n".join(text_parts)
@@ -847,6 +1120,90 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             item.guidance.model_dump(mode="python") for item in checklist
         ]
 
+        if persisted_description_grounded:
+            if plan is None:
+                raise ValueError(
+                    "description-grounded payload requires the fixed diagnostic plan"
+                )
+            description_assessment = MeasurementAssessment.model_validate(
+                description_assessment_payload
+            )
+            validate_grounded_measurement_assessment(
+                plan,
+                description_assessment,
+                rebuilt_accumulated.text,
+            )
+            validate_description_assessment_semantics(
+                plan,
+                description_assessment,
+                rebuilt_accumulated.text,
+            )
+            diagnosis = reduce_measurement_history_to_diagnosis(
+                plan, [description_assessment]
+            )
+            if description_assessment.status != "ready" or not diagnosis.complete:
+                raise ValueError(
+                    "description-grounded payload requires a complete ready assessment"
+                )
+            fact_by_request = {
+                fact.request_id: fact for fact in description_assessment.facts
+            }
+            checklist = build_diagnostic_checklist(rebuilt_accumulated, diagnosis)
+            checklist = apply_guidance_responses_to_checklist(
+                checklist,
+                [
+                    item.guidance.model_copy(
+                        update={
+                            "response": fact_by_request[
+                                item.diagnostic_field_id
+                            ].source_excerpt
+                        }
+                    )
+                    for item in checklist
+                ],
+                rebuilt_accumulated.text,
+            )
+            profile_cap_refusal = (
+                persisted_status == "refused"
+                and payload.get("refusal_reason")
+                == "maximum_profile_measurement_rounds_reached"
+                and payload.get("profile_measurement_round_count", 0)
+                >= payload.get("maximum_turns", 8)
+            )
+            payload.update(
+                {
+                    "current_diagnosis": diagnosis.model_dump(mode="python"),
+                    "description_guidance": [
+                        item.guidance.model_dump(mode="python") for item in checklist
+                    ],
+                    "checklist": [
+                        item.model_dump(mode="python") for item in checklist
+                    ],
+                    "description_assessment": description_assessment.model_dump(
+                        mode="python"
+                    ),
+                    "measurement_assessment": None,
+                    "measurement_history": [],
+                    "measurement_response_history": [],
+                    "measurement_round_count": 0,
+                    "profile_measurement_round_count": (
+                        payload.get("profile_measurement_round_count", 0)
+                        if profile_cap_refusal
+                        else 0
+                    ),
+                    "evidence_level": "description_grounded",
+                    "classification": None,
+                    "semantic_selection": None,
+                    "status": "refused" if profile_cap_refusal else "description_grounded",
+                    "refusal_reason": (
+                        "maximum_profile_measurement_rounds_reached"
+                        if profile_cap_refusal
+                        else None
+                    ),
+                }
+            )
+            return DiagnosticSessionState.model_validate(payload)
+
         if is_post_measurement:
             if (
                 plan is None
@@ -862,6 +1219,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             payload.update(
                 {
                     "evidence_level": "measurement_verified",
+                    "description_assessment": None,
                     "classification": None,
                     "semantic_selection": None,
                     "status": "measurement_verified",

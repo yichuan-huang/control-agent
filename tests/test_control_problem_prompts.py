@@ -10,12 +10,10 @@ CHINESE_PATH = Path("dataset/control_problem_prompts_cn.md")
 
 ENGLISH_HEADINGS = [
     "Control Problem Description",
-    "Existing-Record Diagnostic Measurement Response",
     "Profile Measurement Response (Natural Language)",
 ]
 CHINESE_HEADINGS = [
     "控制问题描述",
-    "已有记录诊断测量回复",
     "Profile 测量回复（自然语言）",
 ]
 ENGLISH_OLD_HEADINGS = [
@@ -35,36 +33,6 @@ CHINESE_OLD_HEADINGS = [
     "主导时间尺度（秒）",
     "示例数据（自然语言）",
     "示例数据（JSON）",
-]
-MEASUREMENT_FIELDS = [
-    "open_loop_stability",
-    "minimum_phase",
-    "significant_delay",
-    "relative_degree",
-    "controllability_observability",
-    "nonlinearity_strength",
-    "coupling_severity",
-    "uncertainty_magnitude",
-]
-ENGLISH_LABELS = [
-    "What happens after input restoration",
-    "Initial output direction",
-    "Time to first change",
-    "Number of visible time scales",
-    "Can the relevant motion be driven and recorded",
-    "Do small positive and negative changes agree",
-    "Which readings one action affects",
-    "Change across load or operating condition",
-]
-CHINESE_LABELS = [
-    "恢复输入后会怎样",
-    "输出最初往哪边变化",
-    "多久开始变化",
-    "有几个明显快慢阶段",
-    "关键运动能否被带动和记录",
-    "小幅正反变化是否近似一致",
-    "一个作用会影响哪些读数",
-    "换负载或工况后变化多大",
 ]
 ASSIGNMENT_TOKENS = [
     "input_change=",
@@ -120,6 +88,9 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
     assert "```json" not in markdown
     assert '"specification_facts"' not in markdown
     assert '"eight_segment_evidence"' not in markdown
+    assert "Existing-Record Diagnostic Measurement Response" not in markdown
+    assert "已有记录诊断测量回复" not in markdown
+    assert "open_loop_stability" not in markdown
     assert "binary_command" not in markdown
     assert not re.search(r"\b[A-Za-z][A-Za-z0-9_]*_unit\b", markdown)
     assert not any(token in markdown for token in ASSIGNMENT_TOKENS)
@@ -128,7 +99,6 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
     for old_heading in old_headings:
         assert f"### {old_heading}\n" not in markdown
 
-    expected_labels = ENGLISH_LABELS if language == "en" else CHINESE_LABELS
     parsed = []
     for index, ((number, title), entry) in enumerate(zip(title_matches, entries), 1):
         assert int(number) == index
@@ -148,28 +118,7 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
             assert sentences[0].startswith("这是")
             assert sentences[1].startswith("控制输入是")
 
-        measurement = _field(entry, headings[1])
-        bullets = re.findall(
-            r"^- \*\*(.+?)\*\* \(`([^`]+)`\): (.+)$",
-            measurement,
-            re.MULTILINE,
-        )
-        assert len(bullets) == 8, (language, index, len(bullets))
-        assert [label for label, _field_id, _body in bullets] == expected_labels
-        assert [field_id for _label, field_id, _body in bullets] == MEASUREMENT_FIELDS
-
-        for field_id, (_label, _actual_field_id, body) in zip(
-            MEASUREMENT_FIELDS, bullets
-        ):
-            assert body.strip(), (language, index, field_id)
-            quote_match = re.search(r"[“\"]([^”\"]+)[”\"]", body)
-            assert quote_match is not None, (language, index, field_id)
-            assert quote_match.group(1) in description, (language, index, field_id)
-        delay_body = bullets[2][2]
-        delay_values = re.findall(r"-?\d+(?:\.\d+)?\s*s\b", delay_body)
-        assert len(delay_values) >= 2, (language, index, delay_body)
-
-        profile = _field(entry, headings[2])
+        profile = _field(entry, headings[1])
         assert len(profile) >= 200, (language, index, len(profile))
         assert "```" not in profile
         if language == "en":
@@ -190,9 +139,6 @@ def _parse_document(path: Path, headings: list[str], language: str) -> list[dict
                 "title": title,
                 "description": description,
                 "sentences": sentences,
-                "measurement": measurement,
-                "bullets": bullets,
-                "delay_values": delay_values,
                 "profile": profile,
             }
         )
@@ -214,19 +160,12 @@ def test_chinese_prompts_match_the_guided_natural_language_ui_contract():
     assert all(HAN_PATTERN.search(item["description"]) for item in entries)
 
 
-def test_bilingual_prompts_have_strict_structural_and_measurement_parity():
+def test_bilingual_prompts_have_strict_two_stage_structural_parity():
     english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
     chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
 
     assert len(english) == len(chinese) == 200
     for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
-        assert [item[1] for item in english_item["bullets"]] == MEASUREMENT_FIELDS, (
-            index
-        )
-        assert [item[1] for item in chinese_item["bullets"]] == MEASUREMENT_FIELDS, (
-            index
-        )
-        assert english_item["delay_values"] == chinese_item["delay_values"], index
         assert len(english_item["sentences"]) == len(chinese_item["sentences"]), index
 
 

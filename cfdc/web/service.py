@@ -221,7 +221,7 @@ def start_app_run(
                 pending_clarification_questions=[],
                 status="awaiting_specifications",
             )
-        else:
+        elif session is None:
             session = start_diagnostic_session(
                 system,
                 route_id=route_id,
@@ -309,19 +309,20 @@ def continue_app_run(
         adapter,
         bool(app_state.get("include_trajectory")),
     )
-    if updated.status == "collecting_information":
+    if report.diagnostic_session is None:
         report = report.model_copy(update={"diagnostic_session": updated})
+    report_session = report.diagnostic_session
     next_state = dict(app_state)
     next_state["session"] = (
-        updated.model_dump(mode="json")
-        if updated.status
+        report_session.model_dump(mode="json")
+        if report_session is not None
+        and report_session.status
         in {
             "collecting_description",
             "awaiting_measurements",
             "measurement_needs_more",
             "measurement_conflict",
             "awaiting_profile_measurements",
-            "collecting_information",
             "awaiting_specifications",
             "need_more_specifications",
             "specification_conflict",
@@ -349,7 +350,15 @@ def submit_app_measurement_response(
         raise ValueError("当前没有等待测量记录的诊断会话。")
     session = DiagnosticSessionState.model_validate(app_state["session"])
     text = _textbox_text(measurement_response).strip()
-    if not text:
+    confirmation_only = bool(
+        not text
+        and simulation_bounds_confirmed
+        and session.status
+        in {"awaiting_profile_measurements", "specification_conflict"}
+        and session.specification_assessment is not None
+        and session.specification_assessment.status == "ready"
+    )
+    if not text and not confirmation_only:
         raise ValueError("请填写现有记录、手册摘录或明确说明未知。")
     adapter = build_adapter(bool(app_state.get("use_llm")), base_url, model, api_key)
     if adapter is None:

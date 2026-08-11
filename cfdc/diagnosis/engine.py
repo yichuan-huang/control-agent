@@ -391,6 +391,214 @@ def _direct_eight_segment_assessments(text: str) -> dict[str, str]:
     return resolved
 
 
+def infer_description_field_assessment(
+    diagnostic_field_id: str,
+    excerpt: str,
+) -> str | None:
+    """Parse one checklist excerpt only for the field it is claimed to answer.
+
+    The general benchmark diagnosis intentionally uses cross-field context.  A
+    description checklist excerpt has a stricter trust boundary: a sentence about
+    record reconstruction, for example, must not also prove stability, delay, or
+    coupling merely because broad plant keywords happen to occur in it.
+    """
+
+    if diagnostic_field_id not in {
+        "open_loop_stability",
+        "minimum_phase",
+        "significant_delay",
+        "relative_degree",
+        "controllability_observability",
+        "nonlinearity_strength",
+        "coupling_severity",
+        "uncertainty_magnitude",
+    }:
+        raise ValueError(f"unsupported diagnostic field: {diagnostic_field_id}")
+    text = excerpt.casefold()
+    if re.search(
+        r"(?:\b(?:unknown|unsupported|not known|cannot determine)\b|"
+        r"未知|不知道|尚不清楚|不清楚|无法确定)",
+        text,
+    ):
+        return None
+
+    contradicted_affirmative = {
+        "open_loop_stability": (
+            r"(?:(?:does not|doesn't|will not|won't|cannot).{0,24}"
+            r"(?:settle|stabili|remain bounded)|"
+            r"(?:不会|不能|无法|未能).{0,18}(?:收敛|稳定|保持有界))"
+        ),
+        "minimum_phase": (
+            r"(?:(?:does not|doesn't|will not|won't).{0,24}"
+            r"(?:final|expected) direction|"
+            r"(?:不会|不能|未).{0,18}(?:沿最终方向|与最终方向一致))"
+        ),
+        "significant_delay": (
+            r"(?:(?:does not|doesn't|will not|won't).{0,30}"
+            r"(?:start|begin).{0,18}(?:promptly|within one sample)|"
+            r"(?:不会|不能|未).{0,28}(?:一个采样周期|及时|立即).{0,18}"
+            r"(?:开始|变化))"
+        ),
+    }
+    contradiction = contradicted_affirmative.get(diagnostic_field_id)
+    if contradiction is not None and re.search(contradiction, text):
+        return None
+
+    direct = _direct_eight_segment_assessments(text).get(diagnostic_field_id)
+    if direct is not None:
+        return direct
+
+    if diagnostic_field_id == "open_loop_stability":
+        negated_growth = re.search(
+            r"(?:(?:no|not|never|without|does not|doesn't).{0,25}"
+            r"(?:grow|diverg|unbound)|(?:没有|不会|未).{0,20}"
+            r"(?:增长|增大|发散|无界))",
+            text,
+        )
+        if negated_growth is None and re.search(
+            r"(?:grow|diverg|unbound|增长|增大|发散|无界)", text
+        ):
+            return StabilityAssessment.UNSTABLE.value
+        if re.search(r"(?:drift|retain an offset|漂移|保留偏差)", text):
+            return StabilityAssessment.MARGINAL.value
+        if re.search(
+            r"(?:settles?|stabilizes?|\bstable\b|becomes stable|remains stable|"
+            r"remain bounded|decay|decrease|收敛|逐渐稳定|最终稳定|保持稳定|"
+            r"保持有界|逐渐减小|衰减)",
+            text,
+        ):
+            return StabilityAssessment.STABLE.value
+        return None
+    if diagnostic_field_id == "minimum_phase":
+        if _has_nonminimum_phase_evidence(text):
+            return PhaseAssessment.NONMINIMUM_PHASE.value
+        if _has_explicit_minimum_phase_direction(text) or re.search(
+            r"(?:initial|first|最初|首次|开始).{0,35}"
+            r"(?:same as|aligned with|一致).{0,18}(?:final|最终)",
+            text,
+        ):
+            return PhaseAssessment.MINIMUM_PHASE.value
+        return None
+    if diagnostic_field_id == "significant_delay":
+        if _has_significant_dead_time_evidence(text):
+            return DelayAssessment.SIGNIFICANT.value
+        if _has_explicit_no_dead_time(text) or re.search(
+            r"(?:within one sample|一个采样周期内).{0,24}(?:start|begin|开始|变化)",
+            text,
+        ):
+            return DelayAssessment.NOT_SIGNIFICANT.value
+        return None
+    if diagnostic_field_id == "relative_degree":
+        if re.search(
+            r"(?:three or more|at least three|high(?:er)? order|至少三|高阶)",
+            text,
+        ):
+            return RelativeDegreeAssessment.HIGH.value
+        if re.search(
+            r"(?:one or two|no more than two|single|first[- ]order|"
+            r"一到两个|不超过两个|至多两个|一个明显|一阶)",
+            text,
+        ) and re.search(
+            r"(?:storage|integration|stage|order|time scale|"
+            r"储能|积分|阶段|阶|快慢)",
+            text,
+        ):
+            return RelativeDegreeAssessment.LOW.value
+        return None
+    if diagnostic_field_id == "controllability_observability":
+        if re.search(
+            r"(?:unreachable|unobservable|cannot be (?:excited|recorded|reconstructed)|"
+            r"insufficient to reconstruct|无法(?:激发|记录|重建)|"
+            r"不足以重建|不可控|不可观)",
+            text,
+        ):
+            return ControllabilityObservabilityAssessment.INADEQUATE.value
+        if re.search(
+            r"(?:(?:synchron|record|sensor).{0,55}"
+            r"(?:sufficient|reconstruct|all relevant motion)|"
+            r"(?:sufficient|reconstruct|all relevant motion).{0,55}"
+            r"(?:synchron|record|sensor)|"
+            r"(?:同步|记录|传感).{0,55}(?:足以|重建所有相关运动)|"
+            r"(?:输入|执行).{0,45}(?:带动|激发).{0,30}(?:输出|运动))",
+            text,
+        ):
+            return ControllabilityObservabilityAssessment.ADEQUATE.value
+        return None
+    if diagnostic_field_id == "nonlinearity_strength":
+        if re.search(r"(?:state-dependent|state evolves|状态相关|随状态演化)", text):
+            return NonlinearityAssessment.STRONG_DYNAMIC.value
+        if re.search(r"(?:hysteresis|dead zone|relay|滞回|死区|继电)", text):
+            return NonlinearityAssessment.STATIC_COMPENSABLE.value
+        if re.search(
+            r"(?:smooth|reversible|proportional|symmetric|平滑|可逆|成比例|对称)",
+            text,
+        ) and re.search(r"(?:positive|negative|正向|反向|正反)", text):
+            return NonlinearityAssessment.WEAK.value
+        return None
+    if diagnostic_field_id == "coupling_severity":
+        if re.search(r"(?:underactuat|fewer independent|欠驱动|少于受控)", text):
+            return CouplingAssessment.UNDERACTUATED.value
+        if re.search(r"(?:inner loop|cascade|内环|串级)", text):
+            return CouplingAssessment.CASCADED.value
+        if re.search(
+            r"(?:several|multiple|多个).{0,28}(?:outputs|readings|输出|读数)",
+            text,
+        ):
+            return CouplingAssessment.SEVERE_MIMO.value
+        if re.search(
+            r"(?:one (?:main|principal).{0,25}(?:path|route|channel)|"
+            r"one (?:control )?input.{0,30}one (?:measured )?output|"
+            r"一条.{0,20}(?:路径|通道)|一个主要控制输入.{0,30}一个被测输出)",
+            text,
+        ):
+            return CouplingAssessment.SISO.value
+        return None
+    if re.search(r"(?:material|substantial|large|大幅|明显)", text):
+        return UncertaintyAssessment.LARGE.value
+    if re.search(r"(?:modest|moderate|适度|中等)", text):
+        return UncertaintyAssessment.MODERATE.value
+    if re.search(
+        r"(?:almost unchanged|nearly unchanged|small range|narrow range|"
+        r"几乎不变|变化很小|小范围|窄范围)",
+        text,
+    ):
+        return UncertaintyAssessment.SMALL.value
+    return None
+
+
+def infer_structural_field_from_excerpt(diagnostic_field_id: str, excerpt: str):
+    """Return one typed field using only its field-specific excerpt semantics."""
+
+    diagnosis = infer_structural_diagnosis(SystemDescription(text=excerpt))
+    field = getattr(diagnosis, diagnostic_field_id)
+    assessment = infer_description_field_assessment(diagnostic_field_id, excerpt)
+    if assessment is None:
+        return field.model_copy(
+            update={
+                "status": "unknown",
+                "value": "field-specific excerpt was not deterministically resolved",
+                "assessment": type(field.assessment)("unknown"),
+                "confidence": 0.2,
+                "evidence": [],
+            }
+        )
+    updates = {
+        "status": "inferred",
+        "value": "field-specific deterministic excerpt inference",
+        "assessment": type(field.assessment)(assessment),
+        "confidence": max(field.confidence, 0.9),
+        "evidence": [excerpt],
+    }
+    if diagnostic_field_id == "relative_degree":
+        if assessment == RelativeDegreeAssessment.HIGH.value:
+            updates["estimated_order"] = 4
+        else:
+            updates["estimated_order"] = (
+                2 if _has_explicit_oscillation_evidence(excerpt.casefold()) else 1
+            )
+    return field.model_copy(update=updates)
+
+
 def _reconcile_explicit_description(
     description: SystemDescription,
     diagnosis: StructuralDiagnosis,

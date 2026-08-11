@@ -5,7 +5,6 @@ from copy import deepcopy
 
 import pytest
 
-from cfdc.diagnosis import continue_description_session
 from cfdc.diagnosis.llm import DiagnosticAdapter
 from cfdc.models import SystemDescription
 from cfdc.runtime import run_cfdc_route
@@ -372,6 +371,10 @@ class StructuredGuidedLLM(DiagnosticAdapter):
             _GUIDANCE_PAYLOADS
         )
         self.calls.append("guide")
+        grounded_guidance = deepcopy(_GUIDANCE_PAYLOADS)
+        for item in grounded_guidance:
+            excerpt = _DIAGNOSTIC_FACTS[item["diagnostic_field_id"]]
+            item["response"] = excerpt if excerpt in description.text else "unknown"
         observed_outputs = []
         actuators = []
         if "temperature" in description.text:
@@ -381,7 +384,7 @@ class StructuredGuidedLLM(DiagnosticAdapter):
         if "heater" in description.text:
             actuators.append({"name": "heater", "source_excerpt": "heater"})
         return {
-            "guidance": deepcopy(_GUIDANCE_PAYLOADS),
+            "guidance": grounded_guidance,
             "observed_outputs": observed_outputs,
             "actuators": actuators,
         }
@@ -538,188 +541,39 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
     initial = run_cfdc_route(
         "generic",
         description=SystemDescription(
-            text="A heater influences a measured temperature in an industrial vessel."
+            text=(
+                "A heater influences a measured temperature in an industrial vessel. "
+                + " ".join(_DIAGNOSTIC_FACTS.values())
+            )
         ),
         diagnostic_adapter=adapter,
         run_id="guided-e2e",
     )
 
-    assert initial.status == "awaiting_measurements"
-    assert initial.classification is None
-    assert initial.semantic_selection is None
+    assert initial.status == "awaiting_profile_measurements"
+    assert initial.classification.primary_class == "class_i_first_order_lag"
+    assert initial.semantic_selection.simulation_profile_id == "first_order_lag"
     assert initial.diagnostic_session.schema_version == "4.0"
-    assert initial.diagnostic_session.revision == 0
+    assert initial.diagnostic_session.revision == 1
+    assert initial.diagnostic_session.evidence_level == "description_grounded"
+    assert initial.diagnostic_session.description_assessment.status == "ready"
+    assert initial.diagnostic_session.measurement_round_count == 0
+    assert initial.diagnostic_session.measurement_history == []
+    assert initial.diagnostic_session.measurement_response_history == []
     assert [
         item.diagnostic_field_id for item in initial.diagnostic_session.checklist
     ] == _FIELD_IDS
     assert [
-        item.guidance.model_dump(mode="json")
+        item.guidance.response
         for item in initial.diagnostic_session.checklist
-    ] == _GUIDANCE_PAYLOADS
+    ] == list(_DIAGNOSTIC_FACTS.values())
     assert (
         initial.diagnostic_session.measurement_plan.model_dump(mode="json")
         == _MEASUREMENT_PLAN_PAYLOAD
     )
-    assert {
-        request.safety_scope
-        for request in initial.diagnostic_session.measurement_plan.requests
-    } == {"existing_records_only"}
-    assert all(
-        request.instruction
-        in {
-            "Review an existing record.",
-            "Review a manual report.",
-            "Read an existing record.",
-            "Read a manual report.",
-            "Find an existing record.",
-            "Find a manual report.",
-            "Compare existing records.",
-            "Compare manual reports.",
-        }
-        for request in initial.diagnostic_session.measurement_plan.requests
-    )
-    assert all(
-        "existing record" in item.guidance.prompt.lower()
-        and "manual report" in item.guidance.prompt.lower()
-        and item.guidance.accepted_sources
-        == [
-            "existing_record",
-            "manual_report",
-        ]
-        for item in initial.diagnostic_session.checklist
-    )
-    rendered_plan = " ".join(
-        [
-            *(
-                f"{item.guidance.prompt} {item.guidance.why_needed}"
-                for item in initial.diagnostic_session.checklist
-            ),
-            *(
-                f"{request.instruction} {request.source_hint} "
-                f"{request.report_template} {request.response_hint}"
-                for request in initial.diagnostic_session.measurement_plan.requests
-            ),
-            initial.diagnostic_session.measurement_plan.rationale,
-        ]
-    ).lower()
-    assert all(
-        forbidden not in rendered_plan
-        for forbidden in ("amplitude", "duration", "apply", "command", "hardware")
-    )
-
-    supplemented = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=initial.diagnostic_session,
-        diagnostic_adapter=adapter,
-        supplemental_description=(
-            "An existing manual identifies heater power as the input and temperature "
-            "as the recorded output."
-        ),
-        run_id="guided-e2e",
-    )
-    assert supplemented.diagnostic_session.revision == 1
-    assert supplemented.diagnostic_session.description_turn_count == 1
-    assert supplemented.classification is None
-    assert supplemented.semantic_selection is None
-    with pytest.raises(ValueError, match="stale diagnostic session revision"):
-        continue_description_session(
-            supplemented.diagnostic_session,
-            "Another existing manual excerpt.",
-            expected_revision=initial.diagnostic_session.revision,
-            diagnostic_adapter=adapter,
-        )
-
-    prior = supplemented
-    expected_rounds = [
-        (
-            "The log excerpt is incomplete.",
-            "measurement_needs_more",
-            2,
-            list(_FIELD_IDS),
-        ),
-        (
-            _CONFLICT_RESPONSE,
-            "measurement_conflict",
-            3,
-            list(_FIELD_IDS[1:]),
-        ),
-        (
-            _PARTIAL_RESPONSE,
-            "measurement_needs_more",
-            4,
-            list(_FIELD_IDS[1:]),
-        ),
-    ]
-    for response, expected_status, expected_revision, expected_gaps in expected_rounds:
-        current = run_cfdc_route(
-            "generic",
-            diagnostic_session_state=prior.diagnostic_session,
-            diagnostic_adapter=adapter,
-            measurement_response=response,
-            run_id="guided-e2e",
-        )
-        assert current.status == expected_status
-        assert current.classification is None
-        assert current.semantic_selection is None
-        assert current.diagnostic_session.revision == expected_revision
-        assert current.diagnostic_session.measurement_round_count == (
-            expected_revision - 1
-        )
-        assert current.diagnostic_session.measurement_assessment.gaps == expected_gaps
-        prior = current
-
-    verified = run_cfdc_route(
-        "generic",
-        diagnostic_session_state=prior.diagnostic_session,
-        diagnostic_adapter=adapter,
-        measurement_response=_DIAGNOSTIC_RESPONSE,
-        run_id="guided-e2e",
-    )
-
-    assert verified.status == "awaiting_profile_measurements"
-    assert verified.diagnostic_session.revision == 6
-    assert verified.diagnostic_session.evidence_level == "measurement_verified"
-    assert verified.classification.primary_class == "class_i_first_order_lag"
-    assert verified.semantic_selection.simulation_profile_id == "first_order_lag"
-    assert verified.diagnostic_session.measurement_round_count == 4
-    assert [
-        assessment.status
-        for assessment in verified.diagnostic_session.measurement_history
-    ] == ["need_more", "conflict", "need_more", "ready"]
-    assert [
-        assessment.gaps
-        for assessment in verified.diagnostic_session.measurement_history
-    ] == [list(_FIELD_IDS), list(_FIELD_IDS[1:]), list(_FIELD_IDS[1:]), []]
-    assert [
-        assessment.conflict_request_ids
-        for assessment in verified.diagnostic_session.measurement_history
-    ] == [[], ["open_loop_stability"], [], []]
-    assert [
-        assessment.conflicts
-        for assessment in verified.diagnostic_session.measurement_history
-    ] == [[], ["One saved record settles while another grows."], [], []]
-    assert verified.diagnostic_session.measurement_response_history[-1] == (
-        _DIAGNOSTIC_RESPONSE
-    )
-    assert all(
-        fact.source_excerpt in _DIAGNOSTIC_RESPONSE
-        for fact in verified.diagnostic_session.measurement_assessment.facts
-    )
-    assert adapter.calls == [
-        "guide",
-        "phrase",
-        "guide",
-        "phrase",
-        "extract:incomplete",
-        "extract:conflict",
-        "extract:unknown",
-        "extract:ready",
-        "select",
-    ]
-
     completed = run_cfdc_route(
         "generic",
-        diagnostic_session_state=verified.diagnostic_session,
+        diagnostic_session_state=initial.diagnostic_session,
         diagnostic_adapter=adapter,
         measurement_response=_PROFILE_RESPONSE,
         simulation_bounds_confirmed=True,
@@ -728,50 +582,14 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
 
     assert completed.status == "candidate_unvalidated"
     assert completed.evidence_boundary == "declared_specification_model_only"
-    assert completed.diagnostic_session.revision == 7
-    assert completed.diagnostic_session.measurement_round_count == 4
+    assert completed.diagnostic_session.revision == 2
+    assert completed.diagnostic_session.measurement_round_count == 0
     assert completed.diagnostic_session.profile_measurement_round_count == 1
-    assert [
-        assessment.status
-        for assessment in completed.diagnostic_session.measurement_history
-    ] == ["need_more", "conflict", "need_more", "ready", "ready"]
-    assert [
-        assessment.gaps
-        for assessment in completed.diagnostic_session.measurement_history
-    ] == [
-        list(_FIELD_IDS),
-        list(_FIELD_IDS[1:]),
-        list(_FIELD_IDS[1:]),
-        [],
-        [],
-    ]
-    assert [
-        assessment.conflict_request_ids
-        for assessment in completed.diagnostic_session.measurement_history
-    ] == [[], ["open_loop_stability"], [], [], []]
-    assert [
-        assessment.conflicts
-        for assessment in completed.diagnostic_session.measurement_history
-    ] == [[], ["One saved record settles while another grows."], [], [], []]
-    assert [
-        (
-            fact.request_id,
-            fact.source_excerpt,
-            fact.text_value,
-            fact.numeric_value,
-            fact.unit,
-        )
-        for fact in completed.diagnostic_session.measurement_history[-1].facts
-    ] == [
-        (request_id, text, text, None, None)
-        for request_id, text in _DIAGNOSTIC_FACTS.items()
-    ]
+    assert completed.diagnostic_session.measurement_history == []
+    assert completed.diagnostic_session.measurement_response_history == []
     assert completed.diagnostic_session.specification_answer_history == [
         _PROFILE_RESPONSE
     ]
-    assert completed.diagnostic_session.measurement_response_history[-1] == (
-        _PROFILE_RESPONSE
-    )
     assert all(
         diagnostic_excerpt not in _PROFILE_RESPONSE
         for diagnostic_excerpt in _DIAGNOSTIC_FACTS.values()
@@ -821,12 +639,6 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
     assert adapter.calls == [
         "guide",
         "phrase",
-        "guide",
-        "phrase",
-        "extract:incomplete",
-        "extract:conflict",
-        "extract:unknown",
-        "extract:ready",
         "select",
         "extract:profile",
         "assess",

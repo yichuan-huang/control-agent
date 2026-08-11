@@ -209,7 +209,7 @@ def test_thermostat_description_unknown_guidance_stays_on_all_eight_gaps():
         diagnostic_adapter=_UnknownDescriptionGuidanceAdapter(),
     )
 
-    assert state.status == "awaiting_measurements"
+    assert state.status == "collecting_description"
     assert len(state.checklist) == 8
     assert {item.status for item in state.checklist} == {"unknown"}
     assert state.accumulated_description.observed_outputs == ["房间温度"]
@@ -1119,6 +1119,62 @@ def test_migration_rebuilds_accumulated_description_from_retained_raw_inputs():
     assert restored.accumulated_description.simulation_boundary_confirmation is None
 
 
+def test_session_round_counters_cannot_exceed_the_configured_budget():
+    payload = _post_measurement_payload()
+    payload["maximum_turns"] = 1
+    payload["profile_measurement_round_count"] = 2
+
+    with pytest.raises(ValidationError, match="profile_measurement_round_count.*maximum_turns"):
+        DiagnosticSessionState.model_validate(payload)
+
+
+def test_profile_round_count_cannot_poison_a_preprofile_resumed_session():
+    state = start_diagnostic_session(_description())
+    payload = state.model_dump(mode="json")
+    payload["profile_measurement_round_count"] = state.maximum_turns
+
+    restored = migrate_diagnostic_session_payload(payload)
+    assert restored.status == state.status
+    assert restored.profile_measurement_round_count == 0
+
+
+def test_migration_rebuilds_description_turn_audit_fields_from_raw_answers():
+    state = start_diagnostic_session(_description())
+    state = continue_description_session(
+        state,
+        "The room record also names the heater and temperature signals.",
+        expected_revision=state.revision,
+    )
+    payload = state.model_dump(mode="json")
+    payload["turns"][0].update(
+        {
+            "turn_index": 99,
+            "questions": ["unsafe forged question"],
+            "evidence": ["forged audit evidence"],
+            "diagnosis": DiagnosticEngine().diagnose(
+                SystemDescription(text="forged diagnosis input")
+            ).model_dump(mode="json"),
+        }
+    )
+    payload["description_turn_count"] = 7
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.description_turn_count == 1
+    assert len(restored.turns) == 1
+    turn = restored.turns[0]
+    assert turn.turn_index == 1
+    assert turn.questions == ["supplemental_description"]
+    assert turn.evidence == [
+        "Supplemental description: The room record also names the heater and temperature signals."
+    ]
+    assert "forged" not in turn.model_dump_json()
+    expected_description = state.initial_description.model_copy(
+        update={"text": restored.accumulated_description.text}
+    )
+    assert turn.diagnosis == DiagnosticEngine().diagnose(expected_description)
+
+
 def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_reselection():
     payload = _post_measurement_payload()
     diagnostic_ready = payload["measurement_history"][-1]
@@ -1139,6 +1195,35 @@ def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_resel
     assert restored.measurement_assessment == restored.measurement_history[-1]
 
 
+def test_migration_resets_current_style_profile_counter_after_discarding_answers():
+    payload = _post_measurement_payload()
+    payload["profile_measurement_round_count"] = 3
+    payload["specification_answer_history"] = ["reply one", "reply two", "reply three"]
+
+    restored = migrate_diagnostic_session_payload(payload)
+
+    assert restored.status == "measurement_verified"
+    assert restored.profile_measurement_round_count == 0
+    assert restored.specification_answer_history == []
+
+
+def test_measurement_verified_state_rejects_a_second_description_evidence_source():
+    payload = _post_measurement_payload()
+    payload["description_assessment"] = payload["measurement_assessment"]
+
+    with pytest.raises(ValidationError, match="mutually exclusive"):
+        DiagnosticSessionState.model_validate(payload)
+
+
+def test_measurement_verified_state_recomputes_current_diagnosis_from_history():
+    payload = _post_measurement_payload()
+    payload["current_diagnosis"]["minimum_phase"]["assessment"] = "nonminimum_phase"
+    payload["current_diagnosis"]["minimum_phase"]["value"] = "forged"
+
+    with pytest.raises(ValidationError, match="must match.*measurement history"):
+        DiagnosticSessionState.model_validate(payload)
+
+
 def test_profile_ready_carry_forward_uses_an_independent_round_counter():
     state = DiagnosticSessionState.model_validate(_post_measurement_payload())
     assessment = state.measurement_assessment
@@ -1147,12 +1232,23 @@ def test_profile_ready_carry_forward_uses_an_independent_round_counter():
         state,
         assessment,
         raw_response="This Profile reply adds only model specification facts.",
+        expected_revision=state.revision,
     )
 
     assert updated.measurement_round_count == 1
     assert updated.profile_measurement_round_count == 1
-    assert len(updated.measurement_history) == 2
-    assert len(updated.measurement_response_history) == 2
+    assert len(updated.measurement_history) == 1
+    assert len(updated.measurement_response_history) == 1
+    assert updated.measurement_assessment == assessment
+    assert updated.revision == state.revision + 1
+
+    with pytest.raises(ValueError, match="stale diagnostic session revision"):
+        submit_profile_measurement_assessment(
+            state,
+            assessment,
+            raw_response="This Profile reply adds only model specification facts.",
+            expected_revision=state.revision + 1,
+        )
 
 
 def test_grounded_profile_conflict_invalidates_the_postmeasurement_release():
@@ -1169,9 +1265,10 @@ def test_grounded_profile_conflict_invalidates_the_postmeasurement_release():
         state,
         conflict,
         raw_response=conflict_text,
+        expected_revision=state.revision,
     )
 
-    assert invalidated.status == "measurement_conflict"
+    assert invalidated.status == "collecting_description"
     assert invalidated.evidence_level == "description_only"
     assert invalidated.classification is None
     assert invalidated.semantic_selection is None

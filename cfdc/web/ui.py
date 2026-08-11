@@ -83,6 +83,14 @@ def _outputs(report, state):
             )
         )
     )
+    confirmation_only = bool(
+        show_measurement
+        and session is not None
+        and session.status in profile_measurement_statuses
+        and session.specification_assessment is not None
+        and session.specification_assessment.status == "ready"
+    )
+    show_measurement_input = show_measurement and not confirmation_only
     visibility = view["technical_visibility"]
     return (
         state,
@@ -90,6 +98,10 @@ def _outputs(report, state):
         view["progress"],
         view["summary"],
         view["performance_visual"],
+        gr.update(
+            label=view["checklist_title"],
+            open=not view["checklist_collapsed"],
+        ),
         view["checklist"],
         view["measurement_guidance"],
         view["timeline"],
@@ -101,8 +113,15 @@ def _outputs(report, state):
         view["tuning"],
         view["performance"],
         view["raw"],
-        gr.update(visible=show_measurement, value=""),
-        gr.update(visible=show_measurement),
+        gr.update(visible=show_measurement_input, value=""),
+        gr.update(
+            visible=show_measurement,
+            value=(
+                "确认软件仿真边界并继续"
+                if confirmation_only
+                else "提交测量回复"
+            ),
+        ),
         gr.update(visible=show_measurement, value=False),
         gr.update(visible=visibility["diagnosis"]),
         gr.update(visible=visibility["route"]),
@@ -165,6 +184,7 @@ def reset_ui():
         "",
         "",
         "",
+        gr.update(label="诊断检查清单（0/8 已完成）", open=True),
         [],
         "",
         "",
@@ -197,7 +217,7 @@ def build_app() -> gr.Blocks:
             with gr.Column(scale=5, min_width=360):
                 gr.Markdown(
                     "先在同一个输入框中用自然语言描述控制问题。八项未完成时，请直接在原描述中"
-                    "继续补充并重新检查；全部完成后才会显示测量计划和测量回复入口。"
+                    "继续补充并重新检查；全部完成后会自动分类，并只显示建模所需的核心参数。"
                 )
                 description = gr.Textbox(
                     label="控制问题描述",
@@ -233,24 +253,26 @@ def build_app() -> gr.Blocks:
                 progress = gr.HTML(elem_id="stage-progress")
                 summary = gr.HTML()
                 performance_visual = gr.HTML()
-                checklist = gr.Dataframe(
-                    label="诊断检查清单",
-                    headers=["需要了解的现象", "状态", "证据摘录"],
-                    datatype=["str", "str", "str"],
-                    interactive=False,
-                    elem_classes="stage-table",
-                )
+                with gr.Accordion(
+                    "诊断检查清单（0/8 已完成）", open=True
+                ) as checklist_accordion:
+                    checklist = gr.Dataframe(
+                        headers=["需要了解的现象", "状态", "证据摘录"],
+                        datatype=["str", "str", "str"],
+                        interactive=False,
+                        elem_classes="stage-table",
+                    )
                 measurement_guidance = gr.Markdown()
                 timeline = gr.Markdown()
 
                 measurement_response = gr.Textbox(
-                    label="现有记录与测量回复",
+                    label="核心参数与测量回复",
                     value="",
                     lines=8,
                     visible=False,
                     placeholder=(
-                        "粘贴已有记录或手册摘录，并逐项说明观察结果；"
-                        "没有记录的项目请明确写“不知道”。"
+                        "按上方问题用自然语言填写已知的变化量、单位、响应时间和"
+                        "软件仿真边界；不知道的项目请明确写“不知道”。"
                     ),
                 )
                 simulation_bounds_confirmed = gr.Checkbox(
@@ -354,6 +376,7 @@ def build_app() -> gr.Blocks:
             progress,
             summary,
             performance_visual,
+            checklist_accordion,
             checklist,
             measurement_guidance,
             timeline,

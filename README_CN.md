@@ -7,19 +7,19 @@
 ## 主流程
 
 ```text
-1 问题描述
-→ 2 AI 测量计划
-→ 3 测量回填
-→ 4 系统分类
+1 问题描述与八项 checklist
+→ 2 系统分类
+→ 3 核心参数测量计划
+→ 4 参数回填与模型编译
 → 5 初始控制器
 → 6 效果验证与调优
 ```
 
-通用 Web 与 CLI 流程必须配置 OpenAI-compatible LLM 服务。流程从一段自然语言控制问题描述开始，也可以用一次可选的描述补充加入现有记录或手册中的事实。随后 AI 展示固定八项诊断清单和测量计划。描述补充、诊断测量回填和所选 Profile 的参数回填各自最多进行 8 轮；未知事实始终保留为缺口，不会被虚构默认值填补。
+通用 Web 与 CLI 流程必须配置 OpenAI-compatible LLM 服务。流程从一段自然语言控制问题描述开始。八项 checklist 是结构描述检查，不是第二份测量表：AI 提取的证据必须逐字存在于问题描述中，并且确定性诊断后端能够解释；缺少或无法解释的项目保持空心圈，用户直接在原“控制问题描述”栏继续补充。描述补充和所选 Profile 的参数回填各自最多进行 8 轮；未知值始终保留为缺口，不会被虚构默认值填补。
 
-所有测量请求都限定为 `existing_records_only`：只说明应查找哪一份现有记录或手册内容，以及如何回填，不会规定实体硬件的幅值、持续时间、动作或命令。系统分类后，仍通过同一个测量回填入口收集所选 Profile 要求的数值事实，不存在绕过证据门的独立入口。
+八项全部核验后，系统自动完成分类和闭目录 Profile 选择。完成的 checklist 折叠为可回看的“8/8 已完成”，统一回复框只显示该 Profile 真正缺少的参数，例如输入/输出变化量及单位、约 63% 响应时间、仅在适用时的显著纯时延，以及软件仿真的输入/输出边界。问题描述中已经明确给出的参数会自动预填；回答“不知道”时保留缺口。
 
-在固定八项诊断事实全部验证前，正式分类和闭集 Profile 选择都保持为空。分类只用于选择模型族，不能提供对象数值。每个系数、矩阵元素、物理参数、工作范围和试验条件都必须来自问题原文、已提交的记录/手册事实，或可复算的确定性派生。信息完整后，后端确定性编译模型并生成初始控制器候选。
+八项描述证据全部核验前，正式分类和闭集 Profile 选择都保持为空。分类只用于选择模型族，不能提供对象数值。每个系数、矩阵元素、物理参数、工作范围和试验条件都必须来自问题原文、已提交的记录/手册事实，或可复算的确定性派生。Profile 参数完整后，后端确定性编译模型并生成初始控制器候选。
 
 运行时不会按题号、案例 ID 或 Profile 查找对象模型。`dataset/` 下的 200 道 Markdown 问题只用于离线研究和评测，不被生产代码导入。
 
@@ -40,9 +40,9 @@ LLM 只能返回严格类型化数据。任意 Python、MATLAB、ODE 字符串�
 python app.py
 ```
 
-浏览器访问 `http://127.0.0.1:7860`。通用 Web 流程只有一个领域输入“控制问题描述”，并要求填写 Provider Base URL、Model 和 API Key；不存在可选的无 LLM 模式。六个进度阶段严格为：问题描述、AI 测量计划、测量回填、系统分类、初始控制器、效果验证与调优。
+浏览器访问 `http://127.0.0.1:7860`。通用 Web 流程只有一个领域输入“控制问题描述”，并要求填写 Provider Base URL、Model 和 API Key；不存在可选的无 LLM 模式，Gradio 也不提供任何案例示例。六个进度阶段严格为：问题描述与八项 checklist、系统分类、核心参数测量计划、参数回填与模型编译、初始控制器、效果验证与调优。
 
-八项诊断事实和所选 Profile 的数值事实完整后：
+八项描述检查和所选 Profile 的数值事实完整后：
 
 1. 用户确认已声明的输入/输出范围只作为软件仿真的运行与停止边界，不是硬件安全认证。
 2. 后端校验 Profile 事实并确定性编译被控对象模型。
@@ -128,13 +128,14 @@ python main.py --use-llm \
 
 以下继续命令假定上文导出的 `CFDC_LLM_BASE_URL`、`CFDC_LLM_MODEL` 和
 `CFDC_LLM_API_KEY` 环境变量仍然有效。继续处理已保存的 v4 会话时，可以在命令行直接回填，
-也可以使用一个 UTF-8 文本文件：
+也可以使用一个 UTF-8 文本文件。checklist 完成后，该回复会直接解释为所选 Profile 的参数：
 
 ```bash
 python main.py --use-llm \
   --diagnostic-session-input session-v4.json \
   --diagnostic-session-output session-v4-next.json \
-  --measurement-response "在此粘贴现有记录或手册中的发现。"
+  --measurement-response "油门变化 1 deg，稳态车速变化 10 mph，响应时间 5 s；油门范围 -3 至 3 deg，车速范围 45 至 80 mph。" \
+  --confirm-simulation-bounds
 
 python main.py --use-llm \
   --diagnostic-session-input session-v4.json \
@@ -142,9 +143,9 @@ python main.py --use-llm \
   --measurement-response-file measurement-response.txt
 ```
 
-`--measurement-response` 与 `--measurement-response-file` 互斥；测量回填必须同时提供 `--diagnostic-session-input`。如需补充问题描述，应在单独一轮使用 `--diagnostic-description`。当所选 Profile 的回填已包含完整数值仿真范围时，还必须传入 `--confirm-simulation-bounds`，确认这些范围只用于软件仿真。
+`--measurement-response` 与 `--measurement-response-file` 互斥；参数回填必须同时提供 `--diagnostic-session-input`。checklist 尚未完成时，应使用 `--diagnostic-description` 扩写原问题描述，不要把八项摘录重新作为测量回复。当所选 Profile 的回填已包含完整数值仿真范围时，还必须传入 `--confirm-simulation-bounds`，确认这些范围只用于软件仿真。
 
-持久化引导会话的 schema 版本为 `4.0`。版本 3 会话会被明确拒绝而不会迁移；更早的已保存会话同样与本流程不兼容，应使用原始问题描述重新创建 v4 会话。
+持久化引导会话的 schema 版本为 `4.0`。已核验的 v4 会话可以继续恢复；未完成的 v4 会话会从已验证的问题描述原文重建 checklist，不再要求重复粘贴八项内容。版本 3 会话会被明确拒绝而不会迁移；更早的已保存会话同样与本流程不兼容，应使用原始问题描述重新创建 v4 会话。
 
 ## 证据边界
 

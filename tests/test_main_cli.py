@@ -40,7 +40,18 @@ class CliGuidedAdapter(DeterministicDiagnosticAdapter):
         output = description.observed_outputs or ["temperature"]
         actuators = description.actuators or ["heater"]
         return {
-            "guidance": [item.model_dump(mode="json") for item in guidance],
+            "guidance": [
+                {
+                    **item.model_dump(mode="json"),
+                    "response": (
+                        _VALID_FIELD_FACTS[item.diagnostic_field_id]
+                        if _VALID_FIELD_FACTS[item.diagnostic_field_id]
+                        in description.text
+                        else "unknown"
+                    ),
+                }
+                for item in guidance
+            ],
             "observed_outputs": [
                 {"name": name, "source_excerpt": name} for name in output
             ],
@@ -82,6 +93,10 @@ def _llm_args():
         "--llm-api-key",
         "test-secret",
     ]
+
+
+def _complete_description(text: str) -> str:
+    return text + "\n" + "\n".join(_VALID_FIELD_FACTS.values())
 
 
 def test_cli_measurement_response_text_and_file_are_mutually_exclusive(tmp_path):
@@ -282,14 +297,22 @@ def test_cli_v4_session_round_trip_accepts_measurement_response_file(
     initial_path = tmp_path / "initial-v4.json"
     advanced_path = tmp_path / "advanced-v4.json"
     response_path = tmp_path / "records.txt"
-    response_path.write_text("\n".join(_VALID_FIELD_FACTS.values()), encoding="utf-8")
+    response_path.write_text(
+        (
+            "input_change=1 V; steady_output_change=10 degC; response_time_s=5 s; "
+            "input_min=-2 V; input_max=2 V; output_min=-30 degC; output_max=80 degC;"
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         sys,
         "argv",
         [
             "main.py",
             "--description",
-            "A first order temperature process settles after a heater change.",
+            _complete_description(
+                "A first order temperature process settles after a heater change."
+            ),
             "--observed-output",
             "temperature",
             "--actuator",
@@ -301,8 +324,11 @@ def test_cli_v4_session_round_trip_accepts_measurement_response_file(
     )
     main()
     initial_payload = json.loads(capsys.readouterr().out)
-    assert initial_payload["status"] == "awaiting_measurements"
-    assert initial_payload["diagnostic_session"]["revision"] == 0
+    assert initial_payload["status"] == "awaiting_profile_measurements"
+    assert initial_payload["diagnostic_session"]["revision"] == 1
+    assert initial_payload["diagnostic_session"]["measurement_round_count"] == 0
+    assert initial_payload["classification"] is not None
+    assert initial_payload["semantic_selection"] is not None
 
     monkeypatch.setattr(
         sys,
@@ -315,6 +341,7 @@ def test_cli_v4_session_round_trip_accepts_measurement_response_file(
             str(advanced_path),
             "--measurement-response-file",
             str(response_path),
+            "--confirm-simulation-bounds",
             *_llm_args(),
         ],
     )
@@ -323,10 +350,12 @@ def test_cli_v4_session_round_trip_accepts_measurement_response_file(
     restored = DiagnosticSessionState.model_validate_json(
         advanced_path.read_text(encoding="utf-8")
     )
-    assert advanced_payload["status"] == "awaiting_profile_measurements"
-    assert restored.status == "awaiting_profile_measurements"
-    assert restored.revision == 2
+    assert advanced_payload["status"] == "candidate_unvalidated"
+    assert restored.status == "specification_model_ready"
+    assert restored.revision == 3
     assert restored.classification is not None
+    assert restored.measurement_round_count == 0
+    assert restored.profile_measurement_round_count == 1
 
 
 def test_documented_deepseek_model_is_v4_pro():
@@ -336,7 +365,7 @@ def test_documented_deepseek_model_is_v4_pro():
         assert '--llm-model "deepseek-v4-pro"' in content
 
 
-def test_cli_description_waits_for_object_evidence(monkeypatch, capsys):
+def test_cli_incomplete_description_returns_checklist_without_profile(monkeypatch, capsys):
     _enable_cli_guided_adapter(monkeypatch)
     monkeypatch.setattr(
         sys,
@@ -354,7 +383,7 @@ def test_cli_description_waits_for_object_evidence(monkeypatch, capsys):
     )
     main()
     payload = json.loads(capsys.readouterr().out)
-    assert payload["status"] == "awaiting_measurements"
+    assert payload["status"] == "need_more_information"
     assert payload["semantic_selection"] is None
     assert payload["experiment_results"] == []
     assert payload["controller"] is None
@@ -574,7 +603,7 @@ def test_cli_accepts_structured_model_evidence(tmp_path, monkeypatch, capsys):
     main()
     payload = json.loads(capsys.readouterr().out)
 
-    assert payload["status"] == "awaiting_measurements"
+    assert payload["status"] == "need_more_information"
     assert payload["controller"] is None
 
 

@@ -22,6 +22,7 @@ from cfdc.diagnosis.llm import (
 from cfdc.diagnosis.measurements import (
     DIAGNOSTIC_FIELD_IDS,
     apply_description_guidance,
+    build_description_assessment,
     build_diagnostic_checklist,
     build_measurement_plan,
     reduce_measurement_history_to_diagnosis,
@@ -55,6 +56,7 @@ __all__ = [
     "OpenAICompatibleDiagnosticAdapter",
     "SimulationProposalAdapter",
     "apply_description_guidance",
+    "build_description_assessment",
     "build_diagnostic_checklist",
     "build_measurement_plan",
     "clarification_question_map",

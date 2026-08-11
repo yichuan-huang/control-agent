@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import replace
 from typing import Literal
 from uuid import uuid4
@@ -67,6 +69,8 @@ from cfdc.models import (
     ScalarRLSTrackerState,
     SemanticRouteSelection,
     SimulationExperimentRecord,
+    SpecificationAssessment,
+    SpecificationTemplate,
     StructuralDiagnosis,
     SystemDescription,
     TrackingObservation,
@@ -133,6 +137,14 @@ RouteId = Literal[
     "vtol-hover",
     "vtol-variation",
 ]
+
+_PROFILE_VALUE_WITH_UNIT = re.compile(
+    r"(?<![\w.])[+-]?\d+(?:\.\d+)?\s*"
+    r"(?:ms|s|degc|degf|deg|°c|°f|°|rad|mph|km/h|m/s|m|v|a|w|n|kg|pa|rpm|%|"
+    r"normalized_input|binary_command|毫秒|秒|摄氏度|华氏度|度|伏|安|瓦|牛|千克|帕)"
+    r"(?=\s|[,.;，。；]|$)",
+    flags=re.IGNORECASE,
+)
 
 
 def _cartpole_description() -> SystemDescription:
@@ -828,7 +840,36 @@ def _diagnosis_signature(diagnosis: StructuralDiagnosis) -> tuple[str, ...]:
     )
 
 
-def _release_measurement_verified_session(
+def _initial_profile_assessment(
+    description: SystemDescription,
+    template: SpecificationTemplate,
+    *,
+    diagnostic_adapter: DiagnosticAdapter | None,
+    diagnosis: StructuralDiagnosis,
+    classification,
+    method_profile_id: str,
+) -> SpecificationAssessment:
+    initial = build_initial_specification_assessment(description, template)
+    if _PROFILE_VALUE_WITH_UNIT.search(description.text) is None:
+        return initial
+    try:
+        return assess_specification_text(
+            description.model_copy(deep=True),
+            template.model_copy(deep=True),
+            description.text,
+            previous=initial.model_copy(deep=True),
+            adapter=diagnostic_adapter,
+            diagnosis=diagnosis.model_copy(deep=True),
+            classification=classification.model_copy(deep=True),
+            method_profile_id=method_profile_id,
+        )
+    except Exception:  # noqa: BLE001 - optional provider prefill must fail closed
+        # Prefilling is optional. Provider timeouts or malformed extraction must
+        # never block the already-grounded classification or invent parameters.
+        return initial
+
+
+def _release_grounded_diagnosis_session(
     session: DiagnosticSessionState,
     diagnostic_adapter: DiagnosticAdapter | None,
     *,
@@ -836,8 +877,8 @@ def _release_measurement_verified_session(
 ) -> DiagnosticSessionState:
     """Rebuild all derived routing state from grounded diagnostic evidence."""
 
-    if session.status != "measurement_verified":
-        raise ValueError("only a measurement-verified session can be released")
+    if session.status not in {"description_grounded", "measurement_verified"}:
+        raise ValueError("only a grounded diagnostic session can be released")
     if diagnostic_adapter is None:
         raise ValueError(
             "releasing verified measurements requires a guided LLM adapter"
@@ -845,9 +886,15 @@ def _release_measurement_verified_session(
     if session.measurement_plan is None:
         raise ValueError("diagnostic session is missing its measurement plan")
 
+    evidence = (
+        [session.description_assessment]
+        if session.status == "description_grounded"
+        and session.description_assessment is not None
+        else session.measurement_history[: session.measurement_round_count]
+    )
     diagnosis = reduce_measurement_history_to_diagnosis(
         session.measurement_plan,
-        session.measurement_history,
+        evidence,
     )
     if not diagnosis.complete:
         payload = session.model_dump(mode="python")
@@ -855,9 +902,10 @@ def _release_measurement_verified_session(
             {
                 "current_diagnosis": diagnosis,
                 "evidence_level": "description_only",
+                "description_assessment": None,
                 "classification": None,
                 "semantic_selection": None,
-                "status": "awaiting_measurements",
+                "status": "collecting_description",
             }
         )
         return DiagnosticSessionState.model_validate(payload)
@@ -875,6 +923,22 @@ def _release_measurement_verified_session(
         )
     )
     profile = validate_semantic_selection(selection, raw_classification, catalog)
+    deterministic_selection = deterministic_profile_selection(
+        session.accumulated_description,
+        diagnosis,
+        raw_classification,
+        catalog,
+    )
+    if (
+        selection.simulation_profile_id
+        != deterministic_selection.simulation_profile_id
+        or selection.feature_bundle_id != deterministic_selection.feature_bundle_id
+        or selection.selected_feature_ids
+        != deterministic_selection.selected_feature_ids
+    ):
+        raise ValueError(
+            "selected simulation profile contradicts the grounded structural diagnosis"
+        )
     classification = apply_profile_to_classification(raw_classification, profile)
     plan = plan_safe_experiments(
         diagnosis, classification, session.accumulated_description
@@ -897,8 +961,13 @@ def _release_measurement_verified_session(
         selection,
     )
     template = specification_template_for_profile(selection.simulation_profile_id)
-    specification_assessment = build_initial_specification_assessment(
-        session.accumulated_description, template
+    specification_assessment = _initial_profile_assessment(
+        session.accumulated_description,
+        template,
+        diagnostic_adapter=diagnostic_adapter,
+        diagnosis=diagnosis,
+        classification=classification,
+        method_profile_id=selection.simulation_profile_id,
     )
     payload = session.model_dump(mode="python")
     payload.update(
@@ -992,17 +1061,32 @@ def run_cfdc_route(
         session = diagnostic_session_state
         if session.schema_version != "4.0":
             raise ValueError("only v4 diagnostic sessions are supported")
-        if session.status == "measurement_verified":
-            session = _release_measurement_verified_session(
+        if session.status in {"description_grounded", "measurement_verified"}:
+            session = _release_grounded_diagnosis_session(
                 session,
                 diagnostic_adapter,
                 use_mechanism_cards=use_mechanism_cards,
             )
         if measurement_response is not None:
             text = measurement_response.strip()
-            if not text:
+            confirmation_only = bool(
+                not text
+                and session.status
+                in {"awaiting_profile_measurements", "specification_conflict"}
+                and session.specification_assessment is not None
+                and session.specification_assessment.status == "ready"
+                and simulation_bounds_confirmed
+            )
+            if not text and not confirmation_only:
                 raise ValueError("measurement_response must be non-empty")
-            if session.status in {
+            if confirmation_only:
+                session = submit_specifications_to_session(
+                    session,
+                    "",
+                    specification_adapter=diagnostic_adapter,
+                    simulation_bounds_confirmed=True,
+                )
+            elif session.status in {
                 "awaiting_measurements",
                 "measurement_needs_more",
                 "measurement_conflict",
@@ -1018,10 +1102,10 @@ def run_cfdc_route(
                         "diagnostic session is missing its measurement plan"
                     )
                 assessment = diagnostic_adapter.extract_measurements(
-                    session.accumulated_description,
-                    session.measurement_plan,
+                    session.accumulated_description.model_copy(deep=True),
+                    session.measurement_plan.model_copy(deep=True),
                     text,
-                    session.measurement_assessment,
+                    deepcopy(session.measurement_assessment),
                 )
                 session = submit_measurement_assessment(
                     session,
@@ -1030,7 +1114,7 @@ def run_cfdc_route(
                     expected_revision=session.revision,
                 )
                 if session.status == "measurement_verified":
-                    session = _release_measurement_verified_session(
+                    session = _release_grounded_diagnosis_session(
                         session,
                         diagnostic_adapter,
                         use_mechanism_cards=use_mechanism_cards,
@@ -1053,10 +1137,13 @@ def run_cfdc_route(
                     )
                 newest_assessment = MeasurementAssessment.model_validate(
                     diagnostic_adapter.extract_measurements(
-                        session.accumulated_description,
-                        session.measurement_plan,
+                        session.accumulated_description.model_copy(deep=True),
+                        session.measurement_plan.model_copy(deep=True),
                         text,
-                        session.measurement_assessment,
+                        deepcopy(
+                            session.description_assessment
+                            or session.measurement_assessment
+                        ),
                     )
                 )
                 old_signature = _diagnosis_signature(session.current_diagnosis)
@@ -1065,6 +1152,7 @@ def run_cfdc_route(
                     session,
                     newest_assessment,
                     raw_response=text,
+                    expected_revision=session.revision,
                 )
                 if session.status not in {
                     "awaiting_profile_measurements",
@@ -1078,10 +1166,7 @@ def run_cfdc_route(
                         run_id=run_id,
                         use_mechanism_cards=use_mechanism_cards,
                     )
-                new_diagnosis = reduce_measurement_history_to_diagnosis(
-                    session.measurement_plan,
-                    session.measurement_history,
-                )
+                new_diagnosis = session.current_diagnosis
                 new_signature = _diagnosis_signature(new_diagnosis)
                 new_primary_class = None
                 if new_diagnosis.complete:
@@ -1102,8 +1187,10 @@ def run_cfdc_route(
                     accumulated_description, guided_items = apply_description_guidance(
                         session.accumulated_description,
                         diagnostic_adapter.guide_description(
-                            session.accumulated_description,
-                            [item.guidance for item in preliminary_checklist],
+                            session.accumulated_description.model_copy(deep=True),
+                            deepcopy(
+                                [item.guidance for item in preliminary_checklist]
+                            ),
                         ),
                         [item.guidance for item in preliminary_checklist],
                     )
@@ -1119,7 +1206,9 @@ def run_cfdc_route(
                         measurement_plan = validate_phrased_measurement_plan(
                             measurement_plan,
                             diagnostic_adapter.phrase_measurement_plan(
-                                accumulated_description, checklist, measurement_plan
+                                accumulated_description.model_copy(deep=True),
+                                deepcopy(checklist),
+                                measurement_plan.model_copy(deep=True),
                             ),
                         )
                     payload = session.model_dump(mode="python")
@@ -1156,6 +1245,7 @@ def run_cfdc_route(
                         text,
                         specification_adapter=diagnostic_adapter,
                         simulation_bounds_confirmed=simulation_bounds_confirmed,
+                        _revision_already_advanced=True,
                     )
                     if (
                         session.status
@@ -1189,6 +1279,12 @@ def run_cfdc_route(
                 diagnostic_adapter=diagnostic_adapter,
                 use_mechanism_cards=use_mechanism_cards,
             )
+            if session.status == "description_grounded":
+                session = _release_grounded_diagnosis_session(
+                    session,
+                    diagnostic_adapter,
+                    use_mechanism_cards=use_mechanism_cards,
+                )
         if evidence_package is not None:
             if (
                 session.current_diagnosis is None
@@ -1307,6 +1403,7 @@ def run_cfdc_route(
             )
         status_map = {
             "collecting_description": "need_more_information",
+            "description_grounded": "awaiting_profile_measurements",
             "awaiting_measurements": "awaiting_measurements",
             "measurement_needs_more": "measurement_needs_more",
             "measurement_conflict": "measurement_conflict",
@@ -1360,15 +1457,43 @@ def run_cfdc_route(
             diagnostic_adapter=diagnostic_adapter,
             use_mechanism_cards=use_mechanism_cards,
         )
+        if session.status == "description_grounded":
+            session = _release_grounded_diagnosis_session(
+                session,
+                diagnostic_adapter,
+                use_mechanism_cards=use_mechanism_cards,
+            )
         return CFDCRunReport(
             run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
             route_id=route_id,
-            status="awaiting_measurements",
-            system_description=description,
+            status=(
+                "awaiting_profile_measurements"
+                if session.status == "awaiting_profile_measurements"
+                else "need_more_information"
+            ),
+            system_description=session.accumulated_description,
             diagnosis=session.current_diagnosis,
             diagnostic_session=session,
-            notes=[session.measurement_plan.rationale],
-            evidence_boundary="record_only_measurement_guidance",
+            classification=session.classification,
+            semantic_selection=session.semantic_selection,
+            experiment_plan=session.experiment_plan,
+            evidence_requirement_plan=session.evidence_requirement_plan,
+            specification_templates=session.specification_templates,
+            specification_assessment=session.specification_assessment,
+            candidate_route=session.candidate_route,
+            compiled_route=session.compiled_route,
+            notes=[
+                (
+                    "The eight structural findings were grounded in the problem description."
+                    if session.evidence_level == "description_grounded"
+                    else "Complete the missing problem-description checklist items."
+                )
+            ],
+            evidence_boundary=(
+                "description_grounded_diagnosis"
+                if session.evidence_level == "description_grounded"
+                else "description_guidance_only"
+            ),
         )
     if (
         execution_mode == "user_object"
@@ -1437,9 +1562,13 @@ def run_cfdc_route(
     specification_template = specification_template_for_profile(
         semantic_selection.simulation_profile_id
     )
-    specification_assessment = build_initial_specification_assessment(
+    specification_assessment = _initial_profile_assessment(
         description,
         specification_template,
+        diagnostic_adapter=diagnostic_adapter,
+        diagnosis=diagnosis,
+        classification=classification,
+        method_profile_id=semantic_selection.simulation_profile_id,
     )
     compiled_specification_model: CompiledSpecificationModel | None = None
     if specification_text is not None and execution_mode == "user_object":

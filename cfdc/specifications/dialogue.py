@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import math
 import re
+from copy import deepcopy
 from typing import Any
 
 from cfdc.models import (
@@ -16,6 +17,7 @@ from cfdc.models import (
 )
 from cfdc.specifications.units import (
     normalize_scalar_unit,
+    normalize_unit_token,
     resolve_unit,
     unit_family,
     unit_is_actuator_per_input,
@@ -725,6 +727,192 @@ def _compact_physical_unit(value: str) -> str:
     )
 
 
+def _flatten_numeric_values(value) -> list[float]:
+    if isinstance(value, float):
+        return [value]
+    return [number for item in value for number in _flatten_numeric_values(item)]
+
+
+def _source_contains_unit(source_text: str, unit: str) -> bool:
+    normalized_source = (
+        source_text.replace("²", "^2")
+        .replace("³", "^3")
+        .replace("−", "-")
+        .replace("·", "*")
+        .replace("⋅", "*")
+        .replace("×", "*")
+    )
+    normalized_unit = normalize_unit_token(unit)
+    source_aliases = {
+        "s": {"s", "sec", "second", "seconds", "秒"},
+        "ms": {"ms", "millisecond", "milliseconds", "毫秒"},
+        "deg": {"deg", "degree", "degrees", "°", "度"},
+        "V": {"V", "volt", "volts", "伏"},
+        "A": {"A", "amp", "amps", "安"},
+        "W": {"W", "watt", "watts", "瓦"},
+        "N": {"N", "newton", "newtons", "牛"},
+        "kg": {"kg", "kilogram", "kilograms", "千克"},
+    }
+    candidates = {
+        str(unit).strip(),
+        normalized_unit,
+        *source_aliases.get(normalized_unit, set()),
+    }
+    for candidate in candidates:
+        if not candidate:
+            continue
+        prefix = r"(?<!\w)" if candidate[0].isalnum() else ""
+        suffix = r"(?!\w)" if candidate[-1].isalnum() else ""
+        if re.search(
+            prefix + re.escape(candidate) + suffix,
+            normalized_source,
+            flags=re.IGNORECASE,
+        ):
+            return True
+    return False
+
+
+def _source_contains_fact_value(source_text: str, fact: SpecificationFact) -> bool:
+    numeric_source = source_text.replace("−", "-").replace("–", "-")
+    attested = [float(value) for value in re.findall(_NUMBER, numeric_source)]
+    return all(
+        any(
+            math.isclose(value, expected, rel_tol=1e-12, abs_tol=1e-12)
+            for value in attested
+        )
+        for expected in _flatten_numeric_values(fact.value)
+    )
+
+
+def _validate_direct_fact_source(
+    fact: SpecificationFact,
+    source_texts: list[str],
+) -> None:
+    if fact.source_type == "derived_from_declared_physics":
+        return
+    joined_sources = "\n".join(source_texts).casefold()
+    if fact.source_text.casefold() not in joined_sources:
+        raise ValueError("source_text is not a verbatim user-provided excerpt")
+    if re.search(
+        r"(?:\b(?:unknown|not known)\b|\bis(?:n't| not)\s+[-+−]?\d|"
+        r"\b(?:does not|doesn't)\s+equal\b|\bnot\s+(?:equal to\s+)?[-+−]?\d|"
+        r"未知|不知道|不是\s*[-+−]?\d|不等于)",
+        fact.source_text,
+        flags=re.IGNORECASE,
+    ):
+        raise ValueError("source excerpt negates or does not establish the value")
+    if not _source_contains_fact_value(fact.source_text, fact):
+        raise ValueError("value does not match its source number")
+    if not _source_contains_unit(fact.source_text, fact.unit):
+        raise ValueError("unit does not match its source unit")
+
+
+def _validate_direct_fact_role(fact: SpecificationFact) -> None:
+    """Prevent a grounded number from being relabeled as another signal role."""
+
+    if fact.source_type == "derived_from_declared_physics":
+        return
+    input_signal = (
+        r"input|command|actuat|throttle|heater|valve|pump|voltage|current|power|"
+        r"force|torque|输入|命令|执行|油门|加热|阀|泵|电压|电流|功率|力|转矩"
+    )
+    output_signal = (
+        r"output|response|speed|temperature|level|position|输出|响应|车速|温度|液位|位置"
+    )
+    role_patterns = {
+        "input_change": (
+            rf"(?:input_change|{input_signal}).{{0,45}}"
+            r"(?:change|step|increment|变化|改变|增量)"
+        ),
+        "steady_output_change": (
+            rf"(?:steady|final|稳态|最终|{output_signal}).{{0,45}}"
+            r"(?:change|变化|改变量)"
+        ),
+        "response_time_s": (
+            r"(?:response|63\s*%|time constant|takes?|reach|settling|"
+            r"响应|达到|时间常数|需要|稳定时间)"
+        ),
+        "dead_time_s": r"(?:dead time|delay|wait|silent|时延|延迟|等待|静默)",
+        "input_min": (
+            rf"(?:(?:input_min|{input_signal}).{{0,45}}"
+            r"(?:min|lower|range|下限|范围|最小)|"
+            rf"(?:min|lower|range|下限|范围|最小).{{0,45}}(?:{input_signal}|"
+            r"[-+−]?\d+(?:\.\d+)?\s*(?:v|a|w|n|nm|normalized_input)))"
+        ),
+        "input_max": (
+            rf"(?:(?:input_max|{input_signal}).{{0,45}}"
+            r"(?:max|upper|range|上限|范围|最大)|"
+            rf"(?:max|upper|range|上限|范围|最大).{{0,45}}(?:{input_signal}|"
+            r"[-+−]?\d+(?:\.\d+)?\s*(?:v|a|w|n|nm|normalized_input)))"
+        ),
+        "output_min": (
+            rf"(?:(?:output_min|{output_signal}).{{0,45}}"
+            r"(?:min|lower|range|bound|下限|范围|边界|最小)|"
+            rf"(?:min|lower|range|bound|下限|范围|边界|最小).{{0,45}}(?:{output_signal}))"
+        ),
+        "output_max": (
+            rf"(?:(?:output_max|{output_signal}).{{0,45}}"
+            r"(?:max|upper|range|bound|上限|范围|边界|最大)|"
+            rf"(?:max|upper|range|bound|上限|范围|边界|最大).{{0,45}}(?:{output_signal}))"
+        ),
+        "oscillation_period_s": r"(?:oscillation_period|period|frequency|peak interval|周期|频率|峰值间隔)",
+        "successive_peak_ratio": r"(?:successive_peak_ratio|peak ratio|next peak|相邻峰值|下一峰值)",
+        "acceleration_change": r"(?:acceleration_change|acceleration|加速度)",
+        "mass_kg": r"(?:mass_kg|effective mass|moving mass|load mass|有效质量|运动质量|负载质量)",
+        "stiffness_n_m": r"(?:stiffness_n_m|stiffness|spring constant|刚度|弹簧常数)",
+        "damping_n_s_m": r"(?:damping_n_s_m|damping|viscous friction|阻尼|粘性摩擦)",
+        "actuator_force_per_input": r"(?:actuator_force_per_input|force per|torque per|每个命令.*(?:力|转矩)|推力|转矩)",
+        "motion_time_scale_s": r"(?:motion_time_scale|target change|motion time|takes?|目标变化|运动时间|需要)",
+        "inverse_peak_change": r"(?:inverse_peak_change|inverse peak|reverse peak|反向峰值)",
+        "inverse_recovery_time_s": r"(?:inverse_recovery_time|recover.*(?:peak|operating point)|反向峰值.*恢复|恢复.*工作点)",
+        "complete_numeric_model": r"(?:complete_numeric_model|numeric model|transfer function|state.space|数值模型|传递函数|状态空间)",
+        "cart_mass_kg": r"(?:cart_mass_kg|cart mass|小车质量|车体质量)",
+        "pole_mass_kg": r"(?:pole_mass_kg|pole mass|rod mass|摆杆质量|杆质量)",
+        "com_length_m": r"(?:com_length_m|center of mass length|com length|质心长度|质心距离)",
+        "pole_inertia_kg_m2": r"(?:pole_inertia_kg_m2|pole inertia|rod inertia|摆杆惯量|杆转动惯量)",
+        "cart_friction_n_s_m": r"(?:cart_friction_n_s_m|cart friction|track friction|小车摩擦|轨道摩擦)",
+        "gravity_m_s2": r"(?:gravity_m_s2|gravity|gravitational|重力加速度)",
+        "force_limit_n": r"(?:force_limit_n|force limit|maximum force|力限制|最大作用力)",
+        "cart_position_limit_m": r"(?:cart_position_limit_m|cart position limit|track limit|小车位置限制|轨道边界)",
+        "pitch_inertia_kg_m2": r"(?:pitch_inertia_kg_m2|pitch inertia|俯仰惯量)",
+        "linear_drag_n_s_m": r"(?:linear_drag_n_s_m|linear drag|translational drag|线性阻力|平移阻力)",
+        "pitch_damping_n_m_s": r"(?:pitch_damping_n_m_s|pitch damping|俯仰阻尼)",
+        "thrust_min_n": r"(?:thrust_min_n|minimum thrust|thrust lower|最小推力|推力下限)",
+        "thrust_max_n": r"(?:thrust_max_n|maximum thrust|thrust upper|最大推力|推力上限)",
+        "torque_limit_n_m": r"(?:torque_limit_n_m|torque limit|maximum torque|转矩限制|最大转矩)",
+        "max_tilt_rad": r"(?:max_tilt_rad|maximum tilt|tilt limit|最大倾角|倾角限制)",
+        "max_altitude_error": r"(?:max_altitude_error|altitude error|高度误差)",
+        "local_gain_matrix": r"(?:local_gain_matrix|local gain matrix|gain matrix|局部增益矩阵|增益矩阵)",
+        "local_time_constant_s": r"(?:local_time_constant|local time constant|局部时间常数)",
+    }
+    pattern = role_patterns.get(fact.fact_id)
+    if pattern is None:
+        return
+    clauses = [
+        clause.strip()
+        for clause in re.split(
+            r"(?:[。;；!?！？\n]+|[,.]\s+|，|\b(?:and|while|whereas)\b|"
+            r"以及|同时|而)",
+            fact.source_text,
+            flags=re.IGNORECASE,
+        )
+        if clause.strip()
+    ]
+    role_clauses = [
+        clause for clause in clauses if re.search(pattern, clause.casefold())
+    ]
+    if not role_clauses:
+        raise ValueError("source excerpt does not identify the requested signal role")
+    if isinstance(fact.value, float) and not any(
+        _source_contains_fact_value(clause, fact)
+        and _source_contains_unit(clause, fact.unit)
+        for clause in role_clauses
+    ):
+        raise ValueError(
+            "source value and unit must appear in the same clause as the requested signal role"
+        )
+
+
 def _validate_derivation_sources(
     fact: SpecificationFact, source_texts: list[str]
 ) -> None:
@@ -918,7 +1106,9 @@ def validate_specification_assessment_payload(
                 continue
             try:
                 fact = SpecificationFact.model_validate(raw_fact)
+                _validate_direct_fact_source(fact, source_texts)
                 normalized = _normalize_fact_for_field(fact, field)
+                _validate_direct_fact_role(fact)
                 normalized = _verify_registered_derivation(
                     normalized,
                     source_texts=source_texts,
@@ -994,12 +1184,53 @@ def validate_specification_assessment_payload(
         "三次",
     }
     for question in assessment.questions:
-        rendered = f"{question.prompt} {question.why_needed} {question.where_to_find} {question.example}".lower()
+        rendered = (
+            f"{question.prompt} {question.why_needed} "
+            f"{question.where_to_find} {question.example}"
+        ).lower()
         if any(term in rendered for term in forbidden_user_facing_terms):
             raise ValueError(
                 "LLM user-facing specification question exposed an internal field or forbidden test protocol"
             )
-    return assessment
+        imperative_text = f"{question.prompt} {question.example}"
+        if re.search(
+            r"(?:^|[.!?。！？]\s*)(?:please\s+)?"
+            r"(?:set|apply|increase|decrease|change|step|command|drive|"
+            r"actuate|switch|move|run|observe|measure|hold|wait|turn|open|close)\b|"
+            r"\b(?:and|then)\s+(?:observe|measure|wait|hold|record)\b|"
+            r"(?:^|[。！？]\s*)(?:请)?(?:(?:将|把).{0,25})?"
+            r"(?:设置|施加|提高|降低|改变|驱动|操作|启动|打开|关闭|等待|观察|测量)",
+            imperative_text,
+            flags=re.IGNORECASE,
+        ):
+            raise ValueError(
+                "LLM Profile questions must not instruct physical hardware actions"
+            )
+        if re.search(
+            r"(?:\b(?:apply|command|actuate|switch|move)\b|"
+            r"\brun\b.{0,20}\bexperiment\b|施加|下发|驱动|操作|启动)"
+            r".{0,80}(?:\d|physical|hardware|actuator|heater|valve|"
+            r"实体|硬件|执行器|加热器|阀)",
+            rendered,
+            flags=re.IGNORECASE,
+        ):
+            raise ValueError(
+                "LLM Profile questions must not instruct physical hardware actions"
+            )
+        if re.search(
+            r"(?:record|manual|log|document|specification|software simulation|"
+            r"已有记录|现有记录|手册|日志|文档|规格|软件仿真)",
+            question.where_to_find,
+            flags=re.IGNORECASE,
+        ) is None:
+            raise ValueError(
+                "LLM Profile questions require a record-only, manual, or software source"
+            )
+    # Provider-authored question prose is never retained.  The deterministic
+    # template builder below renders the same missing facts as record/manual/
+    # software-only prompts, so a model cannot smuggle a hardware procedure into
+    # the primary UI through polite or paraphrased wording.
+    return assessment.model_copy(update={"questions": []})
 
 
 def assess_specification_text(
@@ -1028,13 +1259,13 @@ def assess_specification_text(
     ]
     if adapter is not None and hasattr(adapter, "assess_specifications"):
         payload = adapter.assess_specifications(
-            description,
-            diagnosis,
-            classification,
+            description.model_copy(deep=True),
+            deepcopy(diagnosis),
+            deepcopy(classification),
             method_profile_id or template.method_profile_id,
-            [template],
-            history,
-            previous,
+            [template.model_copy(deep=True)],
+            deepcopy(history),
+            deepcopy(previous),
         )
         incoming = validate_specification_assessment_payload(
             payload,
@@ -1051,13 +1282,6 @@ def assess_specification_text(
             facts=facts,
             conflicts=[*incoming.conflicts, *local_conflicts, *llm_conflicts],
         )
-        if rebuilt.status == "need_more" and incoming.questions:
-            missing = set(rebuilt.missing_fact_ids)
-            if all(
-                set(question.requested_fact_ids).issubset(missing)
-                for question in incoming.questions
-            ):
-                rebuilt = rebuilt.model_copy(update={"questions": incoming.questions})
         return _with_submission_diagnostics(
             rebuilt,
             previous,

@@ -8,6 +8,7 @@ from cfdc.models import CFDCRunReport
 
 STATUS_LABELS = {
     "collecting_description": "补充问题描述",
+    "description_grounded": "问题描述已核验",
     "awaiting_measurements": "等待现有记录",
     "measurement_needs_more": "仍需补充现有记录",
     "measurement_conflict": "测量记录存在冲突",
@@ -57,27 +58,26 @@ CHECKLIST_LABELS = {
 CHECKLIST_STATUS_LABELS = {
     "missing": "○ 缺少描述",
     "described": "✓ 已有线索",
+    "description_verified": "✓ 描述证据已核验",
     "verified": "✓ 测量已验证",
 }
 
 STAGES = [
     (
-        "问题描述",
-        lambda report: bool(
-            report.system_description and report.system_description.text.strip()
-        ),
-    ),
-    (
-        "AI 测量计划",
-        lambda report: _measurement_plan_released(report),
-    ),
-    (
-        "测量回填",
-        lambda report: _measurement_evidence_released(report),
+        "问题描述与八项 checklist",
+        lambda report: _description_checklist_complete(report),
     ),
     (
         "系统分类",
         lambda report: _classification_released(report),
+    ),
+    (
+        "核心参数测量计划",
+        lambda report: _profile_measurement_plan_released(report),
+    ),
+    (
+        "参数回填与模型编译",
+        lambda report: _model_released(report),
     ),
     (
         "初始控制器",
@@ -180,11 +180,23 @@ def _measurement_plan_released(report: CFDCRunReport) -> bool:
     )
 
 
+def _description_checklist_complete(report: CFDCRunReport) -> bool:
+    session = report.diagnostic_session
+    if session is None:
+        return bool(report.system_description and report.system_description.text.strip())
+    return bool(session.checklist) and all(
+        item.status != "unknown" for item in session.checklist
+    )
+
+
 def _measurement_evidence_released(report: CFDCRunReport) -> bool:
     if _effective_status(report) in _PRE_MEASUREMENT_STATUSES:
         return False
     session = report.diagnostic_session
-    return session is None or session.evidence_level == "measurement_verified"
+    return session is None or session.evidence_level in {
+        "description_grounded",
+        "measurement_verified",
+    }
 
 
 def _classification_released(report: CFDCRunReport) -> bool:
@@ -192,6 +204,17 @@ def _classification_released(report: CFDCRunReport) -> bool:
         _measurement_evidence_released(report)
         and report.classification
         and report.semantic_selection
+    )
+
+
+def _profile_measurement_plan_released(report: CFDCRunReport) -> bool:
+    return bool(
+        _model_released(report)
+        or (
+            _classification_released(report)
+            and report.specification_assessment is not None
+            and report.specification_templates
+        )
     )
 
 
@@ -264,7 +287,7 @@ def checklist_rows(report: CFDCRunReport) -> list[list[str]]:
         )
     }
     fact_by_field = {}
-    assessment = session.measurement_assessment
+    assessment = session.description_assessment or session.measurement_assessment
     if assessment is not None:
         for fact in assessment.facts:
             field_id = request_field_by_id.get(fact.request_id)
@@ -274,7 +297,11 @@ def checklist_rows(report: CFDCRunReport) -> list[list[str]]:
     for item in session.checklist:
         fact = fact_by_field.get(item.diagnostic_field_id)
         if fact is not None:
-            state = "verified"
+            state = (
+                "description_verified"
+                if session.description_assessment is not None
+                else "verified"
+            )
             evidence = fact.source_excerpt
         elif item.status == "unknown":
             state = "missing"
@@ -292,11 +319,26 @@ def checklist_rows(report: CFDCRunReport) -> list[list[str]]:
     return rows
 
 
+def checklist_presentation(report: CFDCRunReport) -> tuple[str, bool]:
+    session = report.diagnostic_session
+    if session is None or not session.checklist:
+        return "诊断检查清单（0/8 已完成）", False
+    completed = sum(item.status != "unknown" for item in session.checklist)
+    total = len(session.checklist)
+    grounded = bool(
+        completed == total
+        and session.evidence_level in {
+            "description_grounded",
+            "measurement_verified",
+        }
+    )
+    return f"诊断检查清单（{completed}/{total} 已完成）", grounded
+
+
 def measurement_guidance_markdown(report: CFDCRunReport) -> str:
     session = report.diagnostic_session
     if session is None or session.measurement_plan is None:
         return ""
-    requests = session.measurement_plan.requests
     description_complete = bool(session.checklist) and all(
         item.status != "unknown" for item in session.checklist
     )
@@ -307,29 +349,11 @@ def measurement_guidance_markdown(report: CFDCRunReport) -> str:
             "“控制问题描述”栏继续补充，然后再次点击“检查描述并继续”。"
             "在八项全部完成前，不会显示测量要求或测量回复入口。"
         )
-    lines = [
-        "### 八项问题描述已完成：请按以下 instruction 准备测量数据",
-        "请只查找或整理已有记录、日志或手册，不要为回答这些问题操作真实硬件。",
-        (
-            "请把相应的值和原文摘录反馈给 AI；数值还要注明单位，"
-            "没有记录的项目请明确写“不知道”。"
-        ),
-    ]
-    for index, request in enumerate(requests, start=1):
-        unit = f"；数值单位提示：{request.unit_hint}" if request.unit_hint else ""
-        lines.append(
-            f"{index}. **{CHECKLIST_LABELS[request.diagnostic_field_id]}** "
-            f"(`{request.request_id}`){unit}  \n"
-            f"   来源：{request.source_hint}  \n"
-            f"   回填：{request.report_template}  \n"
-            f"   范围：`{request.safety_scope}`"
-        )
-    assessment = session.measurement_assessment
-    if assessment is not None:
-        lines.append(f"\n**上轮核验：** {assessment.rationale}")
-        if assessment.conflicts:
-            lines.extend(f"- ⚠️ {item}" for item in assessment.conflicts)
-    return "\n\n".join(lines)
+    # The fixed eight-item plan is retained in the session only for auditing and
+    # compatibility with verified v4 sessions. Once the description itself has
+    # grounded all eight structural fields, the user-facing task is the selected
+    # Profile's concrete parameter questions, not a repetition of these facts.
+    return ""
 
 
 def guided_timeline_markdown(report: CFDCRunReport) -> str:
@@ -775,8 +799,9 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
             )
     rejected = ""
     if assessment.rejected_facts:
-        rejected = "\n\n**本次未采纳的内容**" + "".join(
-            f"\n- ⚠️ {item}" for item in assessment.rejected_facts
+        rejected = (
+            "\n\n- ⚠️ 有些内容未能从原文核验；"
+            "请按下方仍缺少的项目补充数值与单位。"
         )
     missing = ""
     if assessment.missing_fact_ids:
@@ -903,6 +928,7 @@ def clarification_items(report: CFDCRunReport) -> list[tuple[str, str]]:
 
 def render_report(report: CFDCRunReport) -> dict[str, Any]:
     session = report.diagnostic_session
+    checklist_title, checklist_collapsed = checklist_presentation(report)
     profile_guidance_active = bool(
         report.specification_assessment is not None
         and session is not None
@@ -932,6 +958,8 @@ def render_report(report: CFDCRunReport) -> dict[str, Any]:
         "performance": performance_rows(report),
         "raw": _compact_report(report),
         "checklist": checklist_rows(report),
+        "checklist_title": checklist_title,
+        "checklist_collapsed": checklist_collapsed,
         "measurement_guidance": shared_measurement_guidance,
         "timeline": guided_timeline_markdown(report),
         "technical_visibility": technical_visibility(report),

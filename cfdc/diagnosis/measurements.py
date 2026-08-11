@@ -8,6 +8,7 @@ from cfdc.models import (
     DescriptionGuidance,
     DescriptionGuidanceAssessment,
     DiagnosticChecklistItem,
+    MeasuredFact,
     MeasurementAssessment,
     MeasurementPlan,
     MeasurementRequest,
@@ -290,19 +291,29 @@ def apply_description_guidance(
         raise ValueError(
             "adapter guidance must exactly preserve deterministic safe guidance"
         )
-    for item in assessment.guidance:
-        if (
-            item.response.casefold() != "unknown"
-            and item.response not in description.text
-        ):
-            raise ValueError(
-                "description guidance response must appear verbatim in the original description"
-            )
-    for item in [*assessment.observed_outputs, *assessment.actuators]:
-        if item.source_excerpt not in description.text:
-            raise ValueError(
-                "description signal source_excerpt must appear verbatim in the original description"
-            )
+    grounded_guidance = [
+        (
+            item
+            if item.response.casefold() == "unknown"
+            or item.response in description.text
+            else item.model_copy(update={"response": "unknown"})
+        )
+        for item in assessment.guidance
+    ]
+    grounded_outputs = [
+        item
+        for item in assessment.observed_outputs
+        if item.source_excerpt in description.text
+        and _normalize_whitespace(item.name).casefold()
+        in _normalize_whitespace(item.source_excerpt).casefold()
+    ]
+    grounded_actuators = [
+        item
+        for item in assessment.actuators
+        if item.source_excerpt in description.text
+        and _normalize_whitespace(item.name).casefold()
+        in _normalize_whitespace(item.source_excerpt).casefold()
+    ]
 
     def merged(existing: list[str], extracted) -> list[str]:
         result = list(existing)
@@ -314,12 +325,12 @@ def apply_description_guidance(
     updated = description.model_copy(
         update={
             "observed_outputs": merged(
-                description.observed_outputs, assessment.observed_outputs
+                description.observed_outputs, grounded_outputs
             ),
-            "actuators": merged(description.actuators, assessment.actuators),
+            "actuators": merged(description.actuators, grounded_actuators),
         }
     )
-    return updated, assessment.guidance
+    return updated, grounded_guidance
 
 
 def apply_guidance_responses_to_checklist(
@@ -348,9 +359,16 @@ def apply_guidance_responses_to_checklist(
             )
             continue
         if response not in description_text:
-            raise ValueError(
-                "description guidance response must appear verbatim in the original description"
+            result.append(
+                item.model_copy(
+                    update={
+                        "status": "unknown",
+                        "evidence": [],
+                        "guidance": guided.model_copy(update={"response": "unknown"}),
+                    }
+                )
             )
+            continue
         result.append(
             item.model_copy(
                 update={
@@ -361,6 +379,190 @@ def apply_guidance_responses_to_checklist(
             )
         )
     return result
+
+
+_EPISTEMIC_NEGATION = re.compile(
+    r"(?:none of the following|not (?:known|supported|established)|"
+    r"unknown or unsupported|no (?:record|evidence) supports|"
+    r"cannot be (?:established|determined)|\b(?:unknown|unsupported)\b|"
+    r"以下[^。！？]*?(?:均|都)[^。！？]*?(?:未知|无记录|没有记录|不受支持)|"
+    r"(?:无法|不能)[^。！？]*?(?:确认|确定|判断)|"
+    r"没有[^。！？]*?(?:记录|证据)[^。！？]*?支持|"
+    r"(?:尚)?未知|不知道|尚不清楚|不清楚)",
+    flags=re.IGNORECASE,
+)
+
+_CLAUSE_SEPARATOR = re.compile(
+    r"[,，;；]|\b(?:but|however)\b|但|不过|然而", re.IGNORECASE
+)
+
+
+def _excerpt_has_nonnegated_occurrence(context: str, excerpt: str) -> bool:
+    start = 0
+    while True:
+        index = context.find(excerpt, start)
+        if index < 0:
+            return False
+        sentence_start = max(
+            context.rfind(delimiter, 0, index) for delimiter in ".。!?！？\n"
+        )
+        sentence_end_candidates = [
+            position
+            for delimiter in ".。!?！？\n"
+            if (position := context.find(delimiter, index + len(excerpt))) >= 0
+        ]
+        sentence_end = min(sentence_end_candidates, default=len(context))
+        sentence = context[sentence_start + 1 : sentence_end]
+        relative_start = index - sentence_start - 1
+        relative_end = relative_start + len(excerpt)
+        separators = list(_CLAUSE_SEPARATOR.finditer(sentence))
+        clause_start = max(
+            (match.end() for match in separators if match.end() <= relative_start),
+            default=0,
+        )
+        clause_end = min(
+            (match.start() for match in separators if match.start() >= relative_end),
+            default=len(sentence),
+        )
+        local_clause = sentence[clause_start:clause_end]
+        colon_index = max(
+            context.rfind(delimiter, 0, index) for delimiter in ":："
+        )
+        colon_scope_is_negated = False
+        if colon_index >= 0:
+            colon_sentence_start = max(
+                context.rfind(delimiter, 0, colon_index)
+                for delimiter in ".。!?！？\n"
+            )
+            colon_scope_is_negated = (
+                _EPISTEMIC_NEGATION.search(
+                    context[colon_sentence_start + 1 : colon_index]
+                )
+                is not None
+            )
+        if (
+            _EPISTEMIC_NEGATION.search(local_clause) is None
+            and not colon_scope_is_negated
+        ):
+            return True
+        start = index + max(1, len(excerpt))
+
+
+def description_excerpt_answers_field(
+    field_id: str,
+    excerpt: str,
+    *,
+    context: str | None = None,
+) -> bool:
+    """Return whether the deterministic field parser understands this excerpt."""
+
+    from cfdc.diagnosis.engine import infer_description_field_assessment
+
+    if infer_description_field_assessment(field_id, excerpt) is None:
+        return False
+    return context is None or _excerpt_has_nonnegated_occurrence(context, excerpt)
+
+
+def filter_description_checklist_semantics(
+    checklist: list[DiagnosticChecklistItem],
+    description_text: str,
+) -> list[DiagnosticChecklistItem]:
+    """Turn field-mismatched LLM excerpts back into unanswered checklist items."""
+
+    result = []
+    for item in checklist:
+        if (
+            item.status != "unknown"
+            and item.evidence
+            and description_excerpt_answers_field(
+                item.diagnostic_field_id,
+                item.evidence[0],
+                context=description_text,
+            )
+        ):
+            result.append(item)
+            continue
+        result.append(
+            item.model_copy(
+                update={
+                    "status": "unknown",
+                    "evidence": [],
+                    "guidance": item.guidance.model_copy(
+                        update={"response": "unknown"}
+                    ),
+                }
+            )
+        )
+    return result
+
+
+def validate_diagnostic_assessment_semantics(
+    plan: MeasurementPlan,
+    assessment: MeasurementAssessment,
+    *,
+    description_text: str | None = None,
+) -> None:
+    """Require every diagnostic fact to answer its declared checklist field."""
+
+    validate_measurement_assessment(plan, assessment)
+    requests = {request.request_id: request for request in plan.requests}
+    for fact in assessment.facts:
+        field_id = requests[fact.request_id].diagnostic_field_id
+        if not description_excerpt_answers_field(
+            field_id,
+            fact.source_excerpt,
+            context=description_text,
+        ):
+            raise ValueError(
+                f"description excerpt does not answer diagnostic field {field_id}"
+            )
+
+
+def validate_description_assessment_semantics(
+    plan: MeasurementPlan,
+    assessment: MeasurementAssessment,
+    description_text: str | None = None,
+) -> None:
+    """Backward-compatible name for the strict diagnostic semantic gate."""
+
+    validate_diagnostic_assessment_semantics(
+        plan,
+        assessment,
+        description_text=description_text,
+    )
+
+
+def build_description_assessment(
+    plan: MeasurementPlan,
+    checklist: list[DiagnosticChecklistItem],
+    description_text: str,
+) -> tuple[MeasurementAssessment | None, StructuralDiagnosis | None]:
+    """Turn eight verbatim checklist excerpts into grounded diagnostic evidence."""
+
+    if any(item.status == "unknown" or not item.evidence for item in checklist):
+        return None, None
+    assessment = MeasurementAssessment(
+        status="ready",
+        facts=[
+            MeasuredFact(
+                request_id=item.diagnostic_field_id,
+                source_excerpt=item.evidence[0],
+                text_value=item.evidence[0],
+            )
+            for item in checklist
+        ],
+        rationale=(
+            "All eight structural findings are grounded in verbatim problem-description excerpts."
+        ),
+    )
+    validate_grounded_measurement_assessment(plan, assessment, description_text)
+    validate_description_assessment_semantics(
+        plan,
+        assessment,
+        description_text,
+    )
+    diagnosis = reduce_measurement_history_to_diagnosis(plan, [assessment])
+    return (assessment if diagnosis.complete else None), diagnosis
 
 
 def render_measurement_evidence(
@@ -415,11 +617,16 @@ def reduce_measurement_history_to_diagnosis(
             ):
                 latest_fact_by_request[request_id] = None
 
-    from cfdc.diagnosis.engine import infer_structural_diagnosis
+    from cfdc.diagnosis.engine import infer_structural_field_from_excerpt
 
     resolved_fields = {}
     for request_id, request in request_by_id.items():
         fact = latest_fact_by_request[request_id]
+        if fact is not None and not description_excerpt_answers_field(
+            request.diagnostic_field_id,
+            fact.source_excerpt,
+        ):
+            fact = None
         parts = ["No validated evidence is available for this field."]
         if fact is not None:
             parts = [fact.source_excerpt]
@@ -427,9 +634,11 @@ def reduce_measurement_history_to_diagnosis(
                 parts.append(fact.text_value)
             if fact.numeric_value is not None:
                 parts.append(f"{fact.numeric_value:.17g} {fact.unit}")
-        isolated = infer_structural_diagnosis(SystemDescription(text="\n".join(parts)))
-        resolved_fields[request.diagnostic_field_id] = getattr(
-            isolated, request.diagnostic_field_id
+        resolved_fields[request.diagnostic_field_id] = (
+            infer_structural_field_from_excerpt(
+                request.diagnostic_field_id,
+                "\n".join(parts),
+            )
         )
 
     complete = all(field.status != "unknown" for field in resolved_fields.values())
