@@ -2273,6 +2273,38 @@ def specification_candidate_report(guided_adapter):
     return report
 
 
+def test_automatically_confirmed_profile_action_is_disabled(
+    specification_candidate_report,
+):
+    outputs = web_ui._outputs(specification_candidate_report, {})
+
+    assert outputs[17]["visible"] is False
+    assert outputs[18]["visible"] is True
+    assert outputs[18]["interactive"] is False
+    assert outputs[19]["value"] is True
+    assert outputs[19]["interactive"] is False
+
+
+def test_automatic_confirmation_replay_does_not_require_llm(
+    specification_candidate_report,
+):
+    session = specification_candidate_report.diagnostic_session
+    replayed, next_state = submit_app_measurement_response(
+        {
+            "session": session.model_dump(mode="json"),
+            "use_llm": False,
+            "include_trajectory": False,
+            "input_source": "natural_language",
+        },
+        "",
+        simulation_bounds_confirmed=True,
+    )
+
+    assert replayed.status == "candidate_unvalidated"
+    assert replayed.diagnostic_session.status == "specification_model_ready"
+    assert next_state["session"] is None
+
+
 def test_outer_terminal_rejection_overrides_model_ready_session_status(
     specification_candidate_report,
 ):

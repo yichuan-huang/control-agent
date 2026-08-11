@@ -435,6 +435,33 @@ class SpecificationAssessment(CFDCModel):
         return self
 
 
+class ProfileFactCandidate(CFDCModel):
+    """One Profile fact found before the structural diagnosis selects a template."""
+
+    template_id: str = Field(min_length=1)
+    fact: SpecificationFact
+
+
+class ProfileFactCandidateAssessment(CFDCModel):
+    """Template-scoped Profile facts extracted from description evidence."""
+
+    candidates: list[ProfileFactCandidate] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    rejected_facts: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_unique_candidates(self) -> ProfileFactCandidateAssessment:
+        identities = [
+            (candidate.template_id, candidate.fact.fact_id)
+            for candidate in self.candidates
+        ]
+        if len(identities) != len(set(identities)):
+            raise ValueError(
+                "Profile fact candidates may contain only one fact per template and field"
+            )
+        return self
+
+
 class TransferFunctionModelSpec(CFDCModel):
     kind: Literal["transfer_function"] = "transfer_function"
     numerator: list[float] = Field(min_length=1)
@@ -1499,6 +1526,7 @@ class DiagnosticSessionState(CFDCModel):
     specification_templates: list[SpecificationTemplate] = Field(default_factory=list)
     specification_assessment: SpecificationAssessment | None = None
     specification_answer_history: list[str] = Field(default_factory=list)
+    description_profile_assessment: ProfileFactCandidateAssessment | None = None
     compiled_specification_model: CompiledSpecificationModel | None = None
     pending_clarification_questions: list[str] = Field(default_factory=list)
     candidate_route: CandidateRouteIR | None = None

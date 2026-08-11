@@ -458,11 +458,61 @@ def description_excerpt_answers_field(
     return context is None or _excerpt_has_nonnegated_occurrence(context, excerpt)
 
 
+_DESCRIPTION_SENTENCE_BOUNDARY = re.compile(
+    r"(?<=[。！？!?])|(?<=\.)(?=\s|$)|\n+"
+)
+
+
+def _description_excerpt_candidates(description_text: str) -> list[str]:
+    """Return short, verbatim evidence candidates before wider context blocks."""
+
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in re.split(r"\n\s*\n+", description_text)
+        if paragraph.strip()
+    ]
+    candidates: list[str] = []
+    for paragraph in paragraphs:
+        sentences = [
+            sentence.strip()
+            for sentence in _DESCRIPTION_SENTENCE_BOUNDARY.split(paragraph)
+            if sentence.strip()
+        ]
+        candidates.extend(sentences)
+        if len(sentences) <= 2:
+            candidates.append(paragraph)
+    return list(dict.fromkeys(candidates))
+
+
+def _deterministic_description_excerpt(
+    field_id: str,
+    description_text: str,
+) -> str | None:
+    """Find unambiguous field evidence when the optional LLM misses an excerpt."""
+
+    from cfdc.diagnosis.engine import infer_description_field_assessment
+
+    matches: list[tuple[str, str]] = []
+    for excerpt in _description_excerpt_candidates(description_text):
+        if not description_excerpt_answers_field(
+            field_id,
+            excerpt,
+            context=description_text,
+        ):
+            continue
+        assessment = infer_description_field_assessment(field_id, excerpt)
+        if assessment is not None:
+            matches.append((assessment, excerpt))
+    if len({assessment for assessment, _ in matches}) != 1:
+        return None
+    return min((excerpt for _, excerpt in matches), key=len, default=None)
+
+
 def filter_description_checklist_semantics(
     checklist: list[DiagnosticChecklistItem],
     description_text: str,
 ) -> list[DiagnosticChecklistItem]:
-    """Turn field-mismatched LLM excerpts back into unanswered checklist items."""
+    """Validate LLM excerpts and backfill deterministic verbatim evidence."""
 
     result = []
     for item in checklist:
@@ -476,6 +526,23 @@ def filter_description_checklist_semantics(
             )
         ):
             result.append(item)
+            continue
+        deterministic_excerpt = _deterministic_description_excerpt(
+            item.diagnostic_field_id,
+            description_text,
+        )
+        if deterministic_excerpt is not None:
+            result.append(
+                item.model_copy(
+                    update={
+                        "status": "inferred",
+                        "evidence": [deterministic_excerpt],
+                        "guidance": item.guidance.model_copy(
+                            update={"response": deterministic_excerpt}
+                        ),
+                    }
+                )
+            )
             continue
         result.append(
             item.model_copy(

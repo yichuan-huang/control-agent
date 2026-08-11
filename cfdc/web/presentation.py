@@ -62,6 +62,36 @@ CHECKLIST_STATUS_LABELS = {
     "verified": "✓ 测量已验证",
 }
 
+PROFILE_FACT_LABELS = {
+    "input_change": "已知输入变化量",
+    "steady_output_change": "最终输出变化量",
+    "response_time_s": "63% 响应时间",
+    "dead_time_s": "纯等待时间",
+    "input_min": "输入仿真下限",
+    "input_max": "输入仿真上限",
+    "output_min": "输出仿真下限",
+    "output_max": "输出仿真上限",
+}
+
+
+def _unique_profile_candidates(assessment):
+    seen: set[tuple[str, str, str, str]] = set()
+    unique = []
+    for candidate in assessment.candidates:
+        fact = candidate.fact
+        identity = (
+            fact.fact_id,
+            json.dumps(fact.value, ensure_ascii=False, sort_keys=True),
+            fact.unit,
+            fact.source_text,
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        unique.append(candidate)
+    return unique
+
+
 STAGES = [
     (
         "问题描述与八项 checklist",
@@ -346,11 +376,13 @@ def measurement_guidance_markdown(report: CFDCRunReport) -> str:
         item.status != "unknown" for item in session.checklist
     )
     if not description_complete:
+        profile_hint = profile_candidate_markdown(report)
         return (
             "### 八项问题描述尚未完成\n\n"
             "请查看 checklist 中标为 `○ 缺少描述` 的项目。请直接在左侧"
             "“控制问题描述”栏继续补充，然后再次点击“检查描述并继续”。"
-            "在八项全部完成前，不会显示测量要求或测量回复入口。"
+            "在八项全部完成前，不会显示 Profile 补充问题或测量回复入口。"
+            f"{profile_hint}"
         )
     # The fixed eight-item plan is retained in the session only for auditing and
     # compatibility with verified v4 sessions. Once the description itself has
@@ -359,12 +391,38 @@ def measurement_guidance_markdown(report: CFDCRunReport) -> str:
     return ""
 
 
+def profile_candidate_markdown(report: CFDCRunReport) -> str:
+    """Render cached Profile clues without turning them into questions early."""
+
+    session = report.diagnostic_session
+    assessment = session.description_profile_assessment if session else None
+    if assessment is None:
+        return ""
+    lines: list[str] = []
+    if assessment.candidates:
+        lines.append("\n\n**描述中已识别的 Profile 线索（暂不重复询问）：**")
+        for candidate in _unique_profile_candidates(assessment):
+            fact = candidate.fact
+            label = PROFILE_FACT_LABELS.get(fact.fact_id, fact.fact_id)
+            lines.append(
+                f"\n- {label}：{fact.value} {fact.unit}；证据：{fact.source_text}"
+            )
+    if assessment.conflicts:
+        lines.append("\n\n**Profile 线索冲突：**")
+        lines.extend(f"\n- ⚠️ {item}" for item in assessment.conflicts)
+    return "".join(lines)
+
+
 def guided_timeline_markdown(report: CFDCRunReport) -> str:
     session = report.diagnostic_session
     if session is None:
         return ""
     lines = ["### 引导记录时间线"]
-    if not session.turns and not session.measurement_history:
+    if (
+        not session.turns
+        and not session.measurement_history
+        and not session.specification_answer_history
+    ):
         lines.append("尚无补充轮次。")
     for turn in session.turns:
         lines.append(f"#### 描述补充 · 第 {turn.turn_index} 轮")
@@ -372,6 +430,18 @@ def guided_timeline_markdown(report: CFDCRunReport) -> str:
             lines.append(f"- `{question_id}`：{answer}")
         for evidence in turn.evidence:
             lines.append(f"- 记录：{evidence}")
+    for index, response in enumerate(session.specification_answer_history, start=1):
+        lines.append(f"#### Profile 回复 · 第 {index} 轮")
+        lines.append(f"- {response}")
+    if session.description_profile_assessment is not None:
+        for candidate in _unique_profile_candidates(
+            session.description_profile_assessment
+        ):
+            fact = candidate.fact
+            label = PROFILE_FACT_LABELS.get(fact.fact_id, fact.fact_id)
+            lines.append(
+                f"- 已保留 Profile 事实 · {label}：{fact.value} {fact.unit}"
+            )
     for round_index, assessment in enumerate(session.measurement_history, start=1):
         lines.append(f"#### 测量回填 · 第 {round_index} 轮")
         for fact in assessment.facts:
@@ -419,7 +489,6 @@ def _redacted_report_payload(report: CFDCRunReport) -> dict[str, Any]:
             "evidence_readiness": None,
             "specification_templates": [],
             "specification_assessment": None,
-            "specification_answer_history": [],
             "candidate_route": None,
             "compiled_route": None,
         }.items():
@@ -775,6 +844,7 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
         item.fact_id: item.label
         for item in (template.fields if template is not None else [])
     }
+    field_labels["simulation_boundary_scope"] = "仿真边界用途说明"
     direct_facts = [
         item
         for item in assessment.facts

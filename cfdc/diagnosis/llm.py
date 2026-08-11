@@ -20,6 +20,7 @@ from cfdc.models import (
     DiagnosticChecklistItem,
     MeasurementAssessment,
     MeasurementPlan,
+    ProfileFactCandidateAssessment,
     SemanticRouteSelection,
     SpecificationAssessment,
     SpecificationTemplate,
@@ -93,6 +94,17 @@ class DiagnosticAdapter(Protocol):
         allowed_specification_templates: list[SpecificationTemplate],
         accumulated_specification_answers: list[str],
         previous_assessment: SpecificationAssessment | None,
+    ) -> dict[str, Any]: ...
+
+
+class ProfileFactExtractionAdapter(Protocol):
+    """Optional preselection enrichment; guided adapters need not implement it."""
+
+    def extract_profile_facts(
+        self,
+        description: SystemDescription,
+        templates: list[SpecificationTemplate],
+        previous_assessment: ProfileFactCandidateAssessment | None,
     ) -> dict[str, Any]: ...
 
 
@@ -531,6 +543,68 @@ class OpenAICompatibleDiagnosticAdapter:
         except (AttributeError, IndexError, TypeError, ValueError):
             candidate = fallback
         return candidate.model_dump(mode="json")
+
+    def extract_profile_facts(
+        self,
+        description,
+        templates,
+        previous_assessment,
+    ):
+        prompt = (
+            "Extract only explicit object-specific Profile facts from the supplied "
+            "control-problem description. Return strict JSON and never infer a value "
+            "from general knowledge or a demo fixture. A candidate must identify its "
+            "template_id and contain a SpecificationFact whose source_text is an exact "
+            "contiguous excerpt from the description. Numeric values and units must "
+            "appear in that same excerpt and the excerpt must identify the physical "
+            "signal role. Do not map a 63% response time to significant delay: delay "
+            "requires an explicit silent/dead-time statement before output starts. "
+            "Do not return unknown facts; leave them out. Do not return controller "
+            "gains or instructions for physical actions. Derived facts may be returned "
+            "only with a registered derivation and all verbatim source inputs.\n\n"
+            'Required shape: {"candidates":[{"template_id":"string",'
+            '"fact":{"fact_id":"string","value":0.0,"unit":"string",'
+            '"source_type":"manufacturer_document|user_known_behavior|structured_answer|derived_from_declared_physics",'
+            '"source_text":"verbatim excerpt","derivation":null}],'
+            '"conflicts":["string"],"rejected_facts":["string"]}.\n'
+            "No template has been selected yet. When one excerpt proves a field shared "
+            "by multiple compatible templates, return one template-scoped candidate for "
+            "each compatible template rather than choosing a template early. Only use "
+            "fact IDs declared by the matching template. Explicit physical input/output "
+            "ranges may be returned as numeric boundary candidates, but preserve their "
+            "exact wording and never rewrite them as software-simulation bounds; a "
+            "separate backend gate will request the missing simulation purpose.\n"
+            f"description={description.model_dump_json()}\n"
+            f"templates={json.dumps([item.model_dump(mode='json') for item in templates], ensure_ascii=False)}\n"
+            f"previous_assessment={previous_assessment.model_dump_json() if previous_assessment else 'null'}"
+        )
+        options: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract auditable Profile facts into strict JSON. "
+                        "You never invent numbers or prescribe hardware actions."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": self.temperature,
+            "max_tokens": min(max(self.max_tokens, 1800), 3200),
+            "response_format": {"type": "json_object"},
+        }
+        if self._disable_thinking:
+            options["extra_body"] = {"thinking": {"type": "disabled"}}
+        response = self.client.chat.completions.create(**options)
+        content = response.choices[0].message.content
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("Profile fact extraction returned empty content")
+        payload = parse_json_content(content)
+        for name in ("candidates", "conflicts", "rejected_facts"):
+            if name in payload and not isinstance(payload[name], list):
+                raise ValueError(f"Profile fact extraction field '{name}' must be an array")
+        return payload
 
     def extract_measurements(
         self,

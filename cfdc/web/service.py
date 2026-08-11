@@ -354,14 +354,18 @@ def submit_app_measurement_response(
         not text
         and simulation_bounds_confirmed
         and session.status
-        in {"awaiting_profile_measurements", "specification_conflict"}
+        in {
+            "awaiting_profile_measurements",
+            "specification_conflict",
+            "specification_model_ready",
+        }
         and session.specification_assessment is not None
         and session.specification_assessment.status == "ready"
     )
     if not text and not confirmation_only:
         raise ValueError("请填写现有记录、手册摘录或明确说明未知。")
     adapter = build_adapter(bool(app_state.get("use_llm")), base_url, model, api_key)
-    if adapter is None:
+    if adapter is None and not confirmation_only:
         raise ValueError("通用引导测量流程需要启用 LLM。")
     report = run_cfdc_route(
         session.route_id,

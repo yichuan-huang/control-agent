@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from cfdc.models import (
+    ProfileFactCandidate,
+    ProfileFactCandidateAssessment,
     SpecificationAssessment,
     SpecificationDerivation,
     SpecificationDerivationInput,
@@ -26,6 +28,10 @@ from cfdc.specifications.units import (
 )
 
 _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+_SCALAR_UNIT = (
+    r"(?:[A-Za-z%°][A-Za-z0-9%°²³*/^()._\-·⋅×]*|"
+    r"秒|毫秒|分钟|小时|度|摄氏度|华氏度|伏|安|瓦|牛|千克|帕)"
+)
 
 
 class UnitCompatibilityError(ValueError):
@@ -434,28 +440,348 @@ def extract_explicit_specification_facts(
             rf"\b{re.escape(field.fact_id)}\s*=\s*({_NUMBER})(?:\s+([^;\s]+))?",
             flags=re.IGNORECASE,
         )
-        match = pattern.search(normalized_text)
+        for match in pattern.finditer(normalized_text):
+            if not match.group(2):
+                continue
+            unit = match.group(2).strip()
+            unit = unit.rstrip(".")
+            try:
+                fact = _normalize_fact_for_field(
+                    SpecificationFact(
+                        fact_id=field.fact_id,
+                        value=float(match.group(1)),
+                        unit=unit,
+                        source_type=source_type,
+                        source_text=match.group(0).strip(),
+                    ),
+                    field,
+                )
+            except UnitCompatibilityError:
+                continue
+            facts.append(fact)
+    return facts
+
+
+def extract_range_specification_facts(
+    description: SystemDescription,
+    template: SpecificationTemplate,
+) -> list[SpecificationFact]:
+    """Parse explicit input/output ranges without assigning a simulation purpose.
+
+    The parser is deliberately narrow: a single clause must name exactly one signal
+    role, contain a range marker, two ordered numeric endpoints, and at least one
+    unit. Physical rated ranges are retained as candidate values, while the later
+    simulation-boundary gate decides whether their declared purpose is sufficient.
+    """
+
+    fields = {field.fact_id: field for field in template.fields}
+    source_type = (
+        "manufacturer_document"
+        if any(
+            token in description.text.casefold()
+            for token in ("manual", "datasheet", "铭牌", "手册")
+        )
+        else "user_known_behavior"
+    )
+    input_signal = (
+        r"input|command|actuat|throttle|heater|valve|pump|voltage|current|power|"
+        r"force|torque|输入|命令|执行|油门|加热|阀|泵|电压|电流|功率|力|转矩"
+    )
+    output_signal = (
+        r"output|response|speed|temperature|level|position|"
+        r"输出|响应|车速|温度|液位|位置"
+    )
+    range_marker = r"range|limits?|bounds?|boundary|范围|区间|边界|上下限"
+    range_pattern = re.compile(
+        rf"(?P<lower>{_NUMBER})\s*(?P<lower_unit>{_SCALAR_UNIT})?\s*"
+        rf"(?:\bto\b|至|到|~|～|—|–)\s*"
+        rf"(?P<upper>{_NUMBER})\s*(?P<upper_unit>{_SCALAR_UNIT})?",
+        flags=re.IGNORECASE,
+    )
+    facts: list[SpecificationFact] = []
+    clauses = [
+        clause.strip()
+        for clause in re.split(
+            r"(?:[。;；!?！？\n]+|[,.]\s+|，|\b(?:and|while|whereas)\b|以及|同时|而)",
+            description.text,
+            flags=re.IGNORECASE,
+        )
+        if clause.strip()
+    ]
+    for clause in clauses:
+        if re.search(range_marker, clause, flags=re.IGNORECASE) is None:
+            continue
+        has_input_role = re.search(input_signal, clause, flags=re.IGNORECASE) is not None
+        has_output_role = (
+            re.search(output_signal, clause, flags=re.IGNORECASE) is not None
+        )
+        if has_input_role == has_output_role:
+            # No role, or two roles competing for one pair of endpoints, is
+            # insufficient evidence for assigning input/output bounds.
+            continue
+        match = range_pattern.search(clause.replace("−", "-"))
         if match is None:
             continue
-        if not match.group(2):
+        lower_unit = match.group("lower_unit") or match.group("upper_unit")
+        upper_unit = match.group("upper_unit") or match.group("lower_unit")
+        if lower_unit is None or upper_unit is None:
             continue
-        unit = match.group(2).strip()
-        unit = unit.rstrip(".")
-        try:
-            fact = _normalize_fact_for_field(
-                SpecificationFact(
-                    fact_id=field.fact_id,
-                    value=float(match.group(1)),
-                    unit=unit,
-                    source_type=source_type,
-                    source_text=match.group(0).strip(),
-                ),
-                field,
-            )
-        except UnitCompatibilityError:
+        lower_unit = lower_unit.rstrip(".")
+        upper_unit = upper_unit.rstrip(".")
+        bound_ids = (
+            ("input_min", "input_max")
+            if has_input_role
+            else ("output_min", "output_max")
+        )
+        if any(fact_id not in fields for fact_id in bound_ids):
             continue
-        facts.append(fact)
+        for fact_id, value, unit in (
+            (bound_ids[0], match.group("lower"), lower_unit),
+            (bound_ids[1], match.group("upper"), upper_unit),
+        ):
+            try:
+                facts.append(
+                    _normalize_fact_for_field(
+                        SpecificationFact(
+                            fact_id=fact_id,
+                            value=float(value),
+                            unit=unit,
+                            source_type=source_type,
+                            source_text=clause,
+                        ),
+                        fields[fact_id],
+                    )
+                )
+            except (UnitCompatibilityError, ValueError):
+                continue
     return facts
+
+
+def _validated_profile_candidate_fact(
+    fact: SpecificationFact,
+    field,
+    source_texts: list[str],
+) -> SpecificationFact:
+    """Apply the same provenance and unit gates used for selected Profiles."""
+
+    _validate_fact_value_kind(fact, field)
+    _validate_direct_fact_source(fact, source_texts)
+    _validate_direct_fact_role(fact)
+    normalized = _normalize_fact_for_field(fact, field)
+    return _verify_registered_derivation(normalized, source_texts=source_texts)
+
+
+def _merge_profile_candidates(
+    candidates: list[ProfileFactCandidate],
+    incoming: list[ProfileFactCandidate],
+) -> tuple[list[ProfileFactCandidate], list[str]]:
+    merged = {
+        (candidate.template_id, candidate.fact.fact_id): candidate
+        for candidate in candidates
+    }
+    conflicts: list[str] = []
+    for candidate in incoming:
+        key = (candidate.template_id, candidate.fact.fact_id)
+        previous = merged.get(key)
+        if previous is not None and not _same_value(previous.fact, candidate.fact):
+            conflicts.append(
+                f"'{candidate.template_id}:{candidate.fact.fact_id}' was supplied as "
+                f"{previous.fact.value} {previous.fact.unit} and later as "
+                f"{candidate.fact.value} {candidate.fact.unit}."
+            )
+        merged[key] = candidate
+    return list(merged.values()), conflicts
+
+
+def _cross_template_profile_conflicts(
+    candidates: list[ProfileFactCandidate],
+) -> list[str]:
+    by_fact_id: dict[str, list[ProfileFactCandidate]] = {}
+    for candidate in candidates:
+        by_fact_id.setdefault(candidate.fact.fact_id, []).append(candidate)
+    conflicts: list[str] = []
+    for fact_id, scoped_candidates in by_fact_id.items():
+        first = scoped_candidates[0]
+        if all(
+            _same_value(first.fact, candidate.fact)
+            for candidate in scoped_candidates[1:]
+        ):
+            continue
+        rendered = ", ".join(
+            f"{candidate.template_id}={candidate.fact.value} {candidate.fact.unit}"
+            for candidate in scoped_candidates
+        )
+        conflicts.append(
+            f"'{fact_id}' has inconsistent candidates across templates: {rendered}."
+        )
+    return conflicts
+
+
+def collect_profile_fact_candidates(
+    description: SystemDescription,
+    *,
+    adapter=None,
+    previous: ProfileFactCandidateAssessment | None = None,
+) -> ProfileFactCandidateAssessment:
+    """Extract template-scoped Profile facts from description text.
+
+    This runs before structural Profile selection. Deterministic labeled facts and
+    registered physical derivations are authoritative; an optional adapter may
+    add natural-language candidates, which are validated against the same gates.
+    """
+
+    from cfdc.specifications.templates import default_specification_template_catalog
+
+    templates = default_specification_template_catalog().templates
+    template_by_id = {template.template_id: template for template in templates}
+    source_texts = [description.text]
+    candidates: list[ProfileFactCandidate] = []
+    rejected: list[str] = []
+    conflicts: list[str] = []
+    for template in templates:
+        labeled = extract_labeled_specification_facts(description.text, template)
+        deterministic = [
+            *extract_explicit_specification_facts(description.text, template),
+            *extract_range_specification_facts(description, template),
+            *labeled.facts,
+            *derive_thermostat_specification_facts(
+                description, template, description.text
+            ),
+        ]
+        rejected.extend(
+            f"{template.template_id}:{item}" for item in labeled.rejected_facts
+        )
+        local: list[ProfileFactCandidate] = []
+        fields = {field.fact_id: field for field in template.fields}
+        for fact in deterministic:
+            field = fields.get(fact.fact_id)
+            if field is None:
+                continue
+            try:
+                normalized = _validated_profile_candidate_fact(
+                    fact, field, source_texts
+                )
+            except (UnitCompatibilityError, ValueError) as exc:
+                rejected.append(f"{template.template_id}:{fact.fact_id}: {exc}")
+                continue
+            local.append(
+                ProfileFactCandidate(template_id=template.template_id, fact=normalized)
+            )
+        candidates, local_conflicts = _merge_profile_candidates(candidates, local)
+        conflicts.extend(local_conflicts)
+
+    if adapter is not None and callable(
+        getattr(adapter, "extract_profile_facts", None)
+    ):
+        payload = adapter.extract_profile_facts(
+            description.model_copy(deep=True),
+            [template.model_copy(deep=True) for template in templates],
+            previous.model_copy(deep=True) if previous is not None else None,
+        )
+        if isinstance(payload, ProfileFactCandidateAssessment):
+            payload = payload.model_dump(mode="python")
+        if not isinstance(payload, dict):
+            raise ValueError("Profile fact extraction must return one JSON object")
+        raw_candidates = payload.get("candidates", [])
+        if not isinstance(raw_candidates, list):
+            raise ValueError("Profile fact candidates must be an array")
+        llm_candidates: list[ProfileFactCandidate] = []
+        for raw_candidate in raw_candidates:
+            try:
+                candidate = ProfileFactCandidate.model_validate(raw_candidate)
+            except (TypeError, ValueError) as exc:
+                rejected.append(f"malformed Profile fact candidate: {exc}")
+                continue
+            template = template_by_id.get(candidate.template_id)
+            if template is None:
+                rejected.append(
+                    "Profile fact candidate uses unknown template "
+                    f"'{candidate.template_id}'"
+                )
+                continue
+            field = next(
+                (
+                    item
+                    for item in template.fields
+                    if item.fact_id == candidate.fact.fact_id
+                ),
+                None,
+            )
+            if field is None:
+                rejected.append(
+                    "Profile fact candidate uses unknown field "
+                    f"'{candidate.fact.fact_id}' for '{candidate.template_id}'"
+                )
+                continue
+            try:
+                normalized = _validated_profile_candidate_fact(
+                    candidate.fact, field, source_texts
+                )
+            except (UnitCompatibilityError, ValueError) as exc:
+                rejected.append(
+                    f"{candidate.template_id}:{candidate.fact.fact_id}: {exc}"
+                )
+                continue
+            llm_candidates.append(
+                candidate.model_copy(update={"fact": normalized})
+            )
+        candidates, llm_conflicts = _merge_profile_candidates(
+            candidates, llm_candidates
+        )
+        conflicts.extend(llm_conflicts)
+        raw_conflicts = payload.get("conflicts", [])
+        if isinstance(raw_conflicts, list):
+            conflicts.extend(str(item) for item in raw_conflicts)
+        raw_rejected = payload.get("rejected_facts", [])
+        if isinstance(raw_rejected, list):
+            rejected.extend(str(item) for item in raw_rejected)
+
+    if previous is not None:
+        validated_previous: list[ProfileFactCandidate] = []
+        for candidate in previous.candidates:
+            template = template_by_id.get(candidate.template_id)
+            field = (
+                next(
+                    (
+                        item
+                        for item in template.fields
+                        if item.fact_id == candidate.fact.fact_id
+                    ),
+                    None,
+                )
+                if template is not None
+                else None
+            )
+            if template is None or field is None:
+                rejected.append(
+                    "Persisted Profile candidate uses an unknown template or field: "
+                    f"{candidate.template_id}:{candidate.fact.fact_id}"
+                )
+                continue
+            try:
+                normalized = _validated_profile_candidate_fact(
+                    candidate.fact, field, source_texts
+                )
+            except (UnitCompatibilityError, ValueError) as exc:
+                rejected.append(
+                    f"{candidate.template_id}:{candidate.fact.fact_id}: {exc}"
+                )
+                continue
+            validated_previous.append(
+                candidate.model_copy(update={"fact": normalized})
+            )
+        candidates, previous_conflicts = _merge_profile_candidates(
+            validated_previous,
+            candidates,
+        )
+        conflicts = [*previous.conflicts, *conflicts, *previous_conflicts]
+        rejected.extend(previous.rejected_facts)
+    conflicts.extend(_cross_template_profile_conflicts(candidates))
+    return ProfileFactCandidateAssessment(
+        candidates=candidates,
+        conflicts=list(dict.fromkeys(conflicts)),
+        rejected_facts=list(dict.fromkeys(rejected)),
+    )
 
 
 def _strip_labeled_line_formatting(line: str) -> str:
@@ -881,6 +1207,35 @@ def merge_specification_facts(
     return list(merged.values()), conflicts
 
 
+def _unresolved_previous_conflicts(
+    previous: SpecificationAssessment | None,
+    template: SpecificationTemplate,
+    addressed_fact_ids: set[str],
+) -> list[str]:
+    """Keep conflicts until the current reply actually addresses their fields."""
+
+    if previous is None:
+        return []
+    field_markers = {
+        field.fact_id: (field.fact_id.casefold(), field.label.casefold())
+        for field in template.fields
+    }
+    unresolved: list[str] = []
+    for conflict in previous.conflicts:
+        normalized = conflict.casefold()
+        referenced_ids = {
+            fact_id
+            for fact_id, markers in field_markers.items()
+            if any(marker in normalized for marker in markers)
+        }
+        if referenced_ids & addressed_fact_ids:
+            # Rebuilding from the updated facts below will recreate any conflict
+            # that the new value did not actually resolve.
+            continue
+        unresolved.append(conflict)
+    return unresolved
+
+
 def _compact_physical_unit(value: str) -> str:
     return (
         value.casefold()
@@ -964,14 +1319,100 @@ def _source_contains_fact_value(source_text: str, fact: SpecificationFact) -> bo
     )
 
 
+def _source_contains_normalized_scalar(
+    source_text: str, fact: SpecificationFact
+) -> bool:
+    """Accept unit conversions while retaining the original numeric evidence."""
+
+    if not isinstance(fact.value, float):
+        return False
+    expected_resolution = resolve_unit(fact.unit)
+    unit_pattern = (
+        r"(?:[A-Za-z%°][A-Za-z0-9%°²³*/^()._\-·⋅×]*|"
+        r"秒|毫秒|分钟|小时|度|摄氏度|华氏度|伏|安|瓦|牛|千克|帕)"
+    )
+    for match in re.finditer(
+        rf"({_NUMBER})\s*({unit_pattern})", source_text.replace("−", "-"),
+        flags=re.IGNORECASE,
+    ):
+        try:
+            value, canonical_unit = normalize_scalar_unit(
+                float(match.group(1)), match.group(2).rstrip(".")
+            )
+        except (TypeError, ValueError):
+            continue
+        if canonical_unit == expected_resolution.canonical_unit and math.isclose(
+            value, fact.value, rel_tol=1e-9, abs_tol=1e-12
+        ):
+            return True
+    return False
+
+
+def _source_contains_normalized_range_endpoint(
+    source_text: str,
+    fact: SpecificationFact,
+) -> bool:
+    """Verify either endpoint when one range unit applies to both numbers."""
+
+    if not isinstance(fact.value, float):
+        return False
+    expected = resolve_unit(fact.unit)
+    unit_pattern = (
+        r"(?:[A-Za-z%°][A-Za-z0-9%°²³*/^()._\-·⋅×]*|"
+        r"秒|毫秒|分钟|小时|度|摄氏度|华氏度|伏|安|瓦|牛|千克|帕)"
+    )
+    pattern = re.compile(
+        rf"(?P<lower>{_NUMBER})\s*"
+        rf"(?P<lower_unit>(?!to\b){unit_pattern})?\s*"
+        rf"(?:\bto\b|至|到|~|～|—|–)\s*"
+        rf"(?P<upper>{_NUMBER})\s*(?P<upper_unit>{unit_pattern})?",
+        flags=re.IGNORECASE,
+    )
+    for match in pattern.finditer(source_text.replace("−", "-")):
+        shared_unit = match.group("lower_unit") or match.group("upper_unit")
+        if shared_unit is None:
+            continue
+        for group_name in ("lower", "upper"):
+            try:
+                value, canonical = normalize_scalar_unit(
+                    float(match.group(group_name)),
+                    shared_unit.rstrip("."),
+                )
+            except (TypeError, ValueError):
+                continue
+            if canonical == expected.canonical_unit and math.isclose(
+                value,
+                fact.value,
+                rel_tol=1e-9,
+                abs_tol=1e-12,
+            ):
+                return True
+    return False
+
+
+def _source_contains_compatible_unit(source_text: str, unit: str) -> bool:
+    expected = resolve_unit(unit)
+    unit_pattern = (
+        r"(?:[A-Za-z%°][A-Za-z0-9%°²³*/^()._\-·⋅×]*|"
+        r"秒|毫秒|分钟|小时|度|摄氏度|华氏度|伏|安|瓦|牛|千克|帕)"
+    )
+    for token in re.findall(unit_pattern, source_text, flags=re.IGNORECASE):
+        try:
+            if resolve_unit(token.rstrip(".")).canonical_unit == expected.canonical_unit:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def _validate_direct_fact_source(
     fact: SpecificationFact,
     source_texts: list[str],
 ) -> None:
     if fact.source_type == "derived_from_declared_physics":
         return
-    joined_sources = "\n".join(source_texts).casefold()
-    if fact.source_text.casefold() not in joined_sources:
+    joined_sources = "\n".join(source_texts)
+    if fact.source_text not in joined_sources:
         raise ValueError("source_text is not a verbatim user-provided excerpt")
     if re.search(
         r"(?:\b(?:unknown|not known)\b|\bis(?:n't| not)\s+[-+−]?\d|"
@@ -981,9 +1422,16 @@ def _validate_direct_fact_source(
         flags=re.IGNORECASE,
     ):
         raise ValueError("source excerpt negates or does not establish the value")
-    if not _source_contains_fact_value(fact.source_text, fact):
+    if not (
+        _source_contains_fact_value(fact.source_text, fact)
+        or _source_contains_normalized_scalar(fact.source_text, fact)
+        or _source_contains_normalized_range_endpoint(fact.source_text, fact)
+    ):
         raise ValueError("value does not match its source number")
-    if not _source_contains_unit(fact.source_text, fact.unit):
+    if not (
+        _source_contains_unit(fact.source_text, fact.unit)
+        or _source_contains_compatible_unit(fact.source_text, fact.unit)
+    ):
         raise ValueError("unit does not match its source unit")
 
 
@@ -1082,8 +1530,15 @@ def _validate_direct_fact_role(fact: SpecificationFact) -> None:
     if not role_clauses:
         raise ValueError("source excerpt does not identify the requested signal role")
     if isinstance(fact.value, float) and not any(
-        _source_contains_fact_value(clause, fact)
-        and _source_contains_unit(clause, fact.unit)
+        (
+            _source_contains_fact_value(clause, fact)
+            or _source_contains_normalized_scalar(clause, fact)
+            or _source_contains_normalized_range_endpoint(clause, fact)
+        )
+        and (
+            _source_contains_unit(clause, fact.unit)
+            or _source_contains_compatible_unit(clause, fact.unit)
+        )
         for clause in role_clauses
     ):
         raise ValueError(
@@ -1091,18 +1546,33 @@ def _validate_direct_fact_role(fact: SpecificationFact) -> None:
         )
 
 
+def _validate_fact_value_kind(fact: SpecificationFact, field) -> None:
+    if field.answer_kind == "number" and not isinstance(fact.value, float):
+        raise ValueError(
+            f"specification fact '{fact.fact_id}' requires one scalar numeric value"
+        )
+    if field.answer_kind == "matrix" and not (
+        isinstance(fact.value, list)
+        and fact.value
+        and all(isinstance(row, list) and row for row in fact.value)
+    ):
+        raise ValueError(
+            f"specification fact '{fact.fact_id}' requires a numeric matrix"
+        )
+
+
 def _validate_derivation_sources(
     fact: SpecificationFact, source_texts: list[str]
 ) -> None:
     assert fact.derivation is not None
-    joined = "\n".join(source_texts).casefold()
+    joined = "\n".join(source_texts)
     for excerpt in fact.derivation.source_excerpts:
-        if excerpt.casefold() not in joined:
+        if excerpt not in joined:
             raise ValueError(
                 f"derivation source for '{fact.fact_id}' is not a verbatim user-provided excerpt"
             )
     for item in fact.derivation.inputs:
-        if item.source_text.casefold() not in joined:
+        if item.source_text not in joined:
             raise ValueError(
                 f"derivation input '{item.name}' for '{fact.fact_id}' has no verbatim source"
             )
@@ -1284,6 +1754,7 @@ def validate_specification_assessment_payload(
                 continue
             try:
                 fact = SpecificationFact.model_validate(raw_fact)
+                _validate_fact_value_kind(fact, field)
                 _validate_direct_fact_source(fact, source_texts)
                 normalized = _normalize_fact_for_field(fact, field)
                 _validate_direct_fact_role(fact)
@@ -1474,6 +1945,7 @@ def assess_specification_text(
         *labeled.facts,
         *(fact for fact in derived_thermal if fact.fact_id not in claimed_fact_ids),
     ]
+    local_addressed_ids = {fact.fact_id for fact in incoming_local}
     facts, local_conflicts = merge_specification_facts(
         previous.facts if previous else [], incoming_local
     )
@@ -1481,7 +1953,14 @@ def assess_specification_text(
         description,
         template,
         facts=facts,
-        conflicts=local_conflicts,
+        conflicts=[
+            *_unresolved_previous_conflicts(
+                previous,
+                template,
+                local_addressed_ids,
+            ),
+            *local_conflicts,
+        ],
     )
     if (incoming_local or labeled.claimed_fact_ids) and local_assessment.status in {
         "ready",
@@ -1511,11 +1990,23 @@ def assess_specification_text(
             source_texts=[description.text, *history],
         )
         facts, llm_conflicts = merge_specification_facts(facts, incoming.facts)
+        addressed_ids = local_addressed_ids | {
+            fact.fact_id for fact in incoming.facts
+        }
         rebuilt = build_initial_specification_assessment(
             description,
             template,
             facts=facts,
-            conflicts=[*incoming.conflicts, *local_conflicts, *llm_conflicts],
+            conflicts=[
+                *_unresolved_previous_conflicts(
+                    previous,
+                    template,
+                    addressed_ids,
+                ),
+                *incoming.conflicts,
+                *local_conflicts,
+                *llm_conflicts,
+            ],
         )
         return _with_submission_diagnostics(
             rebuilt,
@@ -1528,11 +2019,20 @@ def assess_specification_text(
         current = local_assessment
         incoming = _extract_answers_in_question_order(text, template, current)
     facts, fallback_conflicts = merge_specification_facts(facts, incoming)
+    addressed_ids = local_addressed_ids | {fact.fact_id for fact in incoming}
     rebuilt = build_initial_specification_assessment(
         description,
         template,
         facts=facts,
-        conflicts=[*local_conflicts, *fallback_conflicts],
+        conflicts=[
+            *_unresolved_previous_conflicts(
+                previous,
+                template,
+                addressed_ids,
+            ),
+            *local_conflicts,
+            *fallback_conflicts,
+        ],
     )
     return _with_submission_diagnostics(
         rebuilt,

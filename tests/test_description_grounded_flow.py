@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from cfdc.diagnosis import (
@@ -11,6 +13,7 @@ from cfdc.diagnosis.engine import infer_description_field_assessment
 from cfdc.diagnosis.measurements import description_excerpt_answers_field
 from cfdc.models import SystemDescription
 from cfdc.runtime import run_cfdc_route
+from cfdc.specifications import collect_profile_fact_candidates
 from cfdc.web import service as web_service
 from cfdc.web import ui as web_ui
 from cfdc.web.presentation import render_report
@@ -126,6 +129,26 @@ _PROFILE_FACTS = [
     _profile_fact("output_max", 80.0, "mph", "车速停止边界为 45 mph 至 80 mph"),
 ]
 
+_LABELED_PROFILE_TEXT = (
+    "已知输入变化量：1 deg\n"
+    "最终输出变化量：10 mph\n"
+    "63% 响应时间：5 s\n"
+    "输入仿真下限：-3 deg\n"
+    "输入仿真上限：3 deg\n"
+    "输出仿真下限：45 mph\n"
+    "输出仿真上限：80 mph"
+)
+
+_PHYSICAL_PROFILE_TEXT = (
+    "input_change=1 deg\n"
+    "steady_output_change=10 mph\n"
+    "response_time_s=5 s\n"
+    "input_min=-3 deg\n"
+    "input_max=3 deg\n"
+    "output_min=45 mph\n"
+    "output_max=80 mph"
+)
+
 
 class ProfileReplyAdapter(DescriptionGroundedAdapter):
     def extract_measurements(
@@ -166,6 +189,15 @@ class ProfileReplyAdapter(DescriptionGroundedAdapter):
         }
 
 
+class UnchangedProfileDiagnosticAdapter(DescriptionGroundedAdapter):
+    def extract_measurements(
+        self, description, measurement_plan, measurement_response, previous_assessment
+    ):
+        del description, measurement_plan, measurement_response
+        assert previous_assessment is not None
+        return previous_assessment.model_dump(mode="json")
+
+
 def test_complete_description_is_grounded_and_routes_without_measurement_round():
     report = run_cfdc_route(
         "generic",
@@ -192,9 +224,12 @@ def test_complete_description_is_grounded_and_routes_without_measurement_round()
 def test_incomplete_description_uses_collecting_description_as_real_state():
     responses = dict(_EXCERPTS)
     responses.pop("uncertainty_magnitude")
+    description = AUTOMOTIVE_DESCRIPTION.replace(
+        _EXCERPTS["uncertainty_magnitude"], ""
+    )
 
     session = start_diagnostic_session(
-        SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
+        SystemDescription(text=description),
         diagnostic_adapter=DescriptionGroundedAdapter(responses),
     )
 
@@ -294,9 +329,12 @@ def test_complete_description_view_shows_profile_questions_not_eight_item_plan()
 def test_incomplete_description_view_keeps_checklist_open_and_hides_parameters():
     responses = dict(_EXCERPTS)
     responses.pop("uncertainty_magnitude")
+    description = AUTOMOTIVE_DESCRIPTION.replace(
+        _EXCERPTS["uncertainty_magnitude"], ""
+    )
     report = run_cfdc_route(
         "generic",
-        description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
+        description=SystemDescription(text=description),
         diagnostic_adapter=DescriptionGroundedAdapter(responses),
     )
 
@@ -318,9 +356,12 @@ def test_gradio_callback_collapses_only_a_completed_grounded_checklist():
     )
     incomplete_responses = dict(_EXCERPTS)
     incomplete_responses.pop("uncertainty_magnitude")
+    incomplete_description = AUTOMOTIVE_DESCRIPTION.replace(
+        _EXCERPTS["uncertainty_magnitude"], ""
+    )
     incomplete = run_cfdc_route(
         "generic",
-        description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
+        description=SystemDescription(text=incomplete_description),
         diagnostic_adapter=DescriptionGroundedAdapter(incomplete_responses),
     )
 
@@ -621,6 +662,12 @@ def test_one_generic_excerpt_cannot_satisfy_all_eight_description_fields():
     for field_id in set(_EXCERPTS) - {"controllability_observability"}:
         assert by_id[field_id].status == "unknown"
         assert by_id[field_id].evidence == []
+
+
+def test_nonlinearity_wording_cannot_backfill_uncertainty():
+    excerpt = _EXCERPTS["nonlinearity_strength"]
+
+    assert infer_description_field_assessment("uncertainty_magnitude", excerpt) is None
 
 
 def test_negated_canonical_phrases_do_not_complete_the_description_checklist():
@@ -1092,3 +1139,738 @@ def test_profile_selection_cannot_add_dead_time_to_a_no_delay_diagnosis():
             description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
             diagnostic_adapter=DelayProfileAdapter(),
         )
+
+
+def test_complete_labeled_profile_in_description_compiles_without_profile_round():
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=f"{AUTOMOTIVE_DESCRIPTION}\n{_LABELED_PROFILE_TEXT}"
+        ),
+        diagnostic_adapter=DescriptionGroundedAdapter(),
+    )
+
+    session = report.diagnostic_session
+    assert report.status == "candidate_unvalidated"
+    assert session.status == "specification_model_ready"
+    assert session.compiled_specification_model is not None
+    assert session.profile_measurement_round_count == 0
+    assert session.specification_answer_history == []
+    assert {fact.fact_id for fact in session.specification_assessment.facts} == {
+        "input_change",
+        "steady_output_change",
+        "response_time_s",
+        "input_min",
+        "input_max",
+        "output_min",
+        "output_max",
+    }
+    confirmation = session.accumulated_description.simulation_boundary_confirmation
+    assert confirmation is not None
+    assert confirmation.scope == "software_simulation_only"
+    assert web_ui._outputs(report, {})[17]["visible"] is False
+
+
+def test_profile_lines_do_not_expose_a_diagnostic_llm_omission():
+    responses = dict(_EXCERPTS)
+    responses.pop("nonlinearity_strength")
+
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=f"{AUTOMOTIVE_DESCRIPTION}\n{_LABELED_PROFILE_TEXT}"
+        ),
+        diagnostic_adapter=DescriptionGroundedAdapter(responses),
+    )
+
+    session = report.diagnostic_session
+    nonlinearity = next(
+        item
+        for item in session.checklist
+        if item.diagnostic_field_id == "nonlinearity_strength"
+    )
+    assert report.status == "candidate_unvalidated"
+    assert session.description_assessment is not None
+    assert all(item.status != "unknown" for item in session.checklist)
+    assert len(nonlinearity.evidence) == 1
+    assert _EXCERPTS["nonlinearity_strength"] in nonlinearity.evidence[0]
+    assert session.compiled_specification_model is not None
+
+
+def test_partial_labeled_profile_only_asks_for_unresolved_fields():
+    partial_profile = "\n".join(_LABELED_PROFILE_TEXT.splitlines()[:2])
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=f"{AUTOMOTIVE_DESCRIPTION}\n{partial_profile}"
+        ),
+        diagnostic_adapter=DescriptionGroundedAdapter(),
+    )
+
+    assessment = report.specification_assessment
+    known_ids = {fact.fact_id for fact in assessment.facts}
+    requested_ids = {
+        fact_id
+        for question in assessment.questions
+        for fact_id in question.requested_fact_ids
+    }
+    assert report.status == "awaiting_profile_measurements"
+    assert known_ids == {"input_change", "steady_output_change"}
+    assert known_ids.isdisjoint(assessment.missing_fact_ids)
+    assert known_ids.isdisjoint(requested_ids)
+    assert len(assessment.questions) <= 4
+
+
+def test_incomplete_checklist_caches_complete_profile_and_reuses_it_later():
+    missing_excerpt = _EXCERPTS["uncertainty_magnitude"]
+    incomplete_description = AUTOMOTIVE_DESCRIPTION.replace(missing_excerpt, "")
+    incomplete_responses = dict(_EXCERPTS)
+    incomplete_responses.pop("uncertainty_magnitude")
+    initial = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=f"{incomplete_description}\n{_LABELED_PROFILE_TEXT}"
+        ),
+        diagnostic_adapter=DescriptionGroundedAdapter(incomplete_responses),
+    )
+
+    session = initial.diagnostic_session
+    selected_candidates = {
+        candidate.fact.fact_id
+        for candidate in session.description_profile_assessment.candidates
+        if candidate.template_id == "spec_first_order_lag"
+    }
+    view = render_report(initial)
+    assert initial.status == "need_more_information"
+    assert session.status == "collecting_description"
+    assert len(selected_candidates) == 7
+    assert web_ui._outputs(initial, {})[17]["visible"] is False
+    assert view["measurement_guidance"].count("\n- 已知输入变化量：") == 1
+
+    grounded = continue_description_session(
+        session,
+        missing_excerpt,
+        expected_revision=session.revision,
+        diagnostic_adapter=DescriptionGroundedAdapter(),
+    )
+    completed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=grounded,
+        diagnostic_adapter=DescriptionGroundedAdapter(),
+    )
+
+    assert grounded.status == "description_grounded"
+    assert completed.status == "candidate_unvalidated"
+    assert completed.diagnostic_session.profile_measurement_round_count == 0
+
+
+def test_description_supplement_merges_new_profile_facts_before_selection():
+    missing_excerpt = _EXCERPTS["uncertainty_magnitude"]
+    incomplete_description = AUTOMOTIVE_DESCRIPTION.replace(missing_excerpt, "")
+    incomplete_responses = dict(_EXCERPTS)
+    incomplete_responses.pop("uncertainty_magnitude")
+    state = start_diagnostic_session(
+        SystemDescription(
+            text=f"{incomplete_description}\n已知输入变化量：1 deg"
+        ),
+        diagnostic_adapter=DescriptionGroundedAdapter(incomplete_responses),
+    )
+
+    grounded = continue_description_session(
+        state,
+        f"{missing_excerpt}\n最终输出变化量：10 mph",
+        expected_revision=state.revision,
+        diagnostic_adapter=DescriptionGroundedAdapter(),
+    )
+    report = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=grounded,
+        diagnostic_adapter=DescriptionGroundedAdapter(),
+    )
+
+    assert report.status == "awaiting_profile_measurements"
+    assert {fact.fact_id for fact in report.specification_assessment.facts} == {
+        "input_change",
+        "steady_output_change",
+    }
+
+
+def test_deterministic_profile_parser_extracts_natural_language_ranges():
+    assessment = collect_profile_fact_candidates(
+        SystemDescription(
+            text=(
+                "软件仿真油门输入范围为 -3 deg 至 3 deg。\n"
+                "车速输出停止边界范围为 45 mph 至 80 mph。"
+            )
+        )
+    )
+    facts = {
+        candidate.fact.fact_id: candidate.fact
+        for candidate in assessment.candidates
+        if candidate.template_id == "spec_first_order_lag"
+    }
+
+    assert facts["input_min"].value == pytest.approx(math.radians(-3.0))
+    assert facts["input_max"].value == pytest.approx(math.radians(3.0))
+    assert facts["input_min"].unit == "rad"
+    assert facts["output_min"].value == pytest.approx(45.0)
+    assert facts["output_max"].value == pytest.approx(80.0)
+
+    english = collect_profile_fact_candidates(
+        SystemDescription(
+            text=(
+                "software simulation input range is -3 to 3 deg.\n"
+                "software simulation output stop range is 45 to 80 mph."
+            )
+        )
+    )
+    english_facts = {
+        candidate.fact.fact_id: candidate.fact
+        for candidate in english.candidates
+        if candidate.template_id == "spec_first_order_lag"
+    }
+    assert english_facts["input_min"].value == pytest.approx(math.radians(-3.0))
+    assert english_facts["input_max"].value == pytest.approx(math.radians(3.0))
+    assert english_facts["input_max"].unit == "rad"
+    assert english_facts["output_max"].unit == "mph"
+
+
+def test_natural_language_profile_ranges_are_reused_in_the_same_reply():
+    adapter = UnchangedProfileDiagnosticAdapter()
+    initial = run_cfdc_route(
+        "generic",
+        description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
+        diagnostic_adapter=adapter,
+    )
+    reply = (
+        "input_change=1 deg; steady_output_change=10 mph; response_time_s=5 s; "
+        "software simulation input range is -3 to 3 deg. "
+        "software simulation output stop range is 45 to 80 mph."
+    )
+
+    completed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=reply,
+    )
+
+    assert completed.status == "candidate_unvalidated"
+    assert completed.specification_assessment.status == "ready"
+    assert {fact.fact_id for fact in completed.specification_assessment.facts} == {
+        "input_change",
+        "steady_output_change",
+        "response_time_s",
+        "input_min",
+        "input_max",
+        "output_min",
+        "output_max",
+    }
+
+
+def test_profile_candidate_enrichment_rejects_missing_unit_negation_and_wrong_role():
+    class InvalidCandidateAdapter:
+        def extract_profile_facts(self, description, templates, previous_assessment):
+            del description, templates, previous_assessment
+            return {
+                "candidates": [
+                    {
+                        "template_id": "spec_first_order_lag",
+                        "fact": _profile_fact(
+                            "input_change", 1.0, "", "input change is 1"
+                        ),
+                    },
+                    {
+                        "template_id": "spec_first_order_lag",
+                        "fact": _profile_fact(
+                            "input_change",
+                            10.0,
+                            "degC",
+                            "temperature is 10 degC",
+                        ),
+                    },
+                    {
+                        "template_id": "spec_first_order_lag",
+                        "fact": _profile_fact(
+                            "input_change", 1.0, "V", "input change is not 1 V"
+                        ),
+                    },
+                ],
+                "conflicts": [],
+                "rejected_facts": [],
+            }
+
+    assessment = collect_profile_fact_candidates(
+        SystemDescription(
+            text=(
+                "input change is 1; temperature is 10 degC; "
+                "input change is not 1 V"
+            )
+        ),
+        adapter=InvalidCandidateAdapter(),
+    )
+
+    assert not any(
+        candidate.template_id == "spec_first_order_lag"
+        and candidate.fact.fact_id == "input_change"
+        for candidate in assessment.candidates
+    )
+    assert len(assessment.rejected_facts) >= 3
+
+
+def test_profile_candidate_source_text_must_match_verbatim_case():
+    class WrongCaseAdapter:
+        def extract_profile_facts(self, description, templates, previous_assessment):
+            del description, templates, previous_assessment
+            return {
+                "candidates": [
+                    {
+                        "template_id": "spec_first_order_lag",
+                        "fact": _profile_fact(
+                            "input_change", 1.0, "V", "input change is 1 V"
+                        ),
+                    }
+                ],
+                "conflicts": [],
+                "rejected_facts": [],
+            }
+
+    assessment = collect_profile_fact_candidates(
+        SystemDescription(text="Input change is 1 V"),
+        adapter=WrongCaseAdapter(),
+    )
+
+    assert not assessment.candidates
+    assert any("not a verbatim" in item for item in assessment.rejected_facts)
+
+
+def test_scalar_profile_candidate_rejects_list_value():
+    class ListValueAdapter:
+        def extract_profile_facts(self, description, templates, previous_assessment):
+            del description, templates, previous_assessment
+            fact = _profile_fact("input_change", 1.0, "V", "input change is 1 V")
+            fact["value"] = [1.0]
+            return {
+                "candidates": [
+                    {"template_id": "spec_first_order_lag", "fact": fact}
+                ],
+                "conflicts": [],
+                "rejected_facts": [],
+            }
+
+    assessment = collect_profile_fact_candidates(
+        SystemDescription(text="input change is 1 V"),
+        adapter=ListValueAdapter(),
+    )
+
+    assert not assessment.candidates
+    assert any("scalar numeric value" in item for item in assessment.rejected_facts)
+
+
+def test_profile_candidates_cannot_disagree_across_templates():
+    class CrossTemplateAdapter:
+        def extract_profile_facts(self, description, templates, previous_assessment):
+            del description, templates, previous_assessment
+            return {
+                "candidates": [
+                    {
+                        "template_id": "spec_first_order_lag",
+                        "fact": _profile_fact(
+                            "input_change", 1.0, "deg", "input change is 1 deg"
+                        ),
+                    },
+                    {
+                        "template_id": "spec_first_order_lag_with_delay",
+                        "fact": _profile_fact(
+                            "input_change", 2.0, "deg", "input change is 2 deg"
+                        ),
+                    },
+                ],
+                "conflicts": [],
+                "rejected_facts": [],
+            }
+
+    assessment = collect_profile_fact_candidates(
+        SystemDescription(
+            text="input change is 1 deg; input change is 2 deg"
+        ),
+        adapter=CrossTemplateAdapter(),
+    )
+
+    assert any(
+        "inconsistent candidates across templates" in item
+        for item in assessment.conflicts
+    )
+
+
+def test_cross_template_candidate_conflict_blocks_initial_compilation():
+    class ConflictingCandidateAdapter(DescriptionGroundedAdapter):
+        def extract_profile_facts(self, description, templates, previous_assessment):
+            del description, templates, previous_assessment
+            return {
+                "candidates": [
+                    {
+                        "template_id": "spec_first_order_lag",
+                        "fact": _profile_fact(
+                            "input_change", 1.0, "deg", "input change is 1 deg"
+                        ),
+                    },
+                    {
+                        "template_id": "spec_first_order_lag_with_delay",
+                        "fact": _profile_fact(
+                            "input_change", 2.0, "deg", "input change is 2 deg"
+                        ),
+                    },
+                ],
+                "conflicts": [],
+                "rejected_facts": [],
+            }
+
+    remaining_profile = "\n".join(_LABELED_PROFILE_TEXT.splitlines()[1:])
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=(
+                f"{AUTOMOTIVE_DESCRIPTION}\n"
+                "input change is 1 deg; input change is 2 deg\n"
+                f"{remaining_profile}"
+            )
+        ),
+        diagnostic_adapter=ConflictingCandidateAdapter(),
+    )
+
+    assert report.compiled_specification_model is None
+    assert report.specification_assessment.status == "conflict"
+    assert any(
+        "inconsistent candidates across templates" in item
+        for item in report.specification_assessment.conflicts
+    )
+
+
+def test_response_time_fact_does_not_become_structural_dead_time():
+    response_time_text = "63% 响应时间：5 s"
+    state = start_diagnostic_session(SystemDescription(text=response_time_text))
+    response_time_candidates = [
+        candidate
+        for candidate in state.description_profile_assessment.candidates
+        if candidate.fact.fact_id == "response_time_s"
+    ]
+
+    assert response_time_candidates
+    assert state.current_diagnosis.significant_delay.status == "unknown"
+    assert (
+        infer_description_field_assessment(
+            "significant_delay",
+            "按采样时钟观察，不存在先于可见动态过程的独立显著纯时延。",
+        )
+        == "not_significant"
+    )
+    assert (
+        infer_description_field_assessment(
+            "significant_delay",
+            "输入改变后等待 2 s，输出才开始变化。",
+        )
+        == "significant"
+    )
+    assert (
+        infer_description_field_assessment(
+            "significant_delay",
+            "输入改变后无需等待，输出立即开始变化。",
+        )
+        == "not_significant"
+    )
+    assert (
+        infer_description_field_assessment(
+            "significant_delay",
+            "输入改变后不得不等待 2 s，输出才开始变化。",
+        )
+        == "significant"
+    )
+    assert (
+        infer_description_field_assessment(
+            "significant_delay",
+            (
+                "After the input change, the output does not need to wait 2 s "
+                "and starts immediately."
+            ),
+        )
+        == "not_significant"
+    )
+    assert (
+        infer_description_field_assessment(
+            "significant_delay",
+            "After the input change, wait 2 s before the output starts changing.",
+        )
+        == "significant"
+    )
+
+
+@pytest.mark.parametrize(
+    "scope_note",
+    [
+        "软件仿真会记录输入和输出曲线。",
+        "这些输入/输出范围不用于软件仿真的运行或停止边界。",
+        (
+            "这些输入/输出范围用于软件仿真的运行和停止边界。"
+            "这些范围不用于软件仿真停止边界。"
+        ),
+    ],
+)
+def test_unrelated_or_negated_simulation_text_does_not_confirm_physical_ranges(
+    scope_note,
+):
+    adapter = UnchangedProfileDiagnosticAdapter()
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=(
+                f"{AUTOMOTIVE_DESCRIPTION}\n"
+                f"{scope_note}\n"
+                f"{_PHYSICAL_PROFILE_TEXT}"
+            )
+        ),
+        diagnostic_adapter=adapter,
+    )
+
+    assert report.status == "awaiting_profile_measurements"
+    assert report.specification_assessment.missing_fact_ids == [
+        "simulation_boundary_scope"
+    ]
+    assert report.system_description.simulation_boundary_confirmation is None
+
+
+def test_per_fact_scope_cannot_link_an_unrelated_simulation_sentence_to_ranges():
+    broad_source = (
+        "软件仿真会记录输入和输出曲线。"
+        "物理输入范围为 -3 deg 至 3 deg。"
+        "物理输出范围为 45 mph 至 80 mph。"
+    )
+
+    class BroadExcerptAdapter(UnchangedProfileDiagnosticAdapter):
+        def extract_profile_facts(self, description, templates, previous_assessment):
+            del description, templates, previous_assessment
+            return {
+                "candidates": [
+                    {
+                        "template_id": "spec_first_order_lag",
+                        "fact": _profile_fact(
+                            fact_id,
+                            value,
+                            unit,
+                            broad_source,
+                        ),
+                    }
+                    for fact_id, value, unit in (
+                        ("input_min", -3.0, "deg"),
+                        ("input_max", 3.0, "deg"),
+                        ("output_min", 45.0, "mph"),
+                        ("output_max", 80.0, "mph"),
+                    )
+                ],
+                "conflicts": [],
+                "rejected_facts": [],
+            }
+
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=(
+                f"{AUTOMOTIVE_DESCRIPTION}\n"
+                "input_change=1 deg\n"
+                "steady_output_change=10 mph\n"
+                "response_time_s=5 s\n"
+                f"{broad_source}"
+            )
+        ),
+        diagnostic_adapter=BroadExcerptAdapter(),
+    )
+
+    assert report.status == "awaiting_profile_measurements"
+    assert report.specification_assessment.missing_fact_ids == [
+        "simulation_boundary_scope"
+    ]
+    assert report.system_description.simulation_boundary_confirmation is None
+
+
+def test_explicit_scope_negation_overrides_simulation_boundary_labels():
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=(
+                f"{AUTOMOTIVE_DESCRIPTION}\n{_LABELED_PROFILE_TEXT}\n"
+                "这些输入和输出上下限不用于软件仿真的运行或停止边界。"
+            )
+        ),
+        diagnostic_adapter=UnchangedProfileDiagnosticAdapter(),
+    )
+
+    assert report.status == "awaiting_profile_measurements"
+    assert report.specification_assessment.missing_fact_ids == [
+        "simulation_boundary_scope"
+    ]
+    assert report.system_description.simulation_boundary_confirmation is None
+
+
+def test_physical_ranges_are_kept_while_only_simulation_scope_is_requested():
+    class ScopeOnlyAdapter(UnchangedProfileDiagnosticAdapter):
+        def assess_specifications(self, *args, **kwargs):
+            del args, kwargs
+            raise AssertionError(
+                "a pure simulation-scope reply must not require LLM fact extraction"
+            )
+
+    adapter = ScopeOnlyAdapter()
+    initial = run_cfdc_route(
+        "generic",
+        description=SystemDescription(
+            text=f"{AUTOMOTIVE_DESCRIPTION}\n{_PHYSICAL_PROFILE_TEXT}"
+        ),
+        diagnostic_adapter=adapter,
+    )
+
+    assessment = initial.specification_assessment
+    assert initial.status == "awaiting_profile_measurements"
+    assert assessment.status == "need_more"
+    assert assessment.missing_fact_ids == ["simulation_boundary_scope"]
+    assert len(assessment.facts) == 7
+    assert assessment.questions[0].requested_fact_ids == [
+        "simulation_boundary_scope"
+    ]
+
+    scope_statement = (
+        "这些范围尚未通过硬件安全验证，仅用于软件仿真的运行和停止边界。"
+    )
+    completed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=scope_statement,
+    )
+
+    assert completed.status == "candidate_unvalidated"
+    assert completed.diagnostic_session.specification_answer_history == [
+        scope_statement
+    ]
+    assert (
+        completed.system_description.simulation_boundary_confirmation.scope
+        == "software_simulation_only"
+    )
+
+
+def test_profile_reply_reopens_diagnosis_without_losing_complete_profile_data():
+    retraction = (
+        "The current record does not establish the initial response direction; "
+        "minimum phase is unknown."
+    )
+    profile_reply = f"{retraction}\n{_LABELED_PROFILE_TEXT}"
+
+    class RetractionAdapter(DescriptionGroundedAdapter):
+        def extract_measurements(
+            self,
+            description,
+            measurement_plan,
+            measurement_response,
+            previous_assessment,
+        ):
+            del description, measurement_plan
+            assert measurement_response == profile_reply
+            return {
+                "status": "need_more",
+                "facts": [
+                    fact.model_dump(mode="json")
+                    for fact in previous_assessment.facts
+                    if fact.request_id != "minimum_phase"
+                ],
+                "gaps": ["minimum_phase"],
+                "conflicts": [],
+                "conflict_request_ids": [],
+                "rationale": "The user explicitly retracted phase evidence.",
+            }
+
+    adapter = RetractionAdapter()
+    initial = run_cfdc_route(
+        "generic",
+        description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
+        diagnostic_adapter=adapter,
+    )
+    reopened = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response=profile_reply,
+    )
+
+    session = reopened.diagnostic_session
+    selected_candidates = {
+        candidate.fact.fact_id
+        for candidate in session.description_profile_assessment.candidates
+        if candidate.template_id == "spec_first_order_lag"
+    }
+    assert reopened.status == "need_more_information"
+    assert session.status == "collecting_description"
+    assert len(selected_candidates) == 7
+    assert session.specification_answer_history == [profile_reply]
+    assert web_ui._outputs(reopened, {})[17]["visible"] is False
+
+    migration_payload = session.model_dump(mode="json")
+    migration_payload.pop("description_profile_assessment")
+    restored = migrate_diagnostic_session_payload(migration_payload)
+    restored_candidates = {
+        candidate.fact.fact_id
+        for candidate in restored.description_profile_assessment.candidates
+        if candidate.template_id == "spec_first_order_lag"
+    }
+    assert restored.specification_answer_history == [profile_reply]
+    assert len(restored_candidates) == 7
+
+    grounded = continue_description_session(
+        session,
+        _EXCERPTS["minimum_phase"],
+        expected_revision=session.revision,
+        diagnostic_adapter=DescriptionGroundedAdapter(),
+    )
+    completed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=grounded,
+        diagnostic_adapter=DescriptionGroundedAdapter(),
+    )
+
+    assert completed.status == "candidate_unvalidated"
+    assert completed.diagnostic_session.specification_answer_history == [profile_reply]
+    assert completed.diagnostic_session.profile_measurement_round_count == 1
+
+
+def test_profile_values_conflicting_across_replies_block_compilation():
+    adapter = UnchangedProfileDiagnosticAdapter()
+    initial = run_cfdc_route(
+        "generic",
+        description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
+        diagnostic_adapter=adapter,
+    )
+    first = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=initial.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="input_change=1 deg",
+    )
+    conflicted = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=first.diagnostic_session,
+        diagnostic_adapter=adapter,
+        measurement_response="input_change=2 deg",
+    )
+
+    assert conflicted.status == "specification_conflict"
+    assert conflicted.compiled_specification_model is None
+    assert any(
+        "input_change" in conflict
+        for conflict in conflicted.specification_assessment.conflicts
+    )
+    assert any(
+        "input_change" in conflict
+        for conflict in conflicted.diagnostic_session.description_profile_assessment.conflicts
+    )
+    assert conflicted.diagnostic_session.specification_answer_history == [
+        "input_change=1 deg",
+        "input_change=2 deg",
+    ]

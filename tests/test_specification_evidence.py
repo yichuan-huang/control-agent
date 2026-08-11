@@ -1,4 +1,5 @@
 import math
+from copy import deepcopy
 
 import pytest
 from pydantic import ValidationError
@@ -953,6 +954,29 @@ def test_conflicting_specification_values_stop_model_compilation():
     assert corrected.specification_assessment.conflicts == []
 
 
+def test_unrelated_specification_reply_does_not_clear_an_existing_conflict():
+    session = _profile_measurement_session()
+    first = submit_specifications_to_session(
+        session,
+        "input_change=1 normalized_input;",
+    )
+    conflict = submit_specifications_to_session(
+        first,
+        "input_change=2 normalized_input;",
+    )
+
+    unrelated = submit_specifications_to_session(
+        conflict,
+        "response_time_s=20 s;",
+    )
+
+    assert unrelated.status == "specification_conflict"
+    assert any(
+        "input_change" in item
+        for item in unrelated.specification_assessment.conflicts
+    )
+
+
 def test_cross_field_unit_conflict_stops_before_model_compilation():
     report = run_cfdc_route(
         "generic",
@@ -1282,6 +1306,18 @@ def test_llm_registered_derivation_is_recomputed_from_verbatim_inputs():
     assert fact.value == pytest.approx(144000.0)
     assert fact.source_type == "derived_from_declared_physics"
     assert fact.derivation.rule_id == "thermal_time_constant_c_over_h"
+
+    wrong_case_payload = deepcopy(payload)
+    wrong_case_payload["facts"][0]["derivation"]["inputs"][0][
+        "source_text"
+    ] = heat_capacity_source.capitalize()
+    wrong_case = validate_specification_assessment_payload(
+        wrong_case_payload,
+        template=template,
+        source_texts=[f"{heat_capacity_source}; {heat_transfer_source}."],
+    )
+    assert wrong_case.facts == []
+    assert any("verbatim source" in item for item in wrong_case.rejected_facts)
 
 
 def test_all_registered_thermostat_derivation_rules_are_backend_verified():

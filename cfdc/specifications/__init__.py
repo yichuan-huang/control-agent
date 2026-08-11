@@ -2,6 +2,7 @@ from cfdc.specifications.compiler import compile_specification_model
 from cfdc.specifications.dialogue import (
     assess_specification_text,
     build_initial_specification_assessment,
+    collect_profile_fact_candidates,
     derive_thermostat_specification_facts,
     extract_explicit_specification_facts,
     merge_specification_facts,
@@ -21,6 +22,7 @@ from cfdc.specifications.units import (
 __all__ = [
     "assess_specification_text",
     "build_initial_specification_assessment",
+    "collect_profile_fact_candidates",
     "compile_specification_model",
     "default_specification_template_catalog",
     "derive_thermostat_specification_facts",

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
@@ -66,6 +65,7 @@ from cfdc.models import (
     OnlineRefinementPolicy,
     OnlineTuningState,
     PlantEvidencePackage,
+    ProfileFactCandidateAssessment,
     ScalarRLSTrackerState,
     SemanticRouteSelection,
     SimulationExperimentRecord,
@@ -107,6 +107,7 @@ from cfdc.sim import (
 from cfdc.specifications import (
     assess_specification_text,
     build_initial_specification_assessment,
+    collect_profile_fact_candidates,
     compile_specification_model,
     specification_template_for_profile,
 )
@@ -137,15 +138,6 @@ RouteId = Literal[
     "vtol-hover",
     "vtol-variation",
 ]
-
-_PROFILE_VALUE_WITH_UNIT = re.compile(
-    r"(?<![\w.])[+-]?\d+(?:\.\d+)?\s*"
-    r"(?:ms|s|degc|degf|deg|°c|°f|°|rad|mph|km/h|m/s|m|v|a|w|n|kg|pa|rpm|%|"
-    r"normalized_input|binary_command|毫秒|秒|摄氏度|华氏度|度|伏|安|瓦|牛|千克|帕)"
-    r"(?=\s|[,.;，。；]|$)",
-    flags=re.IGNORECASE,
-)
-
 
 def _cartpole_description() -> SystemDescription:
     return SystemDescription(
@@ -848,12 +840,38 @@ def _initial_profile_assessment(
     diagnosis: StructuralDiagnosis,
     classification,
     method_profile_id: str,
+    candidate_assessment: ProfileFactCandidateAssessment | None = None,
+    answer_history: list[str] | None = None,
 ) -> SpecificationAssessment:
-    initial = build_initial_specification_assessment(description, template)
-    if _PROFILE_VALUE_WITH_UNIT.search(description.text) is None:
+    candidates = [
+        candidate.fact
+        for candidate in (candidate_assessment.candidates if candidate_assessment else [])
+        if candidate.template_id == template.template_id
+    ]
+    template_conflict_markers = {
+        template.template_id.casefold(),
+        *(field.fact_id.casefold() for field in template.fields),
+        *(field.label.casefold() for field in template.fields),
+    }
+    candidate_conflicts = [
+        conflict
+        for conflict in (candidate_assessment.conflicts if candidate_assessment else [])
+        if any(marker in conflict.casefold() for marker in template_conflict_markers)
+    ]
+    initial = build_initial_specification_assessment(
+        description,
+        template,
+        facts=candidates,
+        conflicts=candidate_conflicts,
+    )
+    history = list(answer_history or [])
+    combined_text = "\n".join([description.text, *history])
+    if initial.status == "ready" and not initial.conflicts:
+        return initial
+    if not combined_text.strip():
         return initial
     try:
-        return assess_specification_text(
+        assessed = assess_specification_text(
             description.model_copy(deep=True),
             template.model_copy(deep=True),
             description.text,
@@ -862,11 +880,71 @@ def _initial_profile_assessment(
             diagnosis=diagnosis.model_copy(deep=True),
             classification=classification.model_copy(deep=True),
             method_profile_id=method_profile_id,
+            answer_history=history,
         )
+        # The initial description is the first evidence submission, not a
+        # repeated no-op reply. Keep the deterministic questions visible even when
+        # the optional provider returns the same missing set as the initial build.
+        if candidate_conflicts and not history:
+            rebuilt = build_initial_specification_assessment(
+                description,
+                template,
+                facts=assessed.facts,
+                conflicts=[*candidate_conflicts, *assessed.conflicts],
+            )
+            return rebuilt.model_copy(
+                update={
+                    "rejected_facts": assessed.rejected_facts,
+                    "no_progress": False,
+                }
+            )
+        return assessed.model_copy(update={"no_progress": False}) if not history else assessed
     except Exception:  # noqa: BLE001 - optional provider prefill must fail closed
         # Prefilling is optional. Provider timeouts or malformed extraction must
         # never block the already-grounded classification or invent parameters.
         return initial
+
+
+def _collect_profile_response_facts(
+    session: DiagnosticSessionState,
+    response_text: str,
+    diagnostic_adapter: DiagnosticAdapter | None,
+) -> ProfileFactCandidateAssessment | None:
+    """Persist Profile facts before a reply is interpreted as diagnostic evidence.
+
+    Profile replies are kept outside ``accumulated_description`` so structural
+    evidence remains auditable. A temporary description gives the deterministic and
+    optional LLM extractors the exact response text to ground against; the result is
+    then carried across any diagnostic reopen.
+    """
+
+    previous = session.description_profile_assessment
+    temporary_description = session.accumulated_description.model_copy(
+        update={
+            "text": "\n\n".join(
+                [
+                    session.accumulated_description.text,
+                    *session.specification_answer_history,
+                    response_text,
+                ]
+            )
+        }
+    )
+    try:
+        return collect_profile_fact_candidates(
+            temporary_description,
+            adapter=diagnostic_adapter,
+            previous=previous,
+        )
+    except Exception:  # noqa: BLE001 - optional enrichment fails closed
+        try:
+            return collect_profile_fact_candidates(
+                temporary_description,
+                adapter=None,
+                previous=previous,
+            )
+        except Exception:  # noqa: BLE001 - preserve the prior cache on bad input
+            return previous
 
 
 def _release_grounded_diagnosis_session(
@@ -967,6 +1045,8 @@ def _release_grounded_diagnosis_session(
         diagnosis=diagnosis,
         classification=classification,
         method_profile_id=selection.simulation_profile_id,
+        candidate_assessment=session.description_profile_assessment,
+        answer_history=session.specification_answer_history,
     )
     payload = session.model_dump(mode="python")
     payload.update(
@@ -991,7 +1071,25 @@ def _release_grounded_diagnosis_session(
             ),
         }
     )
-    return DiagnosticSessionState.model_validate(payload)
+    released = DiagnosticSessionState.model_validate(payload)
+    auto_boundary_profile = {
+        "input_min",
+        "input_max",
+        "output_min",
+        "output_max",
+    }
+    if (
+        released.specification_assessment is not None
+        and released.specification_assessment.status == "ready"
+        and auto_boundary_profile <= {field.fact_id for field in template.fields}
+    ):
+        return submit_specifications_to_session(
+            released,
+            "",
+            specification_adapter=diagnostic_adapter,
+            auto_confirm_simulation_bounds=True,
+        )
+    return released
 
 
 def run_cfdc_route(
@@ -1071,20 +1169,28 @@ def run_cfdc_route(
             confirmation_only = bool(
                 not text
                 and session.status
-                in {"awaiting_profile_measurements", "specification_conflict"}
+                in {
+                    "awaiting_profile_measurements",
+                    "specification_conflict",
+                    "specification_model_ready",
+                }
                 and session.specification_assessment is not None
                 and session.specification_assessment.status == "ready"
                 and simulation_bounds_confirmed
             )
             if not text and not confirmation_only:
                 raise ValueError("measurement_response must be non-empty")
-            if confirmation_only:
+            if confirmation_only and session.status != "specification_model_ready":
                 session = submit_specifications_to_session(
                     session,
                     "",
                     specification_adapter=diagnostic_adapter,
                     simulation_bounds_confirmed=True,
                 )
+            elif confirmation_only:
+                # Automatic natural-language compilation may already have produced
+                # the model. Keep the legacy empty confirmation callback idempotent.
+                pass
             elif session.status in {
                 "awaiting_measurements",
                 "measurement_needs_more",
@@ -1134,6 +1240,21 @@ def run_cfdc_route(
                     raise ValueError(
                         "maximum Profile measurement rounds already reached"
                     )
+                # A single Profile reply can also contain new numeric facts. Cache
+                # those facts before the same text is interpreted as a possible
+                # structural-diagnosis correction, so reopening the checklist does
+                # not discard or re-ask the Profile values.
+                profile_fact_assessment = _collect_profile_response_facts(
+                    session,
+                    text,
+                    diagnostic_adapter,
+                )
+                if profile_fact_assessment is not None:
+                    session = session.model_copy(
+                        update={
+                            "description_profile_assessment": profile_fact_assessment
+                        }
+                    )
                 newest_assessment = MeasurementAssessment.model_validate(
                     diagnostic_adapter.extract_measurements(
                         session.accumulated_description.model_copy(deep=True),
@@ -1157,6 +1278,12 @@ def run_cfdc_route(
                     "awaiting_profile_measurements",
                     "specification_conflict",
                 }:
+                    reopened_payload = session.model_dump(mode="python")
+                    reopened_payload["specification_answer_history"] = [
+                        *session.specification_answer_history,
+                        text,
+                    ]
+                    session = DiagnosticSessionState.model_validate(reopened_payload)
                     return run_cfdc_route(
                         route_id,
                         diagnostic_session_state=session,
@@ -1227,7 +1354,10 @@ def run_cfdc_route(
                             "evidence_readiness": None,
                             "specification_templates": [],
                             "specification_assessment": None,
-                            "specification_answer_history": [],
+                            "specification_answer_history": [
+                                *session.specification_answer_history,
+                                text,
+                            ],
                             "compiled_specification_model": None,
                             "candidate_route": None,
                             "compiled_route": None,
@@ -1242,6 +1372,7 @@ def run_cfdc_route(
                         text,
                         specification_adapter=diagnostic_adapter,
                         simulation_bounds_confirmed=simulation_bounds_confirmed,
+                        auto_confirm_simulation_bounds=True,
                         _revision_already_advanced=True,
                     )
                     if (
@@ -1460,12 +1591,31 @@ def run_cfdc_route(
                 diagnostic_adapter,
                 use_mechanism_cards=use_mechanism_cards,
             )
+        if session.status == "specification_model_ready":
+            # Re-enter the common compiled-model path so an initially complete
+            # natural-language Profile produces the same report as a later reply.
+            return run_cfdc_route(
+                route_id,
+                diagnostic_session_state=session,
+                diagnostic_adapter=diagnostic_adapter,
+                include_trajectory=include_trajectory,
+                run_id=run_id,
+                use_mechanism_cards=use_mechanism_cards,
+                tracking_state=tracking_state,
+                tracking_observations=tracking_observations,
+                simulation_bounds_confirmed=simulation_bounds_confirmed,
+                evidence_package=evidence_package,
+                execution_mode=execution_mode,
+                experiment_runner=experiment_runner,
+            )
         return CFDCRunReport(
             run_id=run_id or f"cfdc-{uuid4().hex[:12]}",
             route_id=route_id,
             status=(
                 "awaiting_profile_measurements"
                 if session.status == "awaiting_profile_measurements"
+                else "specification_conflict"
+                if session.status == "specification_conflict"
                 else "need_more_information"
             ),
             system_description=session.accumulated_description,

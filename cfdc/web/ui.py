@@ -73,16 +73,27 @@ def _outputs(report, state):
         "awaiting_profile_measurements",
         "specification_conflict",
     }
-    show_measurement = bool(
-        session
-        and (
-            session.status in profile_measurement_statuses
-            or (
-                session.status in diagnostic_measurement_statuses
-                and not view["clarifications"]
-            )
-        )
+    profile_assessment_status = (
+        session.specification_assessment.status
+        if session is not None and session.specification_assessment is not None
+        else None
     )
+    profile_needs_more = bool(
+        session is not None
+        and session.status in profile_measurement_statuses
+        and profile_assessment_status in {None, "need_more", "conflict"}
+    )
+    diagnostic_input = bool(
+        session
+        and session.status in diagnostic_measurement_statuses
+        and not view["clarifications"]
+    )
+    automatically_ready = bool(
+        session is not None
+        and session.status == "specification_model_ready"
+        and profile_assessment_status == "ready"
+    )
+    show_measurement = diagnostic_input or profile_needs_more or automatically_ready
     confirmation_only = bool(
         show_measurement
         and session is not None
@@ -90,14 +101,7 @@ def _outputs(report, state):
         and session.specification_assessment is not None
         and session.specification_assessment.status == "ready"
     )
-    show_measurement_input = show_measurement and not confirmation_only
-    profile_needs_more = bool(
-        show_measurement_input
-        and session is not None
-        and session.status in profile_measurement_statuses
-        and session.specification_assessment is not None
-        and session.specification_assessment.status != "ready"
-    )
+    show_measurement_input = (diagnostic_input or profile_needs_more) and not confirmation_only
     visibility = view["technical_visibility"]
     return (
         state,
@@ -130,12 +134,19 @@ def _outputs(report, state):
         gr.update(
             visible=show_measurement,
             value=(
-                "确认软件仿真边界并继续"
+                "已自动确认软件仿真边界"
+                if automatically_ready
+                else "确认软件仿真边界并继续"
                 if confirmation_only
                 else ("继续补充参数" if profile_needs_more else "提交测量回复")
             ),
+            interactive=not automatically_ready,
         ),
-        gr.update(visible=show_measurement, value=False),
+        gr.update(
+            visible=show_measurement,
+            value=automatically_ready,
+            interactive=not automatically_ready,
+        ),
         gr.update(visible=visibility["diagnosis"]),
         gr.update(visible=visibility["route"]),
         gr.update(visible=visibility["model"]),

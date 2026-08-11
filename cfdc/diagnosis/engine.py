@@ -66,7 +66,10 @@ def _has_significant_dead_time_evidence(text: str) -> bool:
             r"(?:no|without|does not have|is not)\s+(?:\w+\s+){0,6}"
             r"(?:dead time|pure delay|pause|silent interval|transport delay)"
         ),
-        r"(?:没有|不会出现|无|并无)[^。；，,.]{0,30}(?:停顿|静默|纯时延|纯等待|输运时延)",
+        r"(?:does\s+not|doesn't|need\s+not)\s+(?:need\s+to\s+)?(?:wait|delay)",
+        r"without\s+(?:having\s+to\s+)?(?:wait|delay)",
+        r"(?:没有|不会出现|不存在|无|并无)[^。；，,.]{0,30}(?:停顿|静默|纯时延|纯等待|输运时延)",
+        r"(?:无需|(?<![得非是])不(?:需要|用|必)?)\s*(?:等待|延迟)",
     )
     if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in negated):
         return False
@@ -76,6 +79,18 @@ def _has_significant_dead_time_evidence(text: str) -> bool:
         r"\bdead time\b",
         r"(?:明显|可见|独立)[^。；，,.]{0,18}(?:停顿|静默区间|纯等待)",
         r"(?:显著纯时延|输运时延|纯等待时间)",
+        (
+            r"(?:input|command|actuator).{0,20}(?:change|step|switch)"
+            r".{0,24}(?:wait|delay|dead time).{0,12}\d"
+            r".{0,12}(?:ms|s|seconds?|milliseconds?).{0,30}"
+            r"(?:output|response).{0,16}(?:start|begin)"
+        ),
+        (
+            r"(?:输入|命令|执行器).{0,16}(?:改变|变化|切换)"
+            r".{0,24}(?:等待|延迟|静默).{0,12}\d"
+            r".{0,10}(?:ms|s|毫秒|秒).{0,24}"
+            r"(?:输出|响应).{0,12}(?:才|随后)?(?:开始|变化)"
+        ),
     )
     return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in positive)
 
@@ -140,7 +155,10 @@ def _has_explicit_no_dead_time(text: str) -> bool:
             r"(?:no|without|does not have|is not)\s+(?:\w+\s+){0,6}"
             r"(?:dead time|pure delay|pause|silent interval|transport delay)"
         ),
-        r"(?:没有|不会出现|无|并无)[^。；，,.]{0,30}(?:停顿|静默|纯时延|纯等待|输运时延)",
+        r"(?:does\s+not|doesn't|need\s+not)\s+(?:need\s+to\s+)?(?:wait|delay)",
+        r"without\s+(?:having\s+to\s+)?(?:wait|delay)",
+        r"(?:没有|不会出现|不存在|无|并无)[^。；，,.]{0,30}(?:停顿|静默|纯时延|纯等待|输运时延)",
+        r"(?:无需|(?<![得非是])不(?:需要|用|必)?)\s*(?:等待|延迟)",
         r"(?:starts|begins)\s+promptly",
         r"及时开始",
     )
@@ -552,6 +570,12 @@ def infer_description_field_assessment(
             text,
         ):
             return CouplingAssessment.SISO.value
+        return None
+    if re.search(
+        r"(?:uncertaint|variab|repeat|operating condition|load|parameter|"
+        r"不确定|变化性|重复试验|工况|负载|元件|运行条件|参数)",
+        text,
+    ) is None:
         return None
     if re.search(r"(?:material|substantial|large|大幅|明显)", text):
         return UncertaintyAssessment.LARGE.value

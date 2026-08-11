@@ -29,13 +29,18 @@ from cfdc.models import (
     DiagnosticTurn,
     MeasurementAssessment,
     PlantEvidencePackage,
+    ProfileFactCandidateAssessment,
     SimulationBoundaryConfirmation,
+    SpecificationQuestion,
     StructuralDiagnosis,
     SystemDescription,
 )
 from cfdc.specifications import (
     assess_specification_text,
+    build_initial_specification_assessment,
+    collect_profile_fact_candidates,
     compile_specification_model,
+    merge_specification_facts,
     specification_template_for_profile,
 )
 
@@ -191,6 +196,27 @@ def _ground_description_checklist(
     return checklist, assessment, diagnosis
 
 
+def _collect_profile_description_assessment(
+    description: SystemDescription,
+    diagnostic_adapter: DiagnosticAdapter | None,
+    previous: ProfileFactCandidateAssessment | None,
+) -> ProfileFactCandidateAssessment:
+    """Collect optional Profile facts without blocking structural guidance."""
+
+    try:
+        return collect_profile_fact_candidates(
+            description,
+            adapter=diagnostic_adapter,
+            previous=previous,
+        )
+    except Exception:  # noqa: BLE001 - optional Profile enrichment fails closed
+        return collect_profile_fact_candidates(
+            description,
+            adapter=None,
+            previous=previous,
+        )
+
+
 def start_diagnostic_session(
     description: SystemDescription,
     *,
@@ -239,6 +265,11 @@ def start_diagnostic_session(
             working_description, diagnostic_adapter, use_mechanism_cards
         )
         checklist = build_diagnostic_checklist(working_description, resolved_diagnosis)
+    description_profile_assessment = _collect_profile_description_assessment(
+        accumulated_description,
+        diagnostic_adapter,
+        None,
+    )
     measurement_plan = build_measurement_plan(checklist)
     if diagnostic_adapter is not None and hasattr(
         diagnostic_adapter, "phrase_measurement_plan"
@@ -270,6 +301,7 @@ def start_diagnostic_session(
         checklist=checklist,
         measurement_plan=measurement_plan,
         description_assessment=description_assessment,
+        description_profile_assessment=description_profile_assessment,
         pending_clarification_questions=[],
         evidence_level=(
             "description_grounded"
@@ -377,6 +409,18 @@ def continue_description_session(
         )
         if description_assessment is not None:
             diagnosis = grounded_diagnosis
+    profile_source_description = accumulated.model_copy(
+        update={
+            "text": "\n\n".join(
+                [accumulated.text, *state.specification_answer_history]
+            )
+        }
+    )
+    description_profile_assessment = _collect_profile_description_assessment(
+        profile_source_description,
+        diagnostic_adapter,
+        state.description_profile_assessment,
+    )
     updates = {
         "accumulated_description": accumulated,
         "turns": [*state.turns, turn],
@@ -385,12 +429,13 @@ def continue_description_session(
         "checklist": checklist,
         "measurement_plan": measurement_plan,
         "description_assessment": description_assessment,
+        "description_profile_assessment": description_profile_assessment,
         "description_turn_count": state.description_turn_count + 1,
         "measurement_assessment": None,
         "measurement_history": [],
         "measurement_response_history": [],
         "measurement_round_count": 0,
-        "profile_measurement_round_count": 0,
+        "profile_measurement_round_count": state.profile_measurement_round_count,
         "evidence_level": (
             "description_grounded"
             if description_assessment is not None
@@ -403,7 +448,6 @@ def continue_description_session(
         "evidence_readiness": None,
         "specification_templates": [],
         "specification_assessment": None,
-        "specification_answer_history": [],
         "compiled_specification_model": None,
         "candidate_route": None,
         "compiled_route": None,
@@ -690,7 +734,6 @@ def submit_profile_measurement_assessment(
                 "evidence_readiness": None,
                 "specification_templates": [],
                 "specification_assessment": None,
-                "specification_answer_history": [],
                 "compiled_specification_model": None,
                 "candidate_route": None,
                 "compiled_route": None,
@@ -745,12 +788,207 @@ def submit_evidence_to_session(
     )
 
 
+def _merge_cached_profile_facts(
+    state: DiagnosticSessionState,
+    template,
+    assessment,
+):
+    """Merge facts already grounded by the description/Profile candidate channel."""
+
+    cached = state.description_profile_assessment
+    if cached is None:
+        return assessment
+    candidate_facts = [
+        candidate.fact
+        for candidate in cached.candidates
+        if candidate.template_id == template.template_id
+    ]
+    if not candidate_facts:
+        return assessment
+    facts, cache_conflicts = merge_specification_facts(
+        assessment.facts,
+        candidate_facts,
+    )
+    conflicts = list(dict.fromkeys([*assessment.conflicts, *cache_conflicts]))
+    rebuilt = build_initial_specification_assessment(
+        state.accumulated_description,
+        template,
+        facts=facts,
+        conflicts=conflicts,
+    )
+    changed = facts != assessment.facts or conflicts != assessment.conflicts
+    return rebuilt.model_copy(
+        update={
+            "rejected_facts": assessment.rejected_facts,
+            "no_progress": False if changed else assessment.no_progress,
+        }
+    )
+
+
+_SCOPE_SENTENCE_BOUNDARY = re.compile(
+    r"(?<=[。！？!?])|(?<=\.)(?=\s|$)|[;；\n]+"
+)
+_SCOPE_NEGATION = re.compile(
+    r"(?:\b(?:ranges?|bounds?|limits?)\b.{0,24}"
+    r"\b(?:are\s+not|aren't|do\s+not|don't)\b.{0,24}"
+    r"(?:used|intended|for|simulation|boundary)|"
+    r"\b(?:does\s+not|doesn't|cannot|can't)\s+"
+    r"(?:use|apply|serve|define|set)\b.{0,30}"
+    r"(?:ranges?|bounds?|limits?|simulation)|"
+    r"\b(?:not|never)\s+(?:used|intended|applied|treated)\b.{0,30}"
+    r"(?:software\s+simulation|simulation)|"
+    r"(?:software\s+simulation|simulation).{0,24}"
+    r"\b(?:does\s+not|doesn't|is\s+not|isn't|cannot|can't)\b.{0,24}"
+    r"(?:use|range|bound|limit)|"
+    r"(?:不用于|不用作|不作为|未用于|未用作|未作为).{0,24}"
+    r"(?:软件仿真|仿真)|"
+    r"(?:范围|边界|上下限).{0,20}(?:并非|不是|不能作为|不可作为).{0,20}"
+    r"(?:软件仿真|仿真|边界)|"
+    r"(?:软件仿真|仿真).{0,20}(?:不使用|未使用|不用|不能使用).{0,20}"
+    r"(?:范围|边界|上下限))",
+    flags=re.IGNORECASE,
+)
+
+
+def _scope_statement_is_negated(text: str) -> bool:
+    return _SCOPE_NEGATION.search(text) is not None
+
+
+def _has_per_fact_simulation_boundary_scope(fact_id: str, text: str) -> bool:
+    """Require simulation purpose, signal role, and bound in one local clause."""
+
+    clauses = [
+        clause
+        for sentence in _SCOPE_SENTENCE_BOUNDARY.split(text)
+        for clause in re.split(r"[,，]+", sentence)
+        if clause.strip()
+    ]
+    if any(_scope_statement_is_negated(clause) for clause in clauses):
+        return False
+    role_pattern = (
+        r"(?:input|command|actuat|throttle|heater|valve|pump|"
+        r"输入|命令|执行|油门|加热|阀|泵)"
+        if fact_id.startswith("input_")
+        else r"(?:output|response|speed|temperature|level|position|输出|响应|车速|温度|液位|位置)"
+    )
+    direction_pattern = (
+        r"(?:min|lower|下限|最小|range|bounds?|limits?|范围|边界|上下限)"
+        if fact_id.endswith("_min")
+        else r"(?:max|upper|上限|最大|range|bounds?|limits?|范围|边界|上下限)"
+    )
+    explicit_scope_pattern = re.compile(
+        r"(?:(?:software\s+)?simulation|simulation[- ]only|软件仿真|仿真)"
+        r".{0,24}(?:run|stop|range|bounds?|limits?|boundary|"
+        r"运行|停止|范围|边界|上下限|下限|上限)|"
+        r"(?:run|stop|range|bounds?|limits?|boundary|"
+        r"运行|停止|范围|边界|上下限|下限|上限)"
+        r".{0,24}(?:(?:software\s+)?simulation|simulation[- ]only|软件仿真|仿真)",
+        flags=re.IGNORECASE,
+    )
+    return any(
+        re.search(role_pattern, clause, flags=re.IGNORECASE)
+        and re.search(direction_pattern, clause, flags=re.IGNORECASE)
+        and explicit_scope_pattern.search(clause)
+        for clause in clauses
+    )
+
+
+def _simulation_scope_is_negated(text: str) -> bool:
+    return any(
+        _scope_statement_is_negated(sentence)
+        for sentence in _SCOPE_SENTENCE_BOUNDARY.split(text)
+        if sentence.strip()
+    )
+
+
+def _has_global_simulation_boundary_scope(text: str) -> bool:
+    """Require one local statement tying all ranges to software simulation use."""
+
+    sentences = [
+        sentence
+        for sentence in _SCOPE_SENTENCE_BOUNDARY.split(text.casefold())
+        if sentence.strip()
+    ]
+    if any(_scope_statement_is_negated(sentence) for sentence in sentences):
+        return False
+    for sentence in sentences:
+        if re.search(
+            r"(?:software\s+simulation|simulation[- ]only|软件仿真|仅限仿真)",
+            sentence,
+        ) is None:
+            continue
+        input_role = re.search(
+            r"(?:input|command|actuat|throttle|heater|valve|pump|"
+            r"输入|命令|执行|油门|加热|阀|泵)",
+            sentence,
+        )
+        output_role = re.search(
+            r"(?:output|response|speed|temperature|level|position|"
+            r"输出|响应|车速|温度|液位|位置)",
+            sentence,
+        )
+        collective_reference = re.search(
+            r"(?:(?:these|those|above|all)(?:\s+input\s*/?\s*output)?\s+"
+            r"(?:ranges?|bounds?|limits?)|the\s+(?:ranges?|bounds?|limits?)\s+above|"
+            r"(?:这些|上述|所有|全部)(?:输入[/、和及]?输出)?(?:范围|边界|上下限)|"
+            r"(?:这些|上述|所有|全部)(?:范围|边界|上下限))",
+            sentence,
+        )
+        has_both_scoped_roles = bool(
+            input_role
+            and output_role
+            and re.search(r"(?:ranges?|bounds?|limits?|范围|边界|上下限)", sentence)
+        )
+        if collective_reference is None and not has_both_scoped_roles:
+            continue
+        direct_scope = re.search(
+            r"(?:software\s+simulation(?:'s)?\s+"
+            r"(?:input|output|run|stop|throttle|speed|temperature|level|position)\s+"
+            r"(?:ranges?|bounds?|limits?)|"
+            r"软件仿真(?:的)?(?:输入|输出|运行|停止|油门|车速|温度|液位|位置)"
+            r"(?:范围|边界|上下限))",
+            sentence,
+        )
+        purpose_scope = re.search(
+            r"(?:(?:used|serve|apply|only|solely|for).{0,30}"
+            r"(?:run|stop|bound|limit)|"
+            r"(?:用于|用作|作为|仅供).{0,24}(?:运行|停止|边界|上下限))",
+            sentence,
+        )
+        if direct_scope is not None or purpose_scope is not None:
+            return True
+    return False
+
+
+def _simulation_boundary_scope_is_grounded(
+    description: SystemDescription,
+    required_boundary_ids: set[str],
+    assessment,
+    history: list[str],
+) -> bool:
+    facts_by_id = {fact.fact_id: fact for fact in assessment.facts}
+    if not required_boundary_ids or not required_boundary_ids <= set(facts_by_id):
+        return False
+    scope_text = "\n".join([description.text, *history]).casefold()
+    if _simulation_scope_is_negated(scope_text):
+        return False
+    per_fact_scope = all(
+        _has_per_fact_simulation_boundary_scope(
+            fact_id,
+            facts_by_id[fact_id].source_text,
+        )
+        for fact_id in required_boundary_ids
+    )
+    return per_fact_scope or _has_global_simulation_boundary_scope(scope_text)
+
+
 def submit_specifications_to_session(
     state: DiagnosticSessionState,
     specification_text: str,
     *,
     specification_adapter=None,
     simulation_bounds_confirmed: bool = False,
+    auto_confirm_simulation_bounds: bool = False,
     _revision_already_advanced: bool = False,
 ) -> DiagnosticSessionState:
     """Assess post-classification profile facts supplied through the shared textbox."""
@@ -780,7 +1018,47 @@ def submit_specifications_to_session(
             state.semantic_selection.simulation_profile_id
         )
     )
-    if text:
+    boundary_fact_ids = {
+        "input_min",
+        "input_max",
+        "output_min",
+        "output_max",
+    }
+    template_fact_ids = {field.fact_id for field in template.fields}
+    required_boundary_ids = boundary_fact_ids & template_fact_ids
+    history = (
+        [*state.specification_answer_history, text]
+        if text
+        else list(state.specification_answer_history)
+    )
+    previous_assessment = state.specification_assessment
+    scope_only_submission = bool(
+        text
+        and previous_assessment is not None
+        and previous_assessment.status == "need_more"
+        and previous_assessment.missing_fact_ids == ["simulation_boundary_scope"]
+        and not previous_assessment.conflicts
+        and _simulation_boundary_scope_is_grounded(
+            state.accumulated_description,
+            required_boundary_ids,
+            previous_assessment,
+            history,
+        )
+    )
+    if scope_only_submission:
+        assessment = previous_assessment.model_copy(
+            update={
+                "status": "ready",
+                "missing_fact_ids": [],
+                "questions": [],
+                "rationale": (
+                    "All required Profile facts and their software-simulation "
+                    "boundary purpose are explicit."
+                ),
+                "no_progress": False,
+            }
+        )
+    elif text:
         assessment = assess_specification_text(
             state.accumulated_description.model_copy(deep=True),
             template.model_copy(deep=True),
@@ -792,12 +1070,11 @@ def submit_specifications_to_session(
             method_profile_id=state.semantic_selection.simulation_profile_id,
             answer_history=state.specification_answer_history,
         )
-        history = [*state.specification_answer_history, text]
     else:
         assessment = deepcopy(state.specification_assessment)
         if assessment is None or assessment.status != "ready":
             raise ValueError("measurement response must be non-empty")
-        history = list(state.specification_answer_history)
+    assessment = _merge_cached_profile_facts(state, template, assessment)
     if assessment.status == "conflict":
         return transition(
             {
@@ -816,9 +1093,60 @@ def submit_specifications_to_session(
                 "status": "awaiting_profile_measurements",
             },
         )
+    scope_grounded = _simulation_boundary_scope_is_grounded(
+        state.accumulated_description,
+        required_boundary_ids,
+        assessment,
+        history,
+    )
+    legacy_explicit_submission = bool(text) and text.lstrip().casefold().startswith(
+        ("manual:", "json:", "structured:")
+    )
+    auto_scope_confirmation = auto_confirm_simulation_bounds and not (
+        legacy_explicit_submission
+    )
     if (
-        state.accumulated_description.simulation_boundary_confirmation is None
+        required_boundary_ids
+        and state.accumulated_description.simulation_boundary_confirmation is None
         and not simulation_bounds_confirmed
+        and auto_scope_confirmation
+        and not scope_grounded
+    ):
+        scope_question = SpecificationQuestion(
+            question_id="spec_simulation_boundary_scope",
+            requested_fact_ids=["simulation_boundary_scope"],
+            prompt=(
+                "请说明输入和输出范围仅作为本次软件仿真的运行/停止边界，"
+                "而不是实体硬件操作或安全认证范围。"
+            ),
+            why_needed="软件模型只能在明确声明的仿真边界内运行。",
+            where_to_find="可直接在本次 Profile 回复中补充这句范围用途说明。",
+            unit_hint="无需填写单位",
+            example="这些输入/输出范围只用于软件仿真的运行和停止边界。",
+        )
+        scoped_assessment = assessment.model_copy(
+            update={
+                "status": "need_more",
+                "missing_fact_ids": ["simulation_boundary_scope"],
+                "questions": [scope_question],
+                "rationale": (
+                    "数值范围已具备，但原文没有明确说明它们仅用于软件仿真边界。"
+                ),
+            }
+        )
+        return transition(
+            {
+                "specification_assessment": scoped_assessment,
+                "specification_answer_history": history,
+                "compiled_specification_model": None,
+                "status": "awaiting_profile_measurements",
+            }
+    )
+    if (
+        required_boundary_ids
+        and state.accumulated_description.simulation_boundary_confirmation is None
+        and not simulation_bounds_confirmed
+        and not auto_scope_confirmation
     ):
         raise ValueError(
             "confirmed simulation bounds are required before compiling a software model"
@@ -996,7 +1324,6 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             "evidence_readiness": None,
             "specification_templates": [],
             "specification_assessment": None,
-            "specification_answer_history": [],
             "compiled_specification_model": None,
             "pending_clarification_questions": [],
             "candidate_route": None,
@@ -1099,6 +1426,34 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
         )
         payload["accumulated_description"] = rebuilt_accumulated.model_dump(
             mode="python"
+        )
+        # v4 sessions created before the description/Profile split have no cache.
+        # Rebuild deterministic candidates from the full accumulated description;
+        # if a newer payload already carries LLM-enriched candidates, merge them
+        # without dropping their auditable history.
+        persisted_profile_payload = payload.get("description_profile_assessment")
+        persisted_profile = None
+        if persisted_profile_payload is not None:
+            persisted_profile = ProfileFactCandidateAssessment.model_validate(
+                persisted_profile_payload
+            )
+        specification_history = payload.get("specification_answer_history", [])
+        if not isinstance(specification_history, list) or any(
+            not isinstance(item, str) for item in specification_history
+        ):
+            raise ValueError("specification answer history entries must be strings")
+        profile_source_description = rebuilt_accumulated.model_copy(
+            update={
+                "text": "\n\n".join(
+                    [rebuilt_accumulated.text, *specification_history]
+                )
+            }
+        )
+        payload["description_profile_assessment"] = (
+            collect_profile_fact_candidates(
+                profile_source_description,
+                previous=persisted_profile,
+            ).model_dump(mode="python")
         )
         if diagnosis is None:
             diagnosis = DiagnosticEngine(adapter=None).diagnose(rebuilt_accumulated)

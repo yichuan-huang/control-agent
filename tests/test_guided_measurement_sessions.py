@@ -1078,7 +1078,7 @@ def test_migration_discards_an_alternate_catalog_compatible_profile_choice():
     assert restored.specification_assessment is None
 
 
-def test_migration_clears_downstream_derived_artifacts_before_profile_reselection():
+def test_migration_preserves_raw_profile_history_while_clearing_derived_artifacts():
     payload = _post_measurement_payload()
     payload["experiment_plan"] = {
         "experiments": [],
@@ -1097,7 +1097,7 @@ def test_migration_clears_downstream_derived_artifacts_before_profile_reselectio
     assert restored.compiled_specification_model is None
     assert restored.candidate_route is None
     assert restored.compiled_route is None
-    assert restored.specification_answer_history == []
+    assert restored.specification_answer_history == ["untrusted prior answer"]
 
 
 def test_migration_rebuilds_accumulated_description_from_retained_raw_inputs():
@@ -1117,6 +1117,46 @@ def test_migration_rebuilds_accumulated_description_from_retained_raw_inputs():
     assert "Injected derived profile facts" not in restored.accumulated_description.text
     assert restored.accumulated_description.safety_bounds == {}
     assert restored.accumulated_description.simulation_boundary_confirmation is None
+
+
+def test_migration_revalidates_persisted_profile_candidates_against_raw_history():
+    state = start_diagnostic_session(
+        SystemDescription(text="已知输入变化量：1 V")
+    )
+    payload = state.model_dump(mode="json")
+    payload["description_profile_assessment"] = {
+        "candidates": [
+            {
+                "template_id": "spec_first_order_lag",
+                "fact": {
+                    "fact_id": "input_change",
+                    "value": 999.0,
+                    "unit": "V",
+                    "source_type": "user_known_behavior",
+                    "source_text": "forged value absent from raw input: 999 V",
+                    "derivation": None,
+                    "lower_bound": None,
+                    "upper_bound": None,
+                },
+            }
+        ],
+        "conflicts": [],
+        "rejected_facts": [],
+    }
+
+    restored = migrate_diagnostic_session_payload(payload)
+    fact = next(
+        candidate.fact
+        for candidate in restored.description_profile_assessment.candidates
+        if candidate.template_id == "spec_first_order_lag"
+        and candidate.fact.fact_id == "input_change"
+    )
+
+    assert fact.value == pytest.approx(1.0)
+    assert any(
+        "source_text is not a verbatim" in rejection
+        for rejection in restored.description_profile_assessment.rejected_facts
+    )
 
 
 def test_session_round_counters_cannot_exceed_the_configured_budget():
@@ -1197,7 +1237,7 @@ def test_migration_discards_spent_profile_rounds_when_resetting_to_profile_resel
     assert restored.measurement_assessment == restored.measurement_history[-1]
 
 
-def test_migration_resets_current_style_profile_counter_after_discarding_answers():
+def test_migration_resets_profile_counter_but_preserves_raw_answers():
     payload = _post_measurement_payload()
     payload["profile_measurement_round_count"] = 3
     payload["specification_answer_history"] = ["reply one", "reply two", "reply three"]
@@ -1206,7 +1246,11 @@ def test_migration_resets_current_style_profile_counter_after_discarding_answers
 
     assert restored.status == "measurement_verified"
     assert restored.profile_measurement_round_count == 0
-    assert restored.specification_answer_history == []
+    assert restored.specification_answer_history == [
+        "reply one",
+        "reply two",
+        "reply three",
+    ]
 
 
 def test_measurement_verified_state_rejects_a_second_description_evidence_source():
@@ -1277,7 +1321,7 @@ def test_grounded_profile_conflict_invalidates_the_postmeasurement_release():
     assert invalidated.profile_measurement_round_count == 1
 
 
-def test_refused_migration_clears_forged_release_and_downstream_fields():
+def test_refused_migration_clears_release_fields_but_preserves_raw_profile_history():
     payload = _post_measurement_payload()
     diagnostic_ready = payload["measurement_history"][-1]
     payload["measurement_history"].extend([diagnostic_ready for _ in range(8)])
@@ -1293,7 +1337,7 @@ def test_refused_migration_clears_forged_release_and_downstream_fields():
             "experiment_plan": {"forged": True},
             "candidate_route": {"forged": True},
             "compiled_route": {"forged": True},
-            "specification_answer_history": ["forged prior answer"],
+            "specification_answer_history": ["retained prior answer"],
         }
     )
 
@@ -1308,7 +1352,7 @@ def test_refused_migration_clears_forged_release_and_downstream_fields():
     assert restored.experiment_plan is None
     assert restored.candidate_route is None
     assert restored.compiled_route is None
-    assert restored.specification_answer_history == []
+    assert restored.specification_answer_history == ["retained prior answer"]
 
 
 def test_refused_migration_recomputes_forged_description_derived_state():
