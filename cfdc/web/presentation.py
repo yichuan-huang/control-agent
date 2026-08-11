@@ -799,10 +799,16 @@ def specification_guidance_markdown(report: CFDCRunReport) -> str:
             )
     rejected = ""
     if assessment.rejected_facts:
-        rejected = (
-            "\n\n- ⚠️ 有些内容未能从原文核验；"
-            "请按下方仍缺少的项目补充数值与单位。"
-        )
+        if assessment.status == "ready":
+            rejected = (
+                "\n\n- ℹ️ 必填规格已经核验完整；有些附加内容未被采用，"
+                "也不会参与模型或控制器计算。"
+            )
+        else:
+            rejected = (
+                "\n\n- ⚠️ 本次提交中有内容未能从原文核验，系统未采用这些内容；"
+                "请继续补充下方仍缺少或冲突的必填规格。"
+            )
     missing = ""
     if assessment.missing_fact_ids:
         missing_labels = [

@@ -33,6 +33,7 @@ from cfdc.web.service import (
     parse_safety_bounds,
     submit_app_evidence,
     submit_app_json,
+    submit_app_measurement_response,
     submit_app_specifications,
 )
 from cfdc.web.service import start_app_run as _start_app_run
@@ -769,6 +770,57 @@ def test_thermostat_natural_language_and_json_compile_equivalent_models(
     assert "3600 * heat_capacity / heat_transfer_coefficient" in guidance
 
 
+def test_ready_thermostat_specs_do_not_render_ignored_extras_as_missing(
+    guided_adapter,
+):
+    description = (
+        "A binary heater command controls room temperature through fixed thermostat "
+        "hysteresis. The temperature settles, starts promptly in the final direction, "
+        "and has no repeated peaks."
+    )
+    paragraph = (
+        "室外温度 50 degF、设定值 65 degF；等效热容 C = 20000 Btu/degF、"
+        "传热系数 H = 500 Btu/(h degF)、炉子供热率 25000 Btu/h、"
+        "滞环半宽 0.5 degF。"
+    )
+    initial, state = _start_verified_app_run(
+        description,
+        "room temperature, heater state",
+        "binary heater command",
+        "",
+        NATURAL_LANGUAGE_MODE,
+        True,
+        "",
+        "",
+        "",
+    )
+    session = DiagnosticSessionState.model_validate(state["session"])
+    reviewed = submit_specifications_to_session(
+        session,
+        paragraph,
+        simulation_bounds_confirmed=True,
+    )
+    assessment = reviewed.specification_assessment.model_copy(
+        update={
+            "rejected_facts": [
+                "sample_time_s: this optional extra is not a required Profile fact"
+            ]
+        }
+    )
+
+    guidance = render_report(
+        initial.model_copy(update={"specification_assessment": assessment})
+    )["specification_guidance"]
+
+    assert assessment.status == "ready"
+    assert assessment.missing_fact_ids == []
+    assert "有些内容未能从原文核验" not in guidance
+    assert "请按下方仍缺少的项目补充" not in guidance
+    assert "仍缺少" not in guidance
+    assert "必填规格已经核验完整" in guidance
+    assert "附加内容未被采用" in guidance
+
+
 def test_thermostat_prompt_goes_directly_to_effect_validation_without_ai(
     monkeypatch,
     guided_adapter,
@@ -1195,17 +1247,24 @@ def test_repeated_specification_gap_is_rendered_as_no_progress_not_full_question
         "",
     )
 
-    unresolved, _ = submit_app_specifications(
+    unresolved, next_state = submit_app_measurement_response(
         state,
         "The heater is fast and strong, but I do not know numeric values.",
         simulation_bounds_confirmed=True,
     )
     guidance = render_report(unresolved)["specification_guidance"]
+    outputs = web_ui._outputs(unresolved, next_state)
 
     assert unresolved.specification_assessment.no_progress is True
     assert "本次提交未增加可验证规格" in guidance
     assert "仍缺少" in guidance
     assert "为什么需要" not in guidance
+    assert unresolved.controller is None
+    assert next_state["session"] is not None
+    assert outputs[17]["visible"] is True
+    assert outputs[17]["label"] == "继续补充缺少的核心参数"
+    assert outputs[18]["visible"] is True
+    assert outputs[18]["value"] == "继续补充参数"
 
 
 def test_specification_form_accepts_answers_in_visible_question_order(

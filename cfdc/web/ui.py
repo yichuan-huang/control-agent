@@ -91,6 +91,13 @@ def _outputs(report, state):
         and session.specification_assessment.status == "ready"
     )
     show_measurement_input = show_measurement and not confirmation_only
+    profile_needs_more = bool(
+        show_measurement_input
+        and session is not None
+        and session.status in profile_measurement_statuses
+        and session.specification_assessment is not None
+        and session.specification_assessment.status != "ready"
+    )
     visibility = view["technical_visibility"]
     return (
         state,
@@ -113,13 +120,23 @@ def _outputs(report, state):
         view["tuning"],
         view["performance"],
         view["raw"],
-        gr.update(visible=show_measurement_input, value=""),
+        gr.update(
+            visible=show_measurement_input,
+            value="",
+            label=(
+                "继续补充缺少的核心参数"
+                if profile_needs_more
+                else "核心参数与测量回复"
+            ),
+        ),
         gr.update(
             visible=show_measurement,
             value=(
                 "确认软件仿真边界并继续"
                 if confirmation_only
-                else "提交测量回复"
+                else (
+                    "继续补充参数" if profile_needs_more else "提交测量回复"
+                )
             ),
         ),
         gr.update(visible=show_measurement, value=False),
