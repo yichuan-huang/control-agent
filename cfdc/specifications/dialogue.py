@@ -4,6 +4,7 @@ import ast
 import math
 import re
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 from cfdc.models import (
@@ -29,6 +30,14 @@ _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 
 class UnitCompatibilityError(ValueError):
     pass
+
+
+@dataclass
+class LabeledSpecificationParse:
+    facts: list[SpecificationFact]
+    claimed_fact_ids: set[str]
+    rejected_facts: list[str]
+    all_nonempty_lines_labeled: bool
 
 
 def _dynamic_output_names(description: SystemDescription) -> list[str]:
@@ -449,6 +458,161 @@ def extract_explicit_specification_facts(
     return facts
 
 
+def _strip_labeled_line_formatting(line: str) -> str:
+    line = re.sub(r"^\s*(?:[-+*]\s+|\d+[.)]\s*)", "", line)
+    return line.replace("**", "").replace("__", "").strip()
+
+
+def _validate_labeled_unit_suffix(suffix: str) -> None:
+    suffix = suffix.strip(" \t。．.!！?？;；,，、()[]{}（）［］｛｝\"'“”‘’")
+    if not suffix:
+        return
+    if re.fullmatch(
+        r"(?:作为|用作)(?:停止)?(?:下限|上限|边界)",
+        suffix,
+        flags=re.IGNORECASE,
+    ):
+        return
+    if re.fullmatch(
+        r"as\s+(?:the\s+)?(?:stop|lower|upper|boundary)"
+        r"(?:\s+(?:limit|bound(?:ary)?))?",
+        suffix,
+        flags=re.IGNORECASE,
+    ):
+        return
+    raise ValueError("labeled specification has unsupported trailing text after unit")
+
+
+def _extract_labeled_value_and_unit(body: str) -> tuple[float, str]:
+    normalized_body = body.replace("−", "-").replace("–", "-")
+    number_match = re.search(_NUMBER, normalized_body)
+    if number_match is None:
+        raise ValueError("labeled specification is missing a numeric value")
+    value = float(number_match.group(0))
+    if not math.isfinite(value):
+        raise ValueError("labeled specification value must be finite")
+
+    tail = normalized_body[number_match.end() :].strip()
+    tail = re.sub(r"[\s。．.!！?？;；,，、]+$", "", tail).strip()
+    if not tail:
+        raise ValueError("labeled specification is missing a unit")
+
+    binary_alias_match = re.match(
+        r"(?:binary\s+command(?:\s+level)?|二值命令档位|个二值命令档位)",
+        tail,
+        flags=re.IGNORECASE,
+    )
+    if binary_alias_match is not None:
+        suffix = tail[binary_alias_match.end() :]
+        if re.search(_NUMBER, suffix):
+            raise ValueError(
+                "labeled specification contains more than one independent numeric value"
+            )
+        _validate_labeled_unit_suffix(suffix)
+        return value, binary_alias_match.group(0).strip()
+
+    ascii_unit_match = re.match(
+        r"[A-Za-z%°][A-Za-z0-9%°²³*/^()._\-·⋅×]*",
+        tail,
+    )
+    if ascii_unit_match is not None:
+        suffix = tail[ascii_unit_match.end() :]
+        if re.search(_NUMBER, suffix):
+            raise ValueError(
+                "labeled specification contains more than one independent numeric value"
+            )
+        _validate_labeled_unit_suffix(suffix)
+        return value, ascii_unit_match.group(0).strip()
+
+    chinese_tail = re.split(
+        r"(?:作为|用作|as\s+(?:the\s+)?(?:stop|lower|upper|boundary))",
+        tail,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    chinese_tail = chinese_tail.strip(" \t。．.!！?？;；,，、")
+    if not chinese_tail:
+        raise ValueError("labeled specification is missing a unit")
+    if re.search(_NUMBER, chinese_tail):
+        raise ValueError(
+            "labeled specification contains more than one independent numeric value"
+        )
+    return value, chinese_tail
+
+
+def extract_labeled_specification_facts(
+    text: str,
+    template: SpecificationTemplate,
+) -> LabeledSpecificationParse:
+    """Parse one template-labelled numeric specification per input line.
+
+    The original line is retained as the evidence excerpt.  A recognised label
+    is considered claimed even when its value is malformed, so the LLM cannot
+    silently guess a value for a field the user attempted to answer.
+    """
+
+    source_type = (
+        "manufacturer_document"
+        if any(
+            token in text.lower() for token in ("manual", "datasheet", "铭牌", "手册")
+        )
+        else "user_known_behavior"
+    )
+    numeric_fields = [
+        field for field in template.fields if field.answer_kind == "number"
+    ]
+    facts: list[SpecificationFact] = []
+    claimed_fact_ids: set[str] = set()
+    rejected_facts: list[str] = []
+    has_nonempty_line = False
+    all_nonempty_lines_labeled = True
+    for raw_line in text.splitlines():
+        normalized_line = _strip_labeled_line_formatting(raw_line)
+        if not normalized_line:
+            continue
+        has_nonempty_line = True
+        matched_field = None
+        body = ""
+        for field in numeric_fields:
+            match = re.match(
+                rf"^{re.escape(field.label)}\s*[:：]\s*(?P<body>.*)$",
+                normalized_line,
+                flags=re.IGNORECASE,
+            )
+            if match is not None:
+                matched_field = field
+                body = match.group("body")
+                break
+        if matched_field is None:
+            all_nonempty_lines_labeled = False
+            continue
+
+        fact_id = matched_field.fact_id
+        claimed_fact_ids.add(fact_id)
+        try:
+            value, unit = _extract_labeled_value_and_unit(body)
+            raw_fact = SpecificationFact(
+                fact_id=fact_id,
+                value=value,
+                unit=unit,
+                source_type=source_type,
+                source_text=raw_line.strip(),
+            )
+            _validate_direct_fact_source(raw_fact, [text])
+            _validate_direct_fact_role(raw_fact)
+            fact = _normalize_fact_for_field(raw_fact, matched_field)
+        except (UnitCompatibilityError, ValueError) as exc:
+            rejected_facts.append(f"{fact_id}: labeled specification rejected: {exc}")
+            continue
+        facts.append(fact)
+    return LabeledSpecificationParse(
+        facts=facts,
+        claimed_fact_ids=claimed_fact_ids,
+        rejected_facts=rejected_facts,
+        all_nonempty_lines_labeled=has_nonempty_line and all_nonempty_lines_labeled,
+    )
+
+
 def _extract_number_and_source_after_label(
     text: str,
     labels: list[str],
@@ -752,6 +916,13 @@ def _source_contains_unit(source_text: str, unit: str) -> bool:
         "W": {"W", "watt", "watts", "瓦"},
         "N": {"N", "newton", "newtons", "牛"},
         "kg": {"kg", "kilogram", "kilograms", "千克"},
+        "binary_command": {
+            "binary_command",
+            "binary command",
+            "binary command level",
+            "二值命令档位",
+            "个二值命令档位",
+        },
     }
     candidates = {
         str(unit).strip(),
@@ -825,9 +996,7 @@ def _validate_direct_fact_role(fact: SpecificationFact) -> None:
         r"input|command|actuat|throttle|heater|valve|pump|voltage|current|power|"
         r"force|torque|输入|命令|执行|油门|加热|阀|泵|电压|电流|功率|力|转矩"
     )
-    output_signal = (
-        r"output|response|speed|temperature|level|position|输出|响应|车速|温度|液位|位置"
-    )
+    output_signal = r"output|response|speed|temperature|level|position|输出|响应|车速|温度|液位|位置"
     role_patterns = {
         "input_change": (
             rf"(?:input_change|{input_signal}).{{0,45}}"
@@ -1226,12 +1395,15 @@ def validate_specification_assessment_payload(
             raise ValueError(
                 "LLM Profile questions must not instruct physical hardware actions"
             )
-        if re.search(
-            r"(?:record|manual|log|document|specification|software simulation|"
-            r"已有记录|现有记录|手册|日志|文档|规格|软件仿真)",
-            question.where_to_find,
-            flags=re.IGNORECASE,
-        ) is None:
+        if (
+            re.search(
+                r"(?:record|manual|log|document|specification|software simulation|"
+                r"已有记录|现有记录|手册|日志|文档|规格|软件仿真)",
+                question.where_to_find,
+                flags=re.IGNORECASE,
+            )
+            is None
+        ):
             raise ValueError(
                 "LLM Profile questions require a record-only, manual, or software source"
             )
@@ -1240,6 +1412,39 @@ def validate_specification_assessment_payload(
     # software-only prompts, so a model cannot smuggle a hardware procedure into
     # the primary UI through polite or paraphrased wording.
     return assessment.model_copy(update={"questions": []})
+
+
+def _remove_claimed_fields_from_llm_payload(
+    payload: Any,
+    claimed_fact_ids: set[str],
+) -> Any:
+    if not claimed_fact_ids or not isinstance(payload, dict):
+        return payload
+    prepared = deepcopy(payload)
+    raw_facts = prepared.get("facts")
+    if isinstance(raw_facts, list):
+        prepared["facts"] = [
+            item
+            for item in raw_facts
+            if not isinstance(item, dict) or item.get("fact_id") not in claimed_fact_ids
+        ]
+    for key in ("missing_fact_ids",):
+        values = prepared.get(key)
+        if isinstance(values, list):
+            prepared[key] = [value for value in values if value not in claimed_fact_ids]
+    for key in ("conflicts", "rejected_facts"):
+        values = prepared.get(key)
+        if isinstance(values, list):
+            prepared[key] = [
+                value
+                for value in values
+                if not isinstance(value, str)
+                or not any(
+                    re.search(rf"\b{re.escape(fact_id)}\b", value)
+                    for fact_id in claimed_fact_ids
+                )
+            ]
+    return prepared
 
 
 def assess_specification_text(
@@ -1256,33 +1461,54 @@ def assess_specification_text(
 ) -> SpecificationAssessment:
     history = [*(answer_history or []), text]
     incoming_explicit = extract_explicit_specification_facts(text, template)
+    labeled = extract_labeled_specification_facts(text, template)
     derived_thermal = derive_thermostat_specification_facts(
         description,
         template,
         "\n".join(history),
     )
-    explicit_ids = {fact.fact_id for fact in incoming_explicit}
+    explicit_ids = {fact.fact_id for fact in [*incoming_explicit, *labeled.facts]}
+    claimed_fact_ids = explicit_ids | labeled.claimed_fact_ids
     incoming_local = [
         *incoming_explicit,
-        *(fact for fact in derived_thermal if fact.fact_id not in explicit_ids),
+        *labeled.facts,
+        *(fact for fact in derived_thermal if fact.fact_id not in claimed_fact_ids),
     ]
+    facts, local_conflicts = merge_specification_facts(
+        previous.facts if previous else [], incoming_local
+    )
+    local_assessment = build_initial_specification_assessment(
+        description,
+        template,
+        facts=facts,
+        conflicts=local_conflicts,
+    )
+    if (incoming_local or labeled.claimed_fact_ids) and local_assessment.status in {
+        "ready",
+        "conflict",
+    }:
+        return _with_submission_diagnostics(
+            local_assessment,
+            previous,
+            rejected_facts=labeled.rejected_facts,
+        )
     if adapter is not None and hasattr(adapter, "assess_specifications"):
-        payload = adapter.assess_specifications(
-            description.model_copy(deep=True),
-            deepcopy(diagnosis),
-            deepcopy(classification),
-            method_profile_id or template.method_profile_id,
-            [template.model_copy(deep=True)],
-            deepcopy(history),
-            deepcopy(previous),
+        payload = _remove_claimed_fields_from_llm_payload(
+            adapter.assess_specifications(
+                description.model_copy(deep=True),
+                deepcopy(diagnosis),
+                deepcopy(classification),
+                method_profile_id or template.method_profile_id,
+                [template.model_copy(deep=True)],
+                deepcopy(history),
+                deepcopy(local_assessment),
+            ),
+            claimed_fact_ids,
         )
         incoming = validate_specification_assessment_payload(
             payload,
             template=template,
             source_texts=[description.text, *history],
-        )
-        facts, local_conflicts = merge_specification_facts(
-            previous.facts if previous else [], incoming_local
         )
         facts, llm_conflicts = merge_specification_facts(facts, incoming.facts)
         rebuilt = build_initial_specification_assessment(
@@ -1294,23 +1520,22 @@ def assess_specification_text(
         return _with_submission_diagnostics(
             rebuilt,
             previous,
-            rejected_facts=incoming.rejected_facts,
+            rejected_facts=[*labeled.rejected_facts, *incoming.rejected_facts],
         )
 
     incoming = incoming_local
-    if not incoming:
-        current = previous or build_initial_specification_assessment(
-            description,
-            template,
-        )
+    if not incoming and not labeled.claimed_fact_ids:
+        current = local_assessment
         incoming = _extract_answers_in_question_order(text, template, current)
-    facts, conflicts = merge_specification_facts(
-        previous.facts if previous else [], incoming
-    )
+    facts, fallback_conflicts = merge_specification_facts(facts, incoming)
     rebuilt = build_initial_specification_assessment(
         description,
         template,
         facts=facts,
-        conflicts=conflicts,
+        conflicts=[*local_conflicts, *fallback_conflicts],
     )
-    return _with_submission_diagnostics(rebuilt, previous)
+    return _with_submission_diagnostics(
+        rebuilt,
+        previous,
+        rejected_facts=labeled.rejected_facts,
+    )

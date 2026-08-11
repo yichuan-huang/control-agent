@@ -365,7 +365,9 @@ def test_documented_deepseek_model_is_v4_pro():
         assert '--llm-model "deepseek-v4-pro"' in content
 
 
-def test_cli_incomplete_description_returns_checklist_without_profile(monkeypatch, capsys):
+def test_cli_incomplete_description_returns_checklist_without_profile(
+    monkeypatch, capsys
+):
     _enable_cli_guided_adapter(monkeypatch)
     monkeypatch.setattr(
         sys,

@@ -148,13 +148,7 @@ def _restore_unattested_profile_gaps(
         if field_id not in existing_ids
     )
     gaps = [field_id for field_id in assessment.gaps if field_id not in restored_ids]
-    status = (
-        "conflict"
-        if assessment.conflicts
-        else "need_more"
-        if gaps
-        else "ready"
-    )
+    status = "conflict" if assessment.conflicts else "need_more" if gaps else "ready"
     return MeasurementAssessment(
         status=status,
         facts=facts,
@@ -244,9 +238,7 @@ def start_diagnostic_session(
         resolved_diagnosis = diagnosis or _diagnose(
             working_description, diagnostic_adapter, use_mechanism_cards
         )
-        checklist = build_diagnostic_checklist(
-            working_description, resolved_diagnosis
-        )
+        checklist = build_diagnostic_checklist(working_description, resolved_diagnosis)
     measurement_plan = build_measurement_plan(checklist)
     if diagnostic_adapter is not None and hasattr(
         diagnostic_adapter, "phrase_measurement_plan"
@@ -644,10 +636,10 @@ def submit_profile_measurement_assessment(
         state.profile_measurement_round_count + 1
     )
     if diagnosis != state.current_diagnosis:
-        description_budget_exhausted = state.description_turn_count >= state.maximum_turns
-        prior_checklist = {
-            item.diagnostic_field_id: item for item in state.checklist
-        }
+        description_budget_exhausted = (
+            state.description_turn_count >= state.maximum_turns
+        )
+        prior_checklist = {item.diagnostic_field_id: item for item in state.checklist}
         checklist = []
         for field_id in (
             "open_loop_stability",
@@ -770,6 +762,7 @@ def submit_specifications_to_session(
         raise ValueError(
             "only an awaiting_profile_measurements session accepts profile facts"
         )
+
     def transition(updates: dict) -> DiagnosticSessionState:
         if not _revision_already_advanced:
             return _transition(state, updates=updates)
@@ -1066,14 +1059,10 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                     questions=["supplemental_description"],
                     answers={"supplemental_description": normalized_supplemental},
                     evidence=[evidence],
-                    diagnosis=DiagnosticEngine(adapter=None).diagnose(
-                        turn_description
-                    ),
+                    diagnosis=DiagnosticEngine(adapter=None).diagnose(turn_description),
                 )
             )
-        payload["turns"] = [
-            turn.model_dump(mode="python") for turn in normalized_turns
-        ]
+        payload["turns"] = [turn.model_dump(mode="python") for turn in normalized_turns]
         payload["description_turn_count"] = len(normalized_turns)
         if assessments:
             text_parts.append(render_measurement_evidence(assessments))
@@ -1176,9 +1165,7 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                     "description_guidance": [
                         item.guidance.model_dump(mode="python") for item in checklist
                     ],
-                    "checklist": [
-                        item.model_dump(mode="python") for item in checklist
-                    ],
+                    "checklist": [item.model_dump(mode="python") for item in checklist],
                     "description_assessment": description_assessment.model_dump(
                         mode="python"
                     ),
@@ -1194,7 +1181,9 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
                     "evidence_level": "description_grounded",
                     "classification": None,
                     "semantic_selection": None,
-                    "status": "refused" if profile_cap_refusal else "description_grounded",
+                    "status": "refused"
+                    if profile_cap_refusal
+                    else "description_grounded",
                     "refusal_reason": (
                         "maximum_profile_measurement_rounds_reached"
                         if profile_cap_refusal

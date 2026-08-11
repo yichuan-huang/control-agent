@@ -218,6 +218,8 @@ def test_specification_prompt_contains_object_profile_templates_and_history():
     assert "thermal_time_constant_c_over_h" in prompt
     assert "backend will recompute" in prompt
     assert "Do not produce controller gains" in prompt
+    assert "exact contiguous source excerpt" in prompt
+    assert "Preserve Markdown markers" in prompt
 
 
 def test_explicit_thermostat_physics_complete_first_order_specifications_without_llm():
@@ -578,6 +580,356 @@ def test_multiple_plain_language_turns_reduce_gaps_and_compile_only_when_complet
     ]
 
 
+def test_labeled_specification_bullets_are_parsed_without_specification_llm():
+    report = run_cfdc_route("generic", description=_heater_description())
+    template = report.specification_templates[0]
+    response = """- **已知输入变化量：** 二值加热命令变化1 个二值命令档位。
+- **最终输出变化量：** 室温的稳态变化为50 degF。
+- **63% 响应时间：** 144000 s。
+- **输入仿真下限：** 二值加热命令采用0 个二值命令档位。
+- **输入仿真上限：** 二值加热命令采用1 个二值命令档位。
+- **输出仿真下限：** 室温采用64.5 degF作为停止下限。
+- **输出仿真上限：** 室温采用65.5 degF作为停止上限。"""
+
+    class UnexpectedSpecificationLLM:
+        def assess_specifications(self, *args):
+            del args
+            raise AssertionError(
+                "complete labeled specifications must not call the LLM"
+            )
+
+    assessment = assess_specification_text(
+        report.system_description,
+        template,
+        response,
+        previous=report.specification_assessment,
+        adapter=UnexpectedSpecificationLLM(),
+        diagnosis=report.diagnosis,
+        classification=report.classification,
+        method_profile_id=report.semantic_selection.simulation_profile_id,
+    )
+
+    facts = {item.fact_id: item for item in assessment.facts}
+    assert assessment.status == "ready"
+    assert assessment.missing_fact_ids == []
+    assert assessment.rejected_facts == []
+    assert facts["input_change"].value == pytest.approx(1.0)
+    assert facts["input_change"].unit == "binary_command"
+    assert facts["steady_output_change"].value == pytest.approx(50.0)
+    assert facts["steady_output_change"].unit == "degF"
+    assert facts["response_time_s"].value == pytest.approx(144000.0)
+    assert facts["response_time_s"].unit == "s"
+    assert facts["input_min"].value == pytest.approx(0.0)
+    assert facts["input_max"].value == pytest.approx(1.0)
+    assert facts["output_min"].value == pytest.approx(64.5)
+    assert facts["output_max"].value == pytest.approx(65.5)
+    assert all(item.source_text in response for item in facts.values())
+
+
+def test_labeled_specification_bullets_compile_the_profile_model():
+    session = _profile_measurement_session()
+    response = """- **已知输入变化量：** 二值加热命令变化1 个二值命令档位。
+- **最终输出变化量：** 室温的稳态变化为50 degF。
+- **63% 响应时间：** 144000 s。
+- **输入仿真下限：** 二值加热命令采用0 个二值命令档位。
+- **输入仿真上限：** 二值加热命令采用1 个二值命令档位。
+- **输出仿真下限：** 室温采用64.5 degF作为停止下限。
+- **输出仿真上限：** 室温采用65.5 degF作为停止上限。"""
+
+    completed = submit_specifications_to_session(
+        session,
+        response,
+        simulation_bounds_confirmed=True,
+    )
+
+    assert completed.status == "specification_model_ready"
+    assert completed.compiled_specification_model is not None
+    assert completed.compiled_specification_model.derived_features[
+        "static_gain"
+    ] == pytest.approx(50.0)
+    assert completed.compiled_specification_model.derived_features[
+        "time_constant"
+    ] == pytest.approx(144000.0)
+    assert completed.compiled_specification_model.safety_bounds[
+        "input_min"
+    ] == pytest.approx(0.0)
+    assert completed.compiled_specification_model.safety_bounds[
+        "input_max"
+    ] == pytest.approx(1.0)
+    assert completed.compiled_specification_model.safety_bounds[
+        "output_min"
+    ] == pytest.approx(64.5)
+    assert completed.compiled_specification_model.safety_bounds[
+        "output_max"
+    ] == pytest.approx(65.5)
+
+
+def test_complete_labeled_specifications_skip_llm_with_unlabeled_intro():
+    report = run_cfdc_route("generic", description=_heater_description())
+    response = """规格如下：
+- **已知输入变化量：** 二值加热命令变化1 个二值命令档位。
+- **最终输出变化量：** 室温的稳态变化为50 degF。
+- **63% 响应时间：** 144000 s。
+- **输入仿真下限：** 二值加热命令采用0 个二值命令档位。
+- **输入仿真上限：** 二值加热命令采用1 个二值命令档位。
+- **输出仿真下限：** 室温采用64.5 degF作为停止下限。
+- **输出仿真上限：** 室温采用65.5 degF作为停止上限。"""
+
+    class UnexpectedSpecificationLLM:
+        def assess_specifications(self, *args):
+            del args
+            raise AssertionError(
+                "complete deterministic specifications must not call the LLM"
+            )
+
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        response,
+        previous=report.specification_assessment,
+        adapter=UnexpectedSpecificationLLM(),
+        diagnosis=report.diagnosis,
+        classification=report.classification,
+        method_profile_id=report.semantic_selection.simulation_profile_id,
+    )
+
+    assert assessment.status == "ready"
+    assert assessment.missing_fact_ids == []
+
+
+def test_malformed_labeled_fact_cannot_be_filled_by_thermal_derivation():
+    report = run_cfdc_route("generic", description=_heater_description())
+    response = """- **已知输入变化量：** 二值加热命令变化1。
+等效热容 C = 20000 Btu/degF、传热系数 H = 500 Btu/(h degF)、炉子供热率 25000 Btu/h、白天设定值 65 degF、滞环半宽 0.5 degF。"""
+
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        response,
+        previous=report.specification_assessment,
+    )
+
+    assert assessment.status == "need_more"
+    assert "input_change" in assessment.missing_fact_ids
+    assert all(item.fact_id != "input_change" for item in assessment.facts)
+    assert any("input_change" in item for item in assessment.rejected_facts)
+
+
+def test_labeled_specification_accepts_unicode_minus():
+    report = run_cfdc_route("generic", description=_heater_description())
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        "- **输入仿真下限：** 二值加热命令采用−1 个二值命令档位。",
+        previous=report.specification_assessment,
+    )
+
+    fact = next(item for item in assessment.facts if item.fact_id == "input_min")
+    assert fact.value == pytest.approx(-1.0)
+    assert fact.unit == "binary_command"
+
+
+def test_labeled_specification_rejects_unsupported_trailing_text():
+    report = run_cfdc_route("generic", description=_heater_description())
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        "- **63% 响应时间：** 144000 s 未知说明。",
+        previous=report.specification_assessment,
+    )
+
+    assert "response_time_s" in assessment.missing_fact_ids
+    assert all(item.fact_id != "response_time_s" for item in assessment.facts)
+    assert any("trailing text" in item for item in assessment.rejected_facts)
+
+
+def test_labeled_specification_with_an_extra_numeric_value_stays_missing():
+    report = run_cfdc_route("generic", description=_heater_description())
+    response = """- **已知输入变化量：** 二值加热命令变化1 个二值命令档位。
+- **最终输出变化量：** 室温的稳态变化为50 degF。
+- **63% 响应时间：** 144000 s（采样周期60 s）。
+- **输入仿真下限：** 二值加热命令采用0 个二值命令档位。
+- **输入仿真上限：** 二值加热命令采用1 个二值命令档位。
+- **输出仿真下限：** 室温采用64.5 degF作为停止下限。
+- **输出仿真上限：** 室温采用65.5 degF作为停止上限。"""
+
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        response,
+        previous=report.specification_assessment,
+    )
+
+    assert assessment.status == "need_more"
+    assert "response_time_s" in assessment.missing_fact_ids
+    assert all(item.fact_id != "response_time_s" for item in assessment.facts)
+    assert any("response_time_s" in item for item in assessment.rejected_facts)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        """已知输入变化量: 二值加热命令变化1 个二值命令档位
+最终输出变化量：室温的稳态变化为50 degF
+63% 响应时间: 144000 s
+输入仿真下限：二值加热命令采用0 个二值命令档位
+输入仿真上限：二值加热命令采用1 个二值命令档位
+输出仿真下限：室温采用64.5 degF作为停止下限
+输出仿真上限：室温采用65.5 degF作为停止上限""",
+        """- **输入仿真上限**：二值加热命令采用1 个二值命令档位。
+- **输出仿真上限**: 室温采用65.5 degF作为停止上限。
+- **63% 响应时间**：144000 s。
+- **已知输入变化量**: 二值加热命令变化1 个二值命令档位。
+- **输出仿真下限**：室温采用64.5 degF作为停止下限。
+- **最终输出变化量**：室温的稳态变化为50 degF。
+- **输入仿真下限**：二值加热命令采用0 个二值命令档位。""",
+    ],
+)
+def test_labeled_specification_accepts_plain_markdown_and_any_field_order(response):
+    report = run_cfdc_route("generic", description=_heater_description())
+
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        response,
+        previous=report.specification_assessment,
+    )
+
+    assert assessment.status == "ready"
+    assert assessment.missing_fact_ids == []
+
+
+def test_labeled_specification_without_a_unit_remains_a_gap():
+    report = run_cfdc_route("generic", description=_heater_description())
+    response = """- **已知输入变化量：** 二值加热命令变化1 个二值命令档位。
+- **最终输出变化量：** 室温的稳态变化为50 degF。
+- **63% 响应时间：** 144000。
+- **输入仿真下限：** 二值加热命令采用0 个二值命令档位。
+- **输入仿真上限：** 二值加热命令采用1 个二值命令档位。
+- **输出仿真下限：** 室温采用64.5 degF作为停止下限。
+- **输出仿真上限：** 室温采用65.5 degF作为停止上限。"""
+
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        response,
+        previous=report.specification_assessment,
+    )
+
+    assert assessment.status == "need_more"
+    assert "response_time_s" in assessment.missing_fact_ids
+    assert any("missing a unit" in item for item in assessment.rejected_facts)
+
+
+def test_duplicate_labeled_specification_values_conflict_only_when_changed():
+    report = run_cfdc_route("generic", description=_heater_description())
+    first = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        "- **已知输入变化量：** 二值加热命令变化1 个二值命令档位。",
+        previous=report.specification_assessment,
+    )
+    repeated = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        "- **已知输入变化量：** 二值加热命令变化1 个二值命令档位。",
+        previous=first,
+    )
+    changed = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        "- **已知输入变化量：** 二值加热命令变化2 个二值命令档位。",
+        previous=first,
+    )
+
+    assert repeated.conflicts == []
+    assert repeated.status == "need_more"
+    assert changed.status == "conflict"
+    assert any("input_change" in item for item in changed.conflicts)
+
+
+def test_llm_cannot_overwrite_a_labeled_fact_from_the_same_submission():
+    report = run_cfdc_route("generic", description=_heater_description())
+    response = """- **已知输入变化量：** 二值加热命令变化1 个二值命令档位。
+The manual reports a steady output change of 50 degF, a response time of 144000 s,
+an input minimum of 0 binary_command, an input maximum of 1 binary_command,
+an output minimum of 64.5 degF, and an output maximum of 65.5 degF."""
+
+    class ConflictingSpecificationLLM:
+        calls = 0
+
+        def assess_specifications(self, *args):
+            del args
+            self.calls += 1
+            template = report.specification_templates[0]
+            facts = [
+                (
+                    "input_change",
+                    99.0,
+                    "binary_command",
+                    "input change is 99 binary_command",
+                ),
+                (
+                    "steady_output_change",
+                    50.0,
+                    "degF",
+                    "steady output change of 50 degF",
+                ),
+                ("response_time_s", 144000.0, "s", "response time of 144000 s"),
+                (
+                    "input_min",
+                    0.0,
+                    "binary_command",
+                    "input minimum of 0 binary_command",
+                ),
+                (
+                    "input_max",
+                    1.0,
+                    "binary_command",
+                    "input maximum of 1 binary_command",
+                ),
+                ("output_min", 64.5, "degF", "output minimum of 64.5 degF"),
+                ("output_max", 65.5, "degF", "output maximum of 65.5 degF"),
+            ]
+            return {
+                "status": "ready",
+                "template_id": template.template_id,
+                "facts": [
+                    {
+                        "fact_id": fact_id,
+                        "value": value,
+                        "unit": unit,
+                        "source_type": "manufacturer_document",
+                        "source_text": source_text,
+                    }
+                    for fact_id, value, unit, source_text in facts
+                ],
+                "missing_fact_ids": [],
+                "conflicts": [],
+                "questions": [],
+                "rationale": "The manual contains the remaining values.",
+            }
+
+    adapter = ConflictingSpecificationLLM()
+    assessment = assess_specification_text(
+        report.system_description,
+        report.specification_templates[0],
+        response,
+        previous=report.specification_assessment,
+        adapter=adapter,
+        diagnosis=report.diagnosis,
+        classification=report.classification,
+        method_profile_id=report.semantic_selection.simulation_profile_id,
+    )
+
+    assert adapter.calls == 1
+    assert assessment.status == "ready"
+    assert assessment.conflicts == []
+    assert next(
+        item for item in assessment.facts if item.fact_id == "input_change"
+    ).value == pytest.approx(1.0)
+
+
 def test_conflicting_specification_values_stop_model_compilation():
     session = _profile_measurement_session()
     first = submit_specifications_to_session(
@@ -627,6 +979,9 @@ def test_common_unit_spellings_and_scales_are_normalized():
     assert normalize_scalar_unit(100.0, "ms") == pytest.approx((0.1, "s"))
     assert normalize_scalar_unit(1.0, "rad/s²") == pytest.approx((1.0, "rad/s^2"))
     assert normalize_scalar_unit(1.0, "N·m") == pytest.approx((1.0, "Nm"))
+    assert normalize_scalar_unit(1.0, "个二值命令档位") == pytest.approx(
+        (1.0, "binary_command")
+    )
 
 
 def test_consistent_opaque_command_units_are_allowed_for_behavioral_specs():

@@ -1797,7 +1797,11 @@ class DiagnosticSessionState(CFDCModel):
                     and self.measurement_assessment.status == "ready"
                 )
             )
-            if self.measurement_plan is None or not has_ready_source or not self.current_diagnosis.complete:
+            if (
+                self.measurement_plan is None
+                or not has_ready_source
+                or not self.current_diagnosis.complete
+            ):
                 raise ValueError(
                     "post-diagnosis states require complete grounded diagnostic evidence"
                 )

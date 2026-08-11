@@ -70,9 +70,7 @@ class DescriptionGroundedAdapter:
             "guidance": [
                 {
                     **item.model_dump(mode="json"),
-                    "response": self.responses.get(
-                        item.diagnostic_field_id, "unknown"
-                    ),
+                    "response": self.responses.get(item.diagnostic_field_id, "unknown"),
                 }
                 for item in guidance
             ],
@@ -120,12 +118,8 @@ def _profile_fact(fact_id: str, value: float, unit: str, source_text: str):
 
 _PROFILE_FACTS = [
     _profile_fact("input_change", 1.0, "deg", "油门角变化 1 deg"),
-    _profile_fact(
-        "steady_output_change", 10.0, "mph", "稳态车速变化 10 mph"
-    ),
-    _profile_fact(
-        "response_time_s", 5.0, "s", "达到最终变化约 63% 需要 5 s"
-    ),
+    _profile_fact("steady_output_change", 10.0, "mph", "稳态车速变化 10 mph"),
+    _profile_fact("response_time_s", 5.0, "s", "达到最终变化约 63% 需要 5 s"),
     _profile_fact("input_min", -3.0, "deg", "软件仿真油门范围为 -3 deg 至 3 deg"),
     _profile_fact("input_max", 3.0, "deg", "软件仿真油门范围为 -3 deg 至 3 deg"),
     _profile_fact("output_min", 45.0, "mph", "车速停止边界为 45 mph 至 80 mph"),
@@ -269,7 +263,10 @@ def test_first_user_reply_after_complete_description_is_profile_data_only():
     assert session.measurement_response_history == []
     assert session.profile_measurement_round_count == 1
     assert session.specification_answer_history == [_PROFILE_RESPONSE]
-    assert session.description_assessment == initial.diagnostic_session.description_assessment
+    assert (
+        session.description_assessment
+        == initial.diagnostic_session.description_assessment
+    )
 
 
 def test_complete_description_view_shows_profile_questions_not_eight_item_plan():
@@ -362,9 +359,7 @@ def test_profile_parameters_already_in_description_are_prefilled_without_a_round
                 "template_id": template.template_id,
                 "facts": [
                     _profile_fact("input_change", 1.0, "deg", input_excerpt),
-                    _profile_fact(
-                        "steady_output_change", 10.0, "mph", output_excerpt
-                    ),
+                    _profile_fact("steady_output_change", 10.0, "mph", output_excerpt),
                 ],
                 "missing_fact_ids": [
                     "response_time_s",
@@ -592,7 +587,9 @@ def test_profile_diagnostic_retraction_after_final_description_turn_is_refused()
 
     assert refused.status == "rejected"
     assert refused.diagnostic_session.status == "refused"
-    assert refused.diagnostic_session.refusal_reason == "maximum_description_turns_reached"
+    assert (
+        refused.diagnostic_session.refusal_reason == "maximum_description_turns_reached"
+    )
 
 
 def test_one_generic_excerpt_cannot_satisfy_all_eight_description_fields():
@@ -642,9 +639,7 @@ def test_negated_canonical_phrases_do_not_complete_the_description_checklist():
     assert report.status == "need_more_information"
     assert report.classification is None
     assert report.diagnostic_session.description_assessment is None
-    assert {item.status for item in report.diagnostic_session.checklist} == {
-        "unknown"
-    }
+    assert {item.status for item in report.diagnostic_session.checklist} == {"unknown"}
 
 
 def test_explicitly_unknown_field_sentences_keep_all_checklist_items_open():
@@ -674,9 +669,7 @@ def test_explicitly_unknown_field_sentences_keep_all_checklist_items_open():
 
     assert report.status == "need_more_information"
     assert report.diagnostic_session.description_assessment is None
-    assert {item.status for item in report.diagnostic_session.checklist} == {
-        "unknown"
-    }
+    assert {item.status for item in report.diagnostic_session.checklist} == {"unknown"}
 
 
 def test_persisted_description_assessment_rejects_field_mismatched_excerpts():
@@ -698,9 +691,7 @@ def test_persisted_description_assessment_rejects_field_mismatched_excerpts():
 
 
 def test_valid_field_specific_stability_paraphrase_is_accepted():
-    stability_excerpt = (
-        "油门角度恢复到基准值 0 deg 后，车速偏差逐渐减小并最终保持有界"
-    )
+    stability_excerpt = "油门角度恢复到基准值 0 deg 后，车速偏差逐渐减小并最终保持有界"
     responses = dict(_EXCERPTS)
     responses["open_loop_stability"] = stability_excerpt
 
@@ -743,9 +734,7 @@ def test_description_parameter_prefill_supports_a_chinese_time_unit():
             return {
                 "status": "need_more",
                 "template_id": template.template_id,
-                "facts": [
-                    _profile_fact("response_time_s", 5.0, "s", time_excerpt)
-                ],
+                "facts": [_profile_fact("response_time_s", 5.0, "s", time_excerpt)],
                 "missing_fact_ids": [
                     field.fact_id
                     for field in template.fields
@@ -810,10 +799,7 @@ def test_description_parameter_prefill_supports_a_chinese_time_unit():
 def test_field_grounding_never_turns_negative_or_ambiguous_evidence_positive(
     field_id, excerpt, forbidden_assessment
 ):
-    assert (
-        infer_description_field_assessment(field_id, excerpt)
-        != forbidden_assessment
-    )
+    assert infer_description_field_assessment(field_id, excerpt) != forbidden_assessment
 
 
 def test_explicit_dead_time_is_significant_but_ambiguous_delay_remains_open():
@@ -844,9 +830,7 @@ def test_explicit_dead_time_is_significant_but_ambiguous_delay_remains_open():
         ),
     ],
 )
-def test_chinese_unknown_claims_leave_their_checklist_fields_open(
-    field_id, excerpt
-):
+def test_chinese_unknown_claims_leave_their_checklist_fields_open(field_id, excerpt):
     assert not description_excerpt_answers_field(
         field_id,
         excerpt,
@@ -876,9 +860,7 @@ def test_description_parameter_prefill_rejects_a_number_from_the_wrong_signal():
                 "status": "need_more",
                 "template_id": template.template_id,
                 "facts": [
-                    _profile_fact(
-                        "input_change", 10.0, "degC", wrong_role_excerpt
-                    )
+                    _profile_fact("input_change", 10.0, "degC", wrong_role_excerpt)
                 ],
                 "missing_fact_ids": [
                     field.fact_id
@@ -900,8 +882,7 @@ def test_description_parameter_prefill_rejects_a_number_from_the_wrong_signal():
     assert report.specification_assessment.facts == []
     assert "input_change" in report.specification_assessment.missing_fact_ids
     assert any(
-        "signal role" in item
-        for item in report.specification_assessment.rejected_facts
+        "signal role" in item for item in report.specification_assessment.rejected_facts
     )
 
 
@@ -915,9 +896,7 @@ def test_description_parameter_prefill_rejects_a_negated_numeric_claim():
             return {
                 "status": "need_more",
                 "template_id": template.template_id,
-                "facts": [
-                    _profile_fact("input_change", 1.0, "V", negated_excerpt)
-                ],
+                "facts": [_profile_fact("input_change", 1.0, "V", negated_excerpt)],
                 "missing_fact_ids": [
                     field.fact_id
                     for field in template.fields
@@ -1025,9 +1004,9 @@ def test_migration_does_not_trust_a_persisted_simulation_confirmation():
         "statement_version": "v1",
     }
     payload["initial_description"]["simulation_boundary_confirmation"] = confirmation
-    payload["accumulated_description"][
-        "simulation_boundary_confirmation"
-    ] = confirmation
+    payload["accumulated_description"]["simulation_boundary_confirmation"] = (
+        confirmation
+    )
 
     restored = migrate_diagnostic_session_payload(payload)
 

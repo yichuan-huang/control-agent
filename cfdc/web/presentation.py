@@ -183,7 +183,9 @@ def _measurement_plan_released(report: CFDCRunReport) -> bool:
 def _description_checklist_complete(report: CFDCRunReport) -> bool:
     session = report.diagnostic_session
     if session is None:
-        return bool(report.system_description and report.system_description.text.strip())
+        return bool(
+            report.system_description and report.system_description.text.strip()
+        )
     return bool(session.checklist) and all(
         item.status != "unknown" for item in session.checklist
     )
@@ -327,7 +329,8 @@ def checklist_presentation(report: CFDCRunReport) -> tuple[str, bool]:
     total = len(session.checklist)
     grounded = bool(
         completed == total
-        and session.evidence_level in {
+        and session.evidence_level
+        in {
             "description_grounded",
             "measurement_verified",
         }

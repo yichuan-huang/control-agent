@@ -124,9 +124,7 @@ def _outputs(report, state):
             visible=show_measurement_input,
             value="",
             label=(
-                "继续补充缺少的核心参数"
-                if profile_needs_more
-                else "核心参数与测量回复"
+                "继续补充缺少的核心参数" if profile_needs_more else "核心参数与测量回复"
             ),
         ),
         gr.update(
@@ -134,9 +132,7 @@ def _outputs(report, state):
             value=(
                 "确认软件仿真边界并继续"
                 if confirmation_only
-                else (
-                    "继续补充参数" if profile_needs_more else "提交测量回复"
-                )
+                else ("继续补充参数" if profile_needs_more else "提交测量回复")
             ),
         ),
         gr.update(visible=show_measurement, value=False),

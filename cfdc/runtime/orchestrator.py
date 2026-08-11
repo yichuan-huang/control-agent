@@ -930,8 +930,7 @@ def _release_grounded_diagnosis_session(
         catalog,
     )
     if (
-        selection.simulation_profile_id
-        != deterministic_selection.simulation_profile_id
+        selection.simulation_profile_id != deterministic_selection.simulation_profile_id
         or selection.feature_bundle_id != deterministic_selection.feature_bundle_id
         or selection.selected_feature_ids
         != deterministic_selection.selected_feature_ids
@@ -1188,9 +1187,7 @@ def run_cfdc_route(
                         session.accumulated_description,
                         diagnostic_adapter.guide_description(
                             session.accumulated_description.model_copy(deep=True),
-                            deepcopy(
-                                [item.guidance for item in preliminary_checklist]
-                            ),
+                            deepcopy([item.guidance for item in preliminary_checklist]),
                         ),
                         [item.guidance for item in preliminary_checklist],
                     )

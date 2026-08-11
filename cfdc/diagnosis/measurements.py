@@ -324,9 +324,7 @@ def apply_description_guidance(
 
     updated = description.model_copy(
         update={
-            "observed_outputs": merged(
-                description.observed_outputs, grounded_outputs
-            ),
+            "observed_outputs": merged(description.observed_outputs, grounded_outputs),
             "actuators": merged(description.actuators, grounded_actuators),
         }
     )
@@ -425,14 +423,11 @@ def _excerpt_has_nonnegated_occurrence(context: str, excerpt: str) -> bool:
             default=len(sentence),
         )
         local_clause = sentence[clause_start:clause_end]
-        colon_index = max(
-            context.rfind(delimiter, 0, index) for delimiter in ":："
-        )
+        colon_index = max(context.rfind(delimiter, 0, index) for delimiter in ":：")
         colon_scope_is_negated = False
         if colon_index >= 0:
             colon_sentence_start = max(
-                context.rfind(delimiter, 0, colon_index)
-                for delimiter in ".。!?！？\n"
+                context.rfind(delimiter, 0, colon_index) for delimiter in ".。!?！？\n"
             )
             colon_scope_is_negated = (
                 _EPISTEMIC_NEGATION.search(

@@ -196,6 +196,7 @@ def build_specification_prompt(
         "- For direct facts set derivation to null. For derived facts use source_type=derived_from_declared_physics and provide derivation. Never propose an unregistered rule.\n"
         "- Qualitative words such as fast, slow, weak, or strong are not numeric facts.\n"
         "- Every numeric fact must include the unit explicitly stated by the user. Preserve that raw unit in source_text.\n"
+        "- For every direct fact, copy one exact contiguous source excerpt that includes the field label or signal role, the numeric value, and its unit. Preserve Markdown markers and punctuation exactly; do not return only the number-and-unit fragment or rewrite the excerpt.\n"
         "- accepted_units are examples, not a finite whitelist. Device-specific command or sensor units are allowed for fields whose unit_policy is open.\n"
         "- Never guess a missing unit. If a value has no unit, leave the fact missing and ask for its unit.\n"
         "- Do not use demo fixture values or general engineering knowledge to fill gaps.\n"
@@ -584,7 +585,10 @@ class OpenAICompatibleDiagnosticAdapter:
             assessment = MeasurementAssessment.model_validate(
                 parse_json_content(content)
             )
-            if previous_assessment is not None and previous_assessment.status == "ready":
+            if (
+                previous_assessment is not None
+                and previous_assessment.status == "ready"
+            ):
                 validate_grounded_measurement_assessment(
                     measurement_plan,
                     assessment,

@@ -564,8 +564,7 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
         item.diagnostic_field_id for item in initial.diagnostic_session.checklist
     ] == _FIELD_IDS
     assert [
-        item.guidance.response
-        for item in initial.diagnostic_session.checklist
+        item.guidance.response for item in initial.diagnostic_session.checklist
     ] == list(_DIAGNOSTIC_FACTS.values())
     assert (
         initial.diagnostic_session.measurement_plan.model_dump(mode="json")
@@ -641,7 +640,6 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
         "phrase",
         "select",
         "extract:profile",
-        "assess",
     ]
 
     linked_state, linked_view = link_stage5_report(completed.model_dump(mode="json"))

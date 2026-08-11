@@ -991,7 +991,9 @@ def test_profile_gap_without_an_explicit_user_retraction_keeps_prior_diagnosis()
     assert updated.diagnosis == original_diagnosis
     assert updated.classification is not None
     assert updated.semantic_selection is not None
-    assert all(item.status != "unknown" for item in updated.diagnostic_session.checklist)
+    assert all(
+        item.status != "unknown" for item in updated.diagnostic_session.checklist
+    )
 
 
 def test_migrated_session_ignores_tampered_compatible_profile_and_reselects():
@@ -1738,9 +1740,7 @@ def test_live_profile_recheck_falls_back_and_steering_reply_compiles(monkeypatch
     invalid_recheck = previous.model_copy(
         update={
             "facts": [
-                invalid_delay_fact
-                if fact.request_id == "significant_delay"
-                else fact
+                invalid_delay_fact if fact.request_id == "significant_delay" else fact
                 for fact in previous.facts
             ],
             "rationale": "The Profile response was incorrectly treated as delay evidence.",

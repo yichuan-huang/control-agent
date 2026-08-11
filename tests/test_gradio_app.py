@@ -124,8 +124,10 @@ def _guided_response_for_description(description_text: str) -> str:
 
 
 def _description_with_guided_facts(description_text: str) -> str:
-    return description_text + "\n" + "\n".join(
-        _guided_facts_for_description(description_text).values()
+    return (
+        description_text
+        + "\n"
+        + "\n".join(_guided_facts_for_description(description_text).values())
     )
 
 

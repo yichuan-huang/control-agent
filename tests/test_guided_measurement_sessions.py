@@ -1124,7 +1124,9 @@ def test_session_round_counters_cannot_exceed_the_configured_budget():
     payload["maximum_turns"] = 1
     payload["profile_measurement_round_count"] = 2
 
-    with pytest.raises(ValidationError, match="profile_measurement_round_count.*maximum_turns"):
+    with pytest.raises(
+        ValidationError, match="profile_measurement_round_count.*maximum_turns"
+    ):
         DiagnosticSessionState.model_validate(payload)
 
 
@@ -1151,9 +1153,9 @@ def test_migration_rebuilds_description_turn_audit_fields_from_raw_answers():
             "turn_index": 99,
             "questions": ["unsafe forged question"],
             "evidence": ["forged audit evidence"],
-            "diagnosis": DiagnosticEngine().diagnose(
-                SystemDescription(text="forged diagnosis input")
-            ).model_dump(mode="json"),
+            "diagnosis": DiagnosticEngine()
+            .diagnose(SystemDescription(text="forged diagnosis input"))
+            .model_dump(mode="json"),
         }
     )
     payload["description_turn_count"] = 7

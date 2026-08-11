@@ -136,9 +136,7 @@ class _DatasetDescriptionGuidanceAdapter:
                 )
                 else "unknown"
             )
-            resolved.append(
-                {**item.model_dump(mode="json"), "response": response}
-            )
+            resolved.append({**item.model_dump(mode="json"), "response": response})
         return {
             "guidance": resolved,
             "observed_outputs": [],
@@ -302,9 +300,7 @@ def test_bilingual_prompts_have_strict_two_stage_structural_parity():
 
     assert len(english) == len(chinese) == 200
     for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
-        assert len(english_item["paragraphs"]) == len(
-            chinese_item["paragraphs"]
-        ), index
+        assert len(english_item["paragraphs"]) == len(chinese_item["paragraphs"]), index
 
 
 @pytest.mark.parametrize(
