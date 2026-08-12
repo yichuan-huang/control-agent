@@ -181,9 +181,7 @@ ASSIGNMENT_TOKENS = [
     "motion_time_scale_s=",
 ]
 HAN_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
-NUMERIC_TOKEN = re.compile(
-    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
-)
+NUMERIC_TOKEN = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 EXPECTED_PROFILE_COUNTS = {
     "first_order_lag": 79,
     "first_order_lag_with_delay": 9,
@@ -470,7 +468,13 @@ def _profile_required_labels(profile_id: str, language: str) -> list[str]:
     if profile_id == "first_order_lag_with_delay":
         return [universal[0], *profile_fields, *universal[1:]]
     if profile_id == "second_order_oscillator":
-        return [profile_fields[0], profile_fields[1], universal[0], profile_fields[2], *universal[1:]]
+        return [
+            profile_fields[0],
+            profile_fields[1],
+            universal[0],
+            profile_fields[2],
+            *universal[1:],
+        ]
     if profile_id == "double_integrator":
         return [universal[0], *profile_fields, *universal[1:]]
     if profile_id == "nmp_inverse_response":
@@ -526,9 +530,7 @@ def test_every_profile_response_lists_its_required_answers_before_additional_inf
         assert positions == sorted(positions), (language, index)
         for marker in markers:
             assert profile.count(marker) == 1, (language, index, marker)
-            answer = re.search(
-                rf"^- {re.escape(marker)} (.+)$", profile, re.MULTILINE
-            )
+            answer = re.search(rf"^- {re.escape(marker)} (.+)$", profile, re.MULTILINE)
             assert answer is not None and re.search(r"\d", answer.group(1)), (
                 language,
                 index,
@@ -536,7 +538,9 @@ def test_every_profile_response_lists_its_required_answers_before_additional_inf
             )
         required_end = positions[-1]
         supplemental_heading = (
-            "补充仿真测量：" if language == "cn" else "Supplemental simulation measurements:"
+            "补充仿真测量："
+            if language == "cn"
+            else "Supplemental simulation measurements:"
         )
         assert profile.count(supplemental_heading) == 1, (language, index)
         assert profile.count(extra_heading) == 1, (language, index)
@@ -550,7 +554,9 @@ def _profile_answers(entry: dict, language: str) -> tuple[str, dict[str, str]]:
     for label in labels:
         colon = "：" if language == "cn" else ":"
         marker = f"**{label}{colon}**"
-        match = re.search(rf"^- {re.escape(marker)} (.+)$", entry["profile"], re.MULTILINE)
+        match = re.search(
+            rf"^- {re.escape(marker)} (.+)$", entry["profile"], re.MULTILINE
+        )
         assert match is not None, (language, label)
         answers[label] = match.group(1)
     return profile_id, answers
@@ -608,10 +614,34 @@ def test_profile_distribution_is_locked_and_every_numeric_answer_is_finite():
                     r"(?:[A-Za-z]{1,}|%|单位|无量纲|档位|矩阵|模型|系数)", answer
                 ), (language, index, label, answer)
 
-            input_min = _numbers(answers["输入仿真下限" if language == "cn" else "Input simulation lower bound"])[0]
-            input_max = _numbers(answers["输入仿真上限" if language == "cn" else "Input simulation upper bound"])[0]
-            output_min = _numbers(answers["输出仿真下限" if language == "cn" else "Output simulation lower bound"])[0]
-            output_max = _numbers(answers["输出仿真上限" if language == "cn" else "Output simulation upper bound"])[0]
+            input_min = _numbers(
+                answers[
+                    "输入仿真下限"
+                    if language == "cn"
+                    else "Input simulation lower bound"
+                ]
+            )[0]
+            input_max = _numbers(
+                answers[
+                    "输入仿真上限"
+                    if language == "cn"
+                    else "Input simulation upper bound"
+                ]
+            )[0]
+            output_min = _numbers(
+                answers[
+                    "输出仿真下限"
+                    if language == "cn"
+                    else "Output simulation lower bound"
+                ]
+            )[0]
+            output_max = _numbers(
+                answers[
+                    "输出仿真上限"
+                    if language == "cn"
+                    else "Output simulation upper bound"
+                ]
+            )[0]
             assert input_min < input_max, (language, index)
             assert output_min < output_max, (language, index)
 
@@ -626,11 +656,17 @@ def test_profile_distribution_is_locked_and_every_numeric_answer_is_finite():
                     )
 
             if profile_id == "second_order_oscillator":
-                ratio_label = "相邻峰值幅度比例" if language == "cn" else "Successive peak ratio"
+                ratio_label = (
+                    "相邻峰值幅度比例" if language == "cn" else "Successive peak ratio"
+                )
                 ratio = _numbers(answers[ratio_label])[0]
                 assert 0 < ratio < 1, (language, index, ratio)
             if profile_id == "mimo_2x2_coupled":
-                matrix_label = "局部输入输出影响矩阵" if language == "cn" else "Local input-output gain matrix"
+                matrix_label = (
+                    "局部输入输出影响矩阵"
+                    if language == "cn"
+                    else "Local input-output gain matrix"
+                )
                 matrix_match = re.search(
                     r"\[\[([^\]]+)\],\s*\[([^\]]+)\]\]", answers[matrix_label]
                 )
@@ -639,7 +675,9 @@ def test_profile_distribution_is_locked_and_every_numeric_answer_is_finite():
                 assert len(rows) == 2 and all(len(row) == 2 for row in rows)
                 assert all(math.isfinite(value) for row in rows for value in row)
             if profile_id == "generic_unstable_higher_order":
-                model_label = "完整数值模型" if language == "cn" else "Complete numeric model"
+                model_label = (
+                    "完整数值模型" if language == "cn" else "Complete numeric model"
+                )
                 assert re.search(
                     r"(?:numerator coefficients|matrix [ABCD]|registered nonlinear|分子系数|[ABCD]\s*(?:matrix|矩阵)|注册非线性)",
                     answers[model_label],
@@ -752,7 +790,9 @@ def test_every_compilable_chinese_profile_response_reaches_a_candidate_model():
     assert compiled_counts == expected_compilable
 
 
-def _transfer_function_coefficients(profile: str) -> tuple[np.ndarray, np.ndarray] | None:
+def _transfer_function_coefficients(
+    profile: str,
+) -> tuple[np.ndarray, np.ndarray] | None:
     match = re.search(
         r"numerator coefficients are ([^;]+); its denominator coefficients are ([^;]+);",
         profile,
@@ -760,7 +800,9 @@ def _transfer_function_coefficients(profile: str) -> tuple[np.ndarray, np.ndarra
     if match is None:
         return None
     try:
-        numerator = np.array([float(item.strip()) for item in match.group(1).split(",")])
+        numerator = np.array(
+            [float(item.strip()) for item in match.group(1).split(",")]
+        )
         denominator = np.array(
             [float(item.strip()) for item in match.group(2).split(",")]
         )
@@ -778,7 +820,10 @@ def _assert_complete_numeric_model_handoff(entry: dict, language: str, index: in
 
     if "transfer function" in model or "传递函数" in model:
         coefficient_patterns = (
-            (r"numerator coefficients are ([^;]+)", r"denominator coefficients are ([^;]+)"),
+            (
+                r"numerator coefficients are ([^;]+)",
+                r"denominator coefficients are ([^;]+)",
+            ),
             (r"分子系数为([^；]+)", r"分母系数为([^；]+)"),
         )
         for numerator_pattern, denominator_pattern in coefficient_patterns:
@@ -881,12 +926,12 @@ def test_first_order_measurements_match_source_models_or_explicit_proxies():
             assert _time_numbers(answers["63% response time"])[0] == pytest.approx(
                 expected_time, rel=2e-5, abs=1e-8
             )
-            assert _numbers(answers["Output simulation lower bound"])[0] == pytest.approx(
-                expected_min, rel=2e-5, abs=1e-8
-            )
-            assert _numbers(answers["Output simulation upper bound"])[0] == pytest.approx(
-                expected_max, rel=2e-5, abs=1e-8
-            )
+            assert _numbers(answers["Output simulation lower bound"])[
+                0
+            ] == pytest.approx(expected_min, rel=2e-5, abs=1e-8)
+            assert _numbers(answers["Output simulation upper bound"])[
+                0
+            ] == pytest.approx(expected_max, rel=2e-5, abs=1e-8)
             continue
 
         if index in SOURCE_MEASUREMENT_IDS:

@@ -224,9 +224,7 @@ def test_complete_description_is_grounded_and_routes_without_measurement_round()
 def test_incomplete_description_uses_collecting_description_as_real_state():
     responses = dict(_EXCERPTS)
     responses.pop("uncertainty_magnitude")
-    description = AUTOMOTIVE_DESCRIPTION.replace(
-        _EXCERPTS["uncertainty_magnitude"], ""
-    )
+    description = AUTOMOTIVE_DESCRIPTION.replace(_EXCERPTS["uncertainty_magnitude"], "")
 
     session = start_diagnostic_session(
         SystemDescription(text=description),
@@ -329,9 +327,7 @@ def test_complete_description_view_shows_profile_questions_not_eight_item_plan()
 def test_incomplete_description_view_keeps_checklist_open_and_hides_parameters():
     responses = dict(_EXCERPTS)
     responses.pop("uncertainty_magnitude")
-    description = AUTOMOTIVE_DESCRIPTION.replace(
-        _EXCERPTS["uncertainty_magnitude"], ""
-    )
+    description = AUTOMOTIVE_DESCRIPTION.replace(_EXCERPTS["uncertainty_magnitude"], "")
     report = run_cfdc_route(
         "generic",
         description=SystemDescription(text=description),
@@ -1270,9 +1266,7 @@ def test_description_supplement_merges_new_profile_facts_before_selection():
     incomplete_responses = dict(_EXCERPTS)
     incomplete_responses.pop("uncertainty_magnitude")
     state = start_diagnostic_session(
-        SystemDescription(
-            text=f"{incomplete_description}\n已知输入变化量：1 deg"
-        ),
+        SystemDescription(text=f"{incomplete_description}\n已知输入变化量：1 deg"),
         diagnostic_adapter=DescriptionGroundedAdapter(incomplete_responses),
     )
 
@@ -1402,10 +1396,7 @@ def test_profile_candidate_enrichment_rejects_missing_unit_negation_and_wrong_ro
 
     assessment = collect_profile_fact_candidates(
         SystemDescription(
-            text=(
-                "input change is 1; temperature is 10 degC; "
-                "input change is not 1 V"
-            )
+            text=("input change is 1; temperature is 10 degC; input change is not 1 V")
         ),
         adapter=InvalidCandidateAdapter(),
     )
@@ -1451,9 +1442,7 @@ def test_scalar_profile_candidate_rejects_list_value():
             fact = _profile_fact("input_change", 1.0, "V", "input change is 1 V")
             fact["value"] = [1.0]
             return {
-                "candidates": [
-                    {"template_id": "spec_first_order_lag", "fact": fact}
-                ],
+                "candidates": [{"template_id": "spec_first_order_lag", "fact": fact}],
                 "conflicts": [],
                 "rejected_facts": [],
             }
@@ -1491,9 +1480,7 @@ def test_profile_candidates_cannot_disagree_across_templates():
             }
 
     assessment = collect_profile_fact_candidates(
-        SystemDescription(
-            text="input change is 1 deg; input change is 2 deg"
-        ),
+        SystemDescription(text="input change is 1 deg; input change is 2 deg"),
         adapter=CrossTemplateAdapter(),
     )
 
@@ -1623,11 +1610,7 @@ def test_unrelated_or_negated_simulation_text_does_not_confirm_physical_ranges(
     report = run_cfdc_route(
         "generic",
         description=SystemDescription(
-            text=(
-                f"{AUTOMOTIVE_DESCRIPTION}\n"
-                f"{scope_note}\n"
-                f"{_PHYSICAL_PROFILE_TEXT}"
-            )
+            text=(f"{AUTOMOTIVE_DESCRIPTION}\n{scope_note}\n{_PHYSICAL_PROFILE_TEXT}")
         ),
         diagnostic_adapter=adapter,
     )
@@ -1733,13 +1716,9 @@ def test_physical_ranges_are_kept_while_only_simulation_scope_is_requested():
     assert assessment.status == "need_more"
     assert assessment.missing_fact_ids == ["simulation_boundary_scope"]
     assert len(assessment.facts) == 7
-    assert assessment.questions[0].requested_fact_ids == [
-        "simulation_boundary_scope"
-    ]
+    assert assessment.questions[0].requested_fact_ids == ["simulation_boundary_scope"]
 
-    scope_statement = (
-        "这些范围尚未通过硬件安全验证，仅用于软件仿真的运行和停止边界。"
-    )
+    scope_statement = "这些范围尚未通过硬件安全验证，仅用于软件仿真的运行和停止边界。"
     completed = run_cfdc_route(
         "generic",
         diagnostic_session_state=initial.diagnostic_session,

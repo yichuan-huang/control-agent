@@ -972,8 +972,7 @@ def test_unrelated_specification_reply_does_not_clear_an_existing_conflict():
 
     assert unrelated.status == "specification_conflict"
     assert any(
-        "input_change" in item
-        for item in unrelated.specification_assessment.conflicts
+        "input_change" in item for item in unrelated.specification_assessment.conflicts
     )
 
 
@@ -1308,9 +1307,9 @@ def test_llm_registered_derivation_is_recomputed_from_verbatim_inputs():
     assert fact.derivation.rule_id == "thermal_time_constant_c_over_h"
 
     wrong_case_payload = deepcopy(payload)
-    wrong_case_payload["facts"][0]["derivation"]["inputs"][0][
-        "source_text"
-    ] = heat_capacity_source.capitalize()
+    wrong_case_payload["facts"][0]["derivation"]["inputs"][0]["source_text"] = (
+        heat_capacity_source.capitalize()
+    )
     wrong_case = validate_specification_assessment_payload(
         wrong_case_payload,
         template=template,

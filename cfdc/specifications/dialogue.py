@@ -511,7 +511,9 @@ def extract_range_specification_facts(
     for clause in clauses:
         if re.search(range_marker, clause, flags=re.IGNORECASE) is None:
             continue
-        has_input_role = re.search(input_signal, clause, flags=re.IGNORECASE) is not None
+        has_input_role = (
+            re.search(input_signal, clause, flags=re.IGNORECASE) is not None
+        )
         has_output_role = (
             re.search(output_signal, clause, flags=re.IGNORECASE) is not None
         )
@@ -722,9 +724,7 @@ def collect_profile_fact_candidates(
                     f"{candidate.template_id}:{candidate.fact.fact_id}: {exc}"
                 )
                 continue
-            llm_candidates.append(
-                candidate.model_copy(update={"fact": normalized})
-            )
+            llm_candidates.append(candidate.model_copy(update={"fact": normalized}))
         candidates, llm_conflicts = _merge_profile_candidates(
             candidates, llm_candidates
         )
@@ -767,9 +767,7 @@ def collect_profile_fact_candidates(
                     f"{candidate.template_id}:{candidate.fact.fact_id}: {exc}"
                 )
                 continue
-            validated_previous.append(
-                candidate.model_copy(update={"fact": normalized})
-            )
+            validated_previous.append(candidate.model_copy(update={"fact": normalized}))
         candidates, previous_conflicts = _merge_profile_candidates(
             validated_previous,
             candidates,
@@ -1332,7 +1330,8 @@ def _source_contains_normalized_scalar(
         r"秒|毫秒|分钟|小时|度|摄氏度|华氏度|伏|安|瓦|牛|千克|帕)"
     )
     for match in re.finditer(
-        rf"({_NUMBER})\s*({unit_pattern})", source_text.replace("−", "-"),
+        rf"({_NUMBER})\s*({unit_pattern})",
+        source_text.replace("−", "-"),
         flags=re.IGNORECASE,
     ):
         try:
@@ -1398,7 +1397,10 @@ def _source_contains_compatible_unit(source_text: str, unit: str) -> bool:
     )
     for token in re.findall(unit_pattern, source_text, flags=re.IGNORECASE):
         try:
-            if resolve_unit(token.rstrip(".")).canonical_unit == expected.canonical_unit:
+            if (
+                resolve_unit(token.rstrip(".")).canonical_unit
+                == expected.canonical_unit
+            ):
                 return True
         except ValueError:
             continue
@@ -1990,9 +1992,7 @@ def assess_specification_text(
             source_texts=[description.text, *history],
         )
         facts, llm_conflicts = merge_specification_facts(facts, incoming.facts)
-        addressed_ids = local_addressed_ids | {
-            fact.fact_id for fact in incoming.facts
-        }
+        addressed_ids = local_addressed_ids | {fact.fact_id for fact in incoming.facts}
         rebuilt = build_initial_specification_assessment(
             description,
             template,

@@ -1120,9 +1120,7 @@ def test_migration_rebuilds_accumulated_description_from_retained_raw_inputs():
 
 
 def test_migration_revalidates_persisted_profile_candidates_against_raw_history():
-    state = start_diagnostic_session(
-        SystemDescription(text="已知输入变化量：1 V")
-    )
+    state = start_diagnostic_session(SystemDescription(text="已知输入变化量：1 V"))
     payload = state.model_dump(mode="json")
     payload["description_profile_assessment"] = {
         "candidates": [

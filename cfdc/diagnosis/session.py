@@ -411,9 +411,7 @@ def continue_description_session(
             diagnosis = grounded_diagnosis
     profile_source_description = accumulated.model_copy(
         update={
-            "text": "\n\n".join(
-                [accumulated.text, *state.specification_answer_history]
-            )
+            "text": "\n\n".join([accumulated.text, *state.specification_answer_history])
         }
     )
     description_profile_assessment = _collect_profile_description_assessment(
@@ -825,9 +823,7 @@ def _merge_cached_profile_facts(
     )
 
 
-_SCOPE_SENTENCE_BOUNDARY = re.compile(
-    r"(?<=[。！？!?])|(?<=\.)(?=\s|$)|[;；\n]+"
-)
+_SCOPE_SENTENCE_BOUNDARY = re.compile(r"(?<=[。！？!?])|(?<=\.)(?=\s|$)|[;；\n]+")
 _SCOPE_NEGATION = re.compile(
     r"(?:\b(?:ranges?|bounds?|limits?)\b.{0,24}"
     r"\b(?:are\s+not|aren't|do\s+not|don't)\b.{0,24}"
@@ -912,10 +908,13 @@ def _has_global_simulation_boundary_scope(text: str) -> bool:
     if any(_scope_statement_is_negated(sentence) for sentence in sentences):
         return False
     for sentence in sentences:
-        if re.search(
-            r"(?:software\s+simulation|simulation[- ]only|软件仿真|仅限仿真)",
-            sentence,
-        ) is None:
+        if (
+            re.search(
+                r"(?:software\s+simulation|simulation[- ]only|软件仿真|仅限仿真)",
+                sentence,
+            )
+            is None
+        ):
             continue
         input_role = re.search(
             r"(?:input|command|actuat|throttle|heater|valve|pump|"
@@ -1141,7 +1140,7 @@ def submit_specifications_to_session(
                 "compiled_specification_model": None,
                 "status": "awaiting_profile_measurements",
             }
-    )
+        )
     if (
         required_boundary_ids
         and state.accumulated_description.simulation_boundary_confirmation is None
@@ -1444,17 +1443,13 @@ def migrate_diagnostic_session_payload(payload: object) -> DiagnosticSessionStat
             raise ValueError("specification answer history entries must be strings")
         profile_source_description = rebuilt_accumulated.model_copy(
             update={
-                "text": "\n\n".join(
-                    [rebuilt_accumulated.text, *specification_history]
-                )
+                "text": "\n\n".join([rebuilt_accumulated.text, *specification_history])
             }
         )
-        payload["description_profile_assessment"] = (
-            collect_profile_fact_candidates(
-                profile_source_description,
-                previous=persisted_profile,
-            ).model_dump(mode="python")
-        )
+        payload["description_profile_assessment"] = collect_profile_fact_candidates(
+            profile_source_description,
+            previous=persisted_profile,
+        ).model_dump(mode="python")
         if diagnosis is None:
             diagnosis = DiagnosticEngine(adapter=None).diagnose(rebuilt_accumulated)
             payload["current_diagnosis"] = diagnosis.model_dump(mode="python")

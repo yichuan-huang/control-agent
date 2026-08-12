@@ -439,9 +439,7 @@ def guided_timeline_markdown(report: CFDCRunReport) -> str:
         ):
             fact = candidate.fact
             label = PROFILE_FACT_LABELS.get(fact.fact_id, fact.fact_id)
-            lines.append(
-                f"- 已保留 Profile 事实 · {label}：{fact.value} {fact.unit}"
-            )
+            lines.append(f"- 已保留 Profile 事实 · {label}：{fact.value} {fact.unit}")
     for round_index, assessment in enumerate(session.measurement_history, start=1):
         lines.append(f"#### 测量回填 · 第 {round_index} 轮")
         for fact in assessment.facts:

@@ -571,11 +571,14 @@ def infer_description_field_assessment(
         ):
             return CouplingAssessment.SISO.value
         return None
-    if re.search(
-        r"(?:uncertaint|variab|repeat|operating condition|load|parameter|"
-        r"不确定|变化性|重复试验|工况|负载|元件|运行条件|参数)",
-        text,
-    ) is None:
+    if (
+        re.search(
+            r"(?:uncertaint|variab|repeat|operating condition|load|parameter|"
+            r"不确定|变化性|重复试验|工况|负载|元件|运行条件|参数)",
+            text,
+        )
+        is None
+    ):
         return None
     if re.search(r"(?:material|substantial|large|大幅|明显)", text):
         return UncertaintyAssessment.LARGE.value

@@ -458,9 +458,7 @@ def description_excerpt_answers_field(
     return context is None or _excerpt_has_nonnegated_occurrence(context, excerpt)
 
 
-_DESCRIPTION_SENTENCE_BOUNDARY = re.compile(
-    r"(?<=[。！？!?])|(?<=\.)(?=\s|$)|\n+"
-)
+_DESCRIPTION_SENTENCE_BOUNDARY = re.compile(r"(?<=[。！？!?])|(?<=\.)(?=\s|$)|\n+")
 
 
 def _description_excerpt_candidates(description_text: str) -> list[str]:

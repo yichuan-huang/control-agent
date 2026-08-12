@@ -101,7 +101,9 @@ def _outputs(report, state):
         and session.specification_assessment is not None
         and session.specification_assessment.status == "ready"
     )
-    show_measurement_input = (diagnostic_input or profile_needs_more) and not confirmation_only
+    show_measurement_input = (
+        diagnostic_input or profile_needs_more
+    ) and not confirmation_only
     visibility = view["technical_visibility"]
     return (
         state,

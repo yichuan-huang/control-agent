@@ -139,6 +139,7 @@ RouteId = Literal[
     "vtol-variation",
 ]
 
+
 def _cartpole_description() -> SystemDescription:
     return SystemDescription(
         text=(
@@ -845,7 +846,9 @@ def _initial_profile_assessment(
 ) -> SpecificationAssessment:
     candidates = [
         candidate.fact
-        for candidate in (candidate_assessment.candidates if candidate_assessment else [])
+        for candidate in (
+            candidate_assessment.candidates if candidate_assessment else []
+        )
         if candidate.template_id == template.template_id
     ]
     template_conflict_markers = {
@@ -898,7 +901,11 @@ def _initial_profile_assessment(
                     "no_progress": False,
                 }
             )
-        return assessed.model_copy(update={"no_progress": False}) if not history else assessed
+        return (
+            assessed.model_copy(update={"no_progress": False})
+            if not history
+            else assessed
+        )
     except Exception:  # noqa: BLE001 - optional provider prefill must fail closed
         # Prefilling is optional. Provider timeouts or malformed extraction must
         # never block the already-grounded classification or invent parameters.

@@ -603,7 +603,9 @@ class OpenAICompatibleDiagnosticAdapter:
         payload = parse_json_content(content)
         for name in ("candidates", "conflicts", "rejected_facts"):
             if name in payload and not isinstance(payload[name], list):
-                raise ValueError(f"Profile fact extraction field '{name}' must be an array")
+                raise ValueError(
+                    f"Profile fact extraction field '{name}' must be an array"
+                )
         return payload
 
     def extract_measurements(
