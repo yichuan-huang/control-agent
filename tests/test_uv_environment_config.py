@@ -48,3 +48,13 @@ def test_docs_and_ci_publish_only_uv_workflow():
     assert "actions/setup-python" not in ci
     assert "pip install" not in ci
     assert ".[test]" not in ci
+
+
+def test_readmes_install_and_check_before_web_start_and_cli():
+    for path in [ROOT / "README.md", ROOT / "README_CN.md"]:
+        text = path.read_text(encoding="utf-8")
+        compile_check = text.index("uv run python -m compileall -q cfdc tests")
+        web_start = text.index("uv run python app.py")
+        cli_usage = text.index("uv run python main.py --use-llm")
+
+        assert compile_check < web_start < cli_usage

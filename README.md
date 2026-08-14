@@ -32,31 +32,6 @@ The runtime does not look up a model by question number, case ID, or Profile. Th
 
 The LLM may return strict typed data only. Arbitrary Python, MATLAB, ODE strings, imports, callbacks, URLs, module paths, and expression evaluation are rejected. A local model that leaves its confirmed validity range terminates as `inconclusive`; gain tuning cannot continue on that model.
 
-## Web interface
-
-Start the application:
-
-```bash
-uv run python app.py
-```
-
-Open `http://127.0.0.1:7860`. The generic Web workflow has one domain input, **Control Problem Description**, plus the required provider Base URL, Model, and API Key. There is no optional no-LLM mode and the Gradio UI provides no example cases. Its six progress stages are exactly Problem Description and Eight-Item Checklist, System Classification, Core-Parameter Measurement Plan, Parameter Response and Model Compilation, Initial Controller, and Effect Validation and Tuning.
-
-Once the eight description checks and selected-Profile facts are complete:
-
-1. Confirm that the declared input/output ranges are boundaries for software simulation only, not hardware-safety certification.
-2. The backend validates the Profile facts and deterministically compiles the plant model.
-3. The Controller tab presents the initial unvalidated controller candidate.
-4. Tuning & Adaptation receives that exact compiled model and controller and runs the first software trial.
-5. The output curve shows the reference, initial-controller output, latest executed output when different, and lower/upper output bounds for every displayed channel.
-6. Stability is mapped only from the deterministic `StabilityDecision`: stable, unstable, or inconclusive. A rolled-back latest trial stays visible as unaccepted evidence and never becomes the current safe controller.
-
-The complete-specification path does not ask for the same model information again or require a second model-confirmation step.
-
-There is no case selector, separate simulation laboratory, fixed MIMO demo, or continuous auto-tuning button in the main UI.
-
-Base URL, Model, and API Key are required for the generic guided flow and are read directly from the current provider inputs. API keys are never stored in Gradio state, diagnostic/model/simulation sessions, audit JSON, logs, hashes, or exports.
-
 ## Project layout
 
 | Path | Responsibility |
@@ -99,6 +74,33 @@ No environment activation is required when using `uv run`.
 uv run pytest -q
 uv run python -m compileall -q cfdc tests
 ```
+
+## Web interface
+
+After `uv sync`, the test suite, and the compile check above complete, start the application:
+
+```bash
+uv run python app.py
+```
+
+Open `http://127.0.0.1:7860`. The generic Web workflow has one domain input, **Control Problem Description**, plus the required provider Base URL, Model, and API Key. There is no optional no-LLM mode and the Gradio UI provides no example cases. Its six progress stages are exactly Problem Description and Eight-Item Checklist, System Classification, Core-Parameter Measurement Plan, Parameter Response and Model Compilation, Initial Controller, and Effect Validation and Tuning.
+
+Once the eight description checks and selected-Profile facts are complete:
+
+1. Confirm that the declared input/output ranges are boundaries for software simulation only, not hardware-safety certification.
+2. The backend validates the Profile facts and deterministically compiles the plant model.
+3. The Controller tab presents the initial unvalidated controller candidate.
+4. Tuning & Adaptation receives that exact compiled model and controller and runs the first software trial.
+5. The output curve shows the reference, initial-controller output, latest executed output when different, and lower/upper output bounds for every displayed channel.
+6. Stability is mapped only from the deterministic `StabilityDecision`: stable, unstable, or inconclusive. A rolled-back latest trial stays visible as unaccepted evidence and never becomes the current safe controller.
+
+The complete-specification path does not ask for the same model information again or require a second model-confirmation step.
+
+There is no case selector, separate simulation laboratory, fixed MIMO demo, or continuous auto-tuning button in the main UI.
+
+Base URL, Model, and API Key are required for the generic guided flow and are read directly from the current provider inputs. API keys are never stored in Gradio state, diagnostic/model/simulation sessions, audit JSON, logs, hashes, or exports.
+
+## CLI usage
 
 Use any OpenAI-compatible provider:
 
