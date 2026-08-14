@@ -37,7 +37,7 @@ The LLM may return strict typed data only. Arbitrary Python, MATLAB, ODE strings
 Start the application:
 
 ```bash
-python app.py
+uv run python app.py
 ```
 
 Open `http://127.0.0.1:7860`. The generic Web workflow has one domain input, **Control Problem Description**, plus the required provider Base URL, Model, and API Key. There is no optional no-LLM mode and the Gradio UI provides no example cases. Its six progress stages are exactly Problem Description and Eight-Item Checklist, System Classification, Core-Parameter Measurement Plan, Parameter Response and Model Compilation, Initial Controller, and Effect Validation and Tuning.
@@ -83,24 +83,21 @@ git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
 ```
 
-2. Create and activate a Conda environment:
+2. Install uv and sync the project environment:
 
 ```bash
-conda create -n control-agent python=3.11
-conda activate control-agent
+uv sync
 ```
 
-3. Install the project and test dependencies:
+uv reads the pinned Python version from `.python-version`, installs a managed Python 3.12
+interpreter when needed, creates `.venv`, and installs the project plus development tools.
+No environment activation is required when using `uv run`.
+
+3. Run the test suite and compile-check the source code:
 
 ```bash
-python -m pip install -e '.[test]'
-```
-
-4. Run the test suite and compile-check the source code:
-
-```bash
-pytest -q
-python -m compileall -q cfdc tests
+uv run pytest -q
+uv run python -m compileall -q cfdc tests
 ```
 
 Use any OpenAI-compatible provider:
@@ -110,7 +107,7 @@ export CFDC_LLM_BASE_URL="https://your-provider.example"
 export CFDC_LLM_MODEL="your-provider-model"
 export CFDC_LLM_API_KEY="..."
 
-python main.py --use-llm \
+uv run python main.py --use-llm \
   --description "A spring-mass process oscillates after a force pulse." \
   --diagnostic-session-output session-v4.json
 ```
@@ -118,7 +115,7 @@ python main.py --use-llm \
 The same configuration may be supplied on the command line:
 
 ```bash
-python main.py --use-llm \
+uv run python main.py --use-llm \
   --llm-base-url "https://api.deepseek.com" \
   --llm-model "deepseek-v4-pro" \
   --llm-api-key "$DEEPSEEK_API_KEY" \
@@ -132,13 +129,13 @@ session with either inline text or one UTF-8 response file. Once the checklist i
 complete, this response is interpreted directly as selected-Profile parameters:
 
 ```bash
-python main.py --use-llm \
+uv run python main.py --use-llm \
   --diagnostic-session-input session-v4.json \
   --diagnostic-session-output session-v4-next.json \
   --measurement-response "Input change is 1 deg; steady output change is 10 mph; response time is 5 s; input range is -3 to 3 deg; output range is 45 to 80 mph." \
   --confirm-simulation-bounds
 
-python main.py --use-llm \
+uv run python main.py --use-llm \
   --diagnostic-session-input session-v4.json \
   --diagnostic-session-output session-v4-next.json \
   --measurement-response-file measurement-response.txt

@@ -37,7 +37,7 @@ LLM 只能返回严格类型化数据。任意 Python、MATLAB、ODE 字符串�
 启动：
 
 ```bash
-python app.py
+uv run python app.py
 ```
 
 浏览器访问 `http://127.0.0.1:7860`。通用 Web 流程只有一个领域输入“控制问题描述”，并要求填写 Provider Base URL、Model 和 API Key；不存在可选的无 LLM 模式，Gradio 也不提供任何案例示例。六个进度阶段严格为：问题描述与八项 checklist、系统分类、核心参数测量计划、参数回填与模型编译、初始控制器、效果验证与调优。
@@ -83,24 +83,20 @@ git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
 ```
 
-2. 创建并激活 Conda 环境：
+2. 安装 uv 并同步项目环境：
 
 ```bash
-conda create -n control-agent python=3.11
-conda activate control-agent
+uv sync
 ```
 
-3. 安装项目及测试依赖：
+uv 会读取 `.python-version` 中的 Python 版本，需要时自动安装受 uv 管理的 Python 3.12，
+创建 `.venv`，并安装项目及开发工具。使用 `uv run` 时不需要手动激活环境。
+
+3. 运行测试套件并检查源代码是否可编译：
 
 ```bash
-python -m pip install -e '.[test]'
-```
-
-4. 运行测试套件并检查源代码是否可编译：
-
-```bash
-pytest -q
-python -m compileall -q cfdc tests
+uv run pytest -q
+uv run python -m compileall -q cfdc tests
 ```
 
 可使用任意 OpenAI-compatible 服务：
@@ -110,7 +106,7 @@ export CFDC_LLM_BASE_URL="https://your-provider.example"
 export CFDC_LLM_MODEL="your-provider-model"
 export CFDC_LLM_API_KEY="..."
 
-python main.py --use-llm \
+uv run python main.py --use-llm \
   --description "一个弹簧质量系统在施加力脉冲后会振荡。" \
   --diagnostic-session-output session-v4.json
 ```
@@ -118,7 +114,7 @@ python main.py --use-llm \
 也可通过命令行传入同一配置：
 
 ```bash
-python main.py --use-llm \
+uv run python main.py --use-llm \
   --llm-base-url "https://api.deepseek.com" \
   --llm-model "deepseek-v4-pro" \
   --llm-api-key "$DEEPSEEK_API_KEY" \
@@ -131,13 +127,13 @@ python main.py --use-llm \
 也可以使用一个 UTF-8 文本文件。checklist 完成后，该回复会直接解释为所选 Profile 的参数：
 
 ```bash
-python main.py --use-llm \
+uv run python main.py --use-llm \
   --diagnostic-session-input session-v4.json \
   --diagnostic-session-output session-v4-next.json \
   --measurement-response "油门变化 1 deg，稳态车速变化 10 mph，响应时间 5 s；油门范围 -3 至 3 deg，车速范围 45 至 80 mph。" \
   --confirm-simulation-bounds
 
-python main.py --use-llm \
+uv run python main.py --use-llm \
   --diagnostic-session-input session-v4.json \
   --diagnostic-session-output session-v4-next.json \
   --measurement-response-file measurement-response.txt
