@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from cfdc.agents import wrap_agent_adapter
 from cfdc.diagnosis import (
     OpenAICompatibleDiagnosticAdapter,
     clarification_question_map,
@@ -106,14 +107,68 @@ def build_adapter(
     base_url: str | None,
     model: str | None,
     api_key: str | None,
+    *,
+    agent_mode: str | None = None,
+    rag_index_dir: str | Path | None = None,
+    rag_snapshot: str | None = None,
+    use_rag: bool = True,
+    timeout_s: float = 60.0,
+    max_tokens: int = 1400,
 ):
     if not use_llm:
         return None
-    return OpenAICompatibleDiagnosticAdapter(
+    adapter = OpenAICompatibleDiagnosticAdapter(
         base_url=_textbox_text(base_url).strip() or None,
         model=_textbox_text(model).strip() or None,
         api_key=_textbox_text(api_key).strip() or None,
+        timeout_s=timeout_s,
+        max_tokens=max_tokens,
     )
+    return wrap_agent_adapter(
+        adapter,
+        agent_mode=agent_mode,
+        rag_index_dir=str(rag_index_dir) if rag_index_dir is not None else None,
+        rag_snapshot=rag_snapshot,
+        use_rag=use_rag,
+    )
+
+
+def _attach_agent_trace(
+    report: CFDCRunReport,
+    adapter: Any,
+    previous: list[dict[str, Any]] | None = None,
+) -> CFDCRunReport:
+    trace_reader = getattr(adapter, "agent_trace", None)
+    current = trace_reader() if callable(trace_reader) else []
+    return report.model_copy(update={"agent_trace": [*(previous or []), *current]})
+
+
+def _build_app_adapter(
+    use_llm: bool,
+    base_url: str | None,
+    model: str | None,
+    api_key: str | None,
+    *,
+    agent_mode: str | None = None,
+    rag_index_dir: str | Path | None = None,
+    rag_snapshot: str | None = None,
+    use_rag: bool = True,
+    explicit: bool = False,
+):
+    if explicit:
+        return build_adapter(
+            use_llm,
+            base_url,
+            model,
+            api_key,
+            agent_mode=agent_mode,
+            rag_index_dir=rag_index_dir,
+            rag_snapshot=rag_snapshot,
+            use_rag=use_rag,
+        )
+    # Keep the legacy positional call shape for embedding applications that
+    # monkeypatch/build their own adapter factories.
+    return build_adapter(use_llm, base_url, model, api_key)
 
 
 def _run_ready_session(
@@ -165,6 +220,11 @@ def start_app_run(
     include_trajectory: bool = False,
     forbidden_actions: str | None = None,
     time_scale_hint_s: str | float | None = None,
+    *,
+    agent_mode: str | None = None,
+    rag_index_dir: str | Path | None = None,
+    rag_snapshot: str | None = None,
+    use_rag: bool = True,
 ) -> tuple[CFDCRunReport, dict[str, Any]]:
     route_id = ROUTE_CHOICES.get(
         route_label,
@@ -181,7 +241,26 @@ def start_app_run(
         raise ValueError("请描述需要控制的对象、可观察输出和可用执行器。")
     if route_id == "generic" and not use_llm:
         raise ValueError("通用引导测量流程需要启用 LLM。")
-    adapter = build_adapter(use_llm, base_url_text, model_text, api_key_text)
+    explicit_agent_config = (
+        agent_mode is not None or rag_index_dir is not None or not use_rag
+    )
+    adapter = _build_app_adapter(
+        use_llm,
+        base_url_text,
+        model_text,
+        api_key_text,
+        agent_mode=agent_mode,
+        rag_index_dir=rag_index_dir,
+        use_rag=use_rag,
+        rag_snapshot=rag_snapshot,
+        explicit=explicit_agent_config,
+    )
+    # A loaded snapshot must remain pinned across multi-turn UI callbacks even
+    # when the directory came from the environment rather than an explicit
+    # function argument.
+    explicit_agent_config = explicit_agent_config or bool(
+        getattr(adapter, "rag_snapshot", None)
+    )
     if route_id == "generic":
         validate_guided_adapter_capabilities(adapter)
 
@@ -199,6 +278,7 @@ def start_app_run(
         diagnostic_adapter=adapter,
         include_trajectory=include_trajectory,
     )
+    report = _attach_agent_trace(report, adapter)
     session = report.diagnostic_session
     if report.status in {"need_more_information", "awaiting_specifications"}:
         if report.diagnosis is None:
@@ -246,6 +326,14 @@ def start_app_run(
         "use_llm": use_llm if awaiting_llm_dialogue else False,
         "include_trajectory": include_trajectory,
         "input_source": "natural_language",
+        "agent_mode": getattr(adapter, "agent_mode", "single") if adapter else "single",
+        "rag_enabled": bool(getattr(adapter, "rag_enabled", False))
+        if adapter
+        else False,
+        "agent_trace": report.agent_trace,
+        "rag_index_dir": getattr(adapter, "rag_index_dir", None) if adapter else None,
+        "rag_snapshot": getattr(adapter, "rag_snapshot", None) if adapter else None,
+        "_agent_config_explicit": explicit_agent_config,
     }
 
 
@@ -261,11 +349,16 @@ def continue_app_run(
     if not app_state or not app_state.get("session"):
         raise ValueError("当前没有等待回答的诊断会话。")
     session = DiagnosticSessionState.model_validate(app_state["session"])
-    adapter = build_adapter(
+    adapter = _build_app_adapter(
         bool(app_state.get("use_llm")),
         base_url,
         model,
         api_key,
+        agent_mode=app_state.get("agent_mode"),
+        rag_index_dir=app_state.get("rag_index_dir"),
+        rag_snapshot=app_state.get("rag_snapshot"),
+        use_rag=bool(app_state.get("rag_enabled", True)),
+        explicit=bool(app_state.get("_agent_config_explicit")),
     )
     question_ids = list(clarification_question_map(session))
     question_map = clarification_question_map(session)
@@ -309,10 +402,12 @@ def continue_app_run(
         adapter,
         bool(app_state.get("include_trajectory")),
     )
+    report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
     if report.diagnostic_session is None:
         report = report.model_copy(update={"diagnostic_session": updated})
     report_session = report.diagnostic_session
     next_state = dict(app_state)
+    next_state["agent_trace"] = report.agent_trace
     next_state["session"] = (
         report_session.model_dump(mode="json")
         if report_session is not None
@@ -364,7 +459,17 @@ def submit_app_measurement_response(
     )
     if not text and not confirmation_only:
         raise ValueError("请填写现有记录、手册摘录或明确说明未知。")
-    adapter = build_adapter(bool(app_state.get("use_llm")), base_url, model, api_key)
+    adapter = _build_app_adapter(
+        bool(app_state.get("use_llm")),
+        base_url,
+        model,
+        api_key,
+        agent_mode=app_state.get("agent_mode"),
+        rag_index_dir=app_state.get("rag_index_dir"),
+        rag_snapshot=app_state.get("rag_snapshot"),
+        use_rag=bool(app_state.get("rag_enabled", True)),
+        explicit=bool(app_state.get("_agent_config_explicit")),
+    )
     if adapter is None and not confirmation_only:
         raise ValueError("通用引导测量流程需要启用 LLM。")
     report = run_cfdc_route(
@@ -375,6 +480,7 @@ def submit_app_measurement_response(
         simulation_bounds_confirmed=simulation_bounds_confirmed,
         include_trajectory=bool(app_state.get("include_trajectory")),
     )
+    report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
     waiting = report.status in {
         "awaiting_measurements",
         "measurement_needs_more",
@@ -385,6 +491,7 @@ def submit_app_measurement_response(
         "evidence_rejected",
     }
     next_state = dict(app_state)
+    next_state["agent_trace"] = report.agent_trace
     next_state["session"] = (
         report.diagnostic_session.model_dump(mode="json")
         if waiting and report.diagnostic_session is not None
@@ -454,11 +561,16 @@ def submit_app_specifications(
     text = _textbox_text(specification_text).strip()
     if not text:
         raise ValueError("请填写已知设备规格、手册原文或明确选择暂时不知道。")
-    adapter = build_adapter(
+    adapter = _build_app_adapter(
         bool(app_state.get("use_llm")),
         base_url,
         model,
         api_key,
+        agent_mode=app_state.get("agent_mode"),
+        rag_index_dir=app_state.get("rag_index_dir"),
+        rag_snapshot=app_state.get("rag_snapshot"),
+        use_rag=bool(app_state.get("rag_enabled", True)),
+        explicit=bool(app_state.get("_agent_config_explicit")),
     )
     report = run_cfdc_route(
         session.route_id,
@@ -467,11 +579,13 @@ def submit_app_specifications(
         measurement_response=text,
         include_trajectory=bool(app_state.get("include_trajectory")),
     )
+    report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
     waiting = report.status in {
         "awaiting_profile_measurements",
         "specification_conflict",
     }
     next_state = dict(app_state)
+    next_state["agent_trace"] = report.agent_trace
     next_state["session"] = (
         report.diagnostic_session.model_dump(mode="json")
         if waiting and report.diagnostic_session is not None
@@ -663,8 +777,10 @@ def submit_app_evidence(
             include_trajectory=bool(app_state.get("include_trajectory")),
             execution_mode="demo_fixture",
         )
+        report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
         next_state = dict(app_state)
         next_state["session"] = None
+        next_state["agent_trace"] = report.agent_trace
         return report, next_state
 
     session = _record_simulation_boundary_confirmation(
@@ -718,7 +834,9 @@ def submit_app_evidence(
         include_trajectory=bool(app_state.get("include_trajectory")),
         evidence_package=package,
     )
+    report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
     next_state = dict(app_state)
+    next_state["agent_trace"] = report.agent_trace
     next_state["session"] = (
         reviewed.model_dump(mode="json")
         if report.status in {"awaiting_evidence", "evidence_rejected"}

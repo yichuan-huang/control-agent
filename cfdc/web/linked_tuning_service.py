@@ -11,6 +11,7 @@ from typing import Any
 
 import pandas as pd
 
+from cfdc.agents import wrap_agent_adapter
 from cfdc.diagnosis import OpenAICompatibleDiagnosticAdapter
 from cfdc.lab import (
     SimulationRunConfig,
@@ -350,11 +351,12 @@ def request_linked_gain(
 
     session = decode_lab_state(payload)
     try:
-        adapter = OpenAICompatibleDiagnosticAdapter(
+        base_adapter = OpenAICompatibleDiagnosticAdapter(
             base_url=base_url.strip() or None,
             model=model.strip() or None,
             api_key=api_key.strip() or None,
         )
+        adapter = wrap_agent_adapter(base_adapter)
         session, _ = request_gain_for_session(
             session,
             adapter,

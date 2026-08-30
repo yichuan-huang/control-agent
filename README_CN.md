@@ -67,6 +67,16 @@ uv sync
 uv 会读取 `.python-version` 中的 Python 版本，需要时自动安装受 uv 管理的 Python 3.12，
 创建 `.venv`，并安装项目及开发工具。使用 `uv run` 时不需要手动激活环境。
 
+本地 RAG 是可选依赖；需要建立 PDF/Markdown 索引时再同步：
+
+```bash
+uv sync --extra rag
+# 省略 --source-dir 时只建立内置 Registry、机制卡和能力目录
+uv run python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
+# 查看快照和语料覆盖（不加载 embedding）
+uv run python -m cfdc.rag inspect --index-dir ./rag-index
+```
+
 3. 运行测试套件并检查源代码是否可编译：
 
 ```bash
@@ -111,6 +121,31 @@ export CFDC_LLM_API_KEY="..."
 uv run python main.py --use-llm \
   --description "一个弹簧质量系统在施加力脉冲后会振荡。" \
   --diagnostic-session-output session-v4.json
+```
+
+内置 Provider 适配器默认使用四个角色（Diagnosis、Modeling、Controller、Critic）和一次修正审查。五类分类与唯一 Profile 始终由 Registry 的确定性规则决定；Controller 只解释选择依据和提出受限候选。可以显式选择旧的单适配器基线，或指定本地 RAG 快照：
+
+```bash
+uv run python main.py --use-llm --agent-mode multi \
+  --rag-index ./rag-index \
+  --rag-snapshot snapshot-... \
+  --description "加热器改变箱体内测得的温度。"
+
+uv run python main.py --use-llm --agent-mode single --no-rag \
+  --description "加热器改变箱体内测得的温度。"
+```
+
+Web 界面的 Provider 面板也提供同样的 Agent 模式、RAG 开关和索引目录输入；继续补充描述或参数时会沿用本次运行的配置。
+
+RAG 只读取显式提供的资料目录和项目内置控制知识；文档内容作为带来源的数据片段发送给角色模型，不会获得代码执行或修改对象事实的权限。索引每次生成一个快照并原子切换 `CURRENT`，快照内保存文件、页码/标题、内容哈希和 embedding 版本。
+
+可用 `query` 查看按角色、阶段、Class 或 Profile 过滤后的召回，`eval` 只报告检索策略，不调用 LLM：
+
+```bash
+uv run python -m cfdc.rag query --index-dir ./rag-index \
+  --role controller --operation explain_profile \
+  --profile first_order_lag --query "方法前提和限制"
+uv run python -m cfdc.rag eval --index-dir ./rag-index
 ```
 
 也可通过命令行传入同一配置：

@@ -638,7 +638,6 @@ def test_guided_description_to_linked_first_trial_is_evidence_gated_end_to_end()
     assert adapter.calls == [
         "guide",
         "phrase",
-        "select",
         "extract:profile",
     ]
 

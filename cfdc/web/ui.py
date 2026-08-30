@@ -83,17 +83,22 @@ def _outputs(report, state):
         and session.status in profile_measurement_statuses
         and profile_assessment_status in {None, "need_more", "conflict"}
     )
+    blocked = report.status == "feature_extraction_failed"
     diagnostic_input = bool(
         session
         and session.status in diagnostic_measurement_statuses
         and not view["clarifications"]
+        and not blocked
     )
     automatically_ready = bool(
         session is not None
         and session.status == "specification_model_ready"
         and profile_assessment_status == "ready"
+        and not blocked
     )
-    show_measurement = diagnostic_input or profile_needs_more or automatically_ready
+    show_measurement = (
+        diagnostic_input or profile_needs_more or automatically_ready
+    ) and not blocked
     confirmation_only = bool(
         show_measurement
         and session is not None
@@ -158,8 +163,23 @@ def _outputs(report, state):
     )
 
 
-def run_from_ui(description, base_url, model, api_key):
+def run_from_ui(
+    description,
+    base_url,
+    model,
+    api_key,
+    agent_mode=None,
+    rag_enabled=True,
+    rag_index_dir=None,
+):
     try:
+        options = {}
+        if agent_mode is not None:
+            options["agent_mode"] = agent_mode or None
+        if rag_index_dir:
+            options["rag_index_dir"] = rag_index_dir
+        if not rag_enabled:
+            options["use_rag"] = False
         report, state = start_app_run(
             description,
             "",
@@ -171,6 +191,7 @@ def run_from_ui(description, base_url, model, api_key):
             model,
             api_key,
             False,
+            **options,
         )
         return _outputs(report, state)
     except Exception as exc:
@@ -266,6 +287,22 @@ def build_app() -> gr.Blocks:
                         placeholder="provider-model",
                     )
                     api_key = gr.Textbox(label="API Key", value="", type="password")
+                    agent_mode = gr.Radio(
+                        label="Agent 模式",
+                        choices=["multi", "single"],
+                        value=os.getenv("CFDC_AGENT_MODE", "multi"),
+                        info="multi 启用 Diagnosis/Modeling/Controller/Critic；single 用于回退或基线评测。",
+                    )
+                    rag_enabled = gr.Checkbox(
+                        label="启用本地 RAG",
+                        value=True,
+                        info="只使用显式索引目录和内置控制知识；关闭后不加载 embedding 模型。",
+                    )
+                    rag_index_dir = gr.Textbox(
+                        label="本地 RAG 索引目录（可选）",
+                        value="",
+                        placeholder="例如 ./rag-index",
+                    )
                 with gr.Row():
                     run_button = gr.Button(
                         "检查描述并继续",
@@ -426,7 +463,15 @@ def build_app() -> gr.Blocks:
         ]
         run_button.click(
             run_from_ui,
-            inputs=[description, base_url, model, api_key],
+            inputs=[
+                description,
+                base_url,
+                model,
+                api_key,
+                agent_mode,
+                rag_enabled,
+                rag_index_dir,
+            ],
             outputs=output_components,
         )
         measurement_button.click(
@@ -450,5 +495,9 @@ def build_app() -> gr.Blocks:
                 api_key,
                 *output_components,
             ],
+        )
+        clear_button.click(
+            lambda: ("multi", True, ""),
+            outputs=[agent_mode, rag_enabled, rag_index_dir],
         )
     return demo

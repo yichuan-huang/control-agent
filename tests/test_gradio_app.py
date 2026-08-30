@@ -1664,7 +1664,7 @@ def test_app_does_not_repeat_diagnosis_for_clear_description(monkeypatch):
     assert report.status == "awaiting_profile_measurements"
     assert report.classification is not None
     assert report.semantic_selection is not None
-    assert calls == {"diagnose": 0, "select": 1}
+    assert calls == {"diagnose": 0, "select": 0}
     assert report.diagnostic_session.measurement_round_count == 0
     assert state["session"]["measurement_history"] == []
 
@@ -1796,7 +1796,7 @@ def test_description_supplement_releases_profile_without_diagnostic_measurement_
     assert continued.semantic_selection is not None
     assert state["session"]["description_turn_count"] == 1
     assert state["session"]["measurement_round_count"] == 0
-    assert calls == {"diagnose": 0, "select": 1}
+    assert calls == {"diagnose": 0, "select": 0}
 
 
 def test_clear_resets_mode_credentials_session_and_report(monkeypatch):

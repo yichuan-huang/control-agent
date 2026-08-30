@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 from uuid import uuid4
 
+from cfdc.agents import wrap_agent_adapter
 from cfdc.demo import run_demo_validation
 from cfdc.diagnosis import (
     OpenAICompatibleDiagnosticAdapter,
@@ -341,7 +342,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--use-llm",
         action="store_true",
-        help="Use the configured OpenAI-compatible provider for diagnosis and closed-catalog profile selection.",
+        help="Use the configured OpenAI-compatible provider for role-scoped agent work; routing remains deterministic.",
+    )
+    parser.add_argument(
+        "--agent-mode",
+        choices=["single", "multi"],
+        default=None,
+        help="Agent orchestration mode (default: multi; CFDC_AGENT_MODE can override).",
+    )
+    parser.add_argument(
+        "--rag-index",
+        type=Path,
+        default=None,
+        help="Local RAG index directory created by `python -m cfdc.rag index`.",
+    )
+    parser.add_argument(
+        "--rag-snapshot",
+        type=str,
+        default=None,
+        help="Pin one validated local RAG snapshot instead of CURRENT.",
+    )
+    parser.add_argument(
+        "--no-rag",
+        action="store_true",
+        help="Disable local RAG for this run without changing the index.",
     )
     parser.add_argument(
         "--use-mechanism-cards",
@@ -400,13 +424,27 @@ def main() -> None:
     adapter = None
     if args.use_llm or args.diagnostic_eval_llm:
         try:
-            adapter = OpenAICompatibleDiagnosticAdapter(
+            base_adapter = OpenAICompatibleDiagnosticAdapter(
                 base_url=args.llm_base_url,
                 model=args.llm_model,
                 api_key=args.llm_api_key,
                 timeout_s=args.llm_timeout_s,
                 max_tokens=args.llm_max_tokens,
             )
+            if args.use_llm and not args.diagnostic_eval_llm:
+                adapter = wrap_agent_adapter(
+                    base_adapter,
+                    agent_mode=args.agent_mode,
+                    rag_index_dir=(
+                        str(args.rag_index) if args.rag_index is not None else None
+                    ),
+                    rag_snapshot=args.rag_snapshot,
+                    use_rag=not args.no_rag,
+                )
+            else:
+                # Frozen LLM evaluations intentionally measure the underlying
+                # adapter and must not add the runtime critic to the baseline.
+                adapter = base_adapter
         except ValueError as exc:
             raise SystemExit(str(exc)) from None
 
@@ -634,6 +672,9 @@ def main() -> None:
             specification_text=specification_text,
             execution_mode="demo_fixture" if args.demo_fixture else "user_object",
         )
+        trace_reader = getattr(adapter, "agent_trace", None)
+        if callable(trace_reader):
+            report = report.model_copy(update={"agent_trace": trace_reader()})
         if args.diagnostic_session_output is not None:
             if report.diagnostic_session is None:
                 raise SystemExit("route did not produce a diagnostic session state")

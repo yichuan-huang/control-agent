@@ -1030,7 +1030,7 @@ def test_migrated_session_ignores_tampered_compatible_profile_and_reselects():
 
     assert restored.status == "description_grounded"
     assert restored.semantic_selection is None
-    assert adapter.selection_calls == 1
+    assert adapter.selection_calls == 0
     assert resumed.status == "awaiting_profile_measurements"
     assert resumed.diagnostic_session.status == "awaiting_profile_measurements"
     assert resumed.semantic_selection.simulation_profile_id == "first_order_lag"
@@ -1081,7 +1081,7 @@ def test_migrated_session_reselects_then_consumes_profile_response_in_same_call(
         simulation_bounds_confirmed=True,
     )
 
-    assert events == ["select_profile", "extract_profile_response"]
+    assert events == ["extract_profile_response"]
     assert completed.status == "candidate_unvalidated"
     assert completed.compiled_specification_model is not None
     assert completed.diagnostic_session.revision == restored.revision + 2
@@ -1091,28 +1091,31 @@ def test_migrated_session_reselects_then_consumes_profile_response_in_same_call(
     ]
 
 
-def test_migrated_session_profile_adapter_failure_is_atomic():
+def test_migrated_session_does_not_call_profile_adapter_before_consuming_response():
     restored = _migrated_measurement_verified_session()
     before = restored.model_dump(mode="json")
 
     class FailingReselectionAdapter(GuidedFakeAdapter):
+        def __init__(self):
+            self.selection_calls = 0
+
         def select_profile(self, description, diagnosis, classification, catalog):
-            description.text = "MUTATED BY FAILING ADAPTER"
-            raise RuntimeError("profile provider unavailable")
+            self.selection_calls += 1
+            raise AssertionError("the profile adapter must not select a profile")
 
         def extract_measurements(self, *args, **kwargs):
-            raise AssertionError(
-                "Profile response must not be consumed before selection"
-            )
+            return super().extract_measurements(*args, **kwargs)
 
-    with pytest.raises(RuntimeError, match="profile provider unavailable"):
-        run_cfdc_route(
-            "generic",
-            diagnostic_session_state=restored,
-            diagnostic_adapter=FailingReselectionAdapter(),
-            measurement_response="Manual: input_change=1 normalized_input.",
-        )
+    adapter = FailingReselectionAdapter()
+    resumed = run_cfdc_route(
+        "generic",
+        diagnostic_session_state=restored,
+        diagnostic_adapter=adapter,
+        measurement_response="Manual: input_change=1 normalized_input.",
+    )
 
+    assert adapter.selection_calls == 0
+    assert resumed.status == "awaiting_profile_measurements"
     assert restored.model_dump(mode="json") == before
 
 

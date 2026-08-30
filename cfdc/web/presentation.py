@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from html import escape
 from typing import Any
 
 from cfdc.diagnosis import clarification_question_map
@@ -173,6 +174,8 @@ _SESSION_OUTER_STATUS_PRECEDENCE = {
 
 def _effective_status(report: CFDCRunReport) -> str:
     session = report.diagnostic_session
+    if report.status == "feature_extraction_failed":
+        return report.status
     if session is None:
         return report.status
     if (
@@ -455,6 +458,91 @@ def guided_timeline_markdown(report: CFDCRunReport) -> str:
             lines.append(f"- 冲突 `{request_id}`：{conflict}")
         lines.append(f"- 结论：{assessment.rationale}")
     return "\n\n".join(lines)
+
+
+def agent_execution_markdown(report: CFDCRunReport) -> str:
+    """Render role/provenance metadata without exposing prompts or reasoning."""
+
+    trace = report.agent_trace
+    if not trace:
+        return ""
+    lines = [
+        "<details><summary>Agent 执行与参考来源</summary>",
+        "",
+        "仅显示角色、阶段、规则依据、来源和耗时；不显示内部推理过程。",
+    ]
+    for item in trace:
+        role = escape(str(item.get("role", "unknown")))
+        stage = escape(str(item.get("stage", "unknown")))
+        if item.get("role") == "deterministic_registry":
+            for decision in item.get("rule_decisions") or []:
+                if not isinstance(decision, dict):
+                    continue
+                profile_id = escape(str(decision.get("simulation_profile_id", "—")))
+                class_id = escape(str(decision.get("primary_class", "—")))
+                rule_ids = (
+                    ", ".join(
+                        escape(str(rule_id))
+                        for rule_id in decision.get("matched_rule_ids", [])
+                    )
+                    or "—"
+                )
+                lines.append(
+                    f"- `{role}` · `{stage}` · 分类：`{class_id}` · Profile：`{profile_id}` · 规则：`{rule_ids}`"
+                )
+            explanation_rows = item.get("profile_explanations") or []
+            for explanation in explanation_rows:
+                if not isinstance(explanation, dict):
+                    continue
+                text = escape(str(explanation.get("explanation", "")))
+                if text:
+                    lines.append(f"  - 依据：{text}")
+            if not item.get("rule_decisions") and not explanation_rows:
+                lines.append(f"- `{role}` · `{stage}` · 未记录规则决定")
+            continue
+        revision = escape(str(item.get("revision", 0)))
+        review = item.get("review")
+        review_text = (
+            f" · 审查：`{escape(str(review))}`"
+            if review in {"pass", "revise", "block"}
+            else ""
+        )
+        elapsed = item.get("elapsed_ms")
+        elapsed_text = (
+            f"{float(elapsed):.0f} ms" if isinstance(elapsed, (int, float)) else "—"
+        )
+        sources = item.get("source_refs") or []
+        source_labels: list[str] = []
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            source_id = source.get("source_id")
+            if not source_id:
+                continue
+            location = source.get("source_path") or ""
+            if source.get("page") is not None:
+                location += f" 第{source['page']}页"
+            elif source.get("section"):
+                location += f" · {source['section']}"
+            label = escape(str(source_id))
+            if location:
+                label += f" ({escape(str(location))})"
+            source_labels.append(label)
+        source_text = ", ".join(source_labels) if source_labels else "无相关片段"
+        citation_status = item.get("citation_status")
+        citation_text = (
+            f" · 引用：`{escape(str(citation_status))}`"
+            if citation_status in {"valid", "invalid", "none"}
+            else ""
+        )
+        snapshot = item.get("index_snapshot")
+        snapshot_text = f" · 快照：`{escape(str(snapshot))}`" if snapshot else ""
+        lines.append(
+            f"- `{role}` · `{stage}` · 修正轮次 `{revision}`{review_text} · {elapsed_text}"
+            f"{snapshot_text}{citation_text} · 来源：{source_text}"
+        )
+    lines.append("</details>")
+    return "\n".join(lines)
 
 
 def _redacted_report_payload(report: CFDCRunReport) -> dict[str, Any]:
@@ -1021,6 +1109,10 @@ def render_report(report: CFDCRunReport) -> dict[str, Any]:
         if profile_guidance_active
         else measurement_guidance_markdown(report)
     )
+    timeline = guided_timeline_markdown(report)
+    agent_execution = agent_execution_markdown(report)
+    if agent_execution:
+        timeline = "\n\n".join(item for item in (timeline, agent_execution) if item)
     return {
         "status": status_markdown(report),
         "progress": stage_progress_html(report),
@@ -1038,7 +1130,8 @@ def render_report(report: CFDCRunReport) -> dict[str, Any]:
         "checklist_title": checklist_title,
         "checklist_collapsed": checklist_collapsed,
         "measurement_guidance": shared_measurement_guidance,
-        "timeline": guided_timeline_markdown(report),
+        "timeline": timeline,
+        "agent_execution": agent_execution,
         "technical_visibility": technical_visibility(report),
         "clarifications": clarification_items(report),
         "specification_guidance": (

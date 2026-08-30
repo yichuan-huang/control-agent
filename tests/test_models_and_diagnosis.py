@@ -326,7 +326,7 @@ def test_openai_compatible_adapter_uses_sdk(monkeypatch):
     assert "open_loop_stability" in calls["completion"]["messages"][1]["content"]
 
 
-def test_profile_selection_prompt_declares_exact_json_field_types(monkeypatch):
+def test_profile_selection_uses_registry_without_provider_call(monkeypatch):
     calls = {}
     description = SystemDescription(
         text="A measured first order heater settles after a small power change.",
@@ -364,14 +364,7 @@ def test_profile_selection_prompt_declares_exact_json_field_types(monkeypatch):
     result = adapter.select_profile(description, diagnosis, classification, catalog)
 
     assert result == expected.model_dump()
-    system_prompt = calls["completion"]["messages"][0]["content"]
-    user_prompt = calls["completion"]["messages"][1]["content"]
-    assert "exact JSON schema" in system_prompt
-    assert '"selected_feature_ids": ["string"]' in user_prompt
-    assert '"evidence": ["string"]' in user_prompt
-    assert "evidence must be a non-empty JSON array of strings" in user_prompt
-    assert "even when there is only one evidence item" in user_prompt
-    assert "Do not add any other keys" in user_prompt
+    assert calls == {}
 
 
 def test_openai_compatible_adapter_requires_explicit_provider_configuration(

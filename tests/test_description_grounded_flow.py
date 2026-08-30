@@ -1110,7 +1110,7 @@ def test_incomplete_web_start_uses_one_description_guidance_call(monkeypatch):
     assert state["session"]["session_id"] == report.diagnostic_session.session_id
 
 
-def test_profile_selection_cannot_add_dead_time_to_a_no_delay_diagnosis():
+def test_profile_selection_is_registry_determined_and_cannot_add_dead_time():
     class DelayProfileAdapter(DescriptionGroundedAdapter):
         def select_profile(self, description, diagnosis, classification, catalog):
             selection = super().select_profile(
@@ -1129,12 +1129,15 @@ def test_profile_selection_cannot_add_dead_time_to_a_no_delay_diagnosis():
             )
             return selection
 
-    with pytest.raises(ValueError, match="contradicts the grounded"):
-        run_cfdc_route(
-            "generic",
-            description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
-            diagnostic_adapter=DelayProfileAdapter(),
-        )
+    report = run_cfdc_route(
+        "generic",
+        description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
+        diagnostic_adapter=DelayProfileAdapter(),
+    )
+
+    assert report.semantic_selection is not None
+    assert report.semantic_selection.simulation_profile_id == "first_order_lag"
+    assert report.semantic_selection.feature_bundle_id == "class_i_minimal"
 
 
 def test_complete_labeled_profile_in_description_compiles_without_profile_round():

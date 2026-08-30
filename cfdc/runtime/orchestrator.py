@@ -3,11 +3,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
+from functools import wraps
 from typing import Literal
 from uuid import uuid4
 
 import numpy as np
 
+from cfdc.agents import AgentReviewBlocked
 from cfdc.controllers import synthesize_controller
 from cfdc.diagnosis import (
     DiagnosticEngine,
@@ -41,6 +43,7 @@ from cfdc.features import (
     evaluate_feature_quality,
     extract_features_from_repeated_results,
 )
+from cfdc.knowledge import resolve_route_decision, semantic_selection_for_decision
 from cfdc.models import (
     Algorithm1Observation,
     Algorithm1State,
@@ -123,7 +126,6 @@ from cfdc.workflow import (
     default_capability_catalog,
     default_control_method_profile_catalog,
     default_simulation_profile_catalog,
-    deterministic_profile_selection,
     profile_by_id,
     validate_semantic_selection,
 )
@@ -138,6 +140,21 @@ RouteId = Literal[
     "vtol-hover",
     "vtol-variation",
 ]
+
+
+def _record_profile_explanation(adapter, decision) -> None:
+    """Let Controller explain a deterministic choice without owning it."""
+
+    explain = getattr(adapter, "explain_profile", None)
+    if not callable(explain):
+        return
+    try:
+        explanation = explain(decision)
+    except (TypeError, ValueError, RuntimeError):
+        return
+    record = getattr(adapter, "record_profile_explanation", None)
+    if callable(record):
+        record(explanation)
 
 
 def _cartpole_description() -> SystemDescription:
@@ -999,30 +1016,17 @@ def _release_grounded_diagnosis_session(
         use_mechanism_cards=use_mechanism_cards
     ).classify(diagnosis, None)
     catalog = default_control_method_profile_catalog()
-    selection = SemanticRouteSelection.model_validate(
-        diagnostic_adapter.select_profile(
-            session.accumulated_description.model_copy(deep=True),
-            diagnosis.model_copy(deep=True),
-            raw_classification.model_copy(deep=True),
-            catalog.model_copy(deep=True),
-        )
-    )
-    profile = validate_semantic_selection(selection, raw_classification, catalog)
-    deterministic_selection = deterministic_profile_selection(
+    decision = resolve_route_decision(
         session.accumulated_description,
         diagnosis,
         raw_classification,
-        catalog,
     )
-    if (
-        selection.simulation_profile_id != deterministic_selection.simulation_profile_id
-        or selection.feature_bundle_id != deterministic_selection.feature_bundle_id
-        or selection.selected_feature_ids
-        != deterministic_selection.selected_feature_ids
-    ):
-        raise ValueError(
-            "selected simulation profile contradicts the grounded structural diagnosis"
-        )
+    record_decision = getattr(diagnostic_adapter, "record_rule_decision", None)
+    if callable(record_decision):
+        record_decision(decision, stage="profile")
+    _record_profile_explanation(diagnostic_adapter, decision)
+    selection = semantic_selection_for_decision(decision)
+    profile = validate_semantic_selection(selection, raw_classification, catalog)
     classification = apply_profile_to_classification(raw_classification, profile)
     plan = plan_safe_experiments(
         diagnosis, classification, session.accumulated_description
@@ -1099,7 +1103,7 @@ def _release_grounded_diagnosis_session(
     return released
 
 
-def run_cfdc_route(
+def _run_cfdc_route_unchecked(
     route_id: RouteId = "generic",
     description: SystemDescription | None = None,
     safety_limits: dict[str, float] | None = None,
@@ -1291,7 +1295,7 @@ def run_cfdc_route(
                         text,
                     ]
                     session = DiagnosticSessionState.model_validate(reopened_payload)
-                    return run_cfdc_route(
+                    return _run_cfdc_route_unchecked(
                         route_id,
                         diagnostic_session_state=session,
                         diagnostic_adapter=diagnostic_adapter,
@@ -1444,7 +1448,7 @@ def run_cfdc_route(
                     return session.semantic_selection.model_dump(mode="json")
 
             reviewed_session = submit_evidence_to_session(session, evidence_package)
-            result = run_cfdc_route(
+            result = _run_cfdc_route_unchecked(
                 session.route_id,
                 description=session.accumulated_description,
                 diagnostic_adapter=EvidenceSessionReplayAdapter(),
@@ -1484,7 +1488,7 @@ def run_cfdc_route(
                     *session.compiled_specification_model.assumptions,
                 ],
             )
-            result = run_cfdc_route(
+            result = _run_cfdc_route_unchecked(
                 session.route_id,
                 description=session.accumulated_description,
                 diagnostic_adapter=SessionReplayAdapter(),
@@ -1601,7 +1605,7 @@ def run_cfdc_route(
         if session.status == "specification_model_ready":
             # Re-enter the common compiled-model path so an initially complete
             # natural-language Profile produces the same report as a later reply.
-            return run_cfdc_route(
+            return _run_cfdc_route_unchecked(
                 route_id,
                 diagnostic_session_state=session,
                 diagnostic_adapter=diagnostic_adapter,
@@ -1680,16 +1684,16 @@ def run_cfdc_route(
 
     raw_classification = engine.classify(diagnosis, description)
     profile_catalog = default_control_method_profile_catalog()
-    if diagnostic_adapter is not None and hasattr(diagnostic_adapter, "select_profile"):
-        semantic_selection = SemanticRouteSelection.model_validate(
-            diagnostic_adapter.select_profile(
-                description, diagnosis, raw_classification, profile_catalog
-            )
-        )
-    else:
-        semantic_selection = deterministic_profile_selection(
-            description, diagnosis, raw_classification, profile_catalog
-        )
+    route_decision = resolve_route_decision(
+        description,
+        diagnosis,
+        raw_classification,
+    )
+    record_decision = getattr(diagnostic_adapter, "record_rule_decision", None)
+    if callable(record_decision):
+        record_decision(route_decision, stage="profile")
+    _record_profile_explanation(diagnostic_adapter, route_decision)
+    semantic_selection = semantic_selection_for_decision(route_decision)
     profile = validate_semantic_selection(
         semantic_selection, raw_classification, profile_catalog
     )
@@ -2474,6 +2478,105 @@ def run_cfdc_route(
         notes=notes,
         evidence_boundary=report_evidence_boundary,
     )
+
+
+def _agent_review_blocked_report(
+    args, kwargs, error: AgentReviewBlocked
+) -> CFDCRunReport:
+    """Return a report that keeps the last valid state after a critic block."""
+
+    route_id = kwargs.get("route_id", args[0] if args else "generic")
+    session = kwargs.get("diagnostic_session_state")
+    if session is None and len(args) > 9:
+        session = args[9]
+    description = kwargs.get("description")
+    if description is None and len(args) > 1:
+        description = args[1]
+    if description is None and isinstance(session, DiagnosticSessionState):
+        description = session.accumulated_description
+    adapter = kwargs.get("diagnostic_adapter")
+    if adapter is None and len(args) > 3:
+        adapter = args[3]
+    trace_reader = getattr(adapter, "agent_trace", None)
+    trace = trace_reader() if callable(trace_reader) else []
+    return CFDCRunReport(
+        run_id=(kwargs.get("run_id") or (args[5] if len(args) > 5 else None))
+        or f"cfdc-{uuid4().hex[:12]}",
+        route_id=route_id,
+        status="feature_extraction_failed",
+        system_description=description,
+        diagnostic_session=session,
+        diagnosis=(
+            session.current_diagnosis
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        classification=(
+            session.classification
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        semantic_selection=(
+            session.semantic_selection
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        experiment_plan=(
+            session.experiment_plan
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        evidence_requirement_plan=(
+            session.evidence_requirement_plan
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        specification_templates=(
+            session.specification_templates
+            if isinstance(session, DiagnosticSessionState)
+            else []
+        ),
+        specification_assessment=(
+            session.specification_assessment
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        compiled_specification_model=(
+            session.compiled_specification_model
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        candidate_route=(
+            session.candidate_route
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        compiled_route=(
+            session.compiled_route
+            if isinstance(session, DiagnosticSessionState)
+            else None
+        ),
+        agent_trace=trace,
+        notes=[
+            "Agent Critic blocked this stage; the previous valid business state was retained.",
+            str(error),
+        ],
+        evidence_boundary=(
+            session.evidence_boundary
+            if isinstance(session, DiagnosticSessionState)
+            else "agent_review_blocked"
+        ),
+    )
+
+
+@wraps(_run_cfdc_route_unchecked)
+def run_cfdc_route(*args, **kwargs) -> CFDCRunReport:
+    """Run a route and fail closed with a report when an agent review blocks it."""
+
+    try:
+        return _run_cfdc_route_unchecked(*args, **kwargs)
+    except AgentReviewBlocked as exc:
+        return _agent_review_blocked_report(args, kwargs, exc)
 
 
 def run_cfdc_end_to_end(*args, **kwargs) -> CFDCRunReport:

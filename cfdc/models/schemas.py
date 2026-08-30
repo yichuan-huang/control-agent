@@ -2343,5 +2343,8 @@ class CFDCRunReport(CFDCModel):
     final_gains: dict[str, float] = Field(default_factory=dict)
     final_feedforward: dict[str, float] = Field(default_factory=dict)
     go_no_go: GoNoGoDecision | None = None
+    # Agent execution metadata is intentionally separate from business payloads
+    # and historical session hashes.  It contains hashes and provenance only.
+    agent_trace: list[dict[str, Any]] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     evidence_boundary: str = "software_simulation_only"
