@@ -4,41 +4,53 @@
 
 Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.0` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
 
-## Quick start: WebUI with Ollama
+## Quick start
 
-The steps below use the locally tested `gemma3:4b` model. Ollama interprets natural-language replies only; the Kernel still decides routes, experiments, controllers, numerical evaluation, and final claims.
+You can use a local model through Ollama or a hosted service such as DeepSeek API or OpenAI API. Choose the provider and model that suit your needs; Ollama is not required. Models interpret natural-language replies, while the Kernel decides routes, experiments, controllers, numerical evaluation, and final claims.
 
-1. Install the project and pull the model:
+1. With Git and `uv` installed, download the project, install its dependencies, and check the Python files:
 
 ```bash
+git clone https://github.com/yichuan-huang/control-agent.git
+cd control-agent
 uv sync
 uv run python -m compileall -q cfdc tests main.py app.py
-ollama pull gemma3:4b
 ```
 
-2. Make sure Ollama is running. The macOS application normally starts its service automatically; otherwise run this in another terminal:
+`uv` reads the Python version from `.python-version` and manages `.venv`. Commands using `uv run` do not require manual environment activation.
 
-```bash
-ollama serve
-```
-
-3. Start the WebUI:
+2. Start the WebUI:
 
 ```bash
 uv run python app.py
 ```
 
-4. Open `http://127.0.0.1:7860` and choose a built-in case such as “01 | DC motor speed” in the Guided Workbench. Enter:
+3. Open `http://127.0.0.1:7860`. For natural-language replies, fill in Base URL, Model, and API Key using your chosen provider from the table below. Choose a built-in case such as “01 | DC motor speed” in the Guided Workbench.
 
-```text
-Base URL: http://127.0.0.1:11434/v1
-Model:    gemma3:4b
-API Key:  ollama
-```
-
-5. Disable local RAG unless an index has already been built. Create the task, confirm its boundaries, and submit the requested structural diagnosis. A built-in software case then advances through protocol compilation, public evidence, features, controller synthesis, qualification, freeze, and independent evaluation until it needs a user decision or reaches a terminal state.
+4. Disable local RAG unless an index has already been built. Create the task, confirm its boundaries, and submit the requested structural diagnosis. A built-in software case then advances through protocol compilation, public evidence, features, controller synthesis, qualification, freeze, and independent evaluation until it needs a user decision or reaches a terminal state.
 
 Start with a built-in software case. A custom object does not automatically receive a simulation model. Physical or externally operated experiments are never run directly by the page; they continue through an operator bundle, operator confirmation, and protocol-bound data upload.
+
+## Choose a model provider
+
+Configure one provider. The model must support OpenAI-compatible Chat Completions and JSON output (`response_format: {"type": "json_object"}`), including the request parameters used by the application. Compatibility and model access depend on your provider; a model name alone does not guarantee support.
+
+| Provider | Base URL | Model | API Key |
+| --- | --- | --- | --- |
+| Ollama (local, optional) | `http://127.0.0.1:11434/v1` | The exact model name from `ollama list` | `ollama` for the default local service |
+| DeepSeek API | `https://api.deepseek.com` | For example, `deepseek-v4-pro` | Your DeepSeek API key |
+| OpenAI API | `https://api.openai.com/v1` | A compatible Chat Completions model available to your API account | Your OpenAI API key |
+
+Provider documentation: [Ollama compatibility](https://docs.ollama.com/api/openai-compatibility), [DeepSeek configuration](https://api-docs.deepseek.com/), and [OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat). Hosted services use your account's access and billing; no hosted API calls are needed merely to install the project.
+
+If you choose Ollama, install it and start its local service. The desktop application may already have started it; otherwise run `ollama serve` in another terminal. Replace `your-model` below with the model you choose, then use that same name in the WebUI:
+
+```bash
+ollama pull your-model
+ollama list
+```
+
+If you choose DeepSeek or OpenAI, skip the Ollama steps and enter your provider's settings directly. Keep real API keys out of source files, screenshots, and shared reports. The Kernel CLI section below explains environment variables and command-line configuration.
 
 ## Kernel workflow
 
@@ -64,23 +76,22 @@ The runtime defines four role boundaries: Diagnosis, Modeling, Controller, and C
 
 RAG is an optional local reference layer. An enabled session pins one index snapshot after validating its schema, Registry fingerprint, and file checksums. The current Web `user_reply` extraction deliberately receives no retrieved snippets so reference material cannot be mistaken for user facts. Retrieval remains available to other explicit role operations and extension entry points. “RAG enabled” therefore means that a validated snapshot is loaded and pinned, not that every Agent call performs retrieval.
 
-## Migrated v3 capabilities
+## Core capabilities
 
-The production capabilities migrated from `archive/CFDC_Project_v3` are available through versioned Kernel contracts. Runtime modules do not import the archive.
+The Kernel provides the following capabilities through versioned contracts, so experiments, evidence, controller decisions, and results can be inspected and validated.
 
 - `cfdc-protocol/v1` compiles bounded SISO, repeated time-series, staircase, Class IV frequency/amplitude/release, unstable-balance, 2x2 MIMO, and multi-stage protocols. A Provider run recompiles and verifies every binding and fingerprint before execution.
 - Operator handoff writes a card, precheck list, JSON schema, repeat CSV templates, and ZIP. CSV/JSON uploads pass authorization, format, session/protocol, repeat-count, timebase, waveform, safety-limit, and signal-quality gates. Rejected attempts append a receipt without consuming an accepted experiment.
 - `cfdc-features/v1` derives source-bound intervals and bounded parameter domains for SISO adjacent structures, delay/NMP/integrating/second-order behavior, Step-B nonlinearity, Class IV behavior, local unstable balance, and 2x2 static/dynamic coupling. Missing evidence produces a named feature gap.
 - The packaged route registry exposes 20 executable controller contracts plus explicit capability-gap routes. Controller proposals are restricted `ControllerIR`; deterministic synthesis and `cfdc-qualification/v1` return `offline_qualified`, `diagnostic_trial_only`, or `not_qualified`.
 - Identification and evaluation Providers use separate immutable bindings. The independent judge evaluates stability first, then task-specific performance, perturbed repeats, and a 95% Wilson lower bound. Only stable performance gaps may enter bounded tuning; every accepted candidate receives a new freeze and must pass fresh confirmation.
-- `cfdc-session/v2.0` preserves revision checks, idempotent actions, stale-revision rejection, immutable artifact histories, and an append-only event chain. Existing Kernel v1 sessions are read unchanged and upgrade on the next explicit mutation.
-- The v3 importer accepts a directory or ZIP, rejects unsafe paths and invalid hashes, excludes private truth and raw LLM responses, and resumes from the last artifact that the current Kernel can revalidate. The capability mapping is exposed by `cfdc.kernel.migration_manifest`; runtime code does not need the archive or local documentation.
+- `cfdc-session/v2.0` preserves revision checks, idempotent actions, stale-revision rejection, immutable artifact histories, and an append-only event chain.
 
-## Install and test
+## Development checks and optional RAG
+
+From the project directory, run the automated tests and Python checks:
 
 ```bash
-git clone https://github.com/yichuan-huang/control-agent.git
-cd control-agent
 uv sync
 uv run pytest -q
 uv run python -m compileall -q cfdc tests main.py app.py
@@ -108,7 +119,7 @@ The Guided Workbench creates Kernel tasks from an explicit structured form. Ever
 
 At each state the workbench presents one primary next action: confirm the task, answer a diagnostic question, select an experiment Provider, download an operator bundle, record the operator report, upload data, run isolated evaluation, accept bounded tuning, or confirm the result. Protocol waveforms, accepted public traces, feature intervals, qualification checks, reference/output/input/error plots, repeat confidence, and the nine-stage audit timeline are shown from Kernel artifacts.
 
-The Expert Contracts tab accepts a full `TaskContract`, loads an existing Kernel session, submits typed action JSON, imports a v3 ZIP read-only, and validates a downloaded artifact fingerprint. It can export the protocol, operator bundle, upload receipt, feature artifact, Controller IR, qualification, freeze, evaluation, feedback, confirmation, final result, complete session audit, or the full result ZIP.
+The Expert Contracts tab accepts a full `TaskContract`, loads an existing Kernel session, submits typed action JSON, and validates a downloaded artifact fingerprint. It can export the protocol, operator bundle, upload receipt, feature artifact, Controller IR, qualification, freeze, evaluation, feedback, confirmation, final result, complete session audit, or the full result ZIP.
 
 Web Agent orchestration is always `multi`. The page has no workflow-version selector and no Agent-mode selector. Provider configuration, the RAG switch, and the local index directory remain available. Advanced JSON remains available because it is the Kernel's typed public evidence and action interface.
 
@@ -181,18 +192,9 @@ uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
 
 If a declared stop condition fired, add `--kernel-upload-stopped-on-limit`; the upload is recorded as a failed safety gate and is never repaired or counted as accepted evidence.
 
-Import a v3 directory or ZIP without modifying it, then continue only from the last revalidated stage:
-
-```bash
-uv run python main.py --workflow-version kernel \
-  --kernel-import-v3 ./old-v3-session.zip \
-  --kernel-action import-001 --confirm-kernel-budget --kernel-auto \
-  --kernel-result-dir ./output/imported --kernel-export-bundle
-```
-
 Provider settings for natural-language agent work can be supplied through `CFDC_LLM_BASE_URL`, `CFDC_LLM_MODEL`, and `CFDC_LLM_API_KEY`, or the corresponding `--llm-*` options. They affect role-scoped proposals and explanations only; the Kernel still decides routes, numerical results, and authorization.
 
-For example, add these options to a Kernel command:
+The following example uses DeepSeek. Set `DEEPSEEK_API_KEY` in your local environment first. To use another provider, substitute its Base URL, model, and key from the table above:
 
 ```bash
 uv run python main.py --use-llm \
@@ -257,18 +259,6 @@ The deterministic runtime supports continuous or discrete SISO transfer function
 LLM output cannot contain executable Python, MATLAB, ODE code, imports, callbacks, module paths, URLs, or expressions. A local model that leaves its confirmed validity region terminates as `inconclusive`. An unregistered topology, missing discriminator, unresolved high-order or nonlinear behavior, insufficient signed authority, or unsupported MIMO allocation terminates with a named `capability_gap`; the registry never substitutes a neighboring controller.
 
 The WebUI never commands hardware. Physical support ends at engineering-unit normalization, preflight, operator handoff, protocol-bound data return, frozen-controller binding, and independent adjudication. `ready_for_operator_review` is not execution authorization. Confirmation of software bounds authorizes only a bounded simulation and is not hardware-safety certification.
-
-## Project layout
-
-| Path | Responsibility |
-| --- | --- |
-| `cfdc/kernel/` | Task contracts, sessions, diagnostics, routes, controllers, evaluation, tuning, and workflow service. |
-| `cfdc/web/service.py` | Kernel-only Web service boundary, state validation, and multi-Agent reply preparation. |
-| `cfdc/web/ui.py` | Kernel task form and nine-stage Gradio presentation. |
-| `cfdc/runtime/kernel_bridge.py` | Runtime integration for the Kernel workflow. |
-| `cfdc/sim/` | Deterministic linear, CartPole, and VTOL simulation backends. |
-| `dataset/` | Offline research/evaluation data; production code does not import it. |
-| `tests/` | Contract, safety, state-machine, CLI, Web, simulation, and end-to-end tests. |
 
 ## License
 

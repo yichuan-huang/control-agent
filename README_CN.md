@@ -4,41 +4,53 @@
 
 本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.0` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
-## 最快开始：WebUI + Ollama
+## 快速开始
 
-下面的步骤使用已经验收过的本地模型 `gemma3:4b`。Ollama 只负责理解自然语言回复；路线、实验、控制器、数值评价和最终结论仍由 Kernel 决定。
+你可以通过 Ollama 使用本地模型，也可以使用 DeepSeek API、OpenAI API 等在线服务。请按自己的需要选择服务商和模型，Ollama 不是必需依赖。模型负责理解自然语言回复；路线、实验、控制器、数值评价和最终结论仍由 Kernel 决定。
 
-1. 安装依赖并准备模型：
+1. 安装 Git 和 `uv` 后，下载项目、安装依赖并检查 Python 文件：
 
 ```bash
+git clone https://github.com/yichuan-huang/control-agent.git
+cd control-agent
 uv sync
 uv run python -m compileall -q cfdc tests main.py app.py
-ollama pull gemma3:4b
 ```
 
-2. 确认 Ollama 正在运行。macOS 桌面版通常会自动启动服务；否则另开终端运行：
+`uv` 会读取 `.python-version` 中的 Python 版本并管理 `.venv`。使用 `uv run` 时不需要手动激活环境。
 
-```bash
-ollama serve
-```
-
-3. 启动 WebUI：
+2. 启动 WebUI：
 
 ```bash
 uv run python app.py
 ```
 
-4. 打开 `http://127.0.0.1:7860`，在“引导工作台”选择一个内置案例，例如“01｜直流电机转速”。Provider 填写：
+3. 打开 `http://127.0.0.1:7860`。使用自然语言回复时，按照下表中你选择的服务商填写 Base URL、Model 和 API Key。在“引导工作台”选择一个内置案例，例如“01｜直流电机转速”。
 
-```text
-Base URL: http://127.0.0.1:11434/v1
-Model:    gemma3:4b
-API Key:  ollama
-```
-
-5. 没有建立本地 RAG 索引时关闭“启用本地 RAG”。创建任务并确认边界后，按页面提示提交结构诊断。内置软件案例会自动推进协议、公开取证、特征、控制器、资格审查、冻结和独立评价，直到需要用户决定或到达终态。
+4. 没有建立本地 RAG 索引时关闭“启用本地 RAG”。创建任务并确认边界后，按页面提示提交结构诊断。内置软件案例会自动推进协议、公开取证、特征、控制器、资格审查、冻结和独立评价，直到需要用户决定或到达终态。
 
 首次使用建议先选择内置软件案例。自定义对象不会自动获得仿真模型；实体或外部实验也不会由页面直接执行，而是通过 operator bundle、操作员确认和协议绑定的数据上传继续。
+
+## 选择模型服务商
+
+选择并配置其中一种服务即可。模型需要支持 OpenAI-compatible Chat Completions 和 JSON 输出（`response_format: {"type": "json_object"}`），以及应用使用的请求参数。兼容性和模型访问权限以服务商为准，仅填写模型名称不代表一定兼容。
+
+| 服务商 | Base URL | Model | API Key |
+| --- | --- | --- | --- |
+| Ollama（本地，可选） | `http://127.0.0.1:11434/v1` | `ollama list` 中显示的完整模型名称 | 默认本地服务填写 `ollama` |
+| DeepSeek API | `https://api.deepseek.com` | 例如 `deepseek-v4-pro` | 你的 DeepSeek API Key |
+| OpenAI API | `https://api.openai.com/v1` | 你的 API 账户可用且兼容的 Chat Completions 模型 | 你的 OpenAI API Key |
+
+服务商文档：[Ollama 兼容接口](https://docs.ollama.com/api/openai-compatibility)、[DeepSeek 配置](https://api-docs.deepseek.com/)、[OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat)。在线服务使用你自己的账户权限并按服务商规则计费；仅安装项目不需要调用在线 API。
+
+如果选择 Ollama，请先安装并启动本地服务。桌面应用可能已经启动了服务；否则另开终端运行 `ollama serve`。将下方的 `your-model` 替换为你选择的模型名称，再将相同名称填入 WebUI：
+
+```bash
+ollama pull your-model
+ollama list
+```
+
+如果选择 DeepSeek 或 OpenAI，跳过 Ollama 步骤，直接填写对应配置即可。不要将真实 API Key 写入源码、截图或共享报告。下方 Kernel CLI 部分说明了环境变量及命令行配置方式。
 
 ## Kernel 主流程
 
@@ -64,23 +76,22 @@ Kernel 使用带 revision 的 `TaskContract`、只追加事件、确定性 actio
 
 RAG 是可选的本地参考层。索引启用时，会话固定使用一个经过 schema、Registry fingerprint 和文件 checksum 校验的快照。当前 Web 的 `user_reply` 提取操作有意不注入检索片段，避免参考资料被误当成用户事实；RAG 用于其他显式的角色操作和扩展入口。页面显示“RAG 已启用”表示索引已加载并固定，不表示每一次 Agent 调用都执行了检索。
 
-## 已迁移的 v3 能力
+## 核心能力
 
-`archive/CFDC_Project_v3` 中当前有效的生产能力已经通过版本化 Kernel 合同提供，运行时代码不导入 archive。
+Kernel 通过版本化合同提供以下能力，使实验、证据、控制器决策和结果都可以检查与验证。
 
 - `cfdc-protocol/v1` 支持有界 SISO、重复时序、阶梯实验、Class IV 频率／幅值／release、局部不稳定平衡、2x2 MIMO 和多阶段协议。Provider 执行前会重新编译并核对全部绑定和 fingerprint。
 - Operator handoff 会生成操作卡、预检查清单、JSON schema、重复 CSV 模板和 ZIP。CSV/JSON 上传必须依次通过操作员授权、格式、会话／协议、重复次数、时间轴、输入波形、安全边界和信号质量八道门。拒绝的尝试只追加失败回执，不消耗有效实验次数。
 - `cfdc-features/v1` 自动生成带来源和区间的 SISO 相邻结构、时延／NMP／积分／二阶、Step-B 非线性、Class IV、局部不稳定平衡和 2x2 静态／动态耦合特征，同时生成有界参数域。证据不足时返回明确 feature gap。
 - 包内路线注册表提供 20 个可执行控制器合同，并保留明确的 capability-gap 路线。Controller proposal 必须是受限 `ControllerIR`；确定性合成和 `cfdc-qualification/v1` 只返回 `offline_qualified`、`diagnostic_trial_only` 或 `not_qualified`。
 - Identification Provider 与 Evaluation Provider 使用两个独立且不可混淆的绑定。独立 judge 先判断稳定与停止事件，再判断任务性能、扰动重复和 95% Wilson 下界。只有稳定但性能不足才允许有界调优；接受的候选会创建新 freeze，并且必须通过 fresh confirmation。
-- `cfdc-session/v2.0` 保留 revision、幂等 action、stale revision 拒绝、不可覆盖的 artifact 历史和只追加事件链。已有 Kernel v1 会话可原样读取，并在下一次显式 mutation 时升级。
-- v3 importer 接受目录或 ZIP，拒绝不安全路径和错误 hash，不导入 private truth 与原始 LLM 响应，并从当前 Kernel 能重新验证的最后阶段继续。迁移能力映射由 `cfdc.kernel.migration_manifest` 提供，运行时无需读取 archive 或本地文档。
+- `cfdc-session/v2.0` 保留 revision、幂等 action、stale revision 拒绝、不可覆盖的 artifact 历史和只追加事件链。
 
-## 安装与测试
+## 开发检查与可选 RAG
+
+在项目目录中运行自动化测试和 Python 检查：
 
 ```bash
-git clone https://github.com/yichuan-huang/control-agent.git
-cd control-agent
 uv sync
 uv run pytest -q
 uv run python -m compileall -q cfdc tests main.py app.py
@@ -108,7 +119,7 @@ uv run python app.py
 
 页面在每个状态只突出一个主要操作：确认任务、回答诊断问题、选择实验 Provider、下载 operator bundle、提交操作员报告、上传数据、启动隔离评价、接受有界调优或确认结果。协议波形、已接受公开 trace、特征区间、资格检查、参考／输出／输入／误差曲线、重复试次置信度和九阶段审计时间线都直接来自 Kernel artifact。
 
-“专家合同”页可以提交完整 `TaskContract`、加载 Kernel session、执行 typed action JSON、只读导入 v3 ZIP，并校验下载 artifact 的 fingerprint。可单独导出协议、operator bundle、上传回执、特征、Controller IR、qualification、freeze、evaluation、feedback、confirmation、最终结果和完整会话审计，也可导出完整结果 ZIP。
+“专家合同”页可以提交完整 `TaskContract`、加载 Kernel session、执行 typed action JSON，并校验下载 artifact 的 fingerprint。可单独导出协议、operator bundle、上传回执、特征、Controller IR、qualification、freeze、evaluation、feedback、confirmation、最终结果和完整会话审计，也可导出完整结果 ZIP。
 
 Web Agent 编排固定为 `multi`。页面没有工作流版本和 Agent 模式控件；Provider 配置、RAG 开关和本地索引目录继续保留。高级 JSON 也继续保留，因为它属于 Kernel 的类型化公开证据与动作接口。
 
@@ -181,18 +192,9 @@ uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
 
 如果声明的停止条件曾触发，应增加 `--kernel-upload-stopped-on-limit`；该上传会作为安全门失败记录，系统不会修补数据，也不会把它计作已接受证据。
 
-只读导入 v3 目录或 ZIP，并从最后一个重新验证通过的阶段继续：
-
-```bash
-uv run python main.py --workflow-version kernel \
-  --kernel-import-v3 ./old-v3-session.zip \
-  --kernel-action import-001 --confirm-kernel-budget --kernel-auto \
-  --kernel-result-dir ./output/imported --kernel-export-bundle
-```
-
 自然语言 Agent 使用的 Provider 可通过 `CFDC_LLM_BASE_URL`、`CFDC_LLM_MODEL`、`CFDC_LLM_API_KEY` 或对应 `--llm-*` 参数配置。它们只影响角色内 proposal 和解释，路线、数值结果与授权仍由 Kernel 决定。
 
-例如，可以在 Kernel 命令中增加：
+下面以 DeepSeek 为例，请先在本地环境中设置 `DEEPSEEK_API_KEY`。使用其他服务商时，将 Base URL、模型和密钥替换为上表中的对应配置：
 
 ```bash
 uv run python main.py --use-llm \
@@ -257,18 +259,6 @@ uv run python main.py --workflow-version legacy \
 LLM 输出不能包含可执行 Python、MATLAB、ODE 代码、动态导入、回调、模块路径、URL 或表达式。局部模型轨迹一旦离开确认的有效范围，试验立即以 `inconclusive` 终止。未注册拓扑、缺少判别特征、未解析的高阶／动态非线性、输入符号权威不足或不支持的 MIMO 分配会进入带名称的 `capability_gap`；注册表不会悄悄替换成相邻控制器。
 
 WebUI 永远不会控制硬件。物理能力止于工程单位规范化、preflight、操作员 handoff、协议绑定的数据回收、冻结控制器绑定和独立裁决。`ready_for_operator_review` 不等于执行授权。确认软件边界只允许有界软件仿真，不代表允许驱动实体硬件，也不是硬件安全认证。
-
-## 目录
-
-| 路径 | 职责 |
-| --- | --- |
-| `cfdc/kernel/` | 任务合同、会话、诊断、路线、控制器、评价、调优和工作流服务。 |
-| `cfdc/web/service.py` | Kernel-only Web 服务边界、state 校验和 multi-Agent 回复准备。 |
-| `cfdc/web/ui.py` | Kernel 任务表单和九阶段 Gradio 展示。 |
-| `cfdc/runtime/kernel_bridge.py` | Kernel 工作流的 runtime 集成。 |
-| `cfdc/sim/` | 确定性线性、CartPole 和 VTOL 仿真后端。 |
-| `dataset/` | 离线研究与评测数据；生产代码不导入。 |
-| `tests/` | 契约、安全、状态机、CLI、Web、仿真和端到端测试。 |
 
 ## 许可证
 
