@@ -455,7 +455,9 @@ class AgentRuntime:
                 if not callable(invoke):
                     invoke = getattr(self.completion, "complete_agent", None)
                 if not callable(invoke):
-                    raise TypeError("agent completion must be callable or expose complete/complete_agent")
+                    raise TypeError(
+                        "agent completion must be callable or expose complete/complete_agent"
+                    )
             payload = invoke(context)
         except Exception as exc:
             actual_messages = _provider_messages(self.completion, context.messages)
@@ -629,7 +631,9 @@ class AgentRuntime:
                     "messages": build_agent_messages(correction_context),
                 }
             )
-            actual_messages = _provider_messages(self.completion, correction_context.messages)
+            actual_messages = _provider_messages(
+                self.completion, correction_context.messages
+            )
             provider_usage, provider_call_id = _provider_telemetry(self.completion)
             revision_record = AgentExecutionRecord(
                 role=role,

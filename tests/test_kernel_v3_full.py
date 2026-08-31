@@ -95,9 +95,7 @@ def test_migration_manifest_and_v3_parity_matrix_have_source_hashes() -> None:
     assert all(item["source_hash"] for item in manifest["items"])
     assert len(matrix["rows"]) == 11
     assert all(
-        digest
-        for row in matrix["rows"]
-        for digest in row["source_hashes"].values()
+        digest for row in matrix["rows"] for digest in row["source_hashes"].values()
     )
     assert manifest["runtime_archive_dependency"] is False
     assert matrix["runtime_archive_dependency"] is False
@@ -110,7 +108,10 @@ def test_case_catalog_has_five_training_six_transition_and_seven_audit_cases() -
     assert len(TRANSITION_VARIANTS) == 6
     assert len(AUDIT_CASES) == 7
     assert len(catalog) == 18
-    assert public_training_case("audit_class_v_mimo")["base_case_id"] == "tclab_dual_heater_v1"
+    assert (
+        public_training_case("audit_class_v_mimo")["base_case_id"]
+        == "tclab_dual_heater_v1"
+    )
     mimo_task = public_training_case("tclab_dual_heater_v1")["task"]
     assert len(mimo_task["control_inputs"]) == 2
 
@@ -236,8 +237,15 @@ def test_protocol_tampering_and_operator_bundle(tmp_path: Path) -> None:
     assert Path(handoff["precheck_checklist_path"]).is_file()
     with zipfile.ZipFile(handoff["bundle_path"]) as archive:
         names = set(archive.namelist())
-    assert {"operator_card.json", "upload_schema.json", "precheck_checklist.json"} <= names
-    assert len([name for name in names if name.startswith("data_templates/")]) == protocol["repeats"]
+    assert {
+        "operator_card.json",
+        "upload_schema.json",
+        "precheck_checklist.json",
+    } <= names
+    assert (
+        len([name for name in names if name.startswith("data_templates/")])
+        == protocol["repeats"]
+    )
 
 
 def _write_upload(
@@ -261,7 +269,9 @@ def _write_upload(
                 "repeat": index + 1,
                 "time_s": (time_s + time_offset).tolist(),
                 "inputs": {
-                    name: (values + (input_offset if input_index == 0 else 0.0)).tolist()
+                    name: (
+                        values + (input_offset if input_index == 0 else 0.0)
+                    ).tolist()
                     for input_index, (name, values) in enumerate(commands.items())
                 },
                 **{
@@ -303,9 +313,7 @@ def test_upload_all_eight_gates_and_rejected_attempt_is_non_consuming(
     )
     assert accepted["audit"]["status"] == "accepted"
     assert len(accepted["traces"]) == protocol["repeats"]
-    assert set(GATE_DEFINITIONS) == {
-        item["id"] for item in accepted["audit"]["gates"]
-    }
+    assert set(GATE_DEFINITIONS) == {item["id"] for item in accepted["audit"]["gates"]}
 
     invalid_format = tmp_path / "invalid.txt"
     invalid_format.write_text("invalid", encoding="utf-8")
@@ -323,7 +331,9 @@ def test_upload_all_eight_gates_and_rejected_attempt_is_non_consuming(
     wrong_input = tmp_path / "wrong-input.json"
     _write_upload(wrong_input, protocol, input_offset=0.5)
     cases.append(("input_waveform", [wrong_input], operator_report, {}))
-    cases.append(("safety_limits", [valid], operator_report, {"stopped_on_limit": True}))
+    cases.append(
+        ("safety_limits", [valid], operator_report, {"stopped_on_limit": True})
+    )
     noisy = tmp_path / "noisy.json"
     _write_upload(noisy, protocol, noisy_outputs=True)
     cases.append(("signal_quality", [noisy], operator_report, {}))
@@ -374,7 +384,10 @@ def test_registered_case_full_chain_reaches_independent_evaluation(
     assert not session.feature_artifact["missing_feature_ids"]
     assert session.controller_candidate["ir"]["family"] == family
     assert session.controller_qualification["status"] == OFFLINE_QUALIFIED
-    assert session.provider_bindings["identification"]["provider_id"] != session.provider_bindings["evaluation"]["provider_id"]
+    assert (
+        session.provider_bindings["identification"]["provider_id"]
+        != session.provider_bindings["evaluation"]["provider_id"]
+    )
     assert session.evaluation["wilson_lower_bound_95"] >= 0.8
     assert all(
         "dc_gain_matrix" not in json.dumps(item, ensure_ascii=False)
@@ -384,7 +397,12 @@ def test_registered_case_full_chain_reaches_independent_evaluation(
     if mimo:
         assert session.protocols[-1]["data_kind"] == "class_v_mimo_summary"
         assert len(session.task.control_inputs) == 2
-        assert {"local_gain_k11", "local_gain_k12", "local_gain_k21", "local_gain_k22"} <= set(session.feature_artifact["features"])
+        assert {
+            "local_gain_k11",
+            "local_gain_k12",
+            "local_gain_k21",
+            "local_gain_k22",
+        } <= set(session.feature_artifact["features"])
 
 
 def test_v3_import_is_read_only_safe_and_idempotent(tmp_path: Path) -> None:
@@ -464,7 +482,10 @@ def test_session_v1_upgrades_on_first_explicit_mutation(tmp_path: Path) -> None:
         revision=loaded.revision,
     )
     assert upgraded.session_version == "cfdc-session/v2.0"
-    assert json.loads(path.read_text(encoding="utf-8"))["session_version"] == "cfdc-session/v2.0"
+    assert (
+        json.loads(path.read_text(encoding="utf-8"))["session_version"]
+        == "cfdc-session/v2.0"
+    )
 
 
 def test_physical_preflight_and_engineering_unit_normalization() -> None:
@@ -480,7 +501,9 @@ def test_physical_preflight_and_engineering_unit_normalization() -> None:
     )
     assert ready["status"] == "ready_for_operator_review"
     assert ready["hardware_execution_authorized"] is False
-    assert normalize_engineering_values([10.0, 12.0, 14.0], {"zero": 10.0, "scale": 2.0}) == [0.0, 1.0, 2.0]
+    assert normalize_engineering_values(
+        [10.0, 12.0, 14.0], {"zero": 10.0, "scale": 2.0}
+    ) == [0.0, 1.0, 2.0]
 
     mismatch = audit_physical_preflight(
         {
@@ -562,7 +585,10 @@ def test_expert_artifact_validation_checks_typed_fingerprints(tmp_path: Path) ->
     tampered["repeats"] += 1
     with pytest.raises(ValueError, match="protocol_fingerprint_mismatch"):
         validate_kernel_artifact(tampered)
-    fake = {"feature_version": "unknown", "artifact_fingerprint": fingerprint({"feature_version": "unknown"})}
+    fake = {
+        "feature_version": "unknown",
+        "artifact_fingerprint": fingerprint({"feature_version": "unknown"}),
+    }
     with pytest.raises(ValueError, match="无法识别版本化"):
         validate_kernel_artifact(fake)
 
@@ -595,7 +621,9 @@ def test_public_artifact_exports_validate_and_bundle_excludes_raw_uploads(
         "audit",
     ):
         path = service.export_artifact(session.session_id, artifact_kind)
-        validated = validate_kernel_artifact(json.loads(path.read_text(encoding="utf-8")))
+        validated = validate_kernel_artifact(
+            json.loads(path.read_text(encoding="utf-8"))
+        )
         assert validated["status"] == "valid"
 
     session_path = service.root / f"{session.session_id}.json"
@@ -608,7 +636,9 @@ def test_public_artifact_exports_validate_and_bundle_excludes_raw_uploads(
     session_path.write_text(json.dumps(raw_session), encoding="utf-8")
     for artifact_kind in ("feedback", "confirmation"):
         path = service.export_artifact(session.session_id, artifact_kind)
-        validated = validate_kernel_artifact(json.loads(path.read_text(encoding="utf-8")))
+        validated = validate_kernel_artifact(
+            json.loads(path.read_text(encoding="utf-8"))
+        )
         assert validated["artifact_kind"] == artifact_kind
 
     bundle = service.export_result_bundle(session.session_id)
@@ -622,7 +652,9 @@ def test_public_artifact_exports_validate_and_bundle_excludes_raw_uploads(
     assert validate_kernel_artifact(result)["artifact_kind"] == "result"
 
 
-def test_physical_upload_receipt_and_operator_bundle_are_exportable(tmp_path: Path) -> None:
+def test_physical_upload_receipt_and_operator_bundle_are_exportable(
+    tmp_path: Path,
+) -> None:
     service = WorkflowService(tmp_path / "physical")
     session = _resolved_case(service, "tclab_dual_heater_v1", mimo=True)
     provider = {

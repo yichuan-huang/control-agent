@@ -72,6 +72,7 @@ def _resolve_case_id(value: Any) -> str:
     raw = str(value or "").strip()
     return _WEB_CASE_IDS.get(raw, raw)
 
+
 LICENSE_NOTICE = (
     "Copyright (C) 2026 Yichuan Huang · "
     "[GNU AGPL v3.0 only](https://www.gnu.org/licenses/agpl-3.0.en.html) · "
@@ -147,7 +148,9 @@ def _protocol_figure(report: Mapping[str, Any]) -> go.Figure:
 def _trace_figure(report: Mapping[str, Any]) -> go.Figure:
     figure = go.Figure()
     for evidence in report.get("evidence") or ():
-        if not isinstance(evidence, Mapping) or not isinstance(evidence.get("trace"), Mapping):
+        if not isinstance(evidence, Mapping) or not isinstance(
+            evidence.get("trace"), Mapping
+        ):
             continue
         trace = evidence["trace"]
         time_s = trace.get("time_s")
@@ -156,7 +159,12 @@ def _trace_figure(report: Mapping[str, Any]) -> go.Figure:
             continue
         for name, values in signals.items():
             if isinstance(values, list) and len(values) == len(time_s):
-                figure.add_scatter(x=time_s, y=values, mode="lines", name=f"{evidence.get('trial_id')} · {name}")
+                figure.add_scatter(
+                    x=time_s,
+                    y=values,
+                    mode="lines",
+                    name=f"{evidence.get('trial_id')} · {name}",
+                )
     figure.update_layout(
         height=310,
         margin={"l": 42, "r": 18, "t": 36, "b": 42},
@@ -172,13 +180,21 @@ def _evaluation_figure(report: Mapping[str, Any]) -> go.Figure:
     if isinstance(evaluation, Mapping):
         rate = float(evaluation.get("success_rate") or 0.0)
         wilson = float(evaluation.get("wilson_lower_bound_95") or 0.0)
-        minimum = evaluation.get("performance_gate", {}).get("success_rate_min") if isinstance(evaluation.get("performance_gate"), Mapping) else None
+        minimum = (
+            evaluation.get("performance_gate", {}).get("success_rate_min")
+            if isinstance(evaluation.get("performance_gate"), Mapping)
+            else None
+        )
         labels = ["success rate", "Wilson lower 95%"]
         values = [rate, wilson]
         if minimum is not None:
             labels.append("required")
             values.append(float(minimum))
-        figure.add_bar(x=labels, y=values, marker_color=["#1677ff", "#258a4b", "#b54708"][: len(values)])
+        figure.add_bar(
+            x=labels,
+            y=values,
+            marker_color=["#1677ff", "#258a4b", "#b54708"][: len(values)],
+        )
     figure.update_layout(
         height=310,
         margin={"l": 42, "r": 18, "t": 36, "b": 42},
@@ -190,7 +206,11 @@ def _evaluation_figure(report: Mapping[str, Any]) -> go.Figure:
 
 def _artifact_download(report: Mapping[str, Any]) -> Any:
     handoffs = report.get("operator_handoffs") or []
-    if handoffs and isinstance(handoffs[-1], Mapping) and handoffs[-1].get("bundle_path"):
+    if (
+        handoffs
+        and isinstance(handoffs[-1], Mapping)
+        and handoffs[-1].get("bundle_path")
+    ):
         return gr.update(value=handoffs[-1]["bundle_path"], visible=True)
     return gr.update(value=None, visible=False)
 
@@ -264,7 +284,9 @@ def _evidence_rows(report: Mapping[str, Any]) -> list[list[object]]:
     return rows
 
 
-def _diagnosis_rows(report: Mapping[str, Any]) -> tuple[list[list[object]], list[list[object]]]:
+def _diagnosis_rows(
+    report: Mapping[str, Any],
+) -> tuple[list[list[object]], list[list[object]]]:
     diagnostic = report.get("diagnostic")
     diagnostic = diagnostic if isinstance(diagnostic, Mapping) else {}
     entries = diagnostic.get("entries")
@@ -308,11 +330,15 @@ def _progress_html(report: Mapping[str, Any]) -> str:
         "调优／确认": bool(report.get("tuning")),
         "结果": status in _TERMINAL_STATES,
     }
-    return "<div class='flow-strip'>" + "".join(
-        f'<div class="flow-step {"done" if done.get(label, False) else ""}">'
-        f"<span>{index}</span><small>{html.escape(label)}</small></div>"
-        for index, label in enumerate(KERNEL_STAGE_LABELS, 1)
-    ) + "</div>"
+    return (
+        "<div class='flow-strip'>"
+        + "".join(
+            f'<div class="flow-step {"done" if done.get(label, False) else ""}">'
+            f"<span>{index}</span><small>{html.escape(label)}</small></div>"
+            for index, label in enumerate(KERNEL_STAGE_LABELS, 1)
+        )
+        + "</div>"
+    )
 
 
 def _summary_html(report: Mapping[str, Any]) -> str:
@@ -320,8 +346,12 @@ def _summary_html(report: Mapping[str, Any]) -> str:
     session_id = html.escape(str(report.get("session_id") or "未知"))
     status = html.escape(str(report.get("status") or "intake"))
     task_type = html.escape(str(task.get("task_type") or "未知"))
-    signals = html.escape(", ".join(str(item) for item in task.get("measured_signals", ())))
-    inputs = html.escape(", ".join(str(item) for item in task.get("control_inputs", ())))
+    signals = html.escape(
+        ", ".join(str(item) for item in task.get("measured_signals", ()))
+    )
+    inputs = html.escape(
+        ", ".join(str(item) for item in task.get("control_inputs", ()))
+    )
     return (
         f"<p><strong>CFDC Kernel</strong> · {session_id} · revision "
         f"{int(report.get('revision') or 0)} · {status}</p>"
@@ -451,10 +481,12 @@ def _timeline_text(report: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _kernel_outputs(report: Mapping[str, Any], state: Mapping[str, Any]) -> tuple[Any, ...]:
-    if not isinstance(report, Mapping) or not str(report.get("workflow_version") or "").startswith(
-        "cfdc-v6-kernel"
-    ):
+def _kernel_outputs(
+    report: Mapping[str, Any], state: Mapping[str, Any]
+) -> tuple[Any, ...]:
+    if not isinstance(report, Mapping) or not str(
+        report.get("workflow_version") or ""
+    ).startswith("cfdc-v6-kernel"):
         raise ValueError("WebUI 只接受 CFDC Kernel 报告。")
     state = dict(state or {})
     pending = [
@@ -472,9 +504,10 @@ def _kernel_outputs(report: Mapping[str, Any], state: Mapping[str, Any]) -> tupl
     contract = report.get("input_contract")
     contract = contract if isinstance(contract, Mapping) else {}
     action = str(contract.get("action") or "")
-    actionable = bool(action and not contract.get("disabled_reason")) and str(
-        report.get("status")
-    ) not in _TERMINAL_STATES
+    actionable = (
+        bool(action and not contract.get("disabled_reason"))
+        and str(report.get("status")) not in _TERMINAL_STATES
+    )
     no_input = not contract.get("allowed_modes")
     operator_action = action == "record_operator_report"
     upload_action = action == "ingest_upload"
@@ -506,7 +539,10 @@ def _kernel_outputs(report: Mapping[str, Any], state: Mapping[str, Any]) -> tupl
         _mapping_rows(report.get("tuning")),
         dict(report),
         gr.update(
-            visible=actionable and not no_input and not operator_action and not upload_action,
+            visible=actionable
+            and not no_input
+            and not operator_action
+            and not upload_action,
             value="",
             label=str(contract.get("title") or "提交当前动作"),
             placeholder=str(contract.get("guidance") or ""),
@@ -637,9 +673,7 @@ def run_from_ui(
             if not isinstance(units, Mapping):
                 raise ValueError("信号单位必须是 JSON 对象。")
             task["signal_units"] = dict(units)
-        enabled_requirements = {
-            str(item) for item in success_requirement_fields or ()
-        }
+        enabled_requirements = {str(item) for item in success_requirement_fields or ()}
         requirements = {
             key: value
             for key, value in {
@@ -667,7 +701,9 @@ def run_from_ui(
         if task_type == "transition_then_hold":
             intermediate = [
                 float(item.strip())
-                for item in str(intermediate_targets or "").replace("、", ",").split(",")
+                for item in str(intermediate_targets or "")
+                .replace("、", ",")
+                .split(",")
                 if item.strip()
             ]
             task.update(
@@ -717,7 +753,9 @@ def submit_measurement_from_ui(
             model=model,
             api_key=api_key,
         )
-        action = _ACTION_ALIASES.get(str(prepared.get("action") or ""), prepared.get("action"))
+        action = _ACTION_ALIASES.get(
+            str(prepared.get("action") or ""), prepared.get("action")
+        )
         if action == "confirm_task" and simulation_bounds_confirmed is not True:
             raise ValueError("请先确认软件试验边界与预算。")
         if not isinstance(action, str) or not action:
@@ -806,9 +844,25 @@ def submit_guided_action_from_ui(
 def load_case_into_form(case_id: str) -> tuple[Any, ...]:
     if not str(case_id or "").strip():
         return (
-            "", "local_setpoint_hold", "", "", False,
+            "",
+            "local_setpoint_hold",
+            "",
+            "",
+            False,
             gr.update(value=None, interactive=False),
-            None, None, False, None, None, None, "", "", "", "", "", "", "",
+            None,
+            None,
+            False,
+            None,
+            None,
+            None,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
             [],
             gr.update(value=None, interactive=False),
             gr.update(value=None, interactive=False),
@@ -825,7 +879,11 @@ def load_case_into_form(case_id: str) -> tuple[Any, ...]:
             "",
         )
     task = public_training_case(_resolve_case_id(case_id))["task"]
-    units = task.get("engineering_units") if isinstance(task.get("engineering_units"), Mapping) else {}
+    units = (
+        task.get("engineering_units")
+        if isinstance(task.get("engineering_units"), Mapping)
+        else {}
+    )
     input_unit_value = ""
     signal_units: dict[str, str] = {}
     if isinstance(units, Mapping):
@@ -1101,7 +1159,8 @@ def build_app() -> gr.Blocks:
                 case_catalog = public_case_catalog()
                 provider_case_id = gr.Dropdown(
                     label="内置审计／工程案例",
-                    choices=[("自定义任务", "")] + [
+                    choices=[("自定义任务", "")]
+                    + [
                         (str(case_catalog[case_id]["label"]), web_case_id)
                         for web_case_id, case_id in _WEB_CASE_IDS.items()
                     ],
@@ -1233,7 +1292,9 @@ def build_app() -> gr.Blocks:
                             value=None,
                             interactive=False,
                         )
-                    intermediate_targets = gr.Textbox(label="中间目标", placeholder="3, 6")
+                    intermediate_targets = gr.Textbox(
+                        label="中间目标", placeholder="3, 6"
+                    )
                     goal_region = gr.Textbox(label="目标区域")
                 with gr.Group(visible=False) as disturbance_fields:
                     disturbance_event = gr.Textbox(label="扰动事件")
@@ -1355,7 +1416,14 @@ def build_app() -> gr.Blocks:
                             elem_classes="stage-table",
                         )
                         features = gr.Dataframe(
-                            headers=["特征", "值", "单位", "置信区间", "置信度", "方法"],
+                            headers=[
+                                "特征",
+                                "值",
+                                "单位",
+                                "置信区间",
+                                "置信度",
+                                "方法",
+                            ],
                             datatype=["str", "str", "str", "str", "str", "str"],
                             interactive=False,
                             elem_classes="stage-table",
@@ -1435,17 +1503,31 @@ def build_app() -> gr.Blocks:
                                 label="Typed action",
                                 choices=sorted(
                                     {
-                                        "confirm_task", "answer", "advance", "set_provider",
-                                        "compile_protocol", "prepare_operator_handoff",
-                                        "record_operator_report", "ingest_upload", "derive_features",
-                                        "synthesize_controller", "qualify_controller", "freeze",
-                                        "run_provider", "run_evaluation", "run_feedback_iteration",
-                                        "confirm_result", "replay", "cancel",
+                                        "confirm_task",
+                                        "answer",
+                                        "advance",
+                                        "set_provider",
+                                        "compile_protocol",
+                                        "prepare_operator_handoff",
+                                        "record_operator_report",
+                                        "ingest_upload",
+                                        "derive_features",
+                                        "synthesize_controller",
+                                        "qualify_controller",
+                                        "freeze",
+                                        "run_provider",
+                                        "run_evaluation",
+                                        "run_feedback_iteration",
+                                        "confirm_result",
+                                        "replay",
+                                        "cancel",
                                     }
                                 ),
                             )
                             expert_action_button = gr.Button("执行")
-                        expert_payload = gr.Code(label="Action payload JSON", language="json", value="{}")
+                        expert_payload = gr.Code(
+                            label="Action payload JSON", language="json", value="{}"
+                        )
                         expert_artifact_json = gr.Code(
                             label="Artifact JSON",
                             language="json",
@@ -1540,17 +1622,39 @@ def build_app() -> gr.Blocks:
             load_case_into_form,
             inputs=[provider_case_id],
             outputs=[
-                description, task_type, measured_signals, control_inputs,
-                reference_enabled, reference,
-                input_min, input_max, output_bounds_enabled, output_min, output_max,
-                state_stop, initial_region, goal_region, disturbance_event,
-                recovery_start_condition, disturbance_hold_region, signal_units_json,
-                input_unit, success_requirement_fields, final_abs_error_max,
-                overshoot_max, settling_time_max_s, perturbed_success_rate_min,
-                hold_duration_min_s, response_time_preference_enabled,
-                response_time_preference_s, budget_fields, distinct_experiments,
-                cumulative_excitation_time_s, initial_output_value_enabled,
-                initial_output_value, intermediate_targets,
+                description,
+                task_type,
+                measured_signals,
+                control_inputs,
+                reference_enabled,
+                reference,
+                input_min,
+                input_max,
+                output_bounds_enabled,
+                output_min,
+                output_max,
+                state_stop,
+                initial_region,
+                goal_region,
+                disturbance_event,
+                recovery_start_condition,
+                disturbance_hold_region,
+                signal_units_json,
+                input_unit,
+                success_requirement_fields,
+                final_abs_error_max,
+                overshoot_max,
+                settling_time_max_s,
+                perturbed_success_rate_min,
+                hold_duration_min_s,
+                response_time_preference_enabled,
+                response_time_preference_s,
+                budget_fields,
+                distinct_experiments,
+                cumulative_excitation_time_s,
+                initial_output_value_enabled,
+                initial_output_value,
+                intermediate_targets,
             ],
             api_visibility="private",
         )

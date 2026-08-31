@@ -492,9 +492,10 @@ def test_kernel_cli_registered_case_auto_runs_full_chain_and_exports_bundle(
     assert payload["status"] == "performance_met"
     assert payload["feature_artifact"]["feature_version"] == "cfdc-features/v1"
     assert payload["controller_qualification"]["status"] == "offline_qualified"
-    assert payload["provider_bindings"]["identification"]["provider_id"] != payload[
-        "provider_bindings"
-    ]["evaluation"]["provider_id"]
+    assert (
+        payload["provider_bindings"]["identification"]["provider_id"]
+        != payload["provider_bindings"]["evaluation"]["provider_id"]
+    )
     bundle = Path(payload["result_bundle_path"])
     assert bundle.parent == result_dir
     assert bundle.is_file()

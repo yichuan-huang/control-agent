@@ -62,10 +62,33 @@ def infer_task_type(task: Mapping[str, Any]) -> tuple[str, str]:
         for key in ("description", "natural_language_description", "objective")
     )
     markers = {
-        "trajectory_tracking": ("trajectory tracking", "track a trajectory", "轨迹跟踪", "跟踪轨迹"),
-        "periodic_operation": ("periodic operation", "periodic orbit", "limit cycle", "周期运行", "周期轨道"),
-        "constraint_optimization": ("constraint optimization", "constrained optimization", "economic optimum", "约束优化", "经济最优"),
-        "online_adaptation": ("online adaptation", "online adaptive", "adapt parameters online", "在线适应", "在线自适应"),
+        "trajectory_tracking": (
+            "trajectory tracking",
+            "track a trajectory",
+            "轨迹跟踪",
+            "跟踪轨迹",
+        ),
+        "periodic_operation": (
+            "periodic operation",
+            "periodic orbit",
+            "limit cycle",
+            "周期运行",
+            "周期轨道",
+        ),
+        "constraint_optimization": (
+            "constraint optimization",
+            "constrained optimization",
+            "economic optimum",
+            "约束优化",
+            "经济最优",
+        ),
+        "online_adaptation": (
+            "online adaptation",
+            "online adaptive",
+            "adapt parameters online",
+            "在线适应",
+            "在线自适应",
+        ),
     }
     for task_type, candidates in markers.items():
         if any(marker in visible for marker in candidates):
@@ -90,7 +113,10 @@ def validate_task_type_contract(task: Mapping[str, Any]) -> dict[str, Any]:
             "task_type": contract.task_type,
             "source": source,
             "success_metric_ids": [
-                "final_abs_error", "overshoot", "settling_time_s", "perturbed_success_rate",
+                "final_abs_error",
+                "overshoot",
+                "settling_time_s",
+                "perturbed_success_rate",
             ],
             "criteria_status": "not_pre_registered",
         }
@@ -100,12 +126,18 @@ def validate_task_type_contract(task: Mapping[str, Any]) -> dict[str, Any]:
     elif source == "explicit_task_contract" and requirements:
         criteria_status = "p1_explicit_compatibility"
         metric_ids = [
-            "final_abs_error", "overshoot", "settling_time_s", "perturbed_success_rate",
+            "final_abs_error",
+            "overshoot",
+            "settling_time_s",
+            "perturbed_success_rate",
         ]
     elif requirements:
         criteria_status = "legacy_performance_requirements"
         metric_ids = [
-            "final_abs_error", "overshoot", "settling_time_s", "perturbed_success_rate",
+            "final_abs_error",
+            "overshoot",
+            "settling_time_s",
+            "perturbed_success_rate",
         ]
     else:
         criteria_status = "not_pre_registered"
@@ -131,28 +163,58 @@ def disturbance_event_fingerprint(task: Mapping[str, Any]) -> str:
             task_type=contract.task_type,
         )
     return hashlib.sha256(
-        json.dumps(contract.disturbance_contract, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        json.dumps(
+            contract.disturbance_contract,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
     ).hexdigest()
 
 
 def transition_outcome_binding(task_coverage: Mapping[str, Any]) -> dict[str, Any]:
     phases = task_coverage.get("phases", ())
-    phase_ids = [str(item.get("id", item.get("phase_id", ""))) for item in phases if isinstance(item, Mapping)]
-    if len(phase_ids) < 2 or len(phase_ids) != len(set(phase_ids)) or any(not item for item in phase_ids):
-        raise ValueError("transition outcome binding requires at least two unique phase ids")
+    phase_ids = [
+        str(item.get("id", item.get("phase_id", "")))
+        for item in phases
+        if isinstance(item, Mapping)
+    ]
+    if (
+        len(phase_ids) < 2
+        or len(phase_ids) != len(set(phase_ids))
+        or any(not item for item in phase_ids)
+    ):
+        raise ValueError(
+            "transition outcome binding requires at least two unique phase ids"
+        )
     handoffs = task_coverage.get("handoffs")
     if handoffs is None:
         handoffs = [
-            {"id": f"{source}__to__{target}", "source_phase_id": source, "target_phase_id": target}
+            {
+                "id": f"{source}__to__{target}",
+                "source_phase_id": source,
+                "target_phase_id": target,
+            }
             for source, target in pairwise(phase_ids)
         ]
-    pairs = [(str(item.get("source_phase_id")), str(item.get("target_phase_id"))) for item in handoffs]
+    pairs = [
+        (str(item.get("source_phase_id")), str(item.get("target_phase_id")))
+        for item in handoffs
+    ]
     if pairs != list(pairwise(phase_ids)):
-        raise ValueError("transition handoff identities do not match adjacent compiled phases")
+        raise ValueError(
+            "transition handoff identities do not match adjacent compiled phases"
+        )
     handoff_ids = [str(item.get("id", "")) for item in handoffs]
-    if any(not item for item in handoff_ids) or len(handoff_ids) != len(set(handoff_ids)):
+    if any(not item for item in handoff_ids) or len(handoff_ids) != len(
+        set(handoff_ids)
+    ):
         raise ValueError("transition handoff ids must be unique")
-    return {"required_phase_ids": phase_ids, "required_handoff_ids": handoff_ids, "goal_phase_id": phase_ids[-1]}
+    return {
+        "required_phase_ids": phase_ids,
+        "required_handoff_ids": handoff_ids,
+        "goal_phase_id": phase_ids[-1],
+    }
 
 
 def evaluate_nominal_task_outcome(
@@ -166,27 +228,39 @@ def evaluate_nominal_task_outcome(
     contract = TaskContract.from_user_input(task)
     criteria = contract.success_requirements
     if not criteria:
-        raise TaskTypeContractError(code="missing_task_success_requirements", task_type=contract.task_type)
+        raise TaskTypeContractError(
+            code="missing_task_success_requirements", task_type=contract.task_type
+        )
     if outcome.get("stopped_on_limit"):
         return False
     if contract.task_type == "local_setpoint_hold":
         required_hold = criteria.get("hold_duration_min_s")
         return bool(
-            float(outcome.get("final_abs_error", float("inf"))) <= float(criteria.get("final_abs_error_max", float("inf")))
-            and float(outcome.get("overshoot", float("inf"))) <= float(criteria.get("overshoot_max", float("inf")))
+            float(outcome.get("final_abs_error", float("inf")))
+            <= float(criteria.get("final_abs_error_max", float("inf")))
+            and float(outcome.get("overshoot", float("inf")))
+            <= float(criteria.get("overshoot_max", float("inf")))
             and outcome.get("settling_time_s") is not None
-            and float(outcome["settling_time_s"]) <= float(criteria.get("settling_time_max_s", float("inf")))
-            and (required_hold is None or float(outcome.get("hold_duration_s", -1)) >= float(required_hold))
+            and float(outcome["settling_time_s"])
+            <= float(criteria.get("settling_time_max_s", float("inf")))
+            and (
+                required_hold is None
+                or float(outcome.get("hold_duration_s", -1)) >= float(required_hold)
+            )
         )
     if contract.task_type == "transition_then_hold":
         if transition_binding is None:
-            raise TaskTypeContractError(code="transition_identity_binding_missing", task_type=contract.task_type)
+            raise TaskTypeContractError(
+                code="transition_identity_binding_missing", task_type=contract.task_type
+            )
         required_phases = set(transition_binding["required_phase_ids"])
         required_handoffs = set(transition_binding["required_handoff_ids"])
         phase_ids = outcome.get("completed_phase_ids")
         handoff_ids = outcome.get("verified_handoff_ids")
         if not isinstance(phase_ids, list) or not isinstance(handoff_ids, list):
-            raise TaskTypeContractError(code="transition_outcome_identity_missing", task_type=contract.task_type)
+            raise TaskTypeContractError(
+                code="transition_outcome_identity_missing", task_type=contract.task_type
+            )
         identities = (
             len(phase_ids) == len(set(phase_ids))
             and len(handoff_ids) == len(set(handoff_ids))
@@ -197,10 +271,16 @@ def evaluate_nominal_task_outcome(
         )
         return bool(
             identities
-            and (outcome.get("entered_goal_region") is True or not criteria.get("goal_region_entry_required", True))
-            and int(outcome.get("completed_phase_count", 0)) >= int(criteria.get("required_phase_count_min", 0))
-            and int(outcome.get("verified_handoff_count", 0)) >= int(criteria.get("verified_handoff_count_min", 0))
-            and float(outcome.get("final_hold_duration_s", -1)) >= float(criteria.get("final_hold_duration_min_s", float("inf")))
+            and (
+                outcome.get("entered_goal_region") is True
+                or not criteria.get("goal_region_entry_required", True)
+            )
+            and int(outcome.get("completed_phase_count", 0))
+            >= int(criteria.get("required_phase_count_min", 0))
+            and int(outcome.get("verified_handoff_count", 0))
+            >= int(criteria.get("verified_handoff_count_min", 0))
+            and float(outcome.get("final_hold_duration_s", -1))
+            >= float(criteria.get("final_hold_duration_min_s", float("inf")))
         )
     expected = disturbance_event_fingerprint(task)
     return bool(
@@ -208,9 +288,12 @@ def evaluate_nominal_task_outcome(
         and outcome.get("disturbance_event_fingerprint") == expected
         and outcome.get("recovered_to_hold") is True
         and outcome.get("recovery_time_s") is not None
-        and float(outcome["recovery_time_s"]) <= float(criteria.get("recovery_time_max_s", float("inf")))
-        and float(outcome.get("post_recovery_hold_duration_s", -1)) >= float(criteria.get("post_recovery_hold_duration_min_s", float("inf")))
-        and float(outcome.get("final_abs_error", float("inf"))) <= float(criteria.get("recovery_abs_error_max", float("inf")))
+        and float(outcome["recovery_time_s"])
+        <= float(criteria.get("recovery_time_max_s", float("inf")))
+        and float(outcome.get("post_recovery_hold_duration_s", -1))
+        >= float(criteria.get("post_recovery_hold_duration_min_s", float("inf")))
+        and float(outcome.get("final_abs_error", float("inf")))
+        <= float(criteria.get("recovery_abs_error_max", float("inf")))
     )
 
 

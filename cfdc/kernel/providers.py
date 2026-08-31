@@ -31,7 +31,12 @@ class PublicTrace:
     def __post_init__(self) -> None:
         if not str(self.trace_id).strip() or not str(self.trial_id).strip():
             raise ValueError("public_trace_binding_required")
-        if self.source not in {"measured_trace", "model", "demo_fixture", "user_upload"}:
+        if self.source not in {
+            "measured_trace",
+            "model",
+            "demo_fixture",
+            "user_upload",
+        }:
             raise ValueError("public_trace_source_invalid")
         if len(self.time_s) < 2:
             raise ValueError("public_trace_requires_two_samples")
@@ -58,9 +63,14 @@ class PublicTrace:
         object.__setattr__(
             self,
             "signals",
-            {str(name): tuple(float(value) for value in values) for name, values in self.signals.items()},
+            {
+                str(name): tuple(float(value) for value in values)
+                for name, values in self.signals.items()
+            },
         )
-        object.__setattr__(self, "units", {str(name): str(unit) for name, unit in self.units.items()})
+        object.__setattr__(
+            self, "units", {str(name): str(unit) for name, unit in self.units.items()}
+        )
 
     @property
     def fingerprint(self) -> str:
@@ -90,9 +100,18 @@ class PublicTrace:
         # vocabulary used by the v3 workbench.  This adapter is deliberately
         # limited to public arrays; it never accepts an object/model payload.
         nested = raw.get("trace")
-        if isinstance(nested, Mapping) and not raw.get("signals") and not raw.get("time_s"):
-            raw = {**dict(nested), **{key: item for key, item in raw.items() if key != "trace"}}
-        supplied_fingerprint = raw.pop("trace_fingerprint", raw.pop("fingerprint", None))
+        if (
+            isinstance(nested, Mapping)
+            and not raw.get("signals")
+            and not raw.get("time_s")
+        ):
+            raw = {
+                **dict(nested),
+                **{key: item for key, item in raw.items() if key != "trace"},
+            }
+        supplied_fingerprint = raw.pop(
+            "trace_fingerprint", raw.pop("fingerprint", None)
+        )
         raw_signals = raw.get("signals") or raw.get("outputs")
         if isinstance(raw_signals, Mapping):
             signals = {
@@ -115,18 +134,44 @@ class PublicTrace:
             if output_unit:
                 units["output"] = str(output_unit)
         trace = cls(
-            trace_id=str(raw.get("trace_id") or raw.get("evidence_id") or raw.get("id") or ""),
+            trace_id=str(
+                raw.get("trace_id") or raw.get("evidence_id") or raw.get("id") or ""
+            ),
             source=str(raw.get("source") or raw.get("source_type") or ""),
-            time_s=tuple(float(item) for item in (raw.get("time_s") or raw.get("time") or raw.get("timestamps") or raw.get("t") or ())),
+            time_s=tuple(
+                float(item)
+                for item in (
+                    raw.get("time_s")
+                    or raw.get("time")
+                    or raw.get("timestamps")
+                    or raw.get("t")
+                    or ()
+                )
+            ),
             signals=signals,
             units=units,
-            protocol_fingerprint=str(raw.get("protocol_fingerprint") or raw.get("protocol_id") or ""),
-            operating_region=str(raw.get("operating_region") or raw.get("valid_region") or "declared_operating_region"),
-            trial_id=str(raw.get("trial_id") or raw.get("trial") or raw.get("trace_id") or raw.get("id") or ""),
+            protocol_fingerprint=str(
+                raw.get("protocol_fingerprint") or raw.get("protocol_id") or ""
+            ),
+            operating_region=str(
+                raw.get("operating_region")
+                or raw.get("valid_region")
+                or "declared_operating_region"
+            ),
+            trial_id=str(
+                raw.get("trial_id")
+                or raw.get("trial")
+                or raw.get("trace_id")
+                or raw.get("id")
+                or ""
+            ),
             metadata=dict(raw.get("metadata") or {}),
             quality=dict(raw.get("quality") or {}),
         )
-        if supplied_fingerprint is not None and str(supplied_fingerprint) != trace.fingerprint:
+        if (
+            supplied_fingerprint is not None
+            and str(supplied_fingerprint) != trace.fingerprint
+        ):
             raise ValueError("public_trace_fingerprint_mismatch")
         return trace
 
@@ -152,7 +197,11 @@ class PublicTrace:
             rows = list(csv.DictReader(handle))
         if not rows or "time_s" not in rows[0]:
             raise ValueError("public_trace_csv_requires_time_s_column")
-        signals = {name: tuple(float(row[name]) for row in rows) for name in rows[0] if name != "time_s"}
+        signals = {
+            name: tuple(float(row[name]) for row in rows)
+            for name in rows[0]
+            if name != "time_s"
+        }
         return cls(
             trace_id=trial_id or Path(path).stem,
             source=source,
@@ -170,7 +219,9 @@ class ExperimentProvider(Protocol):
     provider_version: str
     capabilities: frozenset[str]
 
-    def execute(self, operation: Mapping[str, Any], *, task: Mapping[str, Any]) -> PublicTrace | Sequence[PublicTrace]: ...
+    def execute(
+        self, operation: Mapping[str, Any], *, task: Mapping[str, Any]
+    ) -> PublicTrace | Sequence[PublicTrace]: ...
 
 
 class EvaluationProvider(Protocol):
@@ -194,10 +245,14 @@ class CallableExperimentProvider:
 
     provider_id: str
     provider_version: str
-    callback: Callable[[Mapping[str, Any], Mapping[str, Any]], PublicTrace | Sequence[PublicTrace]]
+    callback: Callable[
+        [Mapping[str, Any], Mapping[str, Any]], PublicTrace | Sequence[PublicTrace]
+    ]
     capabilities: frozenset[str] = frozenset()
 
-    def execute(self, operation: Mapping[str, Any], *, task: Mapping[str, Any]) -> PublicTrace | Sequence[PublicTrace]:
+    def execute(
+        self, operation: Mapping[str, Any], *, task: Mapping[str, Any]
+    ) -> PublicTrace | Sequence[PublicTrace]:
         result = self.callback(operation, task)
         if isinstance(result, PublicTrace):
             return result
@@ -213,7 +268,9 @@ class CallableEvaluationProvider:
 
     provider_id: str
     provider_version: str
-    callback: Callable[[Mapping[str, Any], Mapping[str, Any], str, int], Mapping[str, Any]]
+    callback: Callable[
+        [Mapping[str, Any], Mapping[str, Any], str, int], Mapping[str, Any]
+    ]
     capabilities: frozenset[str] = frozenset({"software_evaluation"})
 
     def evaluate(
@@ -241,9 +298,13 @@ class CurrentModelExperimentProvider:
             raise ValueError("model_provider_requires_explicit_model")
         self.package = package
         self.plan = plan
-        self.capabilities = frozenset(str(item.primitive) for item in getattr(plan, "instructions", ()))
+        self.capabilities = frozenset(
+            str(item.primitive) for item in getattr(plan, "instructions", ())
+        )
 
-    def execute(self, operation: Mapping[str, Any], *, task: Mapping[str, Any]) -> tuple[PublicTrace, ...]:
+    def execute(
+        self, operation: Mapping[str, Any], *, task: Mapping[str, Any]
+    ) -> tuple[PublicTrace, ...]:
         del task
         primitive = str(operation.get("operation") or operation.get("primitive") or "")
         if primitive and primitive not in self.capabilities:
@@ -251,7 +312,11 @@ class CurrentModelExperimentProvider:
         from cfdc.evidence.sources import run_model_experiments
 
         records = run_model_experiments(self.package, self.plan)
-        selected = [record for record in records if not primitive or str(record.primitive) == primitive]
+        selected = [
+            record
+            for record in records
+            if not primitive or str(record.primitive) == primitive
+        ]
         if not selected:
             raise ValueError("model_provider_returned_no_public_experiment")
         traces: list[PublicTrace] = []
@@ -274,12 +339,30 @@ class CurrentModelExperimentProvider:
                     trace_id=f"model-{index}-{record.primitive}",
                     source="model",
                     time_s=tuple(float(item) for item in raw_trace.time_s),
-                    signals={str(key): tuple(float(item) for item in values) for key, values in raw_trace.signals.items()},
-                    units={str(key): str(value) for key, value in units.items() if key != "time"},
-                    protocol_fingerprint=fingerprint({"provider": self.provider_id, "primitive": record.primitive, "plan": getattr(self.plan, "model_dump", lambda: repr(self.plan))()}),
+                    signals={
+                        str(key): tuple(float(item) for item in values)
+                        for key, values in raw_trace.signals.items()
+                    },
+                    units={
+                        str(key): str(value)
+                        for key, value in units.items()
+                        if key != "time"
+                    },
+                    protocol_fingerprint=fingerprint(
+                        {
+                            "provider": self.provider_id,
+                            "primitive": record.primitive,
+                            "plan": getattr(
+                                self.plan, "model_dump", lambda: repr(self.plan)
+                            )(),
+                        }
+                    ),
                     operating_region=str(record.operating_region),
                     trial_id=f"model-{index}",
-                    metadata={"evidence_boundary": "user_object_model_simulation", "primitive": str(record.primitive)},
+                    metadata={
+                        "evidence_boundary": "user_object_model_simulation",
+                        "primitive": str(record.primitive),
+                    },
                 )
             )
         return tuple(traces)
@@ -325,7 +408,10 @@ class EvaluationProviderRegistry:
 
     def register(self, provider: EvaluationProvider) -> None:
         provider_id = str(provider.provider_id).strip()
-        if not provider_id or not str(getattr(provider, "provider_version", "")).strip():
+        if (
+            not provider_id
+            or not str(getattr(provider, "provider_version", "")).strip()
+        ):
             raise ValueError("evaluation_provider_contract_required")
         if not callable(getattr(provider, "evaluate", None)):
             raise TypeError("evaluation_provider_evaluate_required")
@@ -340,7 +426,9 @@ class EvaluationProviderRegistry:
         try:
             return self._providers[str(provider_id)]
         except KeyError as exc:
-            raise ValueError(f"evaluation_provider_not_registered: {provider_id}") from exc
+            raise ValueError(
+                f"evaluation_provider_not_registered: {provider_id}"
+            ) from exc
 
     def capabilities(self) -> dict[str, list[str]]:
         return {
@@ -349,7 +437,9 @@ class EvaluationProviderRegistry:
         }
 
 
-def evidence_from_trace(trace: PublicTrace, *, kind: str = "experiment") -> dict[str, Any]:
+def evidence_from_trace(
+    trace: PublicTrace, *, kind: str = "experiment"
+) -> dict[str, Any]:
     """Convert a public trace to the kernel evidence shape."""
 
     return {

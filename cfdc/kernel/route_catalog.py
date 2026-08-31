@@ -85,7 +85,9 @@ def capability_gap_routes() -> tuple[str, ...]:
     for classes in route_catalog()["class_subtypes"].values():
         for subtype in classes.values():
             for route in subtype.get("routes", ()):
-                if str(route).endswith("capability_gap") or "capability_gap" in str(route):
+                if str(route).endswith("capability_gap") or "capability_gap" in str(
+                    route
+                ):
                     routes.add(str(route))
     return tuple(sorted(routes))
 
@@ -98,11 +100,20 @@ def known_feature_ids() -> frozenset[str]:
     for contract in route_catalog()["controller_contracts"].values():
         ids.update(str(item) for item in contract.get("controller_features", ()))
         ids.update(str(item) for item in contract.get("route_guard_features", ()))
-    ids.update({
-        "time_constant", "dead_time", "input_gain", "drag_rate",
-        "inverse_response_severity", "static_gain", "natural_frequency",
-        "damping_ratio", "acceleration_gain", "delay_bound",
-    })
+    ids.update(
+        {
+            "time_constant",
+            "dead_time",
+            "input_gain",
+            "drag_rate",
+            "inverse_response_severity",
+            "static_gain",
+            "natural_frequency",
+            "damping_ratio",
+            "acceleration_gain",
+            "delay_bound",
+        }
+    )
     return frozenset(ids)
 
 

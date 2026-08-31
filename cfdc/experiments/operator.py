@@ -17,18 +17,27 @@ from cfdc.kernel.contracts import OPERATOR_HANDOFF_VERSION, fingerprint, utc_now
 OPERATOR_DECISIONS = frozenset({"accepted", "needs_clarification", "refused"})
 
 
-def expected_input_waveforms(protocol: Mapping[str, Any]) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+def expected_input_waveforms(
+    protocol: Mapping[str, Any],
+) -> tuple[np.ndarray, dict[str, np.ndarray]]:
     dt = float(protocol["sample_period_s"])
-    count = int(protocol.get("expected_sample_count") or round(float(protocol["duration_s"]) / dt) + 1)
+    count = int(
+        protocol.get("expected_sample_count")
+        or round(float(protocol["duration_s"]) / dt) + 1
+    )
     times = np.arange(count, dtype=float) * dt
     command = np.zeros_like(times)
     cursor = 0.0
     for segment in protocol["segments"]:
         end = cursor + float(segment["duration_s"])
-        command[(times >= cursor - 1e-12) & (times < end - 1e-12)] = float(segment["input_value"])
+        command[(times >= cursor - 1e-12) & (times < end - 1e-12)] = float(
+            segment["input_value"]
+        )
         cursor = end
     command[times >= cursor - 1e-12] = 0.0
-    input_names = tuple(str(item) for item in protocol.get("control_inputs", ())) or ("input",)
+    input_names = tuple(str(item) for item in protocol.get("control_inputs", ())) or (
+        "input",
+    )
     commands = {input_names[0]: command}
     for index, name in enumerate(input_names[1:], 1):
         shift = max(1, index * len(command) // (8 * len(input_names)))
@@ -69,12 +78,24 @@ def build_operator_handoff(
         "requested_signals": protocol["requested_signals"],
         "control_inputs": list(input_names),
         "units": protocol["units"],
-        "prechecks": ["channels", "units", "logger", "stop condition", "initial condition"],
-        "claims_forbidden": ["controller approval", "data repair", "physical safety certification"],
+        "prechecks": [
+            "channels",
+            "units",
+            "logger",
+            "stop condition",
+            "initial condition",
+        ],
+        "claims_forbidden": [
+            "controller approval",
+            "data repair",
+            "physical safety certification",
+        ],
     }
     card["handoff_fingerprint"] = fingerprint(card)
     card_path = output_dir / "operator_card.json"
-    card_path.write_text(json.dumps(card, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    card_path.write_text(
+        json.dumps(card, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     checklist = {
         "session_id": session_id,
         "protocol_fingerprint": protocol["protocol_fingerprint"],
@@ -108,7 +129,10 @@ def build_operator_handoff(
                     protocol["protocol_fingerprint"],
                     index + 1,
                     f"{time_value:.12g}",
-                    *(f"{expected_inputs[name][sample_index]:.12g}" for name in input_names),
+                    *(
+                        f"{expected_inputs[name][sample_index]:.12g}"
+                        for name in input_names
+                    ),
                     *("" for _ in protocol["requested_signals"]),
                 ]
             )
@@ -120,7 +144,9 @@ def build_operator_handoff(
         memory_files.append((name, payload))
     bundle = output_dir / "operator_bundle.zip"
     with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("operator_card.json", json.dumps(card, ensure_ascii=False, indent=2) + "\n")
+        archive.writestr(
+            "operator_card.json", json.dumps(card, ensure_ascii=False, indent=2) + "\n"
+        )
         archive.writestr(
             "upload_schema.json",
             json.dumps(
@@ -152,12 +178,20 @@ def build_operator_handoff(
     }
 
 
-def validate_operator_report(report: Mapping[str, Any], handoff: Mapping[str, Any]) -> dict[str, Any]:
+def validate_operator_report(
+    report: Mapping[str, Any], handoff: Mapping[str, Any]
+) -> dict[str, Any]:
     decision = str(report.get("decision") or "").strip()
     if decision not in OPERATOR_DECISIONS:
         raise ValueError("operator_decision_invalid")
-    prechecks = tuple(str(item).strip() for item in report.get("prechecks_completed", ()) if str(item).strip())
-    if decision == "accepted" and not set(handoff.get("prechecks", ())) <= set(prechecks):
+    prechecks = tuple(
+        str(item).strip()
+        for item in report.get("prechecks_completed", ())
+        if str(item).strip()
+    )
+    if decision == "accepted" and not set(handoff.get("prechecks", ())) <= set(
+        prechecks
+    ):
         raise ValueError("operator_prechecks_incomplete")
     value = {
         "decision": decision,

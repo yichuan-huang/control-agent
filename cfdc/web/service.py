@@ -127,7 +127,10 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
         }
         matches = [
             fingerprint_contract
-            for (version_field, version), fingerprint_contract in typed_fingerprints.items()
+            for (
+                version_field,
+                version,
+            ), fingerprint_contract in typed_fingerprints.items()
             if value.get(version_field) == version
         ]
         if len(matches) != 1:
@@ -145,6 +148,7 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
         "artifact_kind": kind,
         "artifact_fingerprint": artifact_fingerprint,
     }
+
 
 _KERNEL_PUBLIC_ACTIONS = frozenset(
     {
@@ -213,7 +217,9 @@ def _required_finite_number(payload: Mapping[str, Any], key: str, label: str) ->
     return number
 
 
-def _optional_finite_number(payload: Mapping[str, Any], key: str, label: str) -> float | None:
+def _optional_finite_number(
+    payload: Mapping[str, Any], key: str, label: str
+) -> float | None:
     value = payload.get(key)
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
@@ -424,7 +430,9 @@ def start_kernel_app_run(
     if use_rag and rag_index_dir:
         from cfdc.rag import load_index
 
-        index = load_index(rag_index_dir, snapshot_name=rag_snapshot, load_encoder=False)
+        index = load_index(
+            rag_index_dir, snapshot_name=rag_snapshot, load_encoder=False
+        )
         resolved_snapshot = index.index_snapshot
     rag_active = bool(use_rag and resolved_snapshot)
     session = service.start(
@@ -530,7 +538,9 @@ def continue_kernel_app_run(
         if identity
         else raw
     )
-    action_id = _kernel_action_id(session_id, page_revision, action, action_for_identity)
+    action_id = _kernel_action_id(
+        session_id, page_revision, action, action_for_identity
+    )
     if _kernel_action_already_recorded(session, action_id):
         report = _kernel_report(session)
         return report, {
@@ -610,7 +620,9 @@ def continue_kernel_app_run(
             declarations=raw,
         )
     elif action == "advance":
-        session = service.advance(session_id, action_id=action_id, revision=page_revision)
+        session = service.advance(
+            session_id, action_id=action_id, revision=page_revision
+        )
     elif action == "evidence":
         session = service.submit_evidence(
             session_id,
@@ -734,13 +746,21 @@ def continue_kernel_app_run(
             action_id=action_id,
             revision=page_revision,
         )
-    elif action in {"run_provider", "run_evaluation", "run_feedback_iteration", "confirm_result"}:
+    elif action in {
+        "run_provider",
+        "run_evaluation",
+        "run_feedback_iteration",
+        "confirm_result",
+    }:
         case_id = str(app_state.get("provider_case_id") or "").strip()
         if not case_id:
             raise ValueError("当前会话没有注册可执行的软件案例 Provider。")
-        identification_registry, identification_id, evaluation_registry, evaluation_id = (
-            _training_registries(case_id)
-        )
+        (
+            identification_registry,
+            identification_id,
+            evaluation_registry,
+            evaluation_id,
+        ) = _training_registries(case_id)
         if action == "run_provider":
             session = service.run_provider(
                 session_id,
@@ -799,13 +819,17 @@ def _kernel_report(session) -> dict[str, Any]:
             "entries": [item.to_dict() for item in session.ledger.entries],
         },
         "route": dict(session.route) if session.route else None,
-        "features": dict(session.feature_artifact) if session.feature_artifact else None,
+        "features": dict(session.feature_artifact)
+        if session.feature_artifact
+        else None,
         "controller": (
             dict(session.controller_candidate) if session.controller_candidate else None
         ),
         "phase_plan": dict(session.phase_plan) if session.phase_plan else None,
         "phase_results": [dict(item) for item in session.phase_results],
-        "freeze": dict(session.controller_freeze) if session.controller_freeze else None,
+        "freeze": dict(session.controller_freeze)
+        if session.controller_freeze
+        else None,
         "evaluation": dict(session.evaluation) if session.evaluation else None,
         "tuning": dict(session.tuning) if session.tuning else None,
         "confirmation": dict(session.confirmation) if session.confirmation else None,
@@ -813,7 +837,9 @@ def _kernel_report(session) -> dict[str, Any]:
         "operator_handoffs": [dict(item) for item in session.operator_handoffs],
         "operator_reports": [dict(item) for item in session.operator_reports],
         "upload_attempts": [dict(item) for item in session.upload_attempts],
-        "qualification": dict(session.controller_qualification) if session.controller_qualification else None,
+        "qualification": dict(session.controller_qualification)
+        if session.controller_qualification
+        else None,
         "provider_bindings": dict(session.provider_bindings),
         "import_report": dict(session.import_report) if session.import_report else None,
         "evidence": [dict(item) for item in session.evidence],
@@ -995,7 +1021,9 @@ def prepare_kernel_reply_for_ui(
         app_state.get("kernel_session_dir") or Path("output") / "kernel-sessions"
     )
     session = service.read(session_id)
-    projected_pending = app_state.get("pending_actions") or _kernel_pending_actions(session)
+    projected_pending = app_state.get("pending_actions") or _kernel_pending_actions(
+        session
+    )
     contract = build_kernel_input_contract(session, pending_actions=projected_pending)
     selected_mode = _selected_reply_mode(mode, contract)
     contract_action = str(contract.get("action") or "")
@@ -1012,7 +1040,9 @@ def prepare_kernel_reply_for_ui(
 
     if raw_text.strip() and public_action in _KERNEL_PUBLIC_ACTIONS:
         identity_revision = app_state.get("kernel_revision", session.revision)
-        if isinstance(identity_revision, bool) or not isinstance(identity_revision, int):
+        if isinstance(identity_revision, bool) or not isinstance(
+            identity_revision, int
+        ):
             identity_revision = session.revision
         replay_action_id = _kernel_action_id(
             session.session_id,
@@ -1052,7 +1082,9 @@ def prepare_kernel_reply_for_ui(
     owner = True
     if raw_text.strip() and public_action in _KERNEL_PUBLIC_ACTIONS:
         identity_revision = app_state.get("kernel_revision", session.revision)
-        if isinstance(identity_revision, bool) or not isinstance(identity_revision, int):
+        if isinstance(identity_revision, bool) or not isinstance(
+            identity_revision, int
+        ):
             identity_revision = session.revision
         cache_key = _kernel_action_id(
             session.session_id,

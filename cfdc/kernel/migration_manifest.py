@@ -263,17 +263,123 @@ MIGRATION_ITEMS: tuple[MigrationItem, ...] = (
 
 
 PARITY_CAPABILITIES: tuple[dict[str, Any], ...] = (
-    {"capability": "versioned_session_and_v3_import", "sources": ("src/cfdc_session_events.py", "src/cfdc_canonical_session.py"), "targets": ("cfdc/kernel/session.py", "cfdc/kernel/importer.py"), "contracts": (EVIDENCE_SESSION_VERSION, IMPORT_REPORT_VERSION), "tests": ("test_v3_import_is_read_only_safe_and_idempotent",)},
-    {"capability": "experiment_protocol_and_operator_handoff", "sources": ("src/bounded_experiment_protocol.py", "src/build_physical_experiment_packet.py"), "targets": ("cfdc/experiments/protocols.py", "cfdc/experiments/operator.py"), "contracts": (PROTOCOL_VERSION, OPERATOR_HANDOFF_VERSION), "tests": ("test_protocol_tampering_and_operator_bundle",)},
-    {"capability": "protocol_bound_upload_gates", "sources": ("src/nonexpert_upload_validation.py", "external_experiment_packet_schema.json"), "targets": ("cfdc/evidence/ingestion.py",), "contracts": (UPLOAD_AUDIT_VERSION,), "tests": ("test_upload_all_eight_gates_and_rejected_attempt_is_non_consuming",)},
-    {"capability": "physical_preflight_and_units", "sources": ("src/physical_experiment_preflight.py", "src/physical_unit_normalization.py"), "targets": ("cfdc/evidence/physical.py",), "contracts": ("cfdc-physical-preflight/v1",), "tests": ("test_physical_preflight_and_engineering_unit_normalization",)},
-    {"capability": "automatic_feature_derivation", "sources": ("src/cfdc_core_feature_parameterization_v1.py",), "targets": ("cfdc/features/kernel.py",), "contracts": (FEATURE_ARTIFACT_VERSION,), "tests": ("test_registered_case_full_chain_reaches_independent_evaluation",)},
-    {"capability": "route_registry_and_capability_gaps", "sources": ("control_route_registry.json", "control_route_extensions.json", "unified_executor_capabilities.json"), "targets": ("cfdc/kernel/resources/control_route_registry.v2.7.1.json", "cfdc/kernel/routes.py"), "contracts": ("cfdc-route/v1",), "tests": ("test_all_executable_controller_contracts_synthesize_and_qualify",)},
-    {"capability": "controller_synthesis_and_qualification", "sources": ("src/task_bound_siso_initial_controller_adapter.py", "src/run_initial_controller_qualification_matrix.py"), "targets": ("cfdc/controllers/kernel_synthesis.py", "cfdc/controllers/qualification.py"), "contracts": (CONTROLLER_IR_VERSION, QUALIFICATION_VERSION), "tests": ("test_all_executable_controller_contracts_synthesize_and_qualify",)},
-    {"capability": "independent_provider_evaluation", "sources": ("src/run_cfdc_independent_provider_full_chain_acceptance_v20.py", "performance_evaluation_packet_schema.json"), "targets": ("cfdc/kernel/providers.py", "cfdc/kernel/service.py"), "contracts": ("cfdc-provider/v1", PACKET_VERSION), "tests": ("test_registered_case_full_chain_reaches_independent_evaluation",)},
-    {"capability": "bounded_feedback_and_fresh_confirmation", "sources": ("src/cfdc_bounded_performance_feedback_iteration_v1.py", "cfdc_bounded_performance_feedback_iteration_contract_v1.json"), "targets": ("cfdc/kernel/tuning.py", "cfdc/kernel/service.py"), "contracts": (TUNING_CONTRACT_VERSION,), "tests": ("test_feedback_creates_new_freeze_and_requires_fresh_confirmation",)},
-    {"capability": "multi_agent_role_governance", "sources": ("src/cfdc_llm_role_reliability_cases_v4.py", "cfdc_llm_role_reliability_acceptance_contract_v4.json"), "targets": ("cfdc/kernel/agents.py", "cfdc/kernel/replies.py"), "contracts": ("cfdc-agent-governance/v1",), "tests": ("test_kernel_agent_context_is_role_scoped_and_has_no_supervisor", "test_composite_adapter_revises_once_then_submits_only_after_critic_passes")},
-    {"capability": "canonical_and_physical_training_governance", "sources": ("benchmarks/cfdc_canonical_v10/contract.json", "cfdc_physical_training_cases_v1.json", "cfdc_benchmark_coverage_contract.json"), "targets": ("cfdc/kernel/cases.py", "cfdc/sim/training.py"), "contracts": ("cfdc-canonical-benchmark/v10", "cfdc-training-cases/v1"), "tests": ("test_case_catalog_has_five_training_six_transition_and_seven_audit_cases",)},
+    {
+        "capability": "versioned_session_and_v3_import",
+        "sources": ("src/cfdc_session_events.py", "src/cfdc_canonical_session.py"),
+        "targets": ("cfdc/kernel/session.py", "cfdc/kernel/importer.py"),
+        "contracts": (EVIDENCE_SESSION_VERSION, IMPORT_REPORT_VERSION),
+        "tests": ("test_v3_import_is_read_only_safe_and_idempotent",),
+    },
+    {
+        "capability": "experiment_protocol_and_operator_handoff",
+        "sources": (
+            "src/bounded_experiment_protocol.py",
+            "src/build_physical_experiment_packet.py",
+        ),
+        "targets": ("cfdc/experiments/protocols.py", "cfdc/experiments/operator.py"),
+        "contracts": (PROTOCOL_VERSION, OPERATOR_HANDOFF_VERSION),
+        "tests": ("test_protocol_tampering_and_operator_bundle",),
+    },
+    {
+        "capability": "protocol_bound_upload_gates",
+        "sources": (
+            "src/nonexpert_upload_validation.py",
+            "external_experiment_packet_schema.json",
+        ),
+        "targets": ("cfdc/evidence/ingestion.py",),
+        "contracts": (UPLOAD_AUDIT_VERSION,),
+        "tests": ("test_upload_all_eight_gates_and_rejected_attempt_is_non_consuming",),
+    },
+    {
+        "capability": "physical_preflight_and_units",
+        "sources": (
+            "src/physical_experiment_preflight.py",
+            "src/physical_unit_normalization.py",
+        ),
+        "targets": ("cfdc/evidence/physical.py",),
+        "contracts": ("cfdc-physical-preflight/v1",),
+        "tests": ("test_physical_preflight_and_engineering_unit_normalization",),
+    },
+    {
+        "capability": "automatic_feature_derivation",
+        "sources": ("src/cfdc_core_feature_parameterization_v1.py",),
+        "targets": ("cfdc/features/kernel.py",),
+        "contracts": (FEATURE_ARTIFACT_VERSION,),
+        "tests": ("test_registered_case_full_chain_reaches_independent_evaluation",),
+    },
+    {
+        "capability": "route_registry_and_capability_gaps",
+        "sources": (
+            "control_route_registry.json",
+            "control_route_extensions.json",
+            "unified_executor_capabilities.json",
+        ),
+        "targets": (
+            "cfdc/kernel/resources/control_route_registry.v2.7.1.json",
+            "cfdc/kernel/routes.py",
+        ),
+        "contracts": ("cfdc-route/v1",),
+        "tests": ("test_all_executable_controller_contracts_synthesize_and_qualify",),
+    },
+    {
+        "capability": "controller_synthesis_and_qualification",
+        "sources": (
+            "src/task_bound_siso_initial_controller_adapter.py",
+            "src/run_initial_controller_qualification_matrix.py",
+        ),
+        "targets": (
+            "cfdc/controllers/kernel_synthesis.py",
+            "cfdc/controllers/qualification.py",
+        ),
+        "contracts": (CONTROLLER_IR_VERSION, QUALIFICATION_VERSION),
+        "tests": ("test_all_executable_controller_contracts_synthesize_and_qualify",),
+    },
+    {
+        "capability": "independent_provider_evaluation",
+        "sources": (
+            "src/run_cfdc_independent_provider_full_chain_acceptance_v20.py",
+            "performance_evaluation_packet_schema.json",
+        ),
+        "targets": ("cfdc/kernel/providers.py", "cfdc/kernel/service.py"),
+        "contracts": ("cfdc-provider/v1", PACKET_VERSION),
+        "tests": ("test_registered_case_full_chain_reaches_independent_evaluation",),
+    },
+    {
+        "capability": "bounded_feedback_and_fresh_confirmation",
+        "sources": (
+            "src/cfdc_bounded_performance_feedback_iteration_v1.py",
+            "cfdc_bounded_performance_feedback_iteration_contract_v1.json",
+        ),
+        "targets": ("cfdc/kernel/tuning.py", "cfdc/kernel/service.py"),
+        "contracts": (TUNING_CONTRACT_VERSION,),
+        "tests": ("test_feedback_creates_new_freeze_and_requires_fresh_confirmation",),
+    },
+    {
+        "capability": "multi_agent_role_governance",
+        "sources": (
+            "src/cfdc_llm_role_reliability_cases_v4.py",
+            "cfdc_llm_role_reliability_acceptance_contract_v4.json",
+        ),
+        "targets": ("cfdc/kernel/agents.py", "cfdc/kernel/replies.py"),
+        "contracts": ("cfdc-agent-governance/v1",),
+        "tests": (
+            "test_kernel_agent_context_is_role_scoped_and_has_no_supervisor",
+            "test_composite_adapter_revises_once_then_submits_only_after_critic_passes",
+        ),
+    },
+    {
+        "capability": "canonical_and_physical_training_governance",
+        "sources": (
+            "benchmarks/cfdc_canonical_v10/contract.json",
+            "cfdc_physical_training_cases_v1.json",
+            "cfdc_benchmark_coverage_contract.json",
+        ),
+        "targets": ("cfdc/kernel/cases.py", "cfdc/sim/training.py"),
+        "contracts": ("cfdc-canonical-benchmark/v10", "cfdc-training-cases/v1"),
+        "tests": (
+            "test_case_catalog_has_five_training_six_transition_and_seven_audit_cases",
+        ),
+    },
 )
 
 
@@ -297,7 +403,9 @@ def build_v3_parity_matrix(source_root: str | Path | None = None) -> dict[str, A
         "runtime_archive_dependency": False,
     }
     value["matrix_fingerprint"] = hashlib.sha256(
-        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
     ).hexdigest()
     return value
 
@@ -339,7 +447,9 @@ def build_migration_manifest(source_root: str | Path | None = None) -> dict[str,
         "runtime_archive_dependency": False,
     }
     value["manifest_fingerprint"] = hashlib.sha256(
-        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
     ).hexdigest()
     return value
 

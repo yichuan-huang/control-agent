@@ -57,7 +57,9 @@ class PhaseContract:
             "valid_region": self.valid_region,
             "timeout_s": float(self.timeout_s),
             "handoff_policy": self.handoff_policy,
-            "controller": dict(self.controller) if self.controller is not None else None,
+            "controller": dict(self.controller)
+            if self.controller is not None
+            else None,
             "required_feature_ids": list(self.required_feature_ids),
         }
 
@@ -67,13 +69,23 @@ class PhaseContract:
         return cls(
             phase_id=str(raw.get("phase_id") or raw.get("id") or "").strip(),
             objective=str(raw.get("objective") or raw.get("goal") or "").strip(),
-            entry_condition=str(raw.get("entry_condition") or raw.get("entry") or "").strip(),
-            exit_condition=str(raw.get("exit_condition") or raw.get("exit") or "").strip(),
-            valid_region=str(raw.get("valid_region") or raw.get("validity") or "").strip(),
+            entry_condition=str(
+                raw.get("entry_condition") or raw.get("entry") or ""
+            ).strip(),
+            exit_condition=str(
+                raw.get("exit_condition") or raw.get("exit") or ""
+            ).strip(),
+            valid_region=str(
+                raw.get("valid_region") or raw.get("validity") or ""
+            ).strip(),
             timeout_s=float(raw.get("timeout_s", raw.get("max_duration_s", 0))),
             handoff_policy=str(raw.get("handoff_policy") or "forward_only"),
-            controller=dict(raw["controller"]) if raw.get("controller") is not None else None,
-            required_feature_ids=tuple(str(item) for item in raw.get("required_feature_ids", ()) or ()),
+            controller=dict(raw["controller"])
+            if raw.get("controller") is not None
+            else None,
+            required_feature_ids=tuple(
+                str(item) for item in raw.get("required_feature_ids", ()) or ()
+            ),
             phase_version=str(raw.get("phase_version") or MULTISTAGE_VERSION),
         )
 
@@ -147,7 +159,9 @@ class MultiStagePlan:
         plan = cls(
             task_fingerprint=str(raw.get("task_fingerprint") or ""),
             route_id=str(raw.get("route_id") or raw.get("route") or ""),
-            phases=tuple(PhaseContract.from_mapping(item) for item in raw.get("phases", ()) or ()),
+            phases=tuple(
+                PhaseContract.from_mapping(item) for item in raw.get("phases", ()) or ()
+            ),
             plan_version=str(raw.get("plan_version") or MULTISTAGE_VERSION),
         )
         if supplied is not None and str(supplied) != plan.fingerprint:
@@ -168,7 +182,9 @@ class MultiStagePlan:
 
     @property
     def handoff_ids(self) -> tuple[str, ...]:
-        return tuple(f"{source}__to__{target}" for source, target in pairwise(self.phase_order))
+        return tuple(
+            f"{source}__to__{target}" for source, target in pairwise(self.phase_order)
+        )
 
 
 def compile_phase_plan(
@@ -187,12 +203,23 @@ def compile_phase_plan(
     """
 
     if phases is None and task.phase_schedule:
-        declared = task.phase_schedule.get("phases") if isinstance(task.phase_schedule, Mapping) else None
+        declared = (
+            task.phase_schedule.get("phases")
+            if isinstance(task.phase_schedule, Mapping)
+            else None
+        )
         if isinstance(declared, Sequence) and not isinstance(declared, (str, bytes)):
             phases = tuple(dict(item) for item in declared if isinstance(item, Mapping))
         elif isinstance(task.phase_schedule, Mapping) and any(
             key in task.phase_schedule
-            for key in ("phase_id", "id", "objective", "goal", "entry_condition", "entry")
+            for key in (
+                "phase_id",
+                "id",
+                "objective",
+                "goal",
+                "entry_condition",
+                "entry",
+            )
         ):
             phases = (dict(task.phase_schedule),)
 
@@ -204,7 +231,9 @@ def compile_phase_plan(
                     "objective": "hold the requested reference",
                     "entry_condition": "task_start",
                     "exit_condition": "success_hold",
-                    "valid_region": task.goal_region or task.operating_region or "declared_operating_region",
+                    "valid_region": task.goal_region
+                    or task.operating_region
+                    or "declared_operating_region",
                     "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0)),
                 }
             ]
@@ -215,8 +244,12 @@ def compile_phase_plan(
                     "objective": "recover after the declared disturbance",
                     "entry_condition": "disturbance_event_detected",
                     "exit_condition": "recovery_target_reached",
-                    "valid_region": task.disturbance_hold_region or task.goal_region or task.operating_region or "declared_operating_region",
-                    "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0)) / 2.0,
+                    "valid_region": task.disturbance_hold_region
+                    or task.goal_region
+                    or task.operating_region
+                    or "declared_operating_region",
+                    "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0))
+                    / 2.0,
                     "handoff_policy": "forward_with_safe_recovery",
                 },
                 {
@@ -224,8 +257,12 @@ def compile_phase_plan(
                     "objective": "hold after disturbance recovery",
                     "entry_condition": "recovery_target_reached",
                     "exit_condition": "success_hold",
-                    "valid_region": task.disturbance_hold_region or task.goal_region or task.operating_region or "declared_operating_region",
-                    "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0)) / 2.0,
+                    "valid_region": task.disturbance_hold_region
+                    or task.goal_region
+                    or task.operating_region
+                    or "declared_operating_region",
+                    "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0))
+                    / 2.0,
                 },
             ]
         else:
@@ -243,21 +280,32 @@ def compile_phase_plan(
                 phase_values.append(
                     {
                         "phase_id": (
-                            "transition" if len(transition_targets) == 1
-                            else ("transition_to_goal" if final_transition else f"transition_checkpoint_{index:02d}")
+                            "transition"
+                            if len(transition_targets) == 1
+                            else (
+                                "transition_to_goal"
+                                if final_transition
+                                else f"transition_checkpoint_{index:02d}"
+                            )
                         ),
                         "objective": (
                             "move from the declared initial region"
                             if target is None
                             else f"move to public checkpoint {target:g}"
                         ),
-                        "entry_condition": "task_start" if index == 1 else f"transition_checkpoint_{index - 1:02d}_reached",
+                        "entry_condition": "task_start"
+                        if index == 1
+                        else f"transition_checkpoint_{index - 1:02d}_reached",
                         "exit_condition": (
-                            "transition_target_reached" if len(transition_targets) == 1 or final_transition
+                            "transition_target_reached"
+                            if len(transition_targets) == 1 or final_transition
                             else f"transition_checkpoint_{index:02d}_reached"
                         ),
-                        "valid_region": task.initial_region or task.operating_region or "declared_operating_region",
-                        "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0)) / (len(transition_targets) + 1),
+                        "valid_region": task.initial_region
+                        or task.operating_region
+                        or "declared_operating_region",
+                        "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0))
+                        / (len(transition_targets) + 1),
                         "handoff_policy": "forward_with_safe_recovery",
                     }
                 )
@@ -267,8 +315,11 @@ def compile_phase_plan(
                     "objective": "hold the requested goal region",
                     "entry_condition": "transition_target_reached",
                     "exit_condition": "success_hold",
-                    "valid_region": task.goal_region or task.operating_region or "declared_operating_region",
-                    "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0)) / (len(transition_targets) + 1),
+                    "valid_region": task.goal_region
+                    or task.operating_region
+                    or "declared_operating_region",
+                    "timeout_s": float(task.budgets.get("elapsed_time_s", 7200.0))
+                    / (len(transition_targets) + 1),
                 }
             )
     else:
@@ -297,17 +348,29 @@ def compile_phase_plan(
     for previous, current in pairwise(result):
         if current.entry_condition != previous.exit_condition:
             raise ValueError("phase_handoff_condition_mismatch")
-    if task.required_phase_count_min is not None and len(result) != task.required_phase_count_min:
+    if (
+        task.required_phase_count_min is not None
+        and len(result) != task.required_phase_count_min
+    ):
         raise ValueError("phase_count_does_not_match_task_contract")
-    if task.verified_handoff_count_min is not None and len(result) - 1 != task.verified_handoff_count_min:
+    if (
+        task.verified_handoff_count_min is not None
+        and len(result) - 1 != task.verified_handoff_count_min
+    ):
         raise ValueError("handoff_count_does_not_match_task_contract")
     elapsed_budget = float(task.budgets.get("elapsed_time_s", 7200.0))
     if sum(phase.timeout_s for phase in result) > elapsed_budget + 1e-9:
         raise ValueError("phase_time_budget_exceeded")
-    return MultiStagePlan(task_fingerprint=task.fingerprint, route_id=str(route.get("route_id") or ""), phases=tuple(result))
+    return MultiStagePlan(
+        task_fingerprint=task.fingerprint,
+        route_id=str(route.get("route_id") or ""),
+        phases=tuple(result),
+    )
 
 
-def validate_handoff(plan: MultiStagePlan, observations: Mapping[str, Any]) -> dict[str, Any]:
+def validate_handoff(
+    plan: MultiStagePlan, observations: Mapping[str, Any]
+) -> dict[str, Any]:
     """Validate public phase observations without executing arbitrary code."""
 
     reached: list[str] = []
@@ -326,8 +389,12 @@ def validate_handoff(plan: MultiStagePlan, observations: Mapping[str, Any]) -> d
         ):
             failures.append(f"safety_failure:{phase.phase_id}")
             continue
-        entry_passed = observation.get("entry_condition_met", observation.get("entry_passed"))
-        exit_passed = observation.get("exit_condition_met", observation.get("exit_passed"))
+        entry_passed = observation.get(
+            "entry_condition_met", observation.get("entry_passed")
+        )
+        exit_passed = observation.get(
+            "exit_condition_met", observation.get("exit_passed")
+        )
         success = observation.get("success")
         # The archived progression contract used ``entry_passed`` and
         # ``exit_passed`` as the complete public handoff observation and did
@@ -346,7 +413,10 @@ def validate_handoff(plan: MultiStagePlan, observations: Mapping[str, Any]) -> d
         if any(value is None for value in (entry_passed, exit_passed, success)):
             failures.append(f"missing_gate:{phase.phase_id}")
             continue
-        if any(not isinstance(value, bool) for value in (entry_passed, exit_passed, success)):
+        if any(
+            not isinstance(value, bool)
+            for value in (entry_passed, exit_passed, success)
+        ):
             failures.append(f"invalid_gate:{phase.phase_id}")
             continue
         if entry_passed is False or exit_passed is False or success is False:
@@ -354,7 +424,9 @@ def validate_handoff(plan: MultiStagePlan, observations: Mapping[str, Any]) -> d
             continue
         reached.append(phase.phase_id)
     return {
-        "status": "passed" if not failures and len(reached) == len(plan.phases) else "blocked",
+        "status": "passed"
+        if not failures and len(reached) == len(plan.phases)
+        else "blocked",
         "phase_ids_reached": reached,
         "failures": failures,
         "plan_fingerprint": plan.fingerprint,

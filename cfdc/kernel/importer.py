@@ -56,14 +56,20 @@ class ImportInspection:
             "file_receipts": [dict(item) for item in self.file_receipts],
             "checks": [dict(item) for item in self.checks],
             "discarded": [dict(item) for item in self.discarded],
-            "candidate_counts": {key: len(values) for key, values in self.candidates.items()},
+            "candidate_counts": {
+                key: len(values) for key, values in self.candidates.items()
+            },
         }
 
 
 def _safe_member(name: str) -> str:
     normalized = name.replace("\\", "/")
     path = PurePosixPath(normalized)
-    if not normalized or path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+    if (
+        not normalized
+        or path.is_absolute()
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
         raise ValueError(f"v3_import_unsafe_path: {name}")
     if ":" in path.parts[0]:
         raise ValueError(f"v3_import_unsafe_path: {name}")
@@ -79,14 +85,18 @@ def _directory_files(root: Path) -> dict[str, bytes]:
         for name in dir_names:
             item = current_path / name
             if item.is_symlink():
-                raise ValueError(f"v3_import_symlink_not_allowed: {item.relative_to(root)}")
+                raise ValueError(
+                    f"v3_import_symlink_not_allowed: {item.relative_to(root)}"
+                )
             if name not in _IGNORED_DIRS:
                 kept_dirs.append(name)
         dir_names[:] = kept_dirs
         for name in file_names:
             path = current_path / name
             if path.is_symlink():
-                raise ValueError(f"v3_import_symlink_not_allowed: {path.relative_to(root)}")
+                raise ValueError(
+                    f"v3_import_symlink_not_allowed: {path.relative_to(root)}"
+                )
             if not path.is_file():
                 continue
             relative = _safe_member(path.relative_to(root).as_posix())
@@ -138,7 +148,10 @@ def _bundle_files(source: Path) -> tuple[str, dict[str, bytes]]:
 
 def _contains_private(value: Any) -> bool:
     if isinstance(value, Mapping):
-        return any(str(key).casefold() in _PRIVATE_KEYS or _contains_private(item) for key, item in value.items())
+        return any(
+            str(key).casefold() in _PRIVATE_KEYS or _contains_private(item)
+            for key, item in value.items()
+        )
     if isinstance(value, (list, tuple)):
         return any(_contains_private(item) for item in value)
     return False
@@ -162,7 +175,11 @@ def _task_score(value: Mapping[str, Any]) -> int:
         score += 3
     if candidate.get("measured_signals") or candidate.get("observed_outputs"):
         score += 3
-    if candidate.get("control_input") or candidate.get("control_inputs") or candidate.get("actuator"):
+    if (
+        candidate.get("control_input")
+        or candidate.get("control_inputs")
+        or candidate.get("actuator")
+    ):
         score += 3
     if candidate.get("task_type"):
         score += 1
@@ -170,7 +187,11 @@ def _task_score(value: Mapping[str, Any]) -> int:
 
 
 def _task_payload(documents: Iterable[Mapping[str, Any]]) -> Mapping[str, Any]:
-    candidates = sorted((item for document in documents for item in _walk(document)), key=_task_score, reverse=True)
+    candidates = sorted(
+        (item for document in documents for item in _walk(document)),
+        key=_task_score,
+        reverse=True,
+    )
     if not candidates or _task_score(candidates[0]) < 9:
         raise ValueError("v3_import_public_task_not_found")
     value = candidates[0]
@@ -182,10 +203,16 @@ def _diagnostics(documents: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     snapshots: list[list[Mapping[str, Any]]] = []
     for document in documents:
         for item in _walk(document):
-            raw = item.get("entries") if isinstance(item.get("entries"), list) else item.get("diagnostic_ledger")
+            raw = (
+                item.get("entries")
+                if isinstance(item.get("entries"), list)
+                else item.get("diagnostic_ledger")
+            )
             if isinstance(raw, Mapping):
                 raw = raw.get("entries")
-            if isinstance(raw, list) and {str(entry.get("id")) for entry in raw if isinstance(entry, Mapping)} == set(DIAGNOSTIC_IDS):
+            if isinstance(raw, list) and {
+                str(entry.get("id")) for entry in raw if isinstance(entry, Mapping)
+            } == set(DIAGNOSTIC_IDS):
                 snapshots.append([entry for entry in raw if isinstance(entry, Mapping)])
     if not snapshots:
         return {}
@@ -204,13 +231,17 @@ def _diagnostics(documents: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             "evidence": evidence,
             "confidence": float(item.get("confidence") or 0.0),
             "blocking_for_current_route": status != "known",
-            "next_resolving_action": item.get("next_resolving_action") if status != "known" else None,
+            "next_resolving_action": item.get("next_resolving_action")
+            if status != "known"
+            else None,
             "valid_region": item.get("valid_region"),
         }
     return result
 
 
-def _classify_candidates(documents: Iterable[Mapping[str, Any]]) -> dict[str, tuple[Mapping[str, Any], ...]]:
+def _classify_candidates(
+    documents: Iterable[Mapping[str, Any]],
+) -> dict[str, tuple[Mapping[str, Any], ...]]:
     buckets: dict[str, list[Mapping[str, Any]]] = {
         "protocol": [],
         "evidence": [],
@@ -225,13 +256,26 @@ def _classify_candidates(documents: Iterable[Mapping[str, Any]]) -> dict[str, tu
         for value in _walk(document):
             kinds: list[str] = []
             keys = set(value)
-            if "protocol_fingerprint" in keys and {"segments", "sample_period_s"} <= keys:
+            if (
+                "protocol_fingerprint" in keys
+                and {"segments", "sample_period_s"} <= keys
+            ):
                 kinds.append("protocol")
-            if "trace_fingerprint" in keys or ("evidence_id" in keys and ("trace" in keys or "protocol_fingerprint" in keys)):
+            if "trace_fingerprint" in keys or (
+                "evidence_id" in keys
+                and ("trace" in keys or "protocol_fingerprint" in keys)
+            ):
                 kinds.append("evidence")
-            if "feature_artifact_fingerprint" in keys or "artifact_fingerprint" in keys and "features" in keys or "feature_ledger" in keys:
+            if (
+                "feature_artifact_fingerprint" in keys
+                or "artifact_fingerprint" in keys
+                and "features" in keys
+                or "feature_ledger" in keys
+            ):
                 kinds.append("features")
-            if "route_id" in keys and ("profile_id" in keys or "controller_contract_id" in keys):
+            if "route_id" in keys and (
+                "profile_id" in keys or "controller_contract_id" in keys
+            ):
                 kinds.append("route")
             if "ir_version" in keys and "family" in keys or "controller_ir" in keys:
                 kinds.append("controller")
@@ -247,7 +291,9 @@ def _classify_candidates(documents: Iterable[Mapping[str, Any]]) -> dict[str, tu
     return {key: tuple(values) for key, values in buckets.items()}
 
 
-def _verify_declared_file_hashes(documents: Iterable[Mapping[str, Any]], receipts: Mapping[str, str]) -> None:
+def _verify_declared_file_hashes(
+    documents: Iterable[Mapping[str, Any]], receipts: Mapping[str, str]
+) -> None:
     for document in documents:
         for value in _walk(document):
             declared = value.get("files") or value.get("artifacts")
@@ -262,7 +308,9 @@ def _verify_declared_file_hashes(documents: Iterable[Mapping[str, Any]], receipt
                     continue
                 relative = _safe_member(str(path))
                 if relative not in receipts or receipts[relative] != str(digest):
-                    raise ValueError(f"v3_import_declared_file_hash_mismatch: {relative}")
+                    raise ValueError(
+                        f"v3_import_declared_file_hash_mismatch: {relative}"
+                    )
 
 
 def _verify_v3_event_chain(documents: Iterable[Mapping[str, Any]]) -> bool:
@@ -280,15 +328,25 @@ def _verify_v3_event_chain(documents: Iterable[Mapping[str, Any]]) -> bool:
                 if not isinstance(event, Mapping) or event.get("event_id") in seen_ids:
                     raise ValueError("v3_import_event_chain_invalid")
                 seen_ids.add(str(event.get("event_id")))
-                if event.get("from_state") != previous_state or event.get("previous_event_fingerprint") != previous_fingerprint:
+                if (
+                    event.get("from_state") != previous_state
+                    or event.get("previous_event_fingerprint") != previous_fingerprint
+                ):
                     raise ValueError("v3_import_event_chain_invalid")
                 payload = event.get("sanitized_payload")
                 if event.get("payload_fingerprint") != fingerprint(payload):
                     raise ValueError("v3_import_event_payload_fingerprint_mismatch")
                 core_keys = (
-                    "event_id", "event_type", "source", "occurred_at", "recorded_at",
-                    "from_state", "to_state", "payload_fingerprint",
-                    "previous_event_fingerprint", "sanitized_payload",
+                    "event_id",
+                    "event_type",
+                    "source",
+                    "occurred_at",
+                    "recorded_at",
+                    "from_state",
+                    "to_state",
+                    "payload_fingerprint",
+                    "previous_event_fingerprint",
+                    "sanitized_payload",
                 )
                 if any(key not in event for key in core_keys):
                     raise ValueError("v3_import_event_chain_invalid")
@@ -297,7 +355,10 @@ def _verify_v3_event_chain(documents: Iterable[Mapping[str, Any]]) -> bool:
                     raise ValueError("v3_import_event_fingerprint_mismatch")
                 previous_fingerprint = str(event["event_fingerprint"])
                 previous_state = event.get("to_state")
-            if value.get("workflow_state") is not None and value.get("workflow_state") != previous_state:
+            if (
+                value.get("workflow_state") is not None
+                and value.get("workflow_state") != previous_state
+            ):
                 raise ValueError("v3_import_event_chain_head_mismatch")
     return found
 
@@ -324,7 +385,9 @@ def inspect_v3_source(source: str | Path) -> ImportInspection:
         if isinstance(value, Mapping):
             documents.append(value)
             if _contains_private(value):
-                discarded.append({"source": name, "reason": "private_or_hidden_fields_not_imported"})
+                discarded.append(
+                    {"source": name, "reason": "private_or_hidden_fields_not_imported"}
+                )
     if not documents:
         raise ValueError("v3_import_json_artifact_not_found")
     _verify_declared_file_hashes(documents, receipts)
@@ -338,7 +401,10 @@ def inspect_v3_source(source: str | Path) -> ImportInspection:
         {"check": "path_safety", "status": "passed"},
         {"check": "source_hashes", "status": "passed"},
         {"check": "json_parse", "status": "passed"},
-        {"check": "event_chain", "status": "passed" if event_chain_found else "not_present"},
+        {
+            "check": "event_chain",
+            "status": "passed" if event_chain_found else "not_present",
+        },
         {"check": "private_truth_filter", "status": "passed"},
     )
     file_receipts = tuple(
@@ -371,7 +437,10 @@ def build_import_report(
         "session_id": session_id,
         "recorded_at": utc_now(),
         "accepted": [dict(item) for item in accepted],
-        "discarded": [*inspection.public_summary()["discarded"], *(dict(item) for item in discarded)],
+        "discarded": [
+            *inspection.public_summary()["discarded"],
+            *(dict(item) for item in discarded),
+        ],
         "resumed_stage": resumed_stage,
         "source_modified": False,
         "old_execution_authority_imported": False,

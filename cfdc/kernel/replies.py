@@ -109,7 +109,9 @@ def build_kernel_input_contract(
 ) -> dict[str, Any]:
     """Build the action-specific input contract rendered by WebUI."""
 
-    pending_values = pending_actions if pending_actions is not None else session.pending_actions
+    pending_values = (
+        pending_actions if pending_actions is not None else session.pending_actions
+    )
     pending = (
         dict(pending_values[0])
         if isinstance(pending_values, (list, tuple)) and pending_values
@@ -414,7 +416,9 @@ def _diagnostic_updates(payload: Mapping[str, Any]) -> dict[str, dict[str, Any]]
     return result
 
 
-def _parameter_candidates(payload: Mapping[str, Any], source_text: str) -> list[dict[str, Any]]:
+def _parameter_candidates(
+    payload: Mapping[str, Any], source_text: str
+) -> list[dict[str, Any]]:
     normalized = _unwrap_modeling_payload(payload)
     raw = normalized.get("parameter_candidates", normalized.get("parameters", []))
     if raw is None:
@@ -430,7 +434,9 @@ def _parameter_candidates(payload: Mapping[str, Any], source_text: str) -> list[
         fact_id = str(value.get("fact_id") or value.get("parameter_id") or "").strip()
         if fact_id not in _PARAMETER_FACT_IDS:
             raise ValueError(f"未知或不允许的参数字段：{fact_id or '空字段'}")
-        source_excerpt = str(value.get("source_text") or value.get("source_excerpt") or "").strip()
+        source_excerpt = str(
+            value.get("source_text") or value.get("source_excerpt") or ""
+        ).strip()
         if not _contains_verbatim(source_text, source_excerpt):
             raise ValueError(f"参数 {fact_id} 的 source_text 不在用户原文中。")
         if "value" not in value:
@@ -484,13 +490,22 @@ def _candidate_parts(
     parameter_keys = {"parameter_candidates", "parameters"}
     has_diagnostics = bool(
         {str(key) for key in payload}
-        & ({*DIAGNOSTIC_IDS, *_DIAGNOSTIC_ALIASES.keys(), "diagnostic_updates", "diagnosis"})
+        & (
+            {
+                *DIAGNOSTIC_IDS,
+                *_DIAGNOSTIC_ALIASES.keys(),
+                "diagnostic_updates",
+                "diagnosis",
+            }
+        )
     )
     if has_diagnostics:
         diagnostic_payload: Mapping[str, Any] = payload
         if "diagnostic_updates" not in payload and "diagnosis" not in payload:
             diagnostic_payload = {
-                key: value for key, value in payload.items() if key not in parameter_keys
+                key: value
+                for key, value in payload.items()
+                if key not in parameter_keys
             }
         updates = _diagnostic_updates(diagnostic_payload)
     else:
@@ -536,7 +551,9 @@ def prepare_kernel_reply(
     contract = build_kernel_input_contract(session, pending_actions=pending_actions)
     action = contract.get("action")
     if not action:
-        raise ValueError(str(contract.get("disabled_reason") or "当前没有可提交的动作。"))
+        raise ValueError(
+            str(contract.get("disabled_reason") or "当前没有可提交的动作。")
+        )
     if action == "confirm_task":
         if str(text or "").strip():
             raise ValueError("确认动作不需要输入内容，请直接确认软件试验边界与预算。")
@@ -584,9 +601,7 @@ def prepare_kernel_reply(
                 if not _evidence_in_source(source_text, value):
                     raise ValueError("诊断 evidence 必须出现在提交的 JSON 原文中。")
             if not updates and not parameters:
-                raise ValueError(
-                    "没有提交可验证的诊断或参数事实，请填写允许的字段。"
-                )
+                raise ValueError("没有提交可验证的诊断或参数事实，请填写允许的字段。")
             return {
                 "action": action,
                 "input_mode": selected_mode.value,
@@ -681,7 +696,9 @@ def prepare_kernel_reply(
     )
     diagnosis_payload = _normalize_agent_payload(diagnosis_record, AgentRole.DIAGNOSIS)
     modeling_payload = _normalize_agent_payload(modeling_record, AgentRole.MODELING)
-    conflicts = _conflict_messages(diagnosis_payload) + _conflict_messages(modeling_payload)
+    conflicts = _conflict_messages(diagnosis_payload) + _conflict_messages(
+        modeling_payload
+    )
     if conflicts:
         raise ValueError("检测到矛盾信息，请先澄清：" + "；".join(conflicts[:4]))
     if coordinator.agent_mode == "single":

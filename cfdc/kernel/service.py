@@ -84,12 +84,23 @@ class WorkflowService:
         agent_config: Mapping[str, Any] | None = None,
         rag_snapshot: str | None = None,
     ) -> EvidenceSession:
-        task = payload if isinstance(payload, TaskContract) else TaskContract.from_user_input(payload)
+        task = (
+            payload
+            if isinstance(payload, TaskContract)
+            else TaskContract.from_user_input(payload)
+        )
         if agent_config is not None:
             configured_mode = agent_config.get("mode")
-            if configured_mode is not None and str(configured_mode) not in {"single", "multi"}:
+            if configured_mode is not None and str(configured_mode) not in {
+                "single",
+                "multi",
+            }:
                 raise ValueError("agent_mode_must_be_single_or_multi")
-            if agent_config.get("rag_enabled") is True and agent_config.get("rag_index_dir") and not rag_snapshot:
+            if (
+                agent_config.get("rag_enabled") is True
+                and agent_config.get("rag_index_dir")
+                and not rag_snapshot
+            ):
                 # The UI/CLI resolves and pins a snapshot before calling this
                 # entry point.  Requiring that pin prevents a session from
                 # silently switching CURRENT halfway through a run.
@@ -110,10 +121,14 @@ class WorkflowService:
                     },
                 )
             ),
-            agent_config=deepcopy(dict(agent_config)) if agent_config is not None else None,
+            agent_config=deepcopy(dict(agent_config))
+            if agent_config is not None
+            else None,
             rag_snapshot=rag_snapshot,
         )
-        session = self._append(session, "task_started", "start", {"task_fingerprint": task.fingerprint})
+        session = self._append(
+            session, "task_started", "start", {"task_fingerprint": task.fingerprint}
+        )
         return self._save(session)
 
     def create_task(
@@ -173,13 +188,35 @@ class WorkflowService:
         if budgets is not None:
             merged = dict(task.budgets)
             merged.update(dict(budgets))
-            if task.budget_confirmed and merged != dict(task.budgets) and _execution_started(session):
+            if (
+                task.budget_confirmed
+                and merged != dict(task.budgets)
+                and _execution_started(session)
+            ):
                 raise ValueError("task_budget_immutable_after_execution")
-            task = TaskContract.from_user_input({**task.to_dict(include_fingerprint=False), "budgets": merged, "budget_confirmed": True})
+            task = TaskContract.from_user_input(
+                {
+                    **task.to_dict(include_fingerprint=False),
+                    "budgets": merged,
+                    "budget_confirmed": True,
+                }
+            )
         elif not task.budget_confirmed:
             task = replace(task, budget_confirmed=True)
-        updated = self._replace(session, task=task, status="diagnostic", pending_actions=({"kind": "diagnostic", "action": "submit_answer"},))
-        return self._save(self._append(updated, "task_boundaries_confirmed", action_id, {"task_fingerprint": task.fingerprint, "budgets": dict(task.budgets)}))
+        updated = self._replace(
+            session,
+            task=task,
+            status="diagnostic",
+            pending_actions=({"kind": "diagnostic", "action": "submit_answer"},),
+        )
+        return self._save(
+            self._append(
+                updated,
+                "task_boundaries_confirmed",
+                action_id,
+                {"task_fingerprint": task.fingerprint, "budgets": dict(task.budgets)},
+            )
+        )
 
     def submit_answer(
         self,
@@ -244,7 +281,14 @@ class WorkflowService:
                 phase_results=(),
                 provider=None,
             )
-        return self._save(self._append(updated, "diagnostic_answered", action_id, {"dimensions": sorted(updates)}))
+        return self._save(
+            self._append(
+                updated,
+                "diagnostic_answered",
+                action_id,
+                {"dimensions": sorted(updates)},
+            )
+        )
 
     def submit_reply(
         self,
@@ -306,17 +350,35 @@ class WorkflowService:
             if not evidence_values or not all(
                 _contains_verbatim_text(source, item) for item in evidence_values
             ):
-                raise ValueError(f"diagnostic evidence for {key} is not in the user reply")
+                raise ValueError(
+                    f"diagnostic evidence for {key} is not in the user reply"
+                )
             previous = session.ledger.entry(key)
             if previous.status == "known":
                 if status == "unknown":
-                    raise ValueError(f"diagnostic_conflict_requires_clarification: {key}")
+                    raise ValueError(
+                        f"diagnostic_conflict_requires_clarification: {key}"
+                    )
                 previous_assessment = str(previous.assessment or "").strip().casefold()
-                current_assessment = str(value.get("assessment") or "").strip().casefold()
-                if previous_assessment and current_assessment and previous_assessment != current_assessment:
-                    raise ValueError(f"diagnostic_conflict_requires_clarification: {key}")
-                if previous.value is not None and value.get("value") is not None and previous.value != value.get("value"):
-                    raise ValueError(f"diagnostic_conflict_requires_clarification: {key}")
+                current_assessment = (
+                    str(value.get("assessment") or "").strip().casefold()
+                )
+                if (
+                    previous_assessment
+                    and current_assessment
+                    and previous_assessment != current_assessment
+                ):
+                    raise ValueError(
+                        f"diagnostic_conflict_requires_clarification: {key}"
+                    )
+                if (
+                    previous.value is not None
+                    and value.get("value") is not None
+                    and previous.value != value.get("value")
+                ):
+                    raise ValueError(
+                        f"diagnostic_conflict_requires_clarification: {key}"
+                    )
                 if previous_assessment and not current_assessment:
                     value["assessment"] = previous.assessment
                 if previous.value is not None and value.get("value") is None:
@@ -340,10 +402,16 @@ class WorkflowService:
                 previous.get("value") != item.get("value")
                 or previous.get("unit") != item.get("unit")
             ):
-                raise ValueError(f"parameter_conflict_requires_clarification: {fact_id}")
+                raise ValueError(
+                    f"parameter_conflict_requires_clarification: {fact_id}"
+                )
             existing_by_id[fact_id] = item
 
-        ledger = session.ledger.update(updates, source="human_operator") if updates else session.ledger
+        ledger = (
+            session.ledger.update(updates, source="human_operator")
+            if updates
+            else session.ledger
+        )
         readiness = ledger.readiness()
         pending = (
             ({"kind": "route", "action": "advance"},)
@@ -370,14 +438,18 @@ class WorkflowService:
             )
         records = _sanitize_reply_agent_records(agent_records)
         if records:
-            updated = self._replace(updated, agent_records=(*session.agent_records, *records))
+            updated = self._replace(
+                updated, agent_records=(*session.agent_records, *records)
+            )
         event_payload = {
             "input_mode": input_mode,
             "diagnostic_ids": sorted(updates),
             "parameter_ids": sorted(item["fact_id"] for item in normalized_parameters),
             "source_text": source,
         }
-        return self._save(self._append(updated, "user_reply_recorded", action_id, event_payload))
+        return self._save(
+            self._append(updated, "user_reply_recorded", action_id, event_payload)
+        )
 
     def apply_task_relevance(
         self,
@@ -409,7 +481,14 @@ class WorkflowService:
                 phase_results=(),
                 provider=None,
             )
-        return self._save(self._append(updated, "diagnostic_relevance_applied", action_id, {"dimensions": sorted(declarations)}))
+        return self._save(
+            self._append(
+                updated,
+                "diagnostic_relevance_applied",
+                action_id,
+                {"dimensions": sorted(declarations)},
+            )
+        )
 
     def submit_evidence(
         self,
@@ -426,12 +505,18 @@ class WorkflowService:
         self._check_not_frozen(session)
         self._check_elapsed_budget(session)
         payload = _validate_public_evidence(evidence)
-        if session.task.task_semantics_version == P1_1_TASK_SEMANTICS_VERSION and payload.get("kind") == "experiment":
+        if (
+            session.task.task_semantics_version == P1_1_TASK_SEMANTICS_VERSION
+            and payload.get("kind") == "experiment"
+        ):
             if not isinstance(payload.get("trace"), Mapping):
                 raise ValueError("public_trace_required_for_v3_task")
             if not payload.get("trial_id"):
                 raise ValueError("trial_id_required_for_v3_task")
-        if any(item.get("evidence_id") == payload["evidence_id"] for item in session.evidence):
+        if any(
+            item.get("evidence_id") == payload["evidence_id"]
+            for item in session.evidence
+        ):
             raise ValueError("evidence_already_submitted")
         budget = int(session.task.budgets.get("distinct_experiments", 4))
         used_ids = {
@@ -440,7 +525,9 @@ class WorkflowService:
             if item.get("kind") == "experiment" and item.get("protocol_fingerprint")
         }
         protocol_id = str(payload.get("protocol_fingerprint") or payload["evidence_id"])
-        excitation_limit = float(session.task.budgets.get("cumulative_excitation_time_s", 1800.0))
+        excitation_limit = float(
+            session.task.budgets.get("cumulative_excitation_time_s", 1800.0)
+        )
         used_excitation = sum(_evidence_duration(item) for item in session.evidence)
         prospective_excitation = used_excitation + _evidence_duration(payload)
         if (
@@ -450,23 +537,45 @@ class WorkflowService:
             updated = self._replace(
                 session,
                 status="capability_gap",
-                pending_actions=({"kind": "budget", "reason": "cumulative_excitation_budget_exhausted"},),
+                pending_actions=(
+                    {
+                        "kind": "budget",
+                        "reason": "cumulative_excitation_budget_exhausted",
+                    },
+                ),
             )
             return self._save(
                 self._append(
                     updated,
                     "cumulative_excitation_budget_exhausted",
                     action_id,
-                    {"limit": excitation_limit, "used": used_excitation, "prospective": prospective_excitation},
+                    {
+                        "limit": excitation_limit,
+                        "used": used_excitation,
+                        "prospective": prospective_excitation,
+                    },
                 )
             )
-        if payload.get("kind") == "experiment" and protocol_id not in used_ids and len(used_ids) >= budget:
+        if (
+            payload.get("kind") == "experiment"
+            and protocol_id not in used_ids
+            and len(used_ids) >= budget
+        ):
             updated = self._replace(
                 session,
                 status="capability_gap",
-                pending_actions=({"kind": "budget", "reason": "experiment_budget_exhausted"},),
+                pending_actions=(
+                    {"kind": "budget", "reason": "experiment_budget_exhausted"},
+                ),
             )
-            return self._save(self._append(updated, "experiment_budget_exhausted", action_id, {"budget": budget, "used": len(used_ids)}))
+            return self._save(
+                self._append(
+                    updated,
+                    "experiment_budget_exhausted",
+                    action_id,
+                    {"budget": budget, "used": len(used_ids)},
+                )
+            )
         updated = self._replace(
             session,
             status="route_ready" if session.route is not None else "awaiting_evidence",
@@ -477,7 +586,14 @@ class WorkflowService:
                 else ()
             ),
         )
-        return self._save(self._append(updated, "public_evidence_submitted", action_id, {"evidence_id": payload["evidence_id"], "kind": payload.get("kind")}))
+        return self._save(
+            self._append(
+                updated,
+                "public_evidence_submitted",
+                action_id,
+                {"evidence_id": payload["evidence_id"], "kind": payload.get("kind")},
+            )
+        )
 
     def submit_measurement(self, session_id: str, **kwargs: Any) -> EvidenceSession:
         """Name-compatible entry point for UI/CLI measurement submissions."""
@@ -509,7 +625,9 @@ class WorkflowService:
         if session.route.get("capability_gap"):
             raise ValueError(f"route_capability_gap: {session.route['capability_gap']}")
         provider = provider_registry.get(provider_id)
-        operation_id = str(operation.get("operation") or operation.get("primitive") or "")
+        operation_id = str(
+            operation.get("operation") or operation.get("primitive") or ""
+        )
         if not operation_id:
             raise ValueError("experiment_operation_required")
         if provider.capabilities and operation_id not in provider.capabilities:
@@ -540,9 +658,20 @@ class WorkflowService:
                 experiment_failures=failures,
                 status="capability_gap" if exhausted else "awaiting_evidence",
                 pending_actions=(
-                    ({"kind": "budget", "reason": "same_experiment_failure_retry_budget_exhausted"},)
+                    (
+                        {
+                            "kind": "budget",
+                            "reason": "same_experiment_failure_retry_budget_exhausted",
+                        },
+                    )
                     if exhausted
-                    else ({"kind": "experiment", "action": "retry", "operation": operation_id},)
+                    else (
+                        {
+                            "kind": "experiment",
+                            "action": "retry",
+                            "operation": operation_id,
+                        },
+                    )
                 ),
             )
             self._save(
@@ -550,7 +679,12 @@ class WorkflowService:
                     updated,
                     "experiment_failed",
                     action_id,
-                    {"operation": operation_id, "provider_id": provider.provider_id, "error_type": type(exc).__name__, "retry_index": len(previous_failures) + 1},
+                    {
+                        "operation": operation_id,
+                        "provider_id": provider.provider_id,
+                        "error_type": type(exc).__name__,
+                        "retry_index": len(previous_failures) + 1,
+                    },
                 )
             )
             raise
@@ -585,7 +719,9 @@ class WorkflowService:
             )
         return current
 
-    def advance(self, session_id: str, *, action_id: str, revision: int) -> EvidenceSession:
+    def advance(
+        self, session_id: str, *, action_id: str, revision: int
+    ) -> EvidenceSession:
         session = self.read(session_id)
         if self._event_for_action(session, action_id) is not None:
             return session
@@ -607,9 +743,12 @@ class WorkflowService:
                 pending_actions=tuple(
                     {"kind": "diagnostic", "dimension_id": item, "action": "resolve"}
                     for item in readiness.required_dimensions_not_known
-                ) or ({"kind": "diagnostic", "action": "resolve"},),
+                )
+                or ({"kind": "diagnostic", "action": "resolve"},),
             )
-            return self._save(self._append(updated, "advance_blocked", action_id, readiness.to_dict()))
+            return self._save(
+                self._append(updated, "advance_blocked", action_id, readiness.to_dict())
+            )
         route = self._resolve_route(session.ledger)
         next_experiment = (
             None
@@ -623,7 +762,9 @@ class WorkflowService:
                 {
                     "kind": "experiment",
                     "action": "run_experiment",
-                    "operation": next_experiment["operation"] if next_experiment else None,
+                    "operation": next_experiment["operation"]
+                    if next_experiment
+                    else None,
                     "reason": next_experiment["reason"] if next_experiment else None,
                 },
             )
@@ -635,7 +776,14 @@ class WorkflowService:
             route_history=(*session.route_history, deepcopy(route)),
             pending_actions=pending,
         )
-        return self._save(self._append(updated, "route_resolved", action_id, {"route_id": route["route_id"], "profile_id": route["profile_id"]}))
+        return self._save(
+            self._append(
+                updated,
+                "route_resolved",
+                action_id,
+                {"route_id": route["route_id"], "profile_id": route["profile_id"]},
+            )
+        )
 
     def select_experiment(self, session_id: str) -> dict[str, Any]:
         """Select the next registered information action deterministically.
@@ -654,7 +802,9 @@ class WorkflowService:
     def _select_experiment_for_session(
         session: EvidenceSession, route: Mapping[str, Any]
     ) -> dict[str, Any]:
-        operations = tuple(str(item) for item in route.get("experiment_primitives", ()) or ())
+        operations = tuple(
+            str(item) for item in route.get("experiment_primitives", ()) or ()
+        )
         attempted = {
             str(item.get("operation"))
             for item in session.evidence
@@ -701,7 +851,9 @@ class WorkflowService:
         # ``features={feature_id: ...}`` call.  Keeping this adapter here means
         # WebUI, CLI and embedding callers all pass through the same
         # validation and fingerprint boundary.
-        if isinstance(features, Mapping) and isinstance(features.get("features"), Mapping):
+        if isinstance(features, Mapping) and isinstance(
+            features.get("features"), Mapping
+        ):
             wrapper = dict(features)
             supplied_artifact_fingerprint = wrapper.pop("artifact_fingerprint", None)
             if quality is None and isinstance(wrapper.get("quality"), Mapping):
@@ -732,10 +884,15 @@ class WorkflowService:
             key = str(feature_id).strip()
             if not key:
                 raise ValueError("feature_id_required")
-            if key not in ({item.feature_id for item in feature_definitions()} | set(known_feature_ids())):
+            if key not in (
+                {item.feature_id for item in feature_definitions()}
+                | set(known_feature_ids())
+            ):
                 raise ValueError(f"unknown_feature_id: {key}")
             item = dict(raw) if isinstance(raw, Mapping) else {"value": raw}
-            source_ids = tuple(str(value) for value in item.get("source_evidence_ids", ()) or ())
+            source_ids = tuple(
+                str(value) for value in item.get("source_evidence_ids", ()) or ()
+            )
             if not source_ids:
                 raise ValueError(f"feature_source_required: {key}")
             if source_ids and not set(source_ids) <= evidence_ids:
@@ -752,7 +909,9 @@ class WorkflowService:
                 "value": numeric,
                 "unit": str(item.get("unit") or ""),
                 "source_evidence_ids": list(source_ids),
-                "derivation": str(item.get("derivation") or "public_feature_extraction"),
+                "derivation": str(
+                    item.get("derivation") or "public_feature_extraction"
+                ),
             }
         # v1 expert payloads used ``time_constant`` while the v3 catalog names
         # the same task-band estimate ``dominant_time_constant``.  Preserve the
@@ -783,10 +942,17 @@ class WorkflowService:
             "required_feature_ids": sorted(required),
             "missing_feature_ids": missing,
             "quality": quality_value,
-            "evidence_fingerprints": [str(item.get("fingerprint")) for item in session.evidence],
-            "artifact_fingerprint": fingerprint({"features": normalized, "quality": quality_value}),
+            "evidence_fingerprints": [
+                str(item.get("fingerprint")) for item in session.evidence
+            ],
+            "artifact_fingerprint": fingerprint(
+                {"features": normalized, "quality": quality_value}
+            ),
         }
-        if supplied_artifact_fingerprint is not None and str(supplied_artifact_fingerprint) != artifact["artifact_fingerprint"]:
+        if (
+            supplied_artifact_fingerprint is not None
+            and str(supplied_artifact_fingerprint) != artifact["artifact_fingerprint"]
+        ):
             raise ValueError("feature_artifact_fingerprint_mismatch")
         updated = self._replace(
             session,
@@ -795,7 +961,17 @@ class WorkflowService:
             status=status,
             pending_actions=pending,
         )
-        return self._save(self._append(updated, "features_submitted", action_id, {"missing": missing, "quality_passed": bool(quality_value.get("passed", False))}))
+        return self._save(
+            self._append(
+                updated,
+                "features_submitted",
+                action_id,
+                {
+                    "missing": missing,
+                    "quality_passed": bool(quality_value.get("passed", False)),
+                },
+            )
+        )
 
     def submit_controller(
         self,
@@ -816,30 +992,64 @@ class WorkflowService:
             raise ValueError("route_not_resolved")
         if session.route.get("capability_gap"):
             raise ValueError(f"route_capability_gap: {session.route['capability_gap']}")
-        if session.feature_artifact is not None and session.feature_artifact.get("missing_feature_ids"):
+        if session.feature_artifact is not None and session.feature_artifact.get(
+            "missing_feature_ids"
+        ):
             raise ValueError("required_features_missing")
-        ir = controller if isinstance(controller, ControllerIR) else ControllerIR.from_mapping(controller)
+        ir = (
+            controller
+            if isinstance(controller, ControllerIR)
+            else ControllerIR.from_mapping(controller)
+        )
         validation = validate_controller_for_route(ir, session.route)
         if not set(session.task.measured_signals) <= set(ir.measured_signals):
             raise ValueError("controller_measured_signal_binding_mismatch")
-        required_inputs = set(session.task.control_inputs or (session.task.control_input,))
+        required_inputs = set(
+            session.task.control_inputs or (session.task.control_input,)
+        )
         if not required_inputs <= set(ir.control_inputs):
             raise ValueError("controller_control_input_binding_mismatch")
-        if session.task.input_min is not None and ir.output_bounds is not None and ir.output_bounds[0] < session.task.input_min:
+        if (
+            session.task.input_min is not None
+            and ir.output_bounds is not None
+            and ir.output_bounds[0] < session.task.input_min
+        ):
             raise ValueError("controller_output_bounds_exceed_task_bounds")
-        if session.task.input_max is not None and ir.output_bounds is not None and ir.output_bounds[1] > session.task.input_max:
+        if (
+            session.task.input_max is not None
+            and ir.output_bounds is not None
+            and ir.output_bounds[1] > session.task.input_max
+        ):
             raise ValueError("controller_output_bounds_exceed_task_bounds")
-        phase_plan = compile_phase_plan(session.task, session.route, controller=ir.to_dict(), phases=phases)
-        candidate = {"ir": ir.to_dict(), "validation": validation, "phase_plan": phase_plan.to_dict()}
+        phase_plan = compile_phase_plan(
+            session.task, session.route, controller=ir.to_dict(), phases=phases
+        )
+        candidate = {
+            "ir": ir.to_dict(),
+            "validation": validation,
+            "phase_plan": phase_plan.to_dict(),
+        }
         updated = self._replace(
             session,
             controller_candidate=candidate,
             controller_history=(*session.controller_history, deepcopy(candidate)),
             phase_plan=phase_plan.to_dict(),
             status="controller_candidate_ready",
-            pending_actions=({"kind": "qualification", "action": "qualify_controller"},),
+            pending_actions=(
+                {"kind": "qualification", "action": "qualify_controller"},
+            ),
         )
-        return self._save(self._append(updated, "controller_candidate_submitted", action_id, {"controller_fingerprint": ir.fingerprint, "phase_plan_fingerprint": phase_plan.fingerprint}))
+        return self._save(
+            self._append(
+                updated,
+                "controller_candidate_submitted",
+                action_id,
+                {
+                    "controller_fingerprint": ir.fingerprint,
+                    "phase_plan_fingerprint": phase_plan.fingerprint,
+                },
+            )
+        )
 
     def set_provider(
         self,
@@ -854,11 +1064,17 @@ class WorkflowService:
             return session
         self._check_mutable(session, revision)
         self._check_not_frozen(session)
-        if not isinstance(provider, Mapping) or not provider.get("provider_id") or not str(provider.get("provider_version") or "").strip():
+        if (
+            not isinstance(provider, Mapping)
+            or not provider.get("provider_id")
+            or not str(provider.get("provider_version") or "").strip()
+        ):
             raise ValueError("provider_contract_required")
         provider_public = dict(provider)
         provider_public.pop("private_truth", None)
-        if provider.get("private_truth") is True or _contains_private_marker(provider_public):
+        if provider.get("private_truth") is True or _contains_private_marker(
+            provider_public
+        ):
             raise ValueError("private_provider_not_allowed")
         capabilities = provider.get("capabilities", ())
         if not isinstance(capabilities, (list, tuple, set, frozenset)):
@@ -867,13 +1083,25 @@ class WorkflowService:
         if binding_role not in {"identification", "evaluation"}:
             raise ValueError("provider_binding_role_invalid")
         provider_public["binding_role"] = binding_role
-        bindings = {**session.provider_bindings, binding_role: deepcopy(provider_public)}
+        bindings = {
+            **session.provider_bindings,
+            binding_role: deepcopy(provider_public),
+        }
         updated = self._replace(
             session,
-            provider=deepcopy(provider_public) if binding_role == "identification" else session.provider,
+            provider=deepcopy(provider_public)
+            if binding_role == "identification"
+            else session.provider,
             provider_bindings=bindings,
         )
-        return self._save(self._append(updated, "provider_bound", action_id, {"provider_id": provider["provider_id"], "binding_role": binding_role}))
+        return self._save(
+            self._append(
+                updated,
+                "provider_bound",
+                action_id,
+                {"provider_id": provider["provider_id"], "binding_role": binding_role},
+            )
+        )
 
     def compile_protocol(
         self,
@@ -910,10 +1138,22 @@ class WorkflowService:
             pending_actions=(
                 ({"kind": "provider_run", "action": "run_provider"},)
                 if software_provider
-                else ({"kind": "operator_handoff", "action": "prepare_operator_handoff"},)
+                else (
+                    {"kind": "operator_handoff", "action": "prepare_operator_handoff"},
+                )
             ),
         )
-        return self._save(self._append(updated, "experiment_protocol_compiled", action_id, {"protocol_fingerprint": protocol["protocol_fingerprint"], "operation": protocol["operation"]}))
+        return self._save(
+            self._append(
+                updated,
+                "experiment_protocol_compiled",
+                action_id,
+                {
+                    "protocol_fingerprint": protocol["protocol_fingerprint"],
+                    "operation": protocol["operation"],
+                },
+            )
+        )
 
     def run_provider(
         self,
@@ -934,7 +1174,11 @@ class WorkflowService:
         self._check_elapsed_budget(session)
         if not session.task.budget_confirmed:
             raise ValueError("task_boundary_confirmation_required")
-        if session.route is None or not session.protocols or not session.active_protocol_fingerprint:
+        if (
+            session.route is None
+            or not session.protocols
+            or not session.active_protocol_fingerprint
+        ):
             raise ValueError("route_and_compiled_protocol_required")
         binding = session.provider_bindings.get("identification") or session.provider
         if not isinstance(binding, Mapping):
@@ -959,7 +1203,9 @@ class WorkflowService:
         if verified["protocol_fingerprint"] != session.active_protocol_fingerprint:
             raise ValueError("active_protocol_fingerprint_mismatch")
         declared_capabilities = sorted(str(item) for item in provider.capabilities)
-        if fingerprint(declared_capabilities) != protocol.get("provider_capabilities_fingerprint"):
+        if fingerprint(declared_capabilities) != protocol.get(
+            "provider_capabilities_fingerprint"
+        ):
             raise ValueError("provider_capabilities_changed_after_protocol_compile")
         try:
             result = provider.execute(verified, task=session.task.to_dict())
@@ -975,7 +1221,13 @@ class WorkflowService:
                 session,
                 experiment_failures=(*session.experiment_failures, failure),
                 status="awaiting_evidence",
-                pending_actions=({"kind": "provider_run", "action": "run_provider", "reason": "provider_failed"},),
+                pending_actions=(
+                    {
+                        "kind": "provider_run",
+                        "action": "run_provider",
+                        "reason": "provider_failed",
+                    },
+                ),
             )
             self._save(self._append(updated, "provider_run_failed", action_id, failure))
             raise
@@ -984,7 +1236,10 @@ class WorkflowService:
             raise ValueError("experiment_provider_must_return_public_trace")
         if len(traces) != int(protocol["repeats"]):
             raise ValueError("provider_repeat_count_mismatch")
-        if any(item.protocol_fingerprint != protocol["protocol_fingerprint"] for item in traces):
+        if any(
+            item.protocol_fingerprint != protocol["protocol_fingerprint"]
+            for item in traces
+        ):
             raise ValueError("provider_trace_protocol_binding_mismatch")
         if len({item.trial_id for item in traces}) != len(traces):
             raise ValueError("provider_trial_id_duplicate")
@@ -1018,8 +1273,18 @@ class WorkflowService:
         self._check_mutable(session, revision)
         if not session.protocols or not session.active_protocol_fingerprint:
             raise ValueError("compiled_protocol_required")
-        protocol = next(item for item in reversed(session.protocols) if item.get("protocol_fingerprint") == session.active_protocol_fingerprint)
-        artifact_dir = Path(output_dir) if output_dir is not None else self.root / f"{session.session_id}.artifacts" / protocol["protocol_fingerprint"][:12]
+        protocol = next(
+            item
+            for item in reversed(session.protocols)
+            if item.get("protocol_fingerprint") == session.active_protocol_fingerprint
+        )
+        artifact_dir = (
+            Path(output_dir)
+            if output_dir is not None
+            else self.root
+            / f"{session.session_id}.artifacts"
+            / protocol["protocol_fingerprint"][:12]
+        )
         result = build_operator_handoff(
             session_id=session.session_id,
             task=session.task.to_dict(),
@@ -1037,9 +1302,21 @@ class WorkflowService:
             session,
             operator_handoffs=(*session.operator_handoffs, record),
             status="awaiting_operator_report",
-            pending_actions=({"kind": "operator_report", "action": "record_operator_report"},),
+            pending_actions=(
+                {"kind": "operator_report", "action": "record_operator_report"},
+            ),
         )
-        return self._save(self._append(updated, "operator_handoff_prepared", action_id, {"handoff_fingerprint": record["handoff_fingerprint"], "protocol_fingerprint": protocol["protocol_fingerprint"]}))
+        return self._save(
+            self._append(
+                updated,
+                "operator_handoff_prepared",
+                action_id,
+                {
+                    "handoff_fingerprint": record["handoff_fingerprint"],
+                    "protocol_fingerprint": protocol["protocol_fingerprint"],
+                },
+            )
+        )
 
     def record_operator_report(
         self,
@@ -1062,12 +1339,39 @@ class WorkflowService:
             pending = ({"kind": "upload", "action": "ingest_upload"},)
         elif decision == "needs_clarification":
             status = "awaiting_operator_report"
-            pending = ({"kind": "operator_report", "action": "record_operator_report", "reason": "operator_requested_clarification"},)
+            pending = (
+                {
+                    "kind": "operator_report",
+                    "action": "record_operator_report",
+                    "reason": "operator_requested_clarification",
+                },
+            )
         else:
             status = "awaiting_provider"
-            pending = ({"kind": "provider", "action": "set_provider", "reason": "operator_refused_protocol"},)
-        updated = self._replace(session, operator_reports=(*session.operator_reports, normalized), status=status, pending_actions=pending)
-        return self._save(self._append(updated, "operator_report_recorded", action_id, {"decision": decision, "report_fingerprint": normalized["report_fingerprint"]}))
+            pending = (
+                {
+                    "kind": "provider",
+                    "action": "set_provider",
+                    "reason": "operator_refused_protocol",
+                },
+            )
+        updated = self._replace(
+            session,
+            operator_reports=(*session.operator_reports, normalized),
+            status=status,
+            pending_actions=pending,
+        )
+        return self._save(
+            self._append(
+                updated,
+                "operator_report_recorded",
+                action_id,
+                {
+                    "decision": decision,
+                    "report_fingerprint": normalized["report_fingerprint"],
+                },
+            )
+        )
 
     def ingest_upload(
         self,
@@ -1085,7 +1389,11 @@ class WorkflowService:
         self._check_not_frozen(session)
         if not session.protocols or not session.active_protocol_fingerprint:
             raise ValueError("compiled_protocol_required")
-        protocol = next(item for item in reversed(session.protocols) if item.get("protocol_fingerprint") == session.active_protocol_fingerprint)
+        protocol = next(
+            item
+            for item in reversed(session.protocols)
+            if item.get("protocol_fingerprint") == session.active_protocol_fingerprint
+        )
         report = session.operator_reports[-1] if session.operator_reports else None
         result = inspect_upload(
             [Path(item) for item in paths],
@@ -1100,9 +1408,30 @@ class WorkflowService:
                 session,
                 upload_attempts=(*session.upload_attempts, audit),
                 status="awaiting_evidence",
-                pending_actions=({"kind": "upload", "action": "ingest_upload", "failed_gate": audit["failed_gate"], "redo": next(item["redo"] for item in audit["gates"] if item["id"] == audit["failed_gate"])},),
+                pending_actions=(
+                    {
+                        "kind": "upload",
+                        "action": "ingest_upload",
+                        "failed_gate": audit["failed_gate"],
+                        "redo": next(
+                            item["redo"]
+                            for item in audit["gates"]
+                            if item["id"] == audit["failed_gate"]
+                        ),
+                    },
+                ),
             )
-            return self._save(self._append(updated, "upload_rejected", action_id, {"upload_fingerprint": audit["upload_fingerprint"], "failed_gate": audit["failed_gate"]}))
+            return self._save(
+                self._append(
+                    updated,
+                    "upload_rejected",
+                    action_id,
+                    {
+                        "upload_fingerprint": audit["upload_fingerprint"],
+                        "failed_gate": audit["failed_gate"],
+                    },
+                )
+            )
         new_evidence = list(session.evidence)
         for trace_value in result["traces"]:
             trace = PublicTrace.from_mapping(trace_value)
@@ -1118,9 +1447,24 @@ class WorkflowService:
             status="route_ready",
             pending_actions=({"kind": "feature", "action": "derive_features"},),
         )
-        return self._save(self._append(updated, "upload_accepted", action_id, {"upload_fingerprint": audit["upload_fingerprint"], "evidence_ids": [item["evidence_id"] for item in new_evidence[len(session.evidence):]]}))
+        return self._save(
+            self._append(
+                updated,
+                "upload_accepted",
+                action_id,
+                {
+                    "upload_fingerprint": audit["upload_fingerprint"],
+                    "evidence_ids": [
+                        item["evidence_id"]
+                        for item in new_evidence[len(session.evidence) :]
+                    ],
+                },
+            )
+        )
 
-    def derive_features(self, session_id: str, *, action_id: str, revision: int) -> EvidenceSession:
+    def derive_features(
+        self, session_id: str, *, action_id: str, revision: int
+    ) -> EvidenceSession:
         session = self.read(session_id)
         if self._event_for_action(session, action_id) is not None:
             return session
@@ -1134,16 +1478,31 @@ class WorkflowService:
             session,
             feature_artifact=artifact,
             feature_history=(*session.feature_history, deepcopy(artifact)),
-            status="controller_pending" if passed and not missing else "awaiting_evidence",
+            status="controller_pending"
+            if passed and not missing
+            else "awaiting_evidence",
             pending_actions=(
                 ({"kind": "controller", "action": "synthesize_controller"},)
                 if passed and not missing
                 else ({"kind": "feature", "missing": missing},)
             ),
         )
-        return self._save(self._append(updated, "features_derived", action_id, {"artifact_fingerprint": artifact["artifact_fingerprint"], "missing": missing, "quality_passed": passed}))
+        return self._save(
+            self._append(
+                updated,
+                "features_derived",
+                action_id,
+                {
+                    "artifact_fingerprint": artifact["artifact_fingerprint"],
+                    "missing": missing,
+                    "quality_passed": passed,
+                },
+            )
+        )
 
-    def synthesize_controller(self, session_id: str, *, action_id: str, revision: int) -> EvidenceSession:
+    def synthesize_controller(
+        self, session_id: str, *, action_id: str, revision: int
+    ) -> EvidenceSession:
         session = self.read(session_id)
         if self._event_for_action(session, action_id) is not None:
             return session
@@ -1161,19 +1520,41 @@ class WorkflowService:
             revision=revision,
             controller=ir,
         )
-        candidate = {**dict(current.controller_candidate or {}), "synthesis_audit": synthesis_audit}
-        return self._save(self._replace(current, controller_candidate=candidate, controller_history=(*current.controller_history[:-1], deepcopy(candidate))))
+        candidate = {
+            **dict(current.controller_candidate or {}),
+            "synthesis_audit": synthesis_audit,
+        }
+        return self._save(
+            self._replace(
+                current,
+                controller_candidate=candidate,
+                controller_history=(
+                    *current.controller_history[:-1],
+                    deepcopy(candidate),
+                ),
+            )
+        )
 
-    def qualify_controller(self, session_id: str, *, action_id: str, revision: int) -> EvidenceSession:
+    def qualify_controller(
+        self, session_id: str, *, action_id: str, revision: int
+    ) -> EvidenceSession:
         session = self.read(session_id)
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
-        if session.controller_candidate is None or session.feature_artifact is None or session.route is None:
+        if (
+            session.controller_candidate is None
+            or session.feature_artifact is None
+            or session.route is None
+        ):
             raise ValueError("controller_candidate_and_features_required")
         if not session.protocols or not session.active_protocol_fingerprint:
             raise ValueError("compiled_protocol_required")
-        protocol = next(item for item in reversed(session.protocols) if item.get("protocol_fingerprint") == session.active_protocol_fingerprint)
+        protocol = next(
+            item
+            for item in reversed(session.protocols)
+            if item.get("protocol_fingerprint") == session.active_protocol_fingerprint
+        )
         ir = ControllerIR.from_mapping(session.controller_candidate["ir"])
         qualification = run_controller_qualification(
             ir,
@@ -1186,11 +1567,28 @@ class WorkflowService:
         updated = self._replace(
             session,
             controller_qualification=qualification,
-            qualification_history=(*session.qualification_history, deepcopy(qualification)),
+            qualification_history=(
+                *session.qualification_history,
+                deepcopy(qualification),
+            ),
             status="controller_qualified" if qualified else "capability_gap",
-            pending_actions=({"kind": "freeze", "action": "freeze_controller"},) if qualified else ({"kind": "qualification_gap", "reason": qualification["reasons"]},),
+            pending_actions=({"kind": "freeze", "action": "freeze_controller"},)
+            if qualified
+            else ({"kind": "qualification_gap", "reason": qualification["reasons"]},),
         )
-        return self._save(self._append(updated, "controller_qualification_recorded", action_id, {"status": qualification["status"], "qualification_fingerprint": qualification["qualification_fingerprint"]}))
+        return self._save(
+            self._append(
+                updated,
+                "controller_qualification_recorded",
+                action_id,
+                {
+                    "status": qualification["status"],
+                    "qualification_fingerprint": qualification[
+                        "qualification_fingerprint"
+                    ],
+                },
+            )
+        )
 
     def record_phase_result(
         self,
@@ -1243,11 +1641,19 @@ class WorkflowService:
         if "exit_condition_met" not in phase and "exit_passed" in phase:
             phase["exit_condition_met"] = phase["exit_passed"]
         if "success" not in phase and "status" in phase:
-            phase["success"] = str(phase["status"]).casefold() in {"completed", "passed", "success"}
+            phase["success"] = str(phase["status"]).casefold() in {
+                "completed",
+                "passed",
+                "success",
+            }
         required_fields = ("entry_condition_met", "exit_condition_met", "success")
-        missing_fields = [field_name for field_name in required_fields if field_name not in phase]
+        missing_fields = [
+            field_name for field_name in required_fields if field_name not in phase
+        ]
         if missing_fields:
-            raise ValueError("phase_result_fields_required: " + ", ".join(missing_fields))
+            raise ValueError(
+                "phase_result_fields_required: " + ", ".join(missing_fields)
+            )
         for field_name in (
             "entry_condition_met",
             "exit_condition_met",
@@ -1261,9 +1667,15 @@ class WorkflowService:
             if field_name in phase and not isinstance(phase[field_name], bool):
                 raise ValueError(f"phase_result_{field_name}_must_be_boolean")
         timeout = None
-        phase_spec = phases[next_index] if next_index < len(phases) and isinstance(phases[next_index], Mapping) else {}
+        phase_spec = (
+            phases[next_index]
+            if next_index < len(phases) and isinstance(phases[next_index], Mapping)
+            else {}
+        )
         try:
-            timeout = float(phase_spec.get("timeout_s", phase_spec.get("max_duration_s")))
+            timeout = float(
+                phase_spec.get("timeout_s", phase_spec.get("max_duration_s"))
+            )
         except (TypeError, ValueError):
             timeout = None
         duration = phase.get("duration_s", phase.get("elapsed_s"))
@@ -1272,10 +1684,16 @@ class WorkflowService:
                 duration_value = float(duration)
             except (TypeError, ValueError) as exc:
                 raise ValueError("phase_result_duration_invalid") from exc
-            if not math.isfinite(duration_value) or duration_value < 0 or (timeout is not None and duration_value > timeout + 1e-9):
+            if (
+                not math.isfinite(duration_value)
+                or duration_value < 0
+                or (timeout is not None and duration_value > timeout + 1e-9)
+            ):
                 raise ValueError("phase_result_timeout_exceeded")
             phase["duration_s"] = duration_value
-        phase["result_fingerprint"] = fingerprint({key: value for key, value in phase.items() if key != "result_fingerprint"})
+        phase["result_fingerprint"] = fingerprint(
+            {key: value for key, value in phase.items() if key != "result_fingerprint"}
+        )
         failures = bool(
             phase.get("safety_failure")
             or phase.get("stopped_on_limit")
@@ -1290,14 +1708,41 @@ class WorkflowService:
         updated = self._replace(
             session,
             phase_results=phase_results,
-            status="capability_gap" if failures else ("phase_executing" if len(phase_results) < len(expected_ids) else "controller_ready"),
+            status="capability_gap"
+            if failures
+            else (
+                "phase_executing"
+                if len(phase_results) < len(expected_ids)
+                else "controller_ready"
+            ),
             pending_actions=(
-                ({"kind": "phase", "action": "record_phase_result", "phase_id": expected_ids[len(phase_results)]},)
+                (
+                    {
+                        "kind": "phase",
+                        "action": "record_phase_result",
+                        "phase_id": expected_ids[len(phase_results)],
+                    },
+                )
                 if not failures and len(phase_results) < len(expected_ids)
-                else (({"kind": "evaluation", "action": "record_evaluation"},) if not failures else ({"kind": "capability_gap", "reason": "phase_result_failed"},))
+                else (
+                    ({"kind": "evaluation", "action": "record_evaluation"},)
+                    if not failures
+                    else ({"kind": "capability_gap", "reason": "phase_result_failed"},)
+                )
             ),
         )
-        return self._save(self._append(updated, "phase_result_recorded", action_id, {"phase_id": phase_id, "result_fingerprint": phase["result_fingerprint"], "failed": failures}))
+        return self._save(
+            self._append(
+                updated,
+                "phase_result_recorded",
+                action_id,
+                {
+                    "phase_id": phase_id,
+                    "result_fingerprint": phase["result_fingerprint"],
+                    "failed": failures,
+                },
+            )
+        )
 
     def record_agent_execution(
         self,
@@ -1326,14 +1771,31 @@ class WorkflowService:
         from cfdc.lab.llm import sanitize_for_audit
 
         sanitized = sanitize_for_audit(deepcopy(dict(record)))
-        role_value = getattr(record.get("role"), "value", str(record.get("role"))).strip().casefold()
+        role_value = (
+            getattr(record.get("role"), "value", str(record.get("role")))
+            .strip()
+            .casefold()
+        )
         if role_value not in {"diagnosis", "modeling", "controller", "critic"}:
             raise ValueError("agent_role_not_allowed")
         sanitized["role"] = role_value
         sanitized.pop("payload", None)
         sanitized["record_fingerprint"] = fingerprint(sanitized)
-        updated = self._replace(session, agent_records=(*session.agent_records, sanitized))
-        return self._save(self._append(updated, "agent_execution_recorded", action_id, {"role": role_value, "stage": record.get("stage"), "record_fingerprint": sanitized["record_fingerprint"]}))
+        updated = self._replace(
+            session, agent_records=(*session.agent_records, sanitized)
+        )
+        return self._save(
+            self._append(
+                updated,
+                "agent_execution_recorded",
+                action_id,
+                {
+                    "role": role_value,
+                    "stage": record.get("stage"),
+                    "record_fingerprint": sanitized["record_fingerprint"],
+                },
+            )
+        )
 
     def execute_agent(
         self,
@@ -1380,13 +1842,24 @@ class WorkflowService:
             record=value,
         )
 
-    def cancel(self, session_id: str, *, action_id: str, revision: int, reason: str = "operator_cancelled") -> EvidenceSession:
+    def cancel(
+        self,
+        session_id: str,
+        *,
+        action_id: str,
+        revision: int,
+        reason: str = "operator_cancelled",
+    ) -> EvidenceSession:
         session = self.read(session_id)
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
         updated = self._replace(session, status="cancelled", pending_actions=())
-        return self._save(self._append(updated, "session_cancelled", action_id, {"reason": str(reason)}))
+        return self._save(
+            self._append(
+                updated, "session_cancelled", action_id, {"reason": str(reason)}
+            )
+        )
 
     def freeze_controller(
         self,
@@ -1412,23 +1885,39 @@ class WorkflowService:
             raise ValueError("public_evidence_required_before_freeze")
         if controller is None and isinstance(session.controller_candidate, Mapping):
             candidate_value = session.controller_candidate.get("ir")
-            controller = dict(candidate_value) if isinstance(candidate_value, Mapping) else None
-        if runtime_contract is None and isinstance(session.controller_candidate, Mapping):
+            controller = (
+                dict(candidate_value) if isinstance(candidate_value, Mapping) else None
+            )
+        if runtime_contract is None and isinstance(
+            session.controller_candidate, Mapping
+        ):
             audit = session.controller_candidate.get("synthesis_audit")
-            catalog_runtime = audit.get("runtime_contract") if isinstance(audit, Mapping) else None
+            catalog_runtime = (
+                audit.get("runtime_contract") if isinstance(audit, Mapping) else None
+            )
             runtime_contract = {
-                **(dict(catalog_runtime) if isinstance(catalog_runtime, Mapping) else {}),
+                **(
+                    dict(catalog_runtime)
+                    if isinstance(catalog_runtime, Mapping)
+                    else {}
+                ),
                 "command_bounds": [session.task.input_min, session.task.input_max],
-                "stop_conditions": [f"state magnitude reaches {session.task.state_stop}"],
+                "stop_conditions": [
+                    f"state magnitude reaches {session.task.state_stop}"
+                ],
             }
         if evaluation_contract is None:
             evaluation_contract = {
                 "judge": "cfdc-independent-judge/v1",
-                "evaluation_repeats": int(session.task.budgets.get("evaluation_repeats", 20)),
+                "evaluation_repeats": int(
+                    session.task.budgets.get("evaluation_repeats", 20)
+                ),
             }
         if not controller or not runtime_contract or not evaluation_contract:
             raise ValueError("freeze_contract_incomplete")
-        strict_contract = session.task.task_semantics_version == P1_1_TASK_SEMANTICS_VERSION
+        strict_contract = (
+            session.task.task_semantics_version == P1_1_TASK_SEMANTICS_VERSION
+        )
         if strict_contract and session.provider is None:
             raise ValueError("provider_required_before_freeze")
         if strict_contract and session.controller_candidate is None:
@@ -1449,53 +1938,89 @@ class WorkflowService:
             raise ValueError("provider_required_before_freeze")
         if session.protocols:
             qualification = session.controller_qualification
-            if not isinstance(qualification, Mapping) or qualification.get("status") != "offline_qualified":
-                raise ValueError("offline_controller_qualification_required_before_freeze")
+            if (
+                not isinstance(qualification, Mapping)
+                or qualification.get("status") != "offline_qualified"
+            ):
+                raise ValueError(
+                    "offline_controller_qualification_required_before_freeze"
+                )
             if not isinstance(session.provider_bindings.get("evaluation"), Mapping):
                 raise ValueError("evaluation_provider_required_before_freeze")
-        if any(_contains_private_marker(value) for value in (controller, runtime_contract, evaluation_contract)):
+        if any(
+            _contains_private_marker(value)
+            for value in (controller, runtime_contract, evaluation_contract)
+        ):
             raise ValueError("private_truth_not_allowed")
         candidate_ir = None
         if isinstance(controller, ControllerIR):
             candidate_ir = controller
             controller = controller.to_dict()
-        elif isinstance(controller, Mapping) and "family" in controller and "parameter_domains" in controller:
+        elif (
+            isinstance(controller, Mapping)
+            and "family" in controller
+            and "parameter_domains" in controller
+        ):
             candidate_ir = ControllerIR.from_mapping(controller)
             controller = candidate_ir.to_dict()
         if candidate_ir is not None:
             if strict_contract and session.controller_candidate is not None:
                 submitted_ir = session.controller_candidate.get("ir")
-                if isinstance(submitted_ir, Mapping) and fingerprint(dict(submitted_ir)) != fingerprint(controller):
+                if isinstance(submitted_ir, Mapping) and fingerprint(
+                    dict(submitted_ir)
+                ) != fingerprint(controller):
                     raise ValueError("controller_candidate_binding_mismatch")
             validate_controller_for_route(candidate_ir, session.route)
             required_signals = set(session.task.measured_signals)
             if not required_signals <= set(candidate_ir.measured_signals):
                 raise ValueError("controller_measured_signal_binding_mismatch")
-            required_inputs = set(session.task.control_inputs or (session.task.control_input,))
+            required_inputs = set(
+                session.task.control_inputs or (session.task.control_input,)
+            )
             if not required_inputs <= set(candidate_ir.control_inputs):
                 raise ValueError("controller_control_input_binding_mismatch")
-            if session.task.input_min is not None and candidate_ir.output_bounds is not None and candidate_ir.output_bounds[0] < session.task.input_min:
+            if (
+                session.task.input_min is not None
+                and candidate_ir.output_bounds is not None
+                and candidate_ir.output_bounds[0] < session.task.input_min
+            ):
                 raise ValueError("controller_output_bounds_exceed_task_bounds")
-            if session.task.input_max is not None and candidate_ir.output_bounds is not None and candidate_ir.output_bounds[1] > session.task.input_max:
+            if (
+                session.task.input_max is not None
+                and candidate_ir.output_bounds is not None
+                and candidate_ir.output_bounds[1] > session.task.input_max
+            ):
                 raise ValueError("controller_output_bounds_exceed_task_bounds")
         elif isinstance(controller, Mapping):
-            validate_controller_family_for_route(str(controller.get("family") or ""), session.route)
-            allowed = {str(item) for item in session.route.get("tunable_gain_names", ()) or ()}
+            validate_controller_family_for_route(
+                str(controller.get("family") or ""), session.route
+            )
+            allowed = {
+                str(item) for item in session.route.get("tunable_gain_names", ()) or ()
+            }
             supplied_parameters = controller.get("parameters")
             if allowed and isinstance(supplied_parameters, Mapping):
-                extra = sorted(str(key) for key in supplied_parameters if str(key) not in allowed)
+                extra = sorted(
+                    str(key) for key in supplied_parameters if str(key) not in allowed
+                )
                 if extra:
-                    raise ValueError("controller_parameter_not_allowed: " + ", ".join(extra))
+                    raise ValueError(
+                        "controller_parameter_not_allowed: " + ", ".join(extra)
+                    )
         phase_plan = compile_phase_plan(
             session.task,
             session.route,
             controller=dict(controller),
-            phases=tuple(session.phase_plan.get("phases", ())) if session.phase_plan and session.controller_candidate else None,
+            phases=tuple(session.phase_plan.get("phases", ()))
+            if session.phase_plan and session.controller_candidate
+            else None,
         )
         runtime_value = {
             **dict(runtime_contract),
             "phase_plan": phase_plan.to_dict(),
-            "provider": deepcopy(session.provider) if session.provider is not None else None,
+            "provider": deepcopy(session.provider)
+            if session.provider is not None
+            else None,
             "provider_bindings": deepcopy(dict(session.provider_bindings)),
             "protocol_fingerprint": session.active_protocol_fingerprint,
             "qualification": deepcopy(session.controller_qualification),
@@ -1506,7 +2031,9 @@ class WorkflowService:
         # task criterion with an example value.
         evaluation_value["task_type"] = session.task.task_type
         evaluation_value["task_fingerprint"] = session.task.fingerprint
-        evaluation_value["task_success_requirements"] = deepcopy(dict(session.task.success_requirements))
+        evaluation_value["task_success_requirements"] = deepcopy(
+            dict(session.task.success_requirements)
+        )
         evaluation_value["task_reference"] = session.task.reference
         evaluation_value["task_input_bounds"] = (
             [session.task.input_min, session.task.input_max]
@@ -1515,7 +2042,8 @@ class WorkflowService:
         )
         evaluation_value["task_output_bounds"] = (
             [session.task.output_min, session.task.output_max]
-            if session.task.output_min is not None and session.task.output_max is not None
+            if session.task.output_min is not None
+            and session.task.output_max is not None
             else None
         )
         evaluation_value["task_state_stop"] = session.task.state_stop
@@ -1527,19 +2055,36 @@ class WorkflowService:
         for key, value in session.task.success_requirements.items():
             evaluation_value[str(key)] = deepcopy(value)
         if session.task.task_type == "disturbance_recovery_to_hold":
-            evaluation_value["disturbance_event_fingerprint"] = fingerprint(session.task.disturbance_contract)
+            evaluation_value["disturbance_event_fingerprint"] = fingerprint(
+                session.task.disturbance_contract
+            )
         freeze = ControllerFreeze(
             session_id=session.session_id,
             task_fingerprint=session.task.fingerprint,
             controller=deepcopy(dict(controller)),
-            evidence_fingerprints=tuple(str(item["fingerprint"]) for item in session.evidence),
+            evidence_fingerprints=tuple(
+                str(item["fingerprint"]) for item in session.evidence
+            ),
             runtime_contract=deepcopy(runtime_value),
             evaluation_contract=evaluation_value,
             source_version="cfdc-kernel/v2",
         )
         freeze_value = freeze.to_dict()
-        updated = self._replace(session, status="controller_ready", phase_plan=phase_plan.to_dict(), controller_freeze=freeze_value, pending_actions=({"kind": "evaluation", "action": "record_evaluation"},))
-        return self._save(self._append(updated, "controller_frozen", action_id, {"freeze_fingerprint": freeze_value["freeze_fingerprint"]}))
+        updated = self._replace(
+            session,
+            status="controller_ready",
+            phase_plan=phase_plan.to_dict(),
+            controller_freeze=freeze_value,
+            pending_actions=({"kind": "evaluation", "action": "record_evaluation"},),
+        )
+        return self._save(
+            self._append(
+                updated,
+                "controller_frozen",
+                action_id,
+                {"freeze_fingerprint": freeze_value["freeze_fingerprint"]},
+            )
+        )
 
     def run_evaluation(
         self,
@@ -1572,7 +2117,9 @@ class WorkflowService:
             raise ValueError("evaluation_provider_version_mismatch")
         if evaluation_split not in {"development", "fresh_confirmation"}:
             raise ValueError("evaluation_packet_split_invalid")
-        repeat_count = int(repeats or session.task.budgets.get("evaluation_repeats", 20))
+        repeat_count = int(
+            repeats or session.task.budgets.get("evaluation_repeats", 20)
+        )
         if repeat_count < 1 or repeat_count > 10_000:
             raise ValueError("evaluation_repeat_count_invalid")
         raw_packet = provider.evaluate(
@@ -1595,7 +2142,9 @@ class WorkflowService:
             "session_id": session.session_id,
             "task_fingerprint": session.task.fingerprint,
             "freeze_fingerprint": session.controller_freeze["freeze_fingerprint"],
-            "evidence_fingerprints": list(session.controller_freeze.get("evidence_fingerprints", ())),
+            "evidence_fingerprints": list(
+                session.controller_freeze.get("evidence_fingerprints", ())
+            ),
             "provider_id": provider.provider_id,
             "provider_version": provider.provider_version,
             "provider_contract": {
@@ -1638,12 +2187,20 @@ class WorkflowService:
         evaluation_split = str(packet.get("evaluation_split") or "development")
         if evaluation_split not in {"development", "fresh_confirmation", "replay"}:
             raise ValueError("evaluation_packet_split_invalid")
-        if evaluation_split == "fresh_confirmation" and not (session.tuning and session.tuning.get("accepted")):
+        if evaluation_split == "fresh_confirmation" and not (
+            session.tuning and session.tuning.get("accepted")
+        ):
             raise ValueError("fresh_confirmation_requires_accepted_tuning")
-        if session.tuning and session.tuning.get("accepted") and evaluation_split != "fresh_confirmation":
+        if (
+            session.tuning
+            and session.tuning.get("accepted")
+            and evaluation_split != "fresh_confirmation"
+        ):
             raise ValueError("fresh_confirmation_required_after_tuning")
         if session.evaluation_packets and evaluation_split != "fresh_confirmation":
-            raise ValueError("evaluation_already_recorded_use_replay_or_fresh_confirmation")
+            raise ValueError(
+                "evaluation_already_recorded_use_replay_or_fresh_confirmation"
+            )
         result = independent_judge(session.controller_freeze, packet)
         if result["status"] == "performance_met":
             status = "performance_met"
@@ -1652,10 +2209,9 @@ class WorkflowService:
             # tuned freeze or expose a capability gap, but it must never reopen
             # the development search or feed fresh data back into tuning.
             status = "capability_gap"
-        elif (
-            result.get("stability_gate", {}).get("passed")
-            and not result.get("performance_gate", {}).get("phase_failures")
-        ):
+        elif result.get("stability_gate", {}).get("passed") and not result.get(
+            "performance_gate", {}
+        ).get("phase_failures"):
             status = "tuning_eligible"
         else:
             status = "capability_gap"
@@ -1673,7 +2229,9 @@ class WorkflowService:
                 "status": result["status"],
                 "packet_fingerprint": result["packet_fingerprint"],
                 "judge_fingerprint": result["judge_fingerprint"],
-                "freeze_fingerprint": session.controller_freeze.get("freeze_fingerprint"),
+                "freeze_fingerprint": session.controller_freeze.get(
+                    "freeze_fingerprint"
+                ),
             }
             if evaluation_split == "fresh_confirmation"
             else session.confirmation
@@ -1726,23 +2284,49 @@ class WorkflowService:
             raise ValueError("tuning_requires_frozen_evaluated_controller")
         if session.evaluation.get("status") != "performance_not_met":
             raise ValueError("tuning_requires_performance_gap")
-        raw_contract = contract if isinstance(contract, TuningContract) else TuningContract.from_mapping(contract)
-        active_freeze_fingerprint = str(session.controller_freeze.get("freeze_fingerprint") or "")
-        evaluation_contract_fingerprint = fingerprint(session.controller_freeze.get("evaluation_contract", {}))
-        if raw_contract.task_fingerprint and raw_contract.task_fingerprint != session.task.fingerprint:
+        raw_contract = (
+            contract
+            if isinstance(contract, TuningContract)
+            else TuningContract.from_mapping(contract)
+        )
+        active_freeze_fingerprint = str(
+            session.controller_freeze.get("freeze_fingerprint") or ""
+        )
+        evaluation_contract_fingerprint = fingerprint(
+            session.controller_freeze.get("evaluation_contract", {})
+        )
+        if (
+            raw_contract.task_fingerprint
+            and raw_contract.task_fingerprint != session.task.fingerprint
+        ):
             raise ValueError("tuning_task_binding_mismatch")
-        if raw_contract.initial_freeze_fingerprint and raw_contract.initial_freeze_fingerprint != active_freeze_fingerprint:
+        if (
+            raw_contract.initial_freeze_fingerprint
+            and raw_contract.initial_freeze_fingerprint != active_freeze_fingerprint
+        ):
             raise ValueError("tuning_freeze_binding_mismatch")
-        if raw_contract.evaluation_contract_fingerprint and raw_contract.evaluation_contract_fingerprint != evaluation_contract_fingerprint:
+        if (
+            raw_contract.evaluation_contract_fingerprint
+            and raw_contract.evaluation_contract_fingerprint
+            != evaluation_contract_fingerprint
+        ):
             raise ValueError("tuning_evaluation_contract_binding_mismatch")
         controller = session.controller_freeze.get("controller", {})
-        parameters = dict(controller.get("parameters", {})) if isinstance(controller, Mapping) else {}
+        parameters = (
+            dict(controller.get("parameters", {}))
+            if isinstance(controller, Mapping)
+            else {}
+        )
         baseline_result = {
             **dict(session.evaluation),
-            "stable": bool(session.evaluation.get("stability_gate", {}).get("passed", False)),
+            "stable": bool(
+                session.evaluation.get("stability_gate", {}).get("passed", False)
+            ),
             "performance_pass": session.evaluation.get("status") == "performance_met",
         }
-        result = run_bounded_tuning(parameters, raw_contract, evaluate, baseline_result=baseline_result)
+        result = run_bounded_tuning(
+            parameters, raw_contract, evaluate, baseline_result=baseline_result
+        )
         tuning_value = result.to_dict()
         tuning_value.update(
             {
@@ -1776,25 +2360,36 @@ class WorkflowService:
                     for phase_item in phase_items:
                         if isinstance(phase_item, Mapping):
                             phase_item["controller"] = deepcopy(candidate_controller)
-                phase_plan_value = MultiStagePlan.from_mapping(phase_plan_value).to_dict()
+                phase_plan_value = MultiStagePlan.from_mapping(
+                    phase_plan_value
+                ).to_dict()
             active = ControllerFreeze(
                 session_id=session.session_id,
                 task_fingerprint=session.task.fingerprint,
                 controller=candidate_controller,
-                evidence_fingerprints=tuple(session.controller_freeze.get("evidence_fingerprints", ())),
+                evidence_fingerprints=tuple(
+                    session.controller_freeze.get("evidence_fingerprints", ())
+                ),
                 runtime_contract={
                     **dict(session.controller_freeze.get("runtime_contract", {})),
-                    "predecessor_freeze_fingerprint": session.controller_freeze.get("freeze_fingerprint"),
+                    "predecessor_freeze_fingerprint": session.controller_freeze.get(
+                        "freeze_fingerprint"
+                    ),
                     "tuning_contract_fingerprint": result.contract_fingerprint,
                     "phase_plan": deepcopy(phase_plan_value),
                 },
                 evaluation_contract={
-                    **deepcopy(dict(session.controller_freeze.get("evaluation_contract", {}))),
+                    **deepcopy(
+                        dict(session.controller_freeze.get("evaluation_contract", {}))
+                    ),
                     "phase_plan": deepcopy(phase_plan_value),
                 },
                 source_version="cfdc-kernel/v1+tuned",
             )
-            next_history = (*session.freeze_history, deepcopy(dict(session.controller_freeze)))
+            next_history = (
+                *session.freeze_history,
+                deepcopy(dict(session.controller_freeze)),
+            )
             next_freeze = active.to_dict()
             if session.controller_candidate is not None:
                 next_candidate = {
@@ -1804,7 +2399,9 @@ class WorkflowService:
                 }
             tuning_value.update(
                 {
-                    "predecessor_freeze_fingerprint": session.controller_freeze.get("freeze_fingerprint"),
+                    "predecessor_freeze_fingerprint": session.controller_freeze.get(
+                        "freeze_fingerprint"
+                    ),
                     "incumbent_freeze_fingerprint": next_freeze["freeze_fingerprint"],
                 }
             )
@@ -1820,10 +2417,25 @@ class WorkflowService:
             pending_actions=(
                 ({"kind": "confirmation", "action": "record_fresh_confirmation"},)
                 if result.accepted
-                else (({"kind": "tuning", "reason": "tuning_blocked"},) if result.status == "blocked" else ())
+                else (
+                    ({"kind": "tuning", "reason": "tuning_blocked"},)
+                    if result.status == "blocked"
+                    else ()
+                )
             ),
         )
-        return self._save(self._append(updated, "bounded_tuning_completed", action_id, {"status": result.status, "accepted": result.accepted, "contract_fingerprint": result.contract_fingerprint}))
+        return self._save(
+            self._append(
+                updated,
+                "bounded_tuning_completed",
+                action_id,
+                {
+                    "status": result.status,
+                    "accepted": result.accepted,
+                    "contract_fingerprint": result.contract_fingerprint,
+                },
+            )
+        )
 
     def run_feedback_iteration(
         self,
@@ -1865,23 +2477,37 @@ class WorkflowService:
                 parameter_domains={
                     str(key): (float(value[0]), float(value[1]))
                     for key, value in domains.items()
-                    if key in parameters and isinstance(value, (list, tuple)) and len(value) == 2
+                    if key in parameters
+                    and isinstance(value, (list, tuple))
+                    and len(value) == 2
                 },
                 budget_confirmed=True,
                 task_fingerprint=session.task.fingerprint,
-                initial_freeze_fingerprint=session.controller_freeze["freeze_fingerprint"],
-                evaluation_contract_fingerprint=fingerprint(session.controller_freeze.get("evaluation_contract", {})),
+                initial_freeze_fingerprint=session.controller_freeze[
+                    "freeze_fingerprint"
+                ],
+                evaluation_contract_fingerprint=fingerprint(
+                    session.controller_freeze.get("evaluation_contract", {})
+                ),
             )
 
-        def evaluate_candidate(candidate: Mapping[str, float], split: str, repeats: int) -> dict[str, Any]:
+        def evaluate_candidate(
+            candidate: Mapping[str, float], split: str, repeats: int
+        ) -> dict[str, Any]:
             candidate_controller = _controller_with_parameters(controller, candidate)
             candidate_freeze = ControllerFreeze(
                 session_id=session.session_id,
                 task_fingerprint=session.task.fingerprint,
                 controller=candidate_controller,
-                evidence_fingerprints=tuple(session.controller_freeze.get("evidence_fingerprints", ())),
-                runtime_contract=deepcopy(dict(session.controller_freeze.get("runtime_contract", {}))),
-                evaluation_contract=deepcopy(dict(session.controller_freeze.get("evaluation_contract", {}))),
+                evidence_fingerprints=tuple(
+                    session.controller_freeze.get("evidence_fingerprints", ())
+                ),
+                runtime_contract=deepcopy(
+                    dict(session.controller_freeze.get("runtime_contract", {}))
+                ),
+                evaluation_contract=deepcopy(
+                    dict(session.controller_freeze.get("evaluation_contract", {}))
+                ),
                 source_version="cfdc-kernel/tuning-probe-v1",
             ).to_dict()
             provider_split = "fresh_confirmation" if split == "fresh" else "development"
@@ -1902,7 +2528,9 @@ class WorkflowService:
                 "session_id": session.session_id,
                 "task_fingerprint": session.task.fingerprint,
                 "freeze_fingerprint": candidate_freeze["freeze_fingerprint"],
-                "evidence_fingerprints": list(candidate_freeze["evidence_fingerprints"]),
+                "evidence_fingerprints": list(
+                    candidate_freeze["evidence_fingerprints"]
+                ),
                 "provider_id": provider.provider_id,
                 "provider_version": provider.provider_version,
                 "provider_contract": {
@@ -1989,7 +2617,11 @@ class WorkflowService:
                 return session
             action_id = f"auto:{session.session_id}:{session.revision}"
             if session.route is None:
-                session = self.advance(session_id, action_id=f"{action_id}:route", revision=session.revision)
+                session = self.advance(
+                    session_id,
+                    action_id=f"{action_id}:route",
+                    revision=session.revision,
+                )
                 continue
             if session.route.get("capability_gap"):
                 return session
@@ -2005,14 +2637,20 @@ class WorkflowService:
                     provider={
                         "provider_id": provider.provider_id,
                         "provider_version": provider.provider_version,
-                        "capabilities": sorted(str(item) for item in provider.capabilities),
+                        "capabilities": sorted(
+                            str(item) for item in provider.capabilities
+                        ),
                         "binding_role": "identification",
                         "execution_kind": "software",
                     },
                 )
                 continue
             evaluation_binding = session.provider_bindings.get("evaluation")
-            if not isinstance(evaluation_binding, Mapping) and evaluation_provider_registry is not None and evaluation_provider_id:
+            if (
+                not isinstance(evaluation_binding, Mapping)
+                and evaluation_provider_registry is not None
+                and evaluation_provider_id
+            ):
                 provider = evaluation_provider_registry.get(evaluation_provider_id)
                 session = self.set_provider(
                     session_id,
@@ -2021,7 +2659,9 @@ class WorkflowService:
                     provider={
                         "provider_id": provider.provider_id,
                         "provider_version": provider.provider_version,
-                        "capabilities": sorted(str(item) for item in provider.capabilities),
+                        "capabilities": sorted(
+                            str(item) for item in provider.capabilities
+                        ),
                         "binding_role": "evaluation",
                         "execution_kind": "software",
                     },
@@ -2116,10 +2756,13 @@ class WorkflowService:
         replay = {
             "packet_fingerprint": result["packet_fingerprint"],
             "judge_fingerprint": result["judge_fingerprint"],
-            "matches_previous": result["judge_fingerprint"] == previous.get("judge_fingerprint"),
+            "matches_previous": result["judge_fingerprint"]
+            == previous.get("judge_fingerprint"),
             "evaluation_split": packet.get("evaluation_split", "development"),
         }
-        updated = self._replace(session, evaluation_replays=(*session.evaluation_replays, replay))
+        updated = self._replace(
+            session, evaluation_replays=(*session.evaluation_replays, replay)
+        )
         return self._save(
             self._append(
                 updated,
@@ -2156,7 +2799,9 @@ class WorkflowService:
         # carrying the old digest would make the immutable packet unverifiable.
         packet_value = dict(packet)
         supplied_packet_fingerprint = packet_value.pop("packet_fingerprint", None)
-        if supplied_packet_fingerprint is not None and str(supplied_packet_fingerprint) != fingerprint(packet_value):
+        if supplied_packet_fingerprint is not None and str(
+            supplied_packet_fingerprint
+        ) != fingerprint(packet_value):
             raise ValueError("evaluation_packet_mismatch")
         packet_value["evaluation_split"] = "fresh_confirmation"
         packet_value["packet_fingerprint"] = fingerprint(packet_value)
@@ -2206,9 +2851,9 @@ class WorkflowService:
                 "status": session.status,
                 "task_fingerprint": session.task.fingerprint,
                 "active_protocol_fingerprint": session.active_protocol_fingerprint,
-                "active_freeze_fingerprint": (
-                    session.controller_freeze or {}
-                ).get("freeze_fingerprint"),
+                "active_freeze_fingerprint": (session.controller_freeze or {}).get(
+                    "freeze_fingerprint"
+                ),
                 "evaluation": deepcopy(session.evaluation),
                 "confirmation": deepcopy(session.confirmation),
             },
@@ -2216,7 +2861,10 @@ class WorkflowService:
         }
         feedback = values["feedback"]
         if isinstance(feedback, Mapping):
-            feedback = {"feedback_version": "cfdc-feedback/v1", **deepcopy(dict(feedback))}
+            feedback = {
+                "feedback_version": "cfdc-feedback/v1",
+                **deepcopy(dict(feedback)),
+            }
             feedback["feedback_fingerprint"] = fingerprint(feedback)
             values["feedback"] = feedback
         confirmation = values["confirmation"]
@@ -2231,8 +2879,12 @@ class WorkflowService:
         if isinstance(result, dict):
             result["result_fingerprint"] = fingerprint(result)
         if kind == "operator_bundle":
-            handoff = session.operator_handoffs[-1] if session.operator_handoffs else None
-            bundle_path = handoff.get("bundle_path") if isinstance(handoff, Mapping) else None
+            handoff = (
+                session.operator_handoffs[-1] if session.operator_handoffs else None
+            )
+            bundle_path = (
+                handoff.get("bundle_path") if isinstance(handoff, Mapping) else None
+            )
             if not bundle_path or not Path(bundle_path).is_file():
                 raise ValueError("operator_bundle_not_available")
             return Path(bundle_path)
@@ -2266,7 +2918,11 @@ class WorkflowService:
         """Write a public, replayable result and audit ZIP."""
 
         session = self.read(session_id)
-        output = Path(path) if path is not None else self.root / f"{session.session_id}.result.zip"
+        output = (
+            Path(path)
+            if path is not None
+            else self.root / f"{session.session_id}.result.zip"
+        )
         output.parent.mkdir(parents=True, exist_ok=True)
         artifacts: dict[str, Any] = {
             "task.json": session.task.to_dict(),
@@ -2280,7 +2936,10 @@ class WorkflowService:
             "feature_history.json": list(session.feature_history),
             "controller_history.json": list(session.controller_history),
             "qualification_history.json": list(session.qualification_history),
-            "freeze_history.json": [*session.freeze_history, *([session.controller_freeze] if session.controller_freeze else [])],
+            "freeze_history.json": [
+                *session.freeze_history,
+                *([session.controller_freeze] if session.controller_freeze else []),
+            ],
             "evaluation_packets.json": list(session.evaluation_packets),
             "evaluation_replays.json": list(session.evaluation_replays),
             "tuning_history.json": list(session.tuning_history),
@@ -2295,11 +2954,15 @@ class WorkflowService:
             "status": session.status,
             "task_fingerprint": session.task.fingerprint,
             "active_protocol_fingerprint": session.active_protocol_fingerprint,
-            "active_freeze_fingerprint": (session.controller_freeze or {}).get("freeze_fingerprint"),
+            "active_freeze_fingerprint": (session.controller_freeze or {}).get(
+                "freeze_fingerprint"
+            ),
             "evaluation": deepcopy(session.evaluation),
             "confirmation": deepcopy(session.confirmation),
             "claims_allowed": [
-                "task-bound software result" if session.evaluation else "auditable workflow progress",
+                "task-bound software result"
+                if session.evaluation
+                else "auditable workflow progress",
             ],
             "claims_forbidden": [
                 "physical safety certification",
@@ -2313,8 +2976,7 @@ class WorkflowService:
             "bundle_version": "cfdc-result-bundle/v1",
             "session_id": session.session_id,
             "artifacts": {
-                name: fingerprint(value)
-                for name, value in sorted(artifacts.items())
+                name: fingerprint(value) for name, value in sorted(artifacts.items())
             },
             "raw_uploads_included": False,
             "private_truth_included": False,
@@ -2322,11 +2984,21 @@ class WorkflowService:
         manifest["bundle_fingerprint"] = fingerprint(manifest)
         temporary = output.with_name(f".{output.name}.{uuid4().hex}.tmp")
         try:
-            with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            with zipfile.ZipFile(
+                temporary, "w", compression=zipfile.ZIP_DEFLATED
+            ) as archive:
                 archive.writestr("session.json", session.to_json())
-                archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
+                archive.writestr(
+                    "manifest.json",
+                    json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2)
+                    + "\n",
+                )
                 for name, value in sorted(artifacts.items()):
-                    archive.writestr(name, json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
+                    archive.writestr(
+                        name,
+                        json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)
+                        + "\n",
+                    )
             temporary.replace(output)
         finally:
             temporary.unlink(missing_ok=True)
@@ -2351,27 +3023,51 @@ class WorkflowService:
             raise ValueError("v3_import_digest_collision")
 
         raw_task = deepcopy(dict(inspection.task_payload))
-        for key in ("task_fingerprint", "schema_version", "contract_version", "task_contract_version"):
+        for key in (
+            "task_fingerprint",
+            "schema_version",
+            "contract_version",
+            "task_contract_version",
+        ):
             raw_task.pop(key, None)
         if "measured_signals" not in raw_task and raw_task.get("observed_outputs"):
             raw_task["measured_signals"] = raw_task["observed_outputs"]
-        if "control_input" not in raw_task and not raw_task.get("control_inputs") and raw_task.get("actuator"):
+        if (
+            "control_input" not in raw_task
+            and not raw_task.get("control_inputs")
+            and raw_task.get("actuator")
+        ):
             raw_task["control_input"] = raw_task["actuator"]
         raw_task["budget_confirmed"] = False
         task = TaskContract.from_user_input(raw_task)
 
         ledger = DiagnosticLedger.initial()
         accepted: list[dict[str, Any]] = [
-            {"artifact": "task", "status": "revalidated", "task_fingerprint": task.fingerprint}
+            {
+                "artifact": "task",
+                "status": "revalidated",
+                "task_fingerprint": task.fingerprint,
+            }
         ]
         discarded: list[dict[str, Any]] = [
-            {"artifact": "legacy_execution_authority", "reason": "fresh Kernel confirmation required"},
-            {"artifact": "raw_llm_responses", "reason": "not part of the public typed interface"},
-            {"artifact": "private_truth", "reason": "private provider state is never imported"},
+            {
+                "artifact": "legacy_execution_authority",
+                "reason": "fresh Kernel confirmation required",
+            },
+            {
+                "artifact": "raw_llm_responses",
+                "reason": "not part of the public typed interface",
+            },
+            {
+                "artifact": "private_truth",
+                "reason": "private provider state is never imported",
+            },
         ]
         if inspection.diagnostic_updates:
             try:
-                ledger = ledger.update(inspection.diagnostic_updates, source="v3_import:public_evidence")
+                ledger = ledger.update(
+                    inspection.diagnostic_updates, source="v3_import:public_evidence"
+                )
                 accepted.append(
                     {
                         "artifact": "diagnostic_ledger",
@@ -2409,7 +3105,11 @@ class WorkflowService:
         # execution-bound objects out of the new session until the new task,
         # provider and protocol fingerprints have been confirmed.
         for candidate in inspection.candidates.get("controller", ()):
-            raw_controller = candidate.get("controller_ir") if isinstance(candidate.get("controller_ir"), Mapping) else candidate
+            raw_controller = (
+                candidate.get("controller_ir")
+                if isinstance(candidate.get("controller_ir"), Mapping)
+                else candidate
+            )
             try:
                 controller = ControllerIR.from_mapping(raw_controller)
                 discarded.append(
@@ -2420,7 +3120,9 @@ class WorkflowService:
                     }
                 )
             except (TypeError, ValueError) as exc:
-                discarded.append({"artifact": "controller", "reason": f"validation_failed: {exc}"})
+                discarded.append(
+                    {"artifact": "controller", "reason": f"validation_failed: {exc}"}
+                )
         for kind in ("protocol", "evidence", "features", "freeze", "evaluation_packet"):
             for candidate in inspection.candidates.get(kind, ()):
                 discarded.append(
@@ -2430,7 +3132,10 @@ class WorkflowService:
                             "protocol_fingerprint",
                             candidate.get(
                                 "artifact_fingerprint",
-                                candidate.get("freeze_fingerprint", candidate.get("packet_fingerprint")),
+                                candidate.get(
+                                    "freeze_fingerprint",
+                                    candidate.get("packet_fingerprint"),
+                                ),
                             ),
                         ),
                         "reason": "source binding must be regenerated or resubmitted under the new Kernel session",
@@ -2478,7 +3183,9 @@ class WorkflowService:
         source_id = hashlib.sha256(Path(path).read_bytes()).hexdigest()[:12]
         existing_path = self._path(f"legacy-{source_id}")
         if existing_path.exists():
-            existing = EvidenceSession.from_json(existing_path.read_text(encoding="utf-8"), path=existing_path)
+            existing = EvidenceSession.from_json(
+                existing_path.read_text(encoding="utf-8"), path=existing_path
+            )
             if existing.read_only:
                 return existing
             raise ValueError("legacy_import_target_not_read_only")
@@ -2491,13 +3198,21 @@ class WorkflowService:
             or legacy_task.get("natural_language_description")
             or f"Legacy session {source_id}; task contract unavailable"
         ).strip()
-        signals = legacy_task.get("measured_signals") or legacy_task.get("observed_outputs") or ["output"]
-        control_input = legacy_task.get("control_input") or legacy_task.get("actuator") or "input"
-        task = TaskContract.from_user_input({
-            "description": description,
-            "measured_signals": signals,
-            "control_input": control_input,
-        })
+        signals = (
+            legacy_task.get("measured_signals")
+            or legacy_task.get("observed_outputs")
+            or ["output"]
+        )
+        control_input = (
+            legacy_task.get("control_input") or legacy_task.get("actuator") or "input"
+        )
+        task = TaskContract.from_user_input(
+            {
+                "description": description,
+                "measured_signals": signals,
+                "control_input": control_input,
+            }
+        )
         session = EvidenceSession(
             session_id=f"legacy-{source_id}",
             task=task,
@@ -2507,7 +3222,9 @@ class WorkflowService:
             legacy_lineage={
                 "source_path": str(Path(path).resolve()),
                 "source_hash": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
-                "source_schema": str(raw.get("schema_version") or raw.get("session_version") or "unknown"),
+                "source_schema": str(
+                    raw.get("schema_version") or raw.get("session_version") or "unknown"
+                ),
                 "import_policy": "public_task_facts_only; approvals_and_results_discarded",
             },
         )
@@ -2526,11 +3243,17 @@ class WorkflowService:
         session = self.start(task, agent_config=agent_config)
         lineage = {
             "source_session_id": legacy.session_id,
-            "source_hash": legacy.legacy_lineage.get("source_hash") if legacy.legacy_lineage else None,
+            "source_hash": legacy.legacy_lineage.get("source_hash")
+            if legacy.legacy_lineage
+            else None,
             "import_policy": "public_task_facts_only; approvals_and_results_discarded",
         }
         updated = self._replace(session, legacy_lineage=lineage)
-        return self._save(self._append(updated, "legacy_public_facts_carried_forward", "legacy-import", lineage))
+        return self._save(
+            self._append(
+                updated, "legacy_public_facts_carried_forward", "legacy-import", lineage
+            )
+        )
 
     continue_from_legacy = create_task_from_legacy
 
@@ -2541,7 +3264,12 @@ class WorkflowService:
         return route
 
     def _path(self, session_id: str) -> Path:
-        if not session_id or "/" in session_id or "\\" in session_id or ".." in session_id:
+        if (
+            not session_id
+            or "/" in session_id
+            or "\\" in session_id
+            or ".." in session_id
+        ):
             raise ValueError("invalid_session_id")
         return self.root / f"{session_id}.json"
 
@@ -2555,10 +3283,17 @@ class WorkflowService:
             if path.exists():
                 # A duplicate action is idempotent and returns the already
                 # committed session.
-                current = EvidenceSession.from_json(path.read_text(encoding="utf-8"), path=path)
+                current = EvidenceSession.from_json(
+                    path.read_text(encoding="utf-8"), path=path
+                )
                 if current.revision >= session.revision:
-                    new_action = session.events[-1].action_id if session.events else None
-                    if new_action and self._event_for_action(current, new_action) is not None:
+                    new_action = (
+                        session.events[-1].action_id if session.events else None
+                    )
+                    if (
+                        new_action
+                        and self._event_for_action(current, new_action) is not None
+                    ):
                         return current
                     raise ValueError(
                         f"concurrent_revision_conflict: expected {session.revision - 1}, got {current.revision}"
@@ -2582,7 +3317,12 @@ class WorkflowService:
         return EvidenceSession(**values)
 
     @staticmethod
-    def _append(session: EvidenceSession, event_type: str, action_id: str, payload: Mapping[str, Any]) -> EvidenceSession:
+    def _append(
+        session: EvidenceSession,
+        event_type: str,
+        action_id: str,
+        payload: Mapping[str, Any],
+    ) -> EvidenceSession:
         event = SessionEvent.create(
             event_id=f"evt-{uuid4().hex}",
             action_id=action_id,
@@ -2590,15 +3330,23 @@ class WorkflowService:
             revision_before=session.revision,
             revision_after=session.revision + 1,
             payload=payload,
-            previous_fingerprint=session.events[-1].event_fingerprint if session.events else None,
+            previous_fingerprint=session.events[-1].event_fingerprint
+            if session.events
+            else None,
         )
-        return WorkflowService._replace(session, revision=event.revision_after, events=(*session.events, event))
+        return WorkflowService._replace(
+            session, revision=event.revision_after, events=(*session.events, event)
+        )
 
     @staticmethod
-    def _event_for_action(session: EvidenceSession, action_id: str) -> SessionEvent | None:
+    def _event_for_action(
+        session: EvidenceSession, action_id: str
+    ) -> SessionEvent | None:
         if not str(action_id).strip():
             raise ValueError("action_id_required")
-        return next((event for event in session.events if event.action_id == action_id), None)
+        return next(
+            (event for event in session.events if event.action_id == action_id), None
+        )
 
     @staticmethod
     def _check_mutable(session: EvidenceSession, revision: int) -> None:
@@ -2607,7 +3355,9 @@ class WorkflowService:
         if session.status in TERMINAL_STATES:
             raise ValueError(f"terminal_session: {session.status}")
         if revision != session.revision:
-            raise ValueError(f"stale_revision: expected {session.revision}, got {revision}")
+            raise ValueError(
+                f"stale_revision: expected {session.revision}, got {revision}"
+            )
 
     @staticmethod
     def _check_not_frozen(session: EvidenceSession) -> None:
@@ -2688,7 +3438,9 @@ def _has_route_dependents(session: EvidenceSession) -> bool:
     ) or bool(session.phase_results)
 
 
-def _controller_with_parameters(controller: Mapping[str, Any], parameters: Mapping[str, Any]) -> dict[str, Any]:
+def _controller_with_parameters(
+    controller: Mapping[str, Any], parameters: Mapping[str, Any]
+) -> dict[str, Any]:
     """Return a declarative controller candidate with a fresh fingerprint."""
 
     value = deepcopy(dict(controller))
@@ -2714,7 +3466,12 @@ def _answer_to_update(value: Any) -> dict[str, Any]:
         return result
     text = str(value).strip()
     if text.casefold() in {"unknown", "不清楚", "不知道", "未知"}:
-        return {"status": "unknown", "evidence": text, "confidence": 0.0, "blocking_for_current_route": True}
+        return {
+            "status": "unknown",
+            "evidence": text,
+            "confidence": 0.0,
+            "blocking_for_current_route": True,
+        }
     return {
         "status": "known",
         "evidence": text,
@@ -2744,10 +3501,7 @@ def _reply_evidence_excerpts(value: Mapping[str, Any]) -> list[str]:
 
 
 _REPLY_PARAMETER_FACT_IDS = frozenset(
-    {
-        item.feature_id
-        for item in feature_definitions()
-    }
+    {item.feature_id for item in feature_definitions()}
     | {
         field.fact_id
         for template in default_specification_template_catalog().templates
@@ -2773,7 +3527,9 @@ def _validate_reply_parameter_facts(value: Any, source: str) -> list[dict[str, A
         if fact_id in seen:
             raise ValueError(f"duplicate_parameter_fact: {fact_id}")
         seen.add(fact_id)
-        source_excerpt = str(item.get("source_text") or item.get("source_excerpt") or "").strip()
+        source_excerpt = str(
+            item.get("source_text") or item.get("source_excerpt") or ""
+        ).strip()
         if not _contains_verbatim_text(source, source_excerpt):
             raise ValueError(f"parameter source for {fact_id} is not in the user reply")
         if "value" not in item:
@@ -2839,16 +3595,46 @@ def _infer_assessment(text: str) -> str | None:
     # Check negative/qualified forms before their positive substrings.  This
     # keeps ordinary answers such as "no significant delay" and "inadequate
     # sensing" from being recorded as the opposite assessment.
-    if any(marker in lowered for marker in ("not significant", "no significant", "without significant", "无显著", "不显著")):
+    if any(
+        marker in lowered
+        for marker in (
+            "not significant",
+            "no significant",
+            "without significant",
+            "无显著",
+            "不显著",
+        )
+    ):
         return "not_significant"
-    if any(marker in lowered for marker in ("not adequate", "inadequate", "不充分", "不够")):
+    if any(
+        marker in lowered for marker in ("not adequate", "inadequate", "不充分", "不够")
+    ):
         return "inadequate"
     for token in (
-        "unstable", "marginal", "stable", "nonminimum_phase", "nonminimum phase",
-        "minimum_phase", "significant", "not_significant", "order2", "order 2",
-        "high", "low", "severe_mimo", "severe mimo", "underactuated", "cascaded",
-        "strong_dynamic", "strong dynamic", "weak", "adequate",
-        "large", "moderate", "small", "siso",
+        "unstable",
+        "marginal",
+        "stable",
+        "nonminimum_phase",
+        "nonminimum phase",
+        "minimum_phase",
+        "significant",
+        "not_significant",
+        "order2",
+        "order 2",
+        "high",
+        "low",
+        "severe_mimo",
+        "severe mimo",
+        "underactuated",
+        "cascaded",
+        "strong_dynamic",
+        "strong dynamic",
+        "weak",
+        "adequate",
+        "large",
+        "moderate",
+        "small",
+        "siso",
     ):
         if token in lowered:
             return token.replace(" ", "_")
@@ -2884,12 +3670,18 @@ def _validate_public_evidence(value: Mapping[str, Any]) -> dict[str, Any]:
             raise ValueError("evidence_trace_protocol_mismatch")
         result["trace"] = trace.to_dict()
         supplied_trace_fingerprint = result.get("trace_fingerprint")
-        if supplied_trace_fingerprint is not None and str(supplied_trace_fingerprint) != trace.fingerprint:
+        if (
+            supplied_trace_fingerprint is not None
+            and str(supplied_trace_fingerprint) != trace.fingerprint
+        ):
             raise ValueError("evidence_trace_fingerprint_mismatch")
         result["trace_fingerprint"] = trace.fingerprint
     result["kind"] = str(result.get("kind", "experiment"))
     computed_fingerprint = fingerprint(result)
-    if supplied_fingerprint is not None and str(supplied_fingerprint) != computed_fingerprint:
+    if (
+        supplied_fingerprint is not None
+        and str(supplied_fingerprint) != computed_fingerprint
+    ):
         raise ValueError("evidence_fingerprint_mismatch")
     result["fingerprint"] = computed_fingerprint
     return result
@@ -2899,7 +3691,10 @@ def _contains_private_marker(value: Any) -> bool:
     if isinstance(value, Mapping):
         for key, item in value.items():
             lowered = str(key).casefold()
-            if any(token in lowered for token in ("private", "truth", "oracle", "hidden", "secret")):
+            if any(
+                token in lowered
+                for token in ("private", "truth", "oracle", "hidden", "secret")
+            ):
                 return True
             if _contains_private_marker(item):
                 return True
@@ -2908,7 +3703,9 @@ def _contains_private_marker(value: Any) -> bool:
     return False
 
 
-def independent_judge(freeze: Mapping[str, Any], packet: Mapping[str, Any]) -> dict[str, Any]:
+def independent_judge(
+    freeze: Mapping[str, Any], packet: Mapping[str, Any]
+) -> dict[str, Any]:
     """Recompute public stability/performance gates without LLM or private data."""
 
     if hasattr(freeze, "to_dict"):
@@ -2935,8 +3732,14 @@ def independent_judge(freeze: Mapping[str, Any], packet: Mapping[str, Any]) -> d
     if private_truth_value is True:
         raise ValueError("private_truth_not_allowed")
     packet_session_id = packet.get("session_id")
-    packet_task_fingerprint = packet.get("task_fingerprint") or packet.get("task_contract_fingerprint")
-    packet_freeze_fingerprint = packet.get("freeze_fingerprint") or packet.get("controller_freeze_fingerprint") or packet.get("evaluation_freeze_fingerprint")
+    packet_task_fingerprint = packet.get("task_fingerprint") or packet.get(
+        "task_contract_fingerprint"
+    )
+    packet_freeze_fingerprint = (
+        packet.get("freeze_fingerprint")
+        or packet.get("controller_freeze_fingerprint")
+        or packet.get("evaluation_freeze_fingerprint")
+    )
     if packet_session_id != freeze.get("session_id"):
         raise ValueError("evaluation_session_mismatch")
     if packet_task_fingerprint != freeze.get("task_fingerprint"):
@@ -2947,21 +3750,36 @@ def independent_judge(freeze: Mapping[str, Any], packet: Mapping[str, Any]) -> d
     expected_provider = None
     if isinstance(runtime_contract, Mapping):
         bindings = runtime_contract.get("provider_bindings")
-        if isinstance(bindings, Mapping) and isinstance(bindings.get("evaluation"), Mapping):
+        if isinstance(bindings, Mapping) and isinstance(
+            bindings.get("evaluation"), Mapping
+        ):
             expected_provider = bindings["evaluation"]
         elif isinstance(runtime_contract.get("provider"), Mapping):
             expected_provider = runtime_contract["provider"]
     if isinstance(expected_provider, Mapping) and expected_provider.get("provider_id"):
-        packet_provider = packet.get("provider_contract") if isinstance(packet.get("provider_contract"), Mapping) else packet
+        packet_provider = (
+            packet.get("provider_contract")
+            if isinstance(packet.get("provider_contract"), Mapping)
+            else packet
+        )
         if packet_provider.get("provider_id") != expected_provider.get("provider_id"):
             raise ValueError("evaluation_provider_mismatch")
-        if packet_provider.get("provider_version") != expected_provider.get("provider_version"):
+        if packet_provider.get("provider_version") != expected_provider.get(
+            "provider_version"
+        ):
             raise ValueError("evaluation_provider_mismatch")
-    supplied_evidence = packet.get("evidence_fingerprints") or packet.get("evidence_fingerprint")
-    frozen_evidence = {str(item) for item in freeze.get("evidence_fingerprints", ()) or ()}
+    supplied_evidence = packet.get("evidence_fingerprints") or packet.get(
+        "evidence_fingerprint"
+    )
+    frozen_evidence = {
+        str(item) for item in freeze.get("evidence_fingerprints", ()) or ()
+    }
     if isinstance(supplied_evidence, str):
         supplied_evidence = (supplied_evidence,)
-    if supplied_evidence is not None and {str(item) for item in supplied_evidence} != frozen_evidence:
+    if (
+        supplied_evidence is not None
+        and {str(item) for item in supplied_evidence} != frozen_evidence
+    ):
         raise ValueError("evaluation_evidence_binding_mismatch")
     trials = tuple(packet.get("trials") or ())
     if not trials:
@@ -2998,15 +3816,19 @@ def independent_judge(freeze: Mapping[str, Any], packet: Mapping[str, Any]) -> d
     success_rate = success_count / len(judged_trials)
     wilson_lower_bound = _wilson_lower_bound(success_count, len(judged_trials))
     performance_contract = freeze.get("evaluation_contract", {})
-    minimum_rate = _criterion_float(performance_contract, "perturbed_success_rate_min", "success_rate_min")
+    minimum_rate = _criterion_float(
+        performance_contract, "perturbed_success_rate_min", "success_rate_min"
+    )
     rate_passed = minimum_rate is None or wilson_lower_bound >= minimum_rate
     phase_failures = _phase_failures(judged_trials)
     passed = stable and not phase_failures and all(performance_flags) and rate_passed
-    packet_provider = packet.get("provider_contract") if isinstance(packet.get("provider_contract"), Mapping) else packet
+    packet_provider = (
+        packet.get("provider_contract")
+        if isinstance(packet.get("provider_contract"), Mapping)
+        else packet
+    )
     trial_scores = [
-        _trial_score(item)
-        for item in judged_trials
-        if _trial_score(item) is not None
+        _trial_score(item) for item in judged_trials if _trial_score(item) is not None
     ]
     result = {
         "status": "performance_met" if passed else "performance_not_met",
@@ -3040,7 +3862,9 @@ def independent_judge(freeze: Mapping[str, Any], packet: Mapping[str, Any]) -> d
         "failure_reasons": (
             ["stability_or_stop_failure"]
             if stability_failures
-            else (phase_failures or ([] if passed else ["performance_threshold_not_met"]))
+            else (
+                phase_failures or ([] if passed else ["performance_threshold_not_met"])
+            )
         ),
         "packet_fingerprint": supplied_packet or fingerprint(dict(packet)),
         "freeze_fingerprint": freeze.get("freeze_fingerprint"),
@@ -3055,7 +3879,9 @@ def independent_judge(freeze: Mapping[str, Any], packet: Mapping[str, Any]) -> d
     return result
 
 
-def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) -> dict[str, Any]:
+def _judge_trial(
+    trial: dict[str, Any], evaluation_contract: Mapping[str, Any]
+) -> dict[str, Any]:
     """Derive public trajectory metrics when a packet includes raw samples.
 
     Providers may submit already adjudicated boolean gates.  When they submit a
@@ -3083,7 +3909,9 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
         trial["stopped_on_limit"] = True
         trial["stop_reason"] = str(stop_event.get("reason") or "public_stop")
     metrics = dict(trial.get("metrics") or {})
-    invalid = times is None or output is None or len(times) != len(output) or len(times) < 2
+    invalid = (
+        times is None or output is None or len(times) != len(output) or len(times) < 2
+    )
     if reference is not None and len(reference) != len(output):
         invalid = True
     if control is not None and len(control) != len(output):
@@ -3092,8 +3920,16 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
         invalid = True
     if saturated is not None and len(saturated) != len(output):
         invalid = True
-    if invalid or any(second <= first for first, second in zip(times or (), (times or ())[1:])):
-        trial.update({"stable": False, "performance_pass": False, "failure_reason": "invalid_public_trajectory"})
+    if invalid or any(
+        second <= first for first, second in zip(times or (), (times or ())[1:])
+    ):
+        trial.update(
+            {
+                "stable": False,
+                "performance_pass": False,
+                "failure_reason": "invalid_public_trajectory",
+            }
+        )
         return trial
     if reference is None:
         # A public packet may omit a repeated reference column when the task
@@ -3111,7 +3947,9 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
     trough = min(output)
     target = reference[-1]
     amplitude = max(abs(float(target) - float(reference[0])), 1e-12)
-    overshoot = max(0.0, (peak - target) if target >= reference[0] else (target - trough))
+    overshoot = max(
+        0.0, (peak - target) if target >= reference[0] else (target - trough)
+    )
     settling_limit = _criterion_float(
         evaluation_contract,
         "settling_time_max_s",
@@ -3126,10 +3964,15 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
     overshoot_limit = _criterion_float(evaluation_contract, "overshoot_max")
     stable = trial.get("stable")
     if stable is None:
-        stable = bool(all(math.isfinite(value) for value in output)) and trial.get("stopped_on_limit") is not True
+        stable = (
+            bool(all(math.isfinite(value) for value in output))
+            and trial.get("stopped_on_limit") is not True
+        )
     if trial.get("stopped_on_limit") is True:
         stable = False
-    output_limit = _criterion_float(evaluation_contract, "output_abs_max", "state_stop", "max_abs_output")
+    output_limit = _criterion_float(
+        evaluation_contract, "output_abs_max", "state_stop", "max_abs_output"
+    )
     output_min = _declared_scalar(evaluation_contract, "output_min")
     output_max = _declared_scalar(evaluation_contract, "output_max")
     declared_output_bounds = _declared_bounds(evaluation_contract, "task_output_bounds")
@@ -3143,11 +3986,12 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
             state_stop = None
         if state_stop is not None and math.isfinite(state_stop) and state_stop > 0:
             output_limit = state_stop
-    output_outside_bounds = (
-        (output_min is not None and min(output) < output_min)
-        or (output_max is not None and max(output) > output_max)
+    output_outside_bounds = (output_min is not None and min(output) < output_min) or (
+        output_max is not None and max(output) > output_max
     )
-    if (output_limit is not None and max(abs(value) for value in output) > output_limit) or output_outside_bounds:
+    if (
+        output_limit is not None and max(abs(value) for value in output) > output_limit
+    ) or output_outside_bounds:
         stable = False
         trial["failure_reason"] = "public_output_limit_exceeded"
     performance_pass = trial.get("performance_pass")
@@ -3156,10 +4000,16 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
         criteria_pass = criteria_pass and final_error <= final_error_limit
     if overshoot_limit is not None:
         criteria_pass = criteria_pass and overshoot <= overshoot_limit
-    settling_time = _settling_time(times, errors, final_error_limit or max(0.02 * amplitude, 1e-9))
+    settling_time = _settling_time(
+        times, errors, final_error_limit or max(0.02 * amplitude, 1e-9)
+    )
     metrics["settling_time_s"] = settling_time
     if settling_limit is not None:
-        criteria_pass = criteria_pass and settling_time is not None and settling_time <= settling_limit
+        criteria_pass = (
+            criteria_pass
+            and settling_time is not None
+            and settling_time <= settling_limit
+        )
     iae = sum(
         (abs(errors[index - 1]) + abs(errors[index]))
         * (times[index] - times[index - 1])
@@ -3169,11 +4019,24 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
     hold_tolerance = final_error_limit or max(0.02 * amplitude, 1e-9)
     hold_duration = _trailing_hold_duration(times, errors, hold_tolerance)
     metrics.update({"iae": iae, "hold_duration_s": hold_duration})
-    iae_limit = _criterion_float(evaluation_contract, "iae_max", "integral_absolute_error_max")
-    peak_input_limit = _criterion_float(evaluation_contract, "peak_abs_input_max", "input_peak_max")
-    saturation_ratio_limit = _criterion_float(evaluation_contract, "saturation_ratio_max", "saturation_fraction_max")
-    saturation_duration_limit = _criterion_float(evaluation_contract, "saturation_duration_max_s")
-    hold_min = _criterion_float(evaluation_contract, "hold_duration_min_s", "hold_duration_s", "final_hold_duration_min_s")
+    iae_limit = _criterion_float(
+        evaluation_contract, "iae_max", "integral_absolute_error_max"
+    )
+    peak_input_limit = _criterion_float(
+        evaluation_contract, "peak_abs_input_max", "input_peak_max"
+    )
+    saturation_ratio_limit = _criterion_float(
+        evaluation_contract, "saturation_ratio_max", "saturation_fraction_max"
+    )
+    saturation_duration_limit = _criterion_float(
+        evaluation_contract, "saturation_duration_max_s"
+    )
+    hold_min = _criterion_float(
+        evaluation_contract,
+        "hold_duration_min_s",
+        "hold_duration_s",
+        "final_hold_duration_min_s",
+    )
     if iae_limit is not None:
         criteria_pass = criteria_pass and iae <= iae_limit
     if control is not None:
@@ -3182,18 +4045,21 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
         metrics["control_peak_abs"] = peak_input
         input_min = _declared_scalar(evaluation_contract, "input_min")
         input_max = _declared_scalar(evaluation_contract, "input_max")
-        declared_input_bounds = _declared_bounds(evaluation_contract, "task_input_bounds")
+        declared_input_bounds = _declared_bounds(
+            evaluation_contract, "task_input_bounds"
+        )
         if declared_input_bounds is not None:
             input_min = input_min if input_min is not None else declared_input_bounds[0]
             input_max = input_max if input_max is not None else declared_input_bounds[1]
         if input_min is None or input_max is None:
-            runtime_bounds = _declared_bounds(evaluation_contract.get("runtime_contract", {}), "command_bounds")
+            runtime_bounds = _declared_bounds(
+                evaluation_contract.get("runtime_contract", {}), "command_bounds"
+            )
             if runtime_bounds is not None:
                 input_min = input_min if input_min is not None else runtime_bounds[0]
                 input_max = input_max if input_max is not None else runtime_bounds[1]
-        if (
-            (input_min is not None and min(control) < input_min)
-            or (input_max is not None and max(control) > input_max)
+        if (input_min is not None and min(control) < input_min) or (
+            input_max is not None and max(control) > input_max
         ):
             stable = False
             trial["failure_reason"] = "public_input_limit_exceeded"
@@ -3207,9 +4073,13 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
         metrics["saturation_duration_s"] = saturation_duration
         metrics["saturation_fraction"] = saturation_fraction
         if saturation_ratio_limit is not None:
-            criteria_pass = criteria_pass and saturation_fraction <= saturation_ratio_limit
+            criteria_pass = (
+                criteria_pass and saturation_fraction <= saturation_ratio_limit
+            )
         if saturation_duration_limit is not None:
-            criteria_pass = criteria_pass and saturation_duration <= saturation_duration_limit
+            criteria_pass = (
+                criteria_pass and saturation_duration <= saturation_duration_limit
+            )
     if hold_min is not None:
         criteria_pass = criteria_pass and hold_duration >= hold_min
     if performance_pass is None:
@@ -3231,7 +4101,13 @@ def _judge_trial(trial: dict[str, Any], evaluation_contract: Mapping[str, Any]) 
     )
     if control is not None:
         metrics["control_peak_abs"] = max(abs(value) for value in control)
-    trial.update({"stable": bool(stable), "performance_pass": bool(performance_pass), "metrics": metrics})
+    trial.update(
+        {
+            "stable": bool(stable),
+            "performance_pass": bool(performance_pass),
+            "metrics": metrics,
+        }
+    )
     return trial
 
 
@@ -3247,10 +4123,16 @@ def _apply_task_specific_gate(
     """
 
     task_type = str(evaluation_contract.get("task_type") or "").strip()
-    if task_type not in {"local_setpoint_hold", "transition_then_hold", "disturbance_recovery_to_hold"}:
+    if task_type not in {
+        "local_setpoint_hold",
+        "transition_then_hold",
+        "disturbance_recovery_to_hold",
+    }:
         return trial
     criteria = evaluation_contract.get("task_success_requirements")
-    criteria = dict(criteria) if isinstance(criteria, Mapping) else dict(evaluation_contract)
+    criteria = (
+        dict(criteria) if isinstance(criteria, Mapping) else dict(evaluation_contract)
+    )
     metrics = dict(trial.get("metrics") or {})
     passed = trial.get("performance_pass") is True
 
@@ -3265,7 +4147,9 @@ def _apply_task_specific_gate(
         disturbance_executed = trial.get("disturbance_executed")
         if disturbance_executed is None:
             disturbance_executed = trial.get("disturbance_event") is not None
-        expected_event = str(evaluation_contract.get("disturbance_event_fingerprint") or "")
+        expected_event = str(
+            evaluation_contract.get("disturbance_event_fingerprint") or ""
+        )
         event_fingerprint = trial.get("disturbance_event_fingerprint")
         recovered = trial.get("recovered_to_hold")
         if recovered is None:
@@ -3277,16 +4161,24 @@ def _apply_task_specific_gate(
         if hold_duration is None:
             hold_duration = metrics.get("hold_duration_s")
         try:
-            recovery_time_value = float(recovery_time) if recovery_time is not None else float("inf")
+            recovery_time_value = (
+                float(recovery_time) if recovery_time is not None else float("inf")
+            )
         except (TypeError, ValueError):
             recovery_time_value = float("inf")
         try:
-            hold_duration_value = float(hold_duration) if hold_duration is not None else -1.0
+            hold_duration_value = (
+                float(hold_duration) if hold_duration is not None else -1.0
+            )
         except (TypeError, ValueError):
             hold_duration_value = -1.0
         recovery_limit = _criterion_float(criteria, "recovery_time_max_s")
-        hold_min = _criterion_float(criteria, "post_recovery_hold_duration_min_s", "hold_duration_min_s")
-        error_limit = _criterion_float(criteria, "recovery_abs_error_max", "final_abs_error_max")
+        hold_min = _criterion_float(
+            criteria, "post_recovery_hold_duration_min_s", "hold_duration_min_s"
+        )
+        error_limit = _criterion_float(
+            criteria, "recovery_abs_error_max", "final_abs_error_max"
+        )
         final_error = metrics.get("final_abs_error")
         passed = (
             passed
@@ -3295,12 +4187,19 @@ def _apply_task_specific_gate(
             and bool(recovered)
             and (recovery_limit is None or recovery_time_value <= recovery_limit)
             and (hold_min is None or hold_duration_value >= hold_min)
-            and (error_limit is None or (final_error is not None and float(final_error) <= error_limit))
+            and (
+                error_limit is None
+                or (final_error is not None and float(final_error) <= error_limit)
+            )
         )
-        metrics.update({
-            "recovery_time_s": recovery_time_value if math.isfinite(recovery_time_value) else None,
-            "post_recovery_hold_duration_s": hold_duration_value,
-        })
+        metrics.update(
+            {
+                "recovery_time_s": recovery_time_value
+                if math.isfinite(recovery_time_value)
+                else None,
+                "post_recovery_hold_duration_s": hold_duration_value,
+            }
+        )
         trial["task_outcome"] = {
             "disturbance_executed": bool(disturbance_executed),
             "disturbance_event_fingerprint": event_fingerprint,
@@ -3313,7 +4212,9 @@ def _apply_task_specific_gate(
         return trial
 
     phase_plan = evaluation_contract.get("phase_plan")
-    phase_items = phase_plan.get("phases", ()) if isinstance(phase_plan, Mapping) else ()
+    phase_items = (
+        phase_plan.get("phases", ()) if isinstance(phase_plan, Mapping) else ()
+    )
     expected_phase_ids = [
         str(item.get("phase_id") or item.get("id"))
         for item in phase_items
@@ -3331,7 +4232,11 @@ def _apply_task_specific_gate(
             str(item.get("phase_id") or item.get("id"))
             for item in phase_events
             if isinstance(item, Mapping)
-            and (item.get("success") is True or item.get("exit_condition_met") is True or item.get("status") == "completed")
+            and (
+                item.get("success") is True
+                or item.get("exit_condition_met") is True
+                or item.get("status") == "completed"
+            )
             and (item.get("phase_id") or item.get("id"))
         ]
     verified_handoff_ids = trial.get("verified_handoff_ids")
@@ -3340,7 +4245,11 @@ def _apply_task_specific_gate(
             str(item.get("handoff_id") or item.get("id"))
             for item in handoff_events
             if isinstance(item, Mapping)
-            and (item.get("condition_met") is True or item.get("success") is True or item.get("status") == "verified")
+            and (
+                item.get("condition_met") is True
+                or item.get("success") is True
+                or item.get("status") == "verified"
+            )
             and (item.get("handoff_id") or item.get("id"))
         ]
     completed_phase_ids = [str(item) for item in completed_phase_ids]
@@ -3348,12 +4257,15 @@ def _apply_task_specific_gate(
     if not expected_phase_ids and completed_phase_ids:
         expected_phase_ids = list(completed_phase_ids)
     expected_handoff_ids = [
-        f"{source}__to__{target}"
-        for source, target in pairwise(expected_phase_ids)
+        f"{source}__to__{target}" for source, target in pairwise(expected_phase_ids)
     ]
     entered_goal = trial.get("entered_goal_region")
     if entered_goal is None:
-        entered_goal = bool(completed_phase_ids and expected_phase_ids and completed_phase_ids[-1] == expected_phase_ids[-1])
+        entered_goal = bool(
+            completed_phase_ids
+            and expected_phase_ids
+            and completed_phase_ids[-1] == expected_phase_ids[-1]
+        )
     final_hold = trial.get("final_hold_duration_s")
     if final_hold is None:
         final_hold = metrics.get("hold_duration_s")
@@ -3363,7 +4275,9 @@ def _apply_task_specific_gate(
         final_hold_value = -1.0
     required_phase_count = _criterion_float(criteria, "required_phase_count_min")
     required_handoff_count = _criterion_float(criteria, "verified_handoff_count_min")
-    final_hold_min = _criterion_float(criteria, "final_hold_duration_min_s", "hold_duration_min_s")
+    final_hold_min = _criterion_float(
+        criteria, "final_hold_duration_min_s", "hold_duration_min_s"
+    )
     identities = (
         len(completed_phase_ids) == len(set(completed_phase_ids))
         and len(verified_handoff_ids) == len(set(verified_handoff_ids))
@@ -3383,9 +4297,17 @@ def _apply_task_specific_gate(
     passed = (
         passed
         and identities
-        and bool(entered_goal or not bool(criteria.get("goal_region_entry_required", True)))
-        and (required_phase_count is None or len(completed_phase_ids) >= required_phase_count)
-        and (required_handoff_count is None or len(verified_handoff_ids) >= required_handoff_count)
+        and bool(
+            entered_goal or not bool(criteria.get("goal_region_entry_required", True))
+        )
+        and (
+            required_phase_count is None
+            or len(completed_phase_ids) >= required_phase_count
+        )
+        and (
+            required_handoff_count is None
+            or len(verified_handoff_ids) >= required_handoff_count
+        )
         and (final_hold_min is None or final_hold_value >= final_hold_min)
     )
     trial["performance_pass"] = bool(passed)
@@ -3400,12 +4322,23 @@ def _normalize_trajectory(value: Any) -> Mapping[str, Any] | None:
         if isinstance(samples, (list, tuple)):
             return _normalize_trajectory(samples)
         return value
-    if not isinstance(value, (list, tuple)) or not value or not all(isinstance(item, Mapping) for item in value):
+    if (
+        not isinstance(value, (list, tuple))
+        or not value
+        or not all(isinstance(item, Mapping) for item in value)
+    ):
         return None
     rows = [dict(item) for item in value]
     keys = set().union(*(row.keys() for row in rows))
     normalized: dict[str, Any] = {}
-    for key in ("time_s", "reference", "output", "control_input", "raw_control_input", "saturated"):
+    for key in (
+        "time_s",
+        "reference",
+        "output",
+        "control_input",
+        "raw_control_input",
+        "saturated",
+    ):
         if key in keys:
             normalized[key] = [row.get(key) for row in rows]
     if "output" not in normalized:
@@ -3418,9 +4351,19 @@ def _normalize_trajectory(value: Any) -> Mapping[str, Any] | None:
 
 def _trial_score(trial: Mapping[str, Any]) -> float | None:
     metrics = trial.get("metrics")
-    candidates: list[Any] = [trial.get("score"), trial.get("performance_score"), trial.get("objective")]
+    candidates: list[Any] = [
+        trial.get("score"),
+        trial.get("performance_score"),
+        trial.get("objective"),
+    ]
     if isinstance(metrics, Mapping):
-        candidates.extend((metrics.get("score"), metrics.get("performance_score"), metrics.get("objective")))
+        candidates.extend(
+            (
+                metrics.get("score"),
+                metrics.get("performance_score"),
+                metrics.get("objective"),
+            )
+        )
     for value in candidates:
         if value is None:
             continue
@@ -3444,10 +4387,16 @@ def _boolean_sequence(value: Any) -> list[bool] | None:
 def _boolean_duration(times: list[float], values: list[bool]) -> float:
     if len(times) != len(values):
         return 0.0
-    return sum(times[index] - times[index - 1] for index in range(1, len(times)) if values[index] or values[index - 1])
+    return sum(
+        times[index] - times[index - 1]
+        for index in range(1, len(times))
+        if values[index] or values[index - 1]
+    )
 
 
-def _trailing_hold_duration(times: list[float], errors: list[float], tolerance: float) -> float:
+def _trailing_hold_duration(
+    times: list[float], errors: list[float], tolerance: float
+) -> float:
     for index in range(len(errors) - 1, -1, -1):
         if abs(errors[index]) > tolerance:
             return max(0.0, times[-1] - times[index])
@@ -3457,18 +4406,29 @@ def _trailing_hold_duration(times: list[float], errors: list[float], tolerance: 
 def _phase_failures(trials: tuple[Mapping[str, Any], ...]) -> list[str]:
     failures: list[str] = []
     for index, trial in enumerate(trials):
-        for phase in trial.get("phase_events", ()) if isinstance(trial.get("phase_events"), (list, tuple)) else ():
+        for phase in (
+            trial.get("phase_events", ())
+            if isinstance(trial.get("phase_events"), (list, tuple))
+            else ()
+        ):
             if isinstance(phase, Mapping) and (
                 phase.get("success") is False
                 or phase.get("entry_condition_met") is False
                 or phase.get("exit_condition_met") is False
             ):
                 failures.append(f"trial_{index}:{phase.get('phase_id', 'phase')}")
-        for handoff in trial.get("handoff_events", ()) if isinstance(trial.get("handoff_events"), (list, tuple)) else ():
+        for handoff in (
+            trial.get("handoff_events", ())
+            if isinstance(trial.get("handoff_events"), (list, tuple))
+            else ()
+        ):
             if isinstance(handoff, Mapping) and (
-                handoff.get("condition_met") is False or handoff.get("state_valid") is False
+                handoff.get("condition_met") is False
+                or handoff.get("state_valid") is False
             ):
-                failures.append(f"trial_{index}:handoff:{handoff.get('handoff_id', 'handoff')}")
+                failures.append(
+                    f"trial_{index}:handoff:{handoff.get('handoff_id', 'handoff')}"
+                )
     return failures
 
 
@@ -3603,7 +4563,9 @@ def _declared_scalar(contract: Any, key: str) -> float | None:
     return number if number is not None and math.isfinite(number) else None
 
 
-def _settling_time(times: list[float], errors: list[float], tolerance: float) -> float | None:
+def _settling_time(
+    times: list[float], errors: list[float], tolerance: float
+) -> float | None:
     for index, error in enumerate(errors):
         if all(abs(item) <= tolerance for item in errors[index:]):
             return times[index] - times[0]

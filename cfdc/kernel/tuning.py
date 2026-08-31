@@ -43,7 +43,10 @@ class TuningContract:
             or self.baseline_multiplier_min > self.baseline_multiplier_max
         ):
             raise ValueError("tuning_multiplier_domain_invalid")
-        if not math.isfinite(float(self.minimum_relative_improvement)) or self.minimum_relative_improvement < 0:
+        if (
+            not math.isfinite(float(self.minimum_relative_improvement))
+            or self.minimum_relative_improvement < 0
+        ):
             raise ValueError("tuning_improvement_threshold_invalid")
         if self.development_repeats <= 0 or self.fresh_repeats <= 0:
             raise ValueError("tuning_repeat_count_invalid")
@@ -55,7 +58,11 @@ class TuningContract:
             if name not in self.parameter_domains:
                 raise ValueError(f"tuning_domain_missing: {name}")
             lower, upper = self.parameter_domains[name]
-            if not math.isfinite(float(lower)) or not math.isfinite(float(upper)) or float(lower) >= float(upper):
+            if (
+                not math.isfinite(float(lower))
+                or not math.isfinite(float(upper))
+                or float(lower) >= float(upper)
+            ):
                 raise ValueError(f"tuning_domain_invalid: {name}")
         if not self.probe_multipliers:
             raise ValueError("tuning_probe_sequence_empty")
@@ -72,7 +79,9 @@ class TuningContract:
         if not isinstance(budget_confirmed, bool):
             raise ValueError("tuning_budget_confirmed_must_be_boolean")  # noqa: TRY004 - stable API error
         contract = cls(
-            parameter_whitelist=tuple(str(item) for item in raw.get("parameter_whitelist", ()) or ()),
+            parameter_whitelist=tuple(
+                str(item) for item in raw.get("parameter_whitelist", ()) or ()
+            ),
             parameter_domains={
                 str(key): tuple(float(bound) for bound in bounds)
                 for key, bounds in dict(raw.get("parameter_domains", {})).items()
@@ -80,15 +89,43 @@ class TuningContract:
             max_probes=int(raw.get("max_probes", 6)),
             baseline_multiplier_min=float(raw.get("baseline_multiplier_min", 0.25)),
             baseline_multiplier_max=float(raw.get("baseline_multiplier_max", 3.0)),
-            minimum_relative_improvement=float(raw.get("minimum_relative_improvement", 0.02)),
+            minimum_relative_improvement=float(
+                raw.get("minimum_relative_improvement", 0.02)
+            ),
             development_repeats=int(raw.get("development_repeats", 20)),
             fresh_repeats=int(raw.get("fresh_repeats", 20)),
             budget_confirmed=budget_confirmed,
-            probe_multipliers=tuple(float(item) for item in raw.get("probe_multipliers", DEFAULT_PROBE_MULTIPLIERS)),
-            task_fingerprint=(str(raw.get("task_fingerprint") or raw.get("task_contract_fingerprint") or "") or None),
-            initial_freeze_fingerprint=(str(raw.get("initial_freeze_fingerprint") or raw.get("initial_controller_freeze_fingerprint") or "") or None),
-            evaluation_contract_fingerprint=(str(raw.get("evaluation_contract_fingerprint") or raw.get("independent_judge_contract_fingerprint") or "") or None),
-            contract_version=str(raw.get("contract_version") or TUNING_CONTRACT_VERSION),
+            probe_multipliers=tuple(
+                float(item)
+                for item in raw.get("probe_multipliers", DEFAULT_PROBE_MULTIPLIERS)
+            ),
+            task_fingerprint=(
+                str(
+                    raw.get("task_fingerprint")
+                    or raw.get("task_contract_fingerprint")
+                    or ""
+                )
+                or None
+            ),
+            initial_freeze_fingerprint=(
+                str(
+                    raw.get("initial_freeze_fingerprint")
+                    or raw.get("initial_controller_freeze_fingerprint")
+                    or ""
+                )
+                or None
+            ),
+            evaluation_contract_fingerprint=(
+                str(
+                    raw.get("evaluation_contract_fingerprint")
+                    or raw.get("independent_judge_contract_fingerprint")
+                    or ""
+                )
+                or None
+            ),
+            contract_version=str(
+                raw.get("contract_version") or TUNING_CONTRACT_VERSION
+            ),
         )
         if supplied is not None and str(supplied) != contract.fingerprint:
             raise ValueError("tuning_contract_fingerprint_mismatch")
@@ -102,7 +139,9 @@ class TuningContract:
         value = {
             "contract_version": self.contract_version,
             "parameter_whitelist": list(self.parameter_whitelist),
-            "parameter_domains": {key: list(bounds) for key, bounds in self.parameter_domains.items()},
+            "parameter_domains": {
+                key: list(bounds) for key, bounds in self.parameter_domains.items()
+            },
             "max_probes": self.max_probes,
             "baseline_multiplier_min": self.baseline_multiplier_min,
             "baseline_multiplier_max": self.baseline_multiplier_max,
@@ -144,7 +183,9 @@ class TuningResult:
         }
 
 
-def _validate_parameters(parameters: Mapping[str, Any], contract: TuningContract) -> dict[str, float]:
+def _validate_parameters(
+    parameters: Mapping[str, Any], contract: TuningContract
+) -> dict[str, float]:
     values: dict[str, float] = {}
     for name in contract.parameter_whitelist:
         if name not in parameters:
@@ -201,22 +242,54 @@ def run_bounded_tuning(
     """
 
     if not contract.budget_confirmed:
-        return TuningResult("blocked", baseline_result, dict(baseline_parameters), None, reason="tuning_budget_not_confirmed", contract_fingerprint=contract.fingerprint)
+        return TuningResult(
+            "blocked",
+            baseline_result,
+            dict(baseline_parameters),
+            None,
+            reason="tuning_budget_not_confirmed",
+            contract_fingerprint=contract.fingerprint,
+        )
     baseline = _validate_parameters(baseline_parameters, contract)
     if baseline_result.get("stable") is not True:
-        return TuningResult("blocked", baseline_result, baseline, _score(baseline_result), reason="initial_qualification_failed", contract_fingerprint=contract.fingerprint)
+        return TuningResult(
+            "blocked",
+            baseline_result,
+            baseline,
+            _score(baseline_result),
+            reason="initial_qualification_failed",
+            contract_fingerprint=contract.fingerprint,
+        )
     if baseline_result.get("performance_pass") is True:
-        return TuningResult("skipped", baseline_result, baseline, _score(baseline_result), reason="baseline_already_meets_contract", contract_fingerprint=contract.fingerprint)
+        return TuningResult(
+            "skipped",
+            baseline_result,
+            baseline,
+            _score(baseline_result),
+            reason="baseline_already_meets_contract",
+            contract_fingerprint=contract.fingerprint,
+        )
     baseline_score = _score(baseline_result)
     if baseline_score is None:
-        return TuningResult("blocked", baseline_result, baseline, None, reason="baseline_score_missing", contract_fingerprint=contract.fingerprint)
+        return TuningResult(
+            "blocked",
+            baseline_result,
+            baseline,
+            None,
+            reason="baseline_score_missing",
+            contract_fingerprint=contract.fingerprint,
+        )
     best_parameters = dict(baseline)
     best_score = baseline_score
     best_development_score = baseline_score
     probes: list[Mapping[str, Any]] = []
-    for index, candidate in enumerate(bounded_parameter_candidates(baseline, contract), 1):
+    for index, candidate in enumerate(
+        bounded_parameter_candidates(baseline, contract), 1
+    ):
         try:
-            development = dict(evaluate(candidate, "development", contract.development_repeats))
+            development = dict(
+                evaluate(candidate, "development", contract.development_repeats)
+            )
         except Exception as exc:  # noqa: BLE001 - provider failures are a hard tuning stop
             probes.append(
                 {
@@ -246,12 +319,17 @@ def run_bounded_tuning(
             "fresh": None,
             "accepted": False,
         }
-        if development.get("hard_failure") is True or development.get("stable") is not True:
+        if (
+            development.get("hard_failure") is True
+            or development.get("stable") is not True
+        ):
             row["reason"] = "stability_or_hard_failure"
             probes.append(row)
             continue
         score = _score(development)
-        if score is None or score < best_development_score * (1.0 + contract.minimum_relative_improvement):
+        if score is None or score < best_development_score * (
+            1.0 + contract.minimum_relative_improvement
+        ):
             row["reason"] = "improvement_below_threshold"
             probes.append(row)
             continue
@@ -277,7 +355,9 @@ def run_bounded_tuning(
             probes.append(row)
             continue
         fresh_score = _score(fresh)
-        if fresh_score is None or fresh_score < best_development_score * (1.0 + contract.minimum_relative_improvement):
+        if fresh_score is None or fresh_score < best_development_score * (
+            1.0 + contract.minimum_relative_improvement
+        ):
             row["reason"] = "fresh_improvement_below_threshold"
             probes.append(row)
             continue
@@ -300,7 +380,9 @@ def run_bounded_tuning(
         best_score,
         tuple(probes),
         accepted,
-        "best_candidate_selected" if accepted else "no_candidate_met_improvement_and_fresh_gates",
+        "best_candidate_selected"
+        if accepted
+        else "no_candidate_met_improvement_and_fresh_gates",
         contract.fingerprint,
     )
 
@@ -319,4 +401,9 @@ def _score(result: Mapping[str, Any]) -> float | None:
     return None
 
 
-__all__ = ["TuningContract", "TuningResult", "bounded_parameter_candidates", "run_bounded_tuning"]
+__all__ = [
+    "TuningContract",
+    "TuningResult",
+    "bounded_parameter_candidates",
+    "run_bounded_tuning",
+]

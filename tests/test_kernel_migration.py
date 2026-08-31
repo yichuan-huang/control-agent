@@ -76,7 +76,9 @@ def test_not_relevant_is_deterministic_and_scoped() -> None:
     assert updated.entry("open_loop_stability").status == "unknown"
 
 
-def test_not_relevant_dimensions_do_not_block_when_remaining_evidence_is_known() -> None:
+def test_not_relevant_dimensions_do_not_block_when_remaining_evidence_is_known() -> (
+    None
+):
     ledger = DiagnosticLedger.initial().apply_not_relevant(
         {"coupling_underactuation": "SISO interface"},
         task_type="local_setpoint_hold",
@@ -96,7 +98,9 @@ def test_not_relevant_dimensions_do_not_block_when_remaining_evidence_is_known()
     assert resolved.readiness().status == "ready"
 
 
-def test_workflow_session_is_revisioned_and_duplicate_action_is_idempotent(tmp_path) -> None:
+def test_workflow_session_is_revisioned_and_duplicate_action_is_idempotent(
+    tmp_path,
+) -> None:
     service = WorkflowService(tmp_path)
     task = service.start(
         {
@@ -147,7 +151,9 @@ def test_session_round_trip_and_old_payload_is_read_only(tmp_path) -> None:
     restored = EvidenceSession.from_json(task.to_json())
     assert restored.session_id == task.session_id
     old = tmp_path / "old-session.json"
-    old.write_text(json.dumps({"schema_version": "4.0", "status": "complete"}), encoding="utf-8")
+    old.write_text(
+        json.dumps({"schema_version": "4.0", "status": "complete"}), encoding="utf-8"
+    )
     imported = service.import_legacy(old)
     assert imported.read_only is True
     with pytest.raises(ValueError, match="read_only"):
@@ -179,10 +185,14 @@ def _resolved_session(service: WorkflowService):
         revision=session.revision,
         answer=answers,
     )
-    return service.advance(session.session_id, action_id="advance", revision=session.revision)
+    return service.advance(
+        session.session_id, action_id="advance", revision=session.revision
+    )
 
 
-def test_route_freeze_and_independent_judge_are_bound_to_public_evidence(tmp_path) -> None:
+def test_route_freeze_and_independent_judge_are_bound_to_public_evidence(
+    tmp_path,
+) -> None:
     service = WorkflowService(tmp_path)
     session = service.start(
         {
@@ -192,17 +202,64 @@ def test_route_freeze_and_independent_judge_are_bound_to_public_evidence(tmp_pat
         }
     )
     answers = {
-        "open_loop_stability": {"status": "known", "assessment": "stable", "evidence": "stable", "confidence": 0.9},
-        "nonminimum_phase": {"status": "known", "assessment": "minimum_phase", "evidence": "minimum phase", "confidence": 0.9},
-        "significant_delay": {"status": "known", "assessment": "not_significant", "evidence": "no significant delay", "confidence": 0.9},
-        "relative_degree": {"status": "known", "assessment": "low", "evidence": "low order", "confidence": 0.9},
-        "sensing_actuation_adequacy": {"status": "known", "assessment": "adequate", "evidence": "adequate", "confidence": 0.9},
-        "nonlinearity_strength": {"status": "known", "assessment": "weak", "evidence": "weak", "confidence": 0.9},
-        "coupling_underactuation": {"status": "known", "assessment": "siso", "evidence": "SISO", "confidence": 0.9},
-        "uncertainty_variation": {"status": "known", "assessment": "small", "evidence": "small", "confidence": 0.9},
+        "open_loop_stability": {
+            "status": "known",
+            "assessment": "stable",
+            "evidence": "stable",
+            "confidence": 0.9,
+        },
+        "nonminimum_phase": {
+            "status": "known",
+            "assessment": "minimum_phase",
+            "evidence": "minimum phase",
+            "confidence": 0.9,
+        },
+        "significant_delay": {
+            "status": "known",
+            "assessment": "not_significant",
+            "evidence": "no significant delay",
+            "confidence": 0.9,
+        },
+        "relative_degree": {
+            "status": "known",
+            "assessment": "low",
+            "evidence": "low order",
+            "confidence": 0.9,
+        },
+        "sensing_actuation_adequacy": {
+            "status": "known",
+            "assessment": "adequate",
+            "evidence": "adequate",
+            "confidence": 0.9,
+        },
+        "nonlinearity_strength": {
+            "status": "known",
+            "assessment": "weak",
+            "evidence": "weak",
+            "confidence": 0.9,
+        },
+        "coupling_underactuation": {
+            "status": "known",
+            "assessment": "siso",
+            "evidence": "SISO",
+            "confidence": 0.9,
+        },
+        "uncertainty_variation": {
+            "status": "known",
+            "assessment": "small",
+            "evidence": "small",
+            "confidence": 0.9,
+        },
     }
-    session = service.submit_answer(session.session_id, action_id="answer", revision=session.revision, answer=answers)
-    session = service.advance(session.session_id, action_id="advance", revision=session.revision)
+    session = service.submit_answer(
+        session.session_id,
+        action_id="answer",
+        revision=session.revision,
+        answer=answers,
+    )
+    session = service.advance(
+        session.session_id, action_id="advance", revision=session.revision
+    )
     assert session.status == "route_ready"
     evidence = service.submit_evidence(
         session.session_id,
@@ -236,7 +293,14 @@ def test_route_freeze_and_independent_judge_are_bound_to_public_evidence(tmp_pat
             "provider_id": "model-provider",
             "provider_version": "test-v1",
             "private_truth_returned": False,
-            "trials": [{"trial_id": "trial-1", "stable": True, "stopped_on_limit": False, "performance_pass": True}],
+            "trials": [
+                {
+                    "trial_id": "trial-1",
+                    "stable": True,
+                    "stopped_on_limit": False,
+                    "performance_pass": True,
+                }
+            ],
         },
     )
     assert result.status == "performance_met"
@@ -292,10 +356,23 @@ def test_public_provider_and_multistage_contract_are_explicit() -> None:
             "goal_region": "position near 1",
         }
     )
-    route = {"route_id": "class_i_first_order_lag:first_order_lag", "profile_id": "first_order_lag", "controller_template_id": "detuned_pi"}
+    route = {
+        "route_id": "class_i_first_order_lag:first_order_lag",
+        "profile_id": "first_order_lag",
+        "controller_template_id": "detuned_pi",
+    }
     plan = compile_phase_plan(task, route)
     assert [phase.phase_id for phase in plan.phases] == ["transition", "hold"]
-    assert validate_handoff(plan, {"transition": {"entry_passed": True, "exit_passed": True}, "hold": {"entry_passed": True, "exit_passed": True}})["status"] == "passed"
+    assert (
+        validate_handoff(
+            plan,
+            {
+                "transition": {"entry_passed": True, "exit_passed": True},
+                "hold": {"entry_passed": True, "exit_passed": True},
+            },
+        )["status"]
+        == "passed"
+    )
 
     trace = PublicTrace(
         trace_id="trace-1",
@@ -307,14 +384,18 @@ def test_public_provider_and_multistage_contract_are_explicit() -> None:
         operating_region="declared",
         trial_id="trial-1",
     )
-    provider = CallableExperimentProvider("model", "v1", lambda operation, task: trace, frozenset({"pulse"}))
+    provider = CallableExperimentProvider(
+        "model", "v1", lambda operation, task: trace, frozenset({"pulse"})
+    )
     registry = ProviderRegistry()
     registry.register(provider)
     assert registry.get("model").provider_id == "model"
     assert evidence_from_trace(trace)["trace_fingerprint"] == trace.fingerprint
 
 
-def test_workflow_service_runs_explicit_provider_features_and_controller(tmp_path) -> None:
+def test_workflow_service_runs_explicit_provider_features_and_controller(
+    tmp_path,
+) -> None:
     service = WorkflowService(tmp_path)
     session = service.start(
         {
@@ -323,19 +404,68 @@ def test_workflow_service_runs_explicit_provider_features_and_controller(tmp_pat
             "control_input": "input",
         }
     )
-    session = service.confirm_task(session.session_id, action_id="confirm-budget", revision=session.revision)
+    session = service.confirm_task(
+        session.session_id, action_id="confirm-budget", revision=session.revision
+    )
     answers = {
-        "open_loop_stability": {"status": "known", "assessment": "stable", "evidence": "stable", "confidence": 0.9},
-        "nonminimum_phase": {"status": "known", "assessment": "minimum_phase", "evidence": "minimum phase", "confidence": 0.9},
-        "significant_delay": {"status": "known", "assessment": "not_significant", "evidence": "no significant delay", "confidence": 0.9},
-        "relative_degree": {"status": "known", "assessment": "low", "evidence": "low order", "confidence": 0.9},
-        "sensing_actuation_adequacy": {"status": "known", "assessment": "adequate", "evidence": "adequate", "confidence": 0.9},
-        "nonlinearity_strength": {"status": "known", "assessment": "weak", "evidence": "weak", "confidence": 0.9},
-        "coupling_underactuation": {"status": "known", "assessment": "siso", "evidence": "SISO", "confidence": 0.9},
-        "uncertainty_variation": {"status": "known", "assessment": "small", "evidence": "small", "confidence": 0.9},
+        "open_loop_stability": {
+            "status": "known",
+            "assessment": "stable",
+            "evidence": "stable",
+            "confidence": 0.9,
+        },
+        "nonminimum_phase": {
+            "status": "known",
+            "assessment": "minimum_phase",
+            "evidence": "minimum phase",
+            "confidence": 0.9,
+        },
+        "significant_delay": {
+            "status": "known",
+            "assessment": "not_significant",
+            "evidence": "no significant delay",
+            "confidence": 0.9,
+        },
+        "relative_degree": {
+            "status": "known",
+            "assessment": "low",
+            "evidence": "low order",
+            "confidence": 0.9,
+        },
+        "sensing_actuation_adequacy": {
+            "status": "known",
+            "assessment": "adequate",
+            "evidence": "adequate",
+            "confidence": 0.9,
+        },
+        "nonlinearity_strength": {
+            "status": "known",
+            "assessment": "weak",
+            "evidence": "weak",
+            "confidence": 0.9,
+        },
+        "coupling_underactuation": {
+            "status": "known",
+            "assessment": "siso",
+            "evidence": "SISO",
+            "confidence": 0.9,
+        },
+        "uncertainty_variation": {
+            "status": "known",
+            "assessment": "small",
+            "evidence": "small",
+            "confidence": 0.9,
+        },
     }
-    session = service.submit_answer(session.session_id, action_id="answer", revision=session.revision, answer=answers)
-    session = service.advance(session.session_id, action_id="advance", revision=session.revision)
+    session = service.submit_answer(
+        session.session_id,
+        action_id="answer",
+        revision=session.revision,
+        answer=answers,
+    )
+    session = service.advance(
+        session.session_id, action_id="advance", revision=session.revision
+    )
     trace = PublicTrace(
         trace_id="trace-service",
         source="model",
@@ -347,7 +477,11 @@ def test_workflow_service_runs_explicit_provider_features_and_controller(tmp_pat
         trial_id="trial-service",
     )
     registry = ProviderRegistry()
-    registry.register(CallableExperimentProvider("model", "v1", lambda operation, task: trace, frozenset({"ramp_step"})))
+    registry.register(
+        CallableExperimentProvider(
+            "model", "v1", lambda operation, task: trace, frozenset({"ramp_step"})
+        )
+    )
     measured = service.run_experiment(
         session.session_id,
         action_id="experiment-service",
@@ -361,8 +495,16 @@ def test_workflow_service_runs_explicit_provider_features_and_controller(tmp_pat
         action_id="features-service",
         revision=measured.revision,
         features={
-            "static_gain": {"value": 1.0, "unit": "unit/unit", "source_evidence_ids": ["trace-service"]},
-            "time_constant": {"value": 1.0, "unit": "s", "source_evidence_ids": ["trace-service"]},
+            "static_gain": {
+                "value": 1.0,
+                "unit": "unit/unit",
+                "source_evidence_ids": ["trace-service"],
+            },
+            "time_constant": {
+                "value": 1.0,
+                "unit": "s",
+                "source_evidence_ids": ["trace-service"],
+            },
         },
         quality={"passed": True},
     )
@@ -550,18 +692,35 @@ def test_feedback_creates_new_freeze_and_requires_fresh_confirmation(tmp_path) -
 
 def test_kernel_agent_context_is_role_scoped_and_has_no_supervisor(tmp_path) -> None:
     service = WorkflowService(tmp_path)
-    session = service.start({"description": "A scalar control task", "measured_signals": ["y"], "control_input": "u"})
-    coordinator = KernelAgentCoordinator(lambda request: {"ok": True}, agent_mode="multi")
-    diagnosis = coordinator.build_context(session, role=AgentRole.DIAGNOSIS, operation="diagnosis")
+    session = service.start(
+        {
+            "description": "A scalar control task",
+            "measured_signals": ["y"],
+            "control_input": "u",
+        }
+    )
+    coordinator = KernelAgentCoordinator(
+        lambda request: {"ok": True}, agent_mode="multi"
+    )
+    diagnosis = coordinator.build_context(
+        session, role=AgentRole.DIAGNOSIS, operation="diagnosis"
+    )
     assert "route" not in diagnosis["payload"]
     assert "controller" not in diagnosis["payload"]
-    assert {role.value for role in AgentRole} == {"diagnosis", "modeling", "controller", "critic"}
+    assert {role.value for role in AgentRole} == {
+        "diagnosis",
+        "modeling",
+        "controller",
+        "critic",
+    }
     record = coordinator.execute(session, role=AgentRole.MODELING, operation="feature")
     assert record.role is AgentRole.MODELING
     assert record.messages[0]["role"] == "system"
 
 
-def test_diagnostic_revision_invalidates_stale_route_and_controller_artifacts(tmp_path) -> None:
+def test_diagnostic_revision_invalidates_stale_route_and_controller_artifacts(
+    tmp_path,
+) -> None:
     service = WorkflowService(tmp_path)
     session = service.start(
         {
@@ -584,7 +743,9 @@ def test_diagnostic_revision_invalidates_stale_route_and_controller_artifacts(tm
         revision=session.revision,
         answer=answers,
     )
-    session = service.advance(session.session_id, action_id="route", revision=session.revision)
+    session = service.advance(
+        session.session_id, action_id="route", revision=session.revision
+    )
     assert session.route is not None
 
     revised = service.submit_answer(
@@ -614,7 +775,11 @@ def test_handoff_with_missing_public_booleans_is_blocked() -> None:
     )
     plan = compile_phase_plan(
         task,
-        {"route_id": "route", "profile_id": "first_order_lag", "controller_template_id": "detuned_pi"},
+        {
+            "route_id": "route",
+            "profile_id": "first_order_lag",
+            "controller_template_id": "detuned_pi",
+        },
     )
     result = validate_handoff(
         plan,
@@ -673,7 +838,10 @@ def test_critic_correction_is_revalidated_before_returning() -> None:
         def __init__(self):
             self.responses = iter(
                 [
-                    {"decision": "revise", "feedback": "return the typed gain proposal"},
+                    {
+                        "decision": "revise",
+                        "feedback": "return the typed gain proposal",
+                    },
                     {"rationale": "missing new parameters"},
                     {"decision": "pass", "feedback": ""},
                 ]
@@ -713,7 +881,10 @@ def test_feature_quality_flag_must_be_boolean(tmp_path) -> None:
             revision=evidence.revision,
             features={
                 "static_gain": {"value": 1.0, "source_evidence_ids": ["trace-quality"]},
-                "time_constant": {"value": 2.0, "source_evidence_ids": ["trace-quality"]},
+                "time_constant": {
+                    "value": 2.0,
+                    "source_evidence_ids": ["trace-quality"],
+                },
             },
             quality={"passed": "false"},
         )

@@ -38,7 +38,13 @@ ROLE_OPERATIONS = {
 class KernelAgentCoordinator:
     """Build auditable role messages and optionally invoke a completion."""
 
-    def __init__(self, completion: Any | None = None, *, retriever: Any | None = None, agent_mode: str = "multi") -> None:
+    def __init__(
+        self,
+        completion: Any | None = None,
+        *,
+        retriever: Any | None = None,
+        agent_mode: str = "multi",
+    ) -> None:
         if agent_mode not in {"single", "multi"}:
             raise ValueError("agent_mode_must_be_single_or_multi")
         if completion is not None and not callable(completion):
@@ -76,10 +82,16 @@ class KernelAgentCoordinator:
             "task": session.task.to_dict(),
             "diagnostic": session.ledger.to_dict(),
             "route": dict(session.route) if session.route else None,
-            "features": dict(session.feature_artifact) if session.feature_artifact else None,
-            "controller": dict(session.controller_candidate) if session.controller_candidate else None,
+            "features": dict(session.feature_artifact)
+            if session.feature_artifact
+            else None,
+            "controller": dict(session.controller_candidate)
+            if session.controller_candidate
+            else None,
             "phase_plan": dict(session.phase_plan) if session.phase_plan else None,
-            "freeze": dict(session.controller_freeze) if session.controller_freeze else None,
+            "freeze": dict(session.controller_freeze)
+            if session.controller_freeze
+            else None,
             "evaluation": dict(session.evaluation) if session.evaluation else None,
             "tuning": dict(session.tuning) if session.tuning else None,
             "evidence": [dict(item) for item in session.evidence],
@@ -104,17 +116,38 @@ class KernelAgentCoordinator:
         elif role_value == AgentRole.DIAGNOSIS.value:
             allowed = {"task", "diagnostic", "pending_actions", "task_payload"}
         elif role_value == AgentRole.MODELING.value:
-            allowed = {"task", "diagnostic", "route", "features", "evidence", "pending_actions", "task_payload"}
+            allowed = {
+                "task",
+                "diagnostic",
+                "route",
+                "features",
+                "evidence",
+                "pending_actions",
+                "task_payload",
+            }
         elif role_value == AgentRole.CONTROLLER.value:
-            allowed = {"task", "diagnostic", "route", "features", "controller", "phase_plan", "pending_actions", "task_payload"}
+            allowed = {
+                "task",
+                "diagnostic",
+                "route",
+                "features",
+                "controller",
+                "phase_plan",
+                "pending_actions",
+                "task_payload",
+            }
         else:
             allowed = set(current)
         current = {key: value for key, value in current.items() if key in allowed}
         request = RetrievalRequest(
             role=role_value,
             operation=operation,
-            canonical_class=(str(session.route.get("class")) if session.route else None),
-            profile_id=(str(session.route.get("profile_id")) if session.route else None),
+            canonical_class=(
+                str(session.route.get("class")) if session.route else None
+            ),
+            profile_id=(
+                str(session.route.get("profile_id")) if session.route else None
+            ),
             missing_fields=tuple(
                 str(item.get("dimension_id") or item.get("missing"))
                 for item in session.pending_actions
@@ -124,7 +157,11 @@ class KernelAgentCoordinator:
             stage=operation,
         )
         snippets = [] if operation == "user_reply" else self._retrieve(request)
-        required = () if operation == "user_reply" else self._required_rules(session, role_value)
+        required = (
+            ()
+            if operation == "user_reply"
+            else self._required_rules(session, role_value)
+        )
         return {
             "role": role_value,
             "operation": operation,
@@ -149,7 +186,13 @@ class KernelAgentCoordinator:
         if self.runtime is None:
             raise ValueError("agent_completion_not_configured")
         role_value = role if isinstance(role, AgentRole) else AgentRole(str(role))
-        context = self.build_context(session, role=role_value, operation=operation, task_payload=task_payload, feedback=feedback)
+        context = self.build_context(
+            session,
+            role=role_value,
+            operation=operation,
+            task_payload=task_payload,
+            feedback=feedback,
+        )
         return self.runtime.execute(
             role_value,
             description=None,
@@ -160,7 +203,9 @@ class KernelAgentCoordinator:
             revision=revision,
             index_snapshot=context["index_snapshot"],
             knowledge=KnowledgeContext(
-                required_rules=tuple(self._artifact_from_dict(item) for item in context["required_rules"]),
+                required_rules=tuple(
+                    self._artifact_from_dict(item) for item in context["required_rules"]
+                ),
                 references=tuple(context["references"]),
                 index_snapshot=context["index_snapshot"],
             ),
@@ -180,12 +225,21 @@ class KernelAgentCoordinator:
 
         if self.runtime is None:
             raise ValueError("agent_completion_not_configured")
-        owner = owner_role if isinstance(owner_role, AgentRole) else AgentRole(str(owner_role))
+        owner = (
+            owner_role
+            if isinstance(owner_role, AgentRole)
+            else AgentRole(str(owner_role))
+        )
         context = self.build_context(
             session,
             role=AgentRole.CRITIC,
             operation="review",
-            task_payload={"owner_role": owner.value, "operation": operation, "candidate": candidate, **dict(task_payload or {})},
+            task_payload={
+                "owner_role": owner.value,
+                "operation": operation,
+                "candidate": candidate,
+                **dict(task_payload or {}),
+            },
         )
         return self.runtime.review_and_correct(
             role=owner,
@@ -197,7 +251,9 @@ class KernelAgentCoordinator:
             index_snapshot=context["index_snapshot"],
             corrector=corrector,
             knowledge=KnowledgeContext(
-                required_rules=tuple(self._artifact_from_dict(item) for item in context["required_rules"]),
+                required_rules=tuple(
+                    self._artifact_from_dict(item) for item in context["required_rules"]
+                ),
                 references=tuple(context["references"]),
                 index_snapshot=context["index_snapshot"],
             ),
@@ -224,11 +280,18 @@ class KernelAgentCoordinator:
                 getter = value.get
             else:
                 value = row
-                getter = lambda key, default=None, value=value: getattr(value, key, default)
+                getter = lambda key, default=None, value=value: getattr(
+                    value, key, default
+                )
             snippets.append(
                 RetrievalSnippet(
-                    source_id=str(getter("source_id", getter("artifact_id", getter("id", ""))) or ""),
-                    content=str(getter("content", getter("text", getter("excerpt", ""))) or ""),
+                    source_id=str(
+                        getter("source_id", getter("artifact_id", getter("id", "")))
+                        or ""
+                    ),
+                    content=str(
+                        getter("content", getter("text", getter("excerpt", ""))) or ""
+                    ),
                     score=getter("score"),
                     source_path=getter("source_path"),
                     section=getter("section"),
@@ -245,7 +308,9 @@ class KernelAgentCoordinator:
         return snippets
 
     @staticmethod
-    def _required_rules(session: EvidenceSession, role: str) -> tuple[KnowledgeArtifact, ...]:
+    def _required_rules(
+        session: EvidenceSession, role: str
+    ) -> tuple[KnowledgeArtifact, ...]:
         documents = canonical_knowledge_documents()
         route = session.route or {}
         profile_id = route.get("profile_id")
@@ -253,12 +318,12 @@ class KernelAgentCoordinator:
         selected = []
         for item in documents:
             if (
-                item.artifact_type == "classification_rule"
-                and (role == "diagnosis" or item.canonical_class == class_id)
-            ) or (
-                item.artifact_type == "profile" and item.profile_id == profile_id
-            ) or (
-                item.artifact_type == "feature" and role == "modeling"
+                (
+                    item.artifact_type == "classification_rule"
+                    and (role == "diagnosis" or item.canonical_class == class_id)
+                )
+                or (item.artifact_type == "profile" and item.profile_id == profile_id)
+                or (item.artifact_type == "feature" and role == "modeling")
             ):
                 selected.append(item)
         return tuple(selected)
@@ -268,7 +333,9 @@ class KernelAgentCoordinator:
         return KnowledgeArtifact(
             artifact_id=str(value.get("artifact_id") or ""),
             artifact_type=str(value.get("artifact_type") or "rule"),
-            title=str(value.get("title") or value.get("artifact_id") or "registry rule"),
+            title=str(
+                value.get("title") or value.get("artifact_id") or "registry rule"
+            ),
             text=str(value.get("text") or ""),
             role=tuple(str(item) for item in value.get("role", ()) or ()),
             stage=tuple(str(item) for item in value.get("stage", ()) or ()),
@@ -280,4 +347,9 @@ class KernelAgentCoordinator:
         )
 
 
-__all__ = ["ROLE_OPERATIONS", "AgentReviewBlocked", "AgentRole", "KernelAgentCoordinator"]
+__all__ = [
+    "ROLE_OPERATIONS",
+    "AgentReviewBlocked",
+    "AgentRole",
+    "KernelAgentCoordinator",
+]

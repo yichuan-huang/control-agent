@@ -130,7 +130,9 @@ def test_web_task_contract_supports_all_kernel_task_types(tmp_path, task_type, e
         ({"output_min": -1, "output_max": None}, "必须同时填写"),
     ],
 )
-def test_web_task_contract_rejects_missing_or_invalid_boundaries(tmp_path, update, message):
+def test_web_task_contract_rejects_missing_or_invalid_boundaries(
+    tmp_path, update, message
+):
     task = {
         "description": "保持温度",
         "task_type": "local_setpoint_hold",
@@ -173,7 +175,9 @@ def test_empty_page_actions_are_reloaded_from_kernel_session(tmp_path):
         submit_measurement_from_ui(state, "", False, "", "", "")
 
 
-def test_kernel_page_revision_and_action_id_are_stable_and_payload_cannot_override(tmp_path):
+def test_kernel_page_revision_and_action_id_are_stable_and_payload_cannot_override(
+    tmp_path,
+):
     _, state = _kernel_inputs(tmp_path)
     page_state = dict(state)
 
@@ -285,7 +289,9 @@ def test_kernel_reply_contract_allows_natural_language_diagnosis(tmp_path):
         mode=KernelReplyMode.NATURAL_LANGUAGE,
         coordinator=coordinator,
     )
-    assert prepared["diagnostic_updates"]["open_loop_stability"]["assessment"] == "stable"
+    assert (
+        prepared["diagnostic_updates"]["open_loop_stability"]["assessment"] == "stable"
+    )
     assert prepared["parameter_candidates"][0]["fact_id"] == "static_gain"
     assert prepared["source_text"] == "系统稳定，静态增益为2 degC/kW。"
 
@@ -369,7 +375,9 @@ def test_kernel_reply_accepts_multiple_verbatim_diagnostic_excerpts(tmp_path):
         '{"open_loop_stability": {"status": "known", "evidence": ["系统稳定", "没有自行增长"]}}',
         mode=KernelReplyMode.JSON,
     )
-    assert prepared["diagnostic_updates"]["open_loop_stability"]["evidence"] == "系统稳定"
+    assert (
+        prepared["diagnostic_updates"]["open_loop_stability"]["evidence"] == "系统稳定"
+    )
 
 
 def test_kernel_reply_uses_critic_correction_before_submission(tmp_path):
@@ -598,7 +606,9 @@ def test_kernel_reply_rejects_parameter_with_non_verbatim_source(tmp_path):
         )
 
 
-def test_kernel_reply_submission_persists_diagnostics_and_parameters_atomically(tmp_path):
+def test_kernel_reply_submission_persists_diagnostics_and_parameters_atomically(
+    tmp_path,
+):
     _, state = _kernel_inputs(tmp_path)
     _, state = continue_kernel_app_run(state, action="confirm_task", payload={})
     service = WorkflowService(tmp_path)
@@ -647,7 +657,9 @@ def test_kernel_reply_submission_persists_diagnostics_and_parameters_atomically(
     assert len(repeated.events) == len(updated.events)
 
 
-def test_kernel_reply_submission_rejects_unverified_parameter_without_mutation(tmp_path):
+def test_kernel_reply_submission_rejects_unverified_parameter_without_mutation(
+    tmp_path,
+):
     _, state = _kernel_inputs(tmp_path)
     _, state = continue_kernel_app_run(state, action="confirm_task", payload={})
     service = WorkflowService(tmp_path)
@@ -711,7 +723,9 @@ def test_kernel_reply_conflicting_diagnostic_requires_clarification(tmp_path):
     assert service.read(known.session_id).revision == known.revision
 
 
-def test_kernel_webui_natural_language_reply_reaches_agents_and_kernel(tmp_path, monkeypatch):
+def test_kernel_webui_natural_language_reply_reaches_agents_and_kernel(
+    tmp_path, monkeypatch
+):
     _, state = _kernel_inputs(tmp_path)
     _, state = continue_kernel_app_run(state, action="confirm_task", payload={})
 
@@ -743,7 +757,9 @@ def test_kernel_webui_natural_language_reply_reaches_agents_and_kernel(tmp_path,
                 ]
             }
 
-    monkeypatch.setattr(web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter())
+    monkeypatch.setattr(
+        web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter()
+    )
     outputs = submit_measurement_from_ui(
         state,
         "系统稳定，静态增益为2 degC/kW。",
@@ -758,7 +774,9 @@ def test_kernel_webui_natural_language_reply_reaches_agents_and_kernel(tmp_path,
     assert outputs[16]["visible"] is True
 
 
-def test_kernel_webui_duplicate_reply_reuses_committed_action_without_llm(tmp_path, monkeypatch):
+def test_kernel_webui_duplicate_reply_reuses_committed_action_without_llm(
+    tmp_path, monkeypatch
+):
     _, state = _kernel_inputs(tmp_path)
     _, state = continue_kernel_app_run(state, action="confirm_task", payload={})
     calls = []
@@ -783,13 +801,27 @@ def test_kernel_webui_duplicate_reply_reuses_committed_action_without_llm(tmp_pa
                 "parameter_candidates": [],
             }
 
-    monkeypatch.setattr(web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter())
+    monkeypatch.setattr(
+        web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter()
+    )
     text = "系统稳定。"
     first = submit_measurement_from_ui(
-        state, text, False, "https://provider.example/v1", "test-model", "test-key", "natural_language"
+        state,
+        text,
+        False,
+        "https://provider.example/v1",
+        "test-model",
+        "test-key",
+        "natural_language",
     )
     second = submit_measurement_from_ui(
-        state, text, False, "https://provider.example/v1", "test-model", "test-key", "natural_language"
+        state,
+        text,
+        False,
+        "https://provider.example/v1",
+        "test-model",
+        "test-key",
+        "natural_language",
     )
 
     assert first[0]["kernel_revision"] == second[0]["kernel_revision"] == 3
@@ -800,7 +832,9 @@ def test_budget_exhaustion_cannot_be_reinterpreted_as_confirmation(tmp_path):
     _, state = _kernel_inputs(tmp_path)
     exhausted = {
         **state,
-        "pending_actions": [{"kind": "budget", "reason": "experiment_budget_exhausted"}],
+        "pending_actions": [
+            {"kind": "budget", "reason": "experiment_budget_exhausted"}
+        ],
     }
 
     with pytest.raises(gr.Error, match="没有可用的 WebUI 入口|待处理动作"):
@@ -868,18 +902,45 @@ def _fn_index(app, name, *, input_count=None):
 
 
 _RUN_INPUT_NAMES = (
-    "description", "task_type", "measured_signals", "control_inputs",
-    "reference_enabled", "reference", "input_min", "input_max",
-    "output_bounds_enabled", "output_min", "output_max", "state_stop",
-    "initial_region", "goal_region", "disturbance_event",
-    "recovery_start_condition", "disturbance_hold_region", "base_url", "model",
-    "api_key", "rag_enabled", "rag_index_dir", "provider_case_id",
-    "signal_units_json", "input_unit", "success_requirement_fields",
-    "final_abs_error_max", "overshoot_max", "settling_time_max_s",
-    "perturbed_success_rate_min", "hold_duration_min_s",
-    "response_time_preference_enabled", "response_time_preference_s",
-    "budget_fields", "distinct_experiments", "cumulative_excitation_time_s",
-    "initial_output_value_enabled", "initial_output_value", "intermediate_targets",
+    "description",
+    "task_type",
+    "measured_signals",
+    "control_inputs",
+    "reference_enabled",
+    "reference",
+    "input_min",
+    "input_max",
+    "output_bounds_enabled",
+    "output_min",
+    "output_max",
+    "state_stop",
+    "initial_region",
+    "goal_region",
+    "disturbance_event",
+    "recovery_start_condition",
+    "disturbance_hold_region",
+    "base_url",
+    "model",
+    "api_key",
+    "rag_enabled",
+    "rag_index_dir",
+    "provider_case_id",
+    "signal_units_json",
+    "input_unit",
+    "success_requirement_fields",
+    "final_abs_error_max",
+    "overshoot_max",
+    "settling_time_max_s",
+    "perturbed_success_rate_min",
+    "hold_duration_min_s",
+    "response_time_preference_enabled",
+    "response_time_preference_s",
+    "budget_fields",
+    "distinct_experiments",
+    "cumulative_excitation_time_s",
+    "initial_output_value_enabled",
+    "initial_output_value",
+    "intermediate_targets",
 )
 
 
@@ -1099,7 +1160,9 @@ async def test_kernel_gradio_process_api_accepts_stale_json_on_confirmation(
 
 
 @pytest.mark.anyio
-async def test_kernel_gradio_process_api_natural_language_reply_chain(tmp_path, monkeypatch):
+async def test_kernel_gradio_process_api_natural_language_reply_chain(
+    tmp_path, monkeypatch
+):
     original_start = web_service.start_kernel_app_run
 
     def start_in_tmp(task, **kwargs):
@@ -1138,7 +1201,9 @@ async def test_kernel_gradio_process_api_natural_language_reply_chain(tmp_path, 
             }
 
     monkeypatch.setattr(web_ui, "start_kernel_app_run", start_in_tmp)
-    monkeypatch.setattr(web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter())
+    monkeypatch.setattr(
+        web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter()
+    )
     app = web_ui.build_app()
     from gradio.blocks import SessionState
 
@@ -1177,7 +1242,9 @@ async def test_kernel_gradio_process_api_natural_language_reply_chain(tmp_path, 
         explicit_call=True,
     )
 
-    assert reply_result["data"][15].root["parameter_facts"][0]["fact_id"] == "static_gain"
+    assert (
+        reply_result["data"][15].root["parameter_facts"][0]["fact_id"] == "static_gain"
+    )
     assert reply_result["data"][15].root["agent_records"]
 
 
@@ -1272,8 +1339,18 @@ async def test_visible_gradio_flow_reaches_kernel_result_with_ollama_shaped_repl
     confirm_result = await app.process_api(
         _fn_index(app, "submit_guided_action_from_ui", input_count=12),
         [
-            run_result["data"][0], "", True, "", "", "", "json",
-            "accepted", [], "", [], False,
+            run_result["data"][0],
+            "",
+            True,
+            "",
+            "",
+            "",
+            "json",
+            "accepted",
+            [],
+            "",
+            [],
+            False,
         ],
         state=session_state,
         session_hash="kernel-visible-full-flow",
@@ -1284,9 +1361,18 @@ async def test_visible_gradio_flow_reaches_kernel_result_with_ollama_shaped_repl
     result = await app.process_api(
         _fn_index(app, "submit_guided_action_from_ui", input_count=12),
         [
-            confirm_result["data"][0], source_text, False,
-            "http://127.0.0.1:11434/v1", "gemma3:4b", "ollama",
-            "natural_language", "accepted", [], "", [], False,
+            confirm_result["data"][0],
+            source_text,
+            False,
+            "http://127.0.0.1:11434/v1",
+            "gemma3:4b",
+            "ollama",
+            "natural_language",
+            "accepted",
+            [],
+            "",
+            [],
+            False,
         ],
         state=session_state,
         session_hash="kernel-visible-full-flow",

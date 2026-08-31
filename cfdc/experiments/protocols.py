@@ -65,7 +65,9 @@ def _finite(value: Any, label: str) -> float:
 
 
 def _default_request(task: TaskContract, route: Mapping[str, Any]) -> dict[str, Any]:
-    operation = str(next(iter(route.get("experiment_primitives", ())), "bounded_input_sequence"))
+    operation = str(
+        next(iter(route.get("experiment_primitives", ())), "bounded_input_sequence")
+    )
     profile_id = str(route.get("profile_id") or "")
     if profile_id == "mimo_2x2_coupled":
         operation = "bounded_mimo_dc_then_hadamard_multisine"
@@ -86,7 +88,10 @@ def _default_request(task: TaskContract, route: Mapping[str, Any]) -> dict[str, 
         amplitude = 0.05 * (upper - lower)
     amplitude = max(min(amplitude, upper), lower)
     duration = float(task.response_time_preference_s or 10.0)
-    duration = min(max(duration, 1.0), float(task.budgets.get("cumulative_excitation_time_s", 1800.0)) / 3.0)
+    duration = min(
+        max(duration, 1.0),
+        float(task.budgets.get("cumulative_excitation_time_s", 1800.0)) / 3.0,
+    )
     return {
         "operation": operation,
         "data_kind": _DATA_KIND_BY_OPERATION.get(operation, "siso_repeated_timeseries"),
@@ -136,13 +141,26 @@ def compile_protocol(
     request: Mapping[str, Any] | None = None,
     phase: Mapping[str, Any] | None = None,
 ) -> ExperimentProtocol:
-    raw = deepcopy(dict(request)) if request is not None else _default_request(task, route)
-    errors = sorted(Draft202012Validator(PROTOCOL_REQUEST_SCHEMA).iter_errors(raw), key=lambda item: list(item.path))
+    raw = (
+        deepcopy(dict(request))
+        if request is not None
+        else _default_request(task, route)
+    )
+    errors = sorted(
+        Draft202012Validator(PROTOCOL_REQUEST_SCHEMA).iter_errors(raw),
+        key=lambda item: list(item.path),
+    )
     if errors:
-        raise ValueError("protocol_request_invalid: " + " | ".join(item.message for item in errors))
+        raise ValueError(
+            "protocol_request_invalid: " + " | ".join(item.message for item in errors)
+        )
     capabilities = {str(item) for item in provider.get("capabilities", ())}
     operation = str(raw["operation"])
-    if capabilities and operation not in capabilities and raw.get("data_kind") not in capabilities:
+    if (
+        capabilities
+        and operation not in capabilities
+        and raw.get("data_kind") not in capabilities
+    ):
         raise ValueError(f"provider_operation_not_supported: {operation}")
     task_lower = _finite(task.input_min, "task_input_min")
     task_upper = _finite(task.input_max, "task_input_max")
@@ -171,7 +189,9 @@ def compile_protocol(
     sample_count = round(total / sample_period) + 1
     if sample_count < 8 or sample_count > 2_000_000:
         raise ValueError("protocol_sample_count_out_of_bounds")
-    requested = tuple(str(item) for item in raw.get("requested_signals") or task.measured_signals)
+    requested = tuple(
+        str(item) for item in raw.get("requested_signals") or task.measured_signals
+    )
     if not set(requested) <= set(task.measured_signals):
         raise ValueError("protocol_signal_not_declared_by_task")
     requested_inputs = tuple(
@@ -191,8 +211,13 @@ def compile_protocol(
         "provider_capabilities_fingerprint": fingerprint(sorted(capabilities)),
         "phase_id": phase.get("phase_id") if phase else None,
         "operation": operation,
-        "data_kind": str(raw.get("data_kind") or _DATA_KIND_BY_OPERATION.get(operation, "siso_repeated_timeseries")),
-        "initial_condition_id": str(raw.get("initial_condition_id") or "declared_operating_region"),
+        "data_kind": str(
+            raw.get("data_kind")
+            or _DATA_KIND_BY_OPERATION.get(operation, "siso_repeated_timeseries")
+        ),
+        "initial_condition_id": str(
+            raw.get("initial_condition_id") or "declared_operating_region"
+        ),
         "segments": segments,
         "repeats": int(raw["repeats"]),
         "sample_period_s": sample_period,
@@ -205,7 +230,9 @@ def compile_protocol(
         "units": {
             "time": "s",
             "input": task.input_units or "unspecified",
-            "outputs": {name: task.signal_units.get(name, "unspecified") for name in requested},
+            "outputs": {
+                name: task.signal_units.get(name, "unspecified") for name in requested
+            },
         },
         "derived_limits": {
             "integrated_absolute_input": exposure,
@@ -214,7 +241,11 @@ def compile_protocol(
         },
         "stop_condition": {
             "input_bounds": [task_lower, task_upper],
-            "output_bounds": ([task.output_min, task.output_max] if task.output_min is not None else None),
+            "output_bounds": (
+                [task.output_min, task.output_max]
+                if task.output_min is not None
+                else None
+            ),
             "state_stop": task.state_stop,
         },
     }
@@ -246,4 +277,9 @@ def verify_protocol(
     return protocol
 
 
-__all__ = ["PROTOCOL_REQUEST_SCHEMA", "ExperimentProtocol", "compile_protocol", "verify_protocol"]
+__all__ = [
+    "PROTOCOL_REQUEST_SCHEMA",
+    "ExperimentProtocol",
+    "compile_protocol",
+    "verify_protocol",
+]

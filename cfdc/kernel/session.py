@@ -171,36 +171,61 @@ class EvidenceSession:
             "experiment_failures": [dict(item) for item in self.experiment_failures],
             "route": dict(self.route) if self.route is not None else None,
             "route_history": [dict(item) for item in self.route_history],
-            "feature_artifact": dict(self.feature_artifact) if self.feature_artifact is not None else None,
+            "feature_artifact": dict(self.feature_artifact)
+            if self.feature_artifact is not None
+            else None,
             "feature_history": [dict(item) for item in self.feature_history],
-            "controller_candidate": dict(self.controller_candidate) if self.controller_candidate is not None else None,
+            "controller_candidate": dict(self.controller_candidate)
+            if self.controller_candidate is not None
+            else None,
             "controller_history": [dict(item) for item in self.controller_history],
-            "controller_qualification": dict(self.controller_qualification) if self.controller_qualification is not None else None,
-            "qualification_history": [dict(item) for item in self.qualification_history],
-            "phase_plan": dict(self.phase_plan) if self.phase_plan is not None else None,
+            "controller_qualification": dict(self.controller_qualification)
+            if self.controller_qualification is not None
+            else None,
+            "qualification_history": [
+                dict(item) for item in self.qualification_history
+            ],
+            "phase_plan": dict(self.phase_plan)
+            if self.phase_plan is not None
+            else None,
             "phase_results": [dict(item) for item in self.phase_results],
-            "controller_freeze": dict(self.controller_freeze) if self.controller_freeze is not None else None,
+            "controller_freeze": dict(self.controller_freeze)
+            if self.controller_freeze is not None
+            else None,
             "freeze_history": [dict(item) for item in self.freeze_history],
-            "evaluation": dict(self.evaluation) if self.evaluation is not None else None,
+            "evaluation": dict(self.evaluation)
+            if self.evaluation is not None
+            else None,
             "evaluation_packets": [dict(item) for item in self.evaluation_packets],
             "evaluation_replays": [dict(item) for item in self.evaluation_replays],
             "tuning": dict(self.tuning) if self.tuning is not None else None,
             "tuning_history": [dict(item) for item in self.tuning_history],
-            "confirmation": dict(self.confirmation) if self.confirmation is not None else None,
+            "confirmation": dict(self.confirmation)
+            if self.confirmation is not None
+            else None,
             "confirmation_history": [dict(item) for item in self.confirmation_history],
             "provider": dict(self.provider) if self.provider is not None else None,
             "provider_bindings": dict(self.provider_bindings),
             "agent_records": [dict(item) for item in self.agent_records],
-            "agent_config": dict(self.agent_config) if self.agent_config is not None else None,
+            "agent_config": dict(self.agent_config)
+            if self.agent_config is not None
+            else None,
             "rag_snapshot": self.rag_snapshot,
             "workflow_version": self.workflow_version,
-            "legacy_lineage": dict(self.legacy_lineage) if self.legacy_lineage is not None else None,
-            "import_report": dict(self.import_report) if self.import_report is not None else None,
+            "legacy_lineage": dict(self.legacy_lineage)
+            if self.legacy_lineage is not None
+            else None,
+            "import_report": dict(self.import_report)
+            if self.import_report is not None
+            else None,
             "read_only": self.read_only,
         }
 
     def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+        return (
+            json.dumps(self.to_dict(), ensure_ascii=False, sort_keys=True, indent=2)
+            + "\n"
+        )
 
     @property
     def fingerprint(self) -> str:
@@ -220,7 +245,9 @@ class EvidenceSession:
             temporary.unlink(missing_ok=True)
 
     @classmethod
-    def from_dict(cls, value: Mapping[str, Any], *, path: Path | None = None) -> EvidenceSession:
+    def from_dict(
+        cls, value: Mapping[str, Any], *, path: Path | None = None
+    ) -> EvidenceSession:
         version = value.get("session_version")
         if version not in READABLE_EVIDENCE_SESSION_VERSIONS:
             raise ValueError("evidence_session_version_mismatch")
@@ -237,12 +264,18 @@ class EvidenceSession:
         controller_freeze = value.get("controller_freeze")
         if controller_freeze is not None:
             freeze = ControllerFreeze.from_mapping(controller_freeze)
-            if freeze.session_id != session_id or freeze.task_fingerprint != task.fingerprint:
+            if (
+                freeze.session_id != session_id
+                or freeze.task_fingerprint != task.fingerprint
+            ):
                 raise ValueError("controller_freeze_session_binding_mismatch")
         freeze_history = tuple(dict(item) for item in value.get("freeze_history", ()))
         for previous_freeze in freeze_history:
             freeze = ControllerFreeze.from_mapping(previous_freeze)
-            if freeze.session_id != session_id or freeze.task_fingerprint != task.fingerprint:
+            if (
+                freeze.session_id != session_id
+                or freeze.task_fingerprint != task.fingerprint
+            ):
                 raise ValueError("controller_freeze_history_binding_mismatch")
         session = cls(
             session_id=session_id,
@@ -253,39 +286,73 @@ class EvidenceSession:
             created_at=str(value.get("created_at") or utc_now()),
             clarification_rounds=int(value.get("clarification_rounds", 0)),
             events=events,
-            pending_actions=tuple(dict(item) for item in value.get("pending_actions", ())),
+            pending_actions=tuple(
+                dict(item) for item in value.get("pending_actions", ())
+            ),
             evidence=tuple(dict(item) for item in value.get("evidence", ())),
             protocols=tuple(dict(item) for item in value.get("protocols", ())),
-            active_protocol_fingerprint=(str(value["active_protocol_fingerprint"]) if value.get("active_protocol_fingerprint") else None),
-            operator_handoffs=tuple(dict(item) for item in value.get("operator_handoffs", ())),
-            operator_reports=tuple(dict(item) for item in value.get("operator_reports", ())),
-            upload_attempts=tuple(dict(item) for item in value.get("upload_attempts", ())),
-            parameter_facts=tuple(dict(item) for item in value.get("parameter_facts", ())),
-            experiment_failures=tuple(dict(item) for item in value.get("experiment_failures", ())),
+            active_protocol_fingerprint=(
+                str(value["active_protocol_fingerprint"])
+                if value.get("active_protocol_fingerprint")
+                else None
+            ),
+            operator_handoffs=tuple(
+                dict(item) for item in value.get("operator_handoffs", ())
+            ),
+            operator_reports=tuple(
+                dict(item) for item in value.get("operator_reports", ())
+            ),
+            upload_attempts=tuple(
+                dict(item) for item in value.get("upload_attempts", ())
+            ),
+            parameter_facts=tuple(
+                dict(item) for item in value.get("parameter_facts", ())
+            ),
+            experiment_failures=tuple(
+                dict(item) for item in value.get("experiment_failures", ())
+            ),
             route=value.get("route"),
             route_history=tuple(dict(item) for item in value.get("route_history", ())),
             feature_artifact=value.get("feature_artifact"),
-            feature_history=tuple(dict(item) for item in value.get("feature_history", ())),
+            feature_history=tuple(
+                dict(item) for item in value.get("feature_history", ())
+            ),
             controller_candidate=value.get("controller_candidate"),
-            controller_history=tuple(dict(item) for item in value.get("controller_history", ())),
+            controller_history=tuple(
+                dict(item) for item in value.get("controller_history", ())
+            ),
             controller_qualification=value.get("controller_qualification"),
-            qualification_history=tuple(dict(item) for item in value.get("qualification_history", ())),
+            qualification_history=tuple(
+                dict(item) for item in value.get("qualification_history", ())
+            ),
             phase_plan=value.get("phase_plan"),
             phase_results=tuple(dict(item) for item in value.get("phase_results", ())),
             controller_freeze=controller_freeze,
             freeze_history=freeze_history,
             evaluation=value.get("evaluation"),
-            evaluation_packets=tuple(dict(item) for item in value.get("evaluation_packets", ())),
-            evaluation_replays=tuple(dict(item) for item in value.get("evaluation_replays", ())),
+            evaluation_packets=tuple(
+                dict(item) for item in value.get("evaluation_packets", ())
+            ),
+            evaluation_replays=tuple(
+                dict(item) for item in value.get("evaluation_replays", ())
+            ),
             tuning=value.get("tuning"),
-            tuning_history=tuple(dict(item) for item in value.get("tuning_history", ())),
+            tuning_history=tuple(
+                dict(item) for item in value.get("tuning_history", ())
+            ),
             confirmation=value.get("confirmation"),
-            confirmation_history=tuple(dict(item) for item in value.get("confirmation_history", ())),
+            confirmation_history=tuple(
+                dict(item) for item in value.get("confirmation_history", ())
+            ),
             provider=value.get("provider"),
             provider_bindings=dict(value.get("provider_bindings") or {}),
             agent_records=tuple(dict(item) for item in value.get("agent_records", ())),
             agent_config=value.get("agent_config"),
-            rag_snapshot=(str(value["rag_snapshot"]) if value.get("rag_snapshot") is not None else None),
+            rag_snapshot=(
+                str(value["rag_snapshot"])
+                if value.get("rag_snapshot") is not None
+                else None
+            ),
             workflow_version=str(value.get("workflow_version", "cfdc-v6-kernel/v1")),
             legacy_lineage=value.get("legacy_lineage"),
             import_report=value.get("import_report"),
@@ -302,7 +369,8 @@ class EvidenceSession:
             expected_phase_ids = [
                 str(item.get("phase_id") or item.get("id"))
                 for item in session.phase_plan.get("phases", ())
-                if isinstance(item, Mapping) and (item.get("phase_id") or item.get("id"))
+                if isinstance(item, Mapping)
+                and (item.get("phase_id") or item.get("id"))
             ]
         if len(session.phase_results) > len(expected_phase_ids):
             raise ValueError("phase_result_count_invalid")
@@ -311,10 +379,15 @@ class EvidenceSession:
                 raise TypeError("phase_result_object_required")
             phase = dict(phase_value)
             stored_phase_fingerprint = phase.pop("result_fingerprint", None)
-            if not stored_phase_fingerprint or fingerprint(phase) != stored_phase_fingerprint:
+            if (
+                not stored_phase_fingerprint
+                or fingerprint(phase) != stored_phase_fingerprint
+            ):
                 raise ValueError("phase_result_fingerprint_mismatch")
             phase_id = str(phase.get("phase_id") or phase.get("id") or "")
-            if not phase_id or (expected_phase_ids and phase_id != expected_phase_ids[index]):
+            if not phase_id or (
+                expected_phase_ids and phase_id != expected_phase_ids[index]
+            ):
                 raise ValueError("phase_result_order_invalid")
         if not events and session.revision != 0:
             raise ValueError("session_revision_does_not_match_event_chain")
@@ -331,7 +404,10 @@ def _validate_event_chain(events: tuple[SessionEvent, ...]) -> None:
     previous: str | None = None
     expected_revision = 0
     for event in events:
-        if event.previous_fingerprint != previous or event.revision_before != expected_revision:
+        if (
+            event.previous_fingerprint != previous
+            or event.revision_before != expected_revision
+        ):
             raise ValueError("session_event_chain_invalid")
         if event.revision_after != event.revision_before + 1:
             raise ValueError("session_event_revision_invalid")

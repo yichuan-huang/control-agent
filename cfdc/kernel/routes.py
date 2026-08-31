@@ -70,7 +70,13 @@ def _text(entry: DiagnosticEntry) -> str:
     # User evidence often repeats the field label (for example
     # ``confirmed nonminimum_phase``).  Labels are schema metadata, not
     # evidence, so remove them before applying the semantic token rules.
-    for label in (*DIAGNOSTIC_IDS, "minimum_phase", "controllability_observability", "coupling_severity", "uncertainty_magnitude"):
+    for label in (
+        *DIAGNOSTIC_IDS,
+        "minimum_phase",
+        "controllability_observability",
+        "coupling_severity",
+        "uncertainty_magnitude",
+    ):
         evidence = re.sub(rf"\b{re.escape(label.casefold())}\b", " ", evidence)
     return f"{evidence} {value}".casefold()
 
@@ -120,7 +126,10 @@ def _class_for_ledger(ledger: DiagnosticLedger) -> tuple[str, str]:
         or _has(nonlinear, "strong_dynamic", "strong dynamic", "强动态", "强非线性")
         or _has(coupling, "underactuated", "欠驱动", "cascaded", "级联")
     ):
-        return "class_iv_higher_order_unstable_nonlinear_or_nmp", "class.iv.escalating_dynamics"
+        return (
+            "class_iv_higher_order_unstable_nonlinear_or_nmp",
+            "class.iv.escalating_dynamics",
+        )
 
     if _has(stability, "marginal", "integrator", "积分", "drift", "漂移"):
         return "class_iii_double_or_pure_integrator", "class.iii.marginal"
@@ -135,8 +144,19 @@ def _profile_for_class(class_id: str, ledger: DiagnosticLedger) -> str:
     if class_id == "class_i_first_order_lag":
         return (
             "first_order_lag_with_delay"
-            if _has(ledger.entry("significant_delay"), "significant", "显著", "delay", "时延")
-            and not _has(ledger.entry("significant_delay"), "not_significant", "not significant", "无")
+            if _has(
+                ledger.entry("significant_delay"),
+                "significant",
+                "显著",
+                "delay",
+                "时延",
+            )
+            and not _has(
+                ledger.entry("significant_delay"),
+                "not_significant",
+                "not significant",
+                "无",
+            )
             else "first_order_lag"
         )
     if class_id == "class_ii_second_order_oscillator":
@@ -146,11 +166,25 @@ def _profile_for_class(class_id: str, ledger: DiagnosticLedger) -> str:
     if class_id == "class_v_multivariable_significant_coupling":
         return "mimo_2x2_coupled"
     coupling = _assessment(ledger.entry("coupling_underactuation"))
-    if "underactuated" in coupling or "欠驱动" in coupling or _has(ledger.entry("coupling_underactuation"), "cartpole", "摆"):
+    if (
+        "underactuated" in coupling
+        or "欠驱动" in coupling
+        or _has(ledger.entry("coupling_underactuation"), "cartpole", "摆")
+    ):
         return "underactuated_cartpole"
-    if "cascaded" in coupling or "级联" in coupling or _has(ledger.entry("coupling_underactuation"), "vtol", "hover", "悬停"):
+    if (
+        "cascaded" in coupling
+        or "级联" in coupling
+        or _has(ledger.entry("coupling_underactuation"), "vtol", "hover", "悬停")
+    ):
         return "vtol_cascaded"
-    if _has(ledger.entry("nonminimum_phase"), "nonminimum_phase", "nonminimum phase", "反向", "非最小相位") and _has(ledger.entry("open_loop_stability"), "stable", "稳定"):
+    if _has(
+        ledger.entry("nonminimum_phase"),
+        "nonminimum_phase",
+        "nonminimum phase",
+        "反向",
+        "非最小相位",
+    ) and _has(ledger.entry("open_loop_stability"), "stable", "稳定"):
         return "nmp_inverse_response"
     return "generic_unstable_higher_order"
 
@@ -171,12 +205,20 @@ def resolve_route(ledger: DiagnosticLedger) -> dict[str, Any]:
     # the scalar profiles, the explicit CartPole/VTOL fixtures, and the 2x2
     # registered route.  Generic Class IV remains an explicit capability gap.
     implemented = profile_id != "generic_unstable_higher_order"
-    capability_gap = None if implemented else "generic_class_iv_route_requires_registered_object_adapter"
+    capability_gap = (
+        None
+        if implemented
+        else "generic_class_iv_route_requires_registered_object_adapter"
+    )
     return {
         "route_id": route_id,
         "class": class_id,
         "profile_id": profile.profile_id,
-        "feature_ids": list(contract.get("controller_features", profile.required_feature_ids)) if contract else list(profile.required_feature_ids),
+        "feature_ids": list(
+            contract.get("controller_features", profile.required_feature_ids)
+        )
+        if contract
+        else list(profile.required_feature_ids),
         "controller_template_id": profile.controller_template_id,
         "controller_contract_id": controller_family,
         "matched_rule_ids": [rule_id],
@@ -185,7 +227,11 @@ def resolve_route(ledger: DiagnosticLedger) -> dict[str, Any]:
         "preconditions": list(profile.preconditions),
         "limitations": list(profile.limitations),
         "experiment_primitives": list(profile.experiment_primitives),
-        "tunable_gain_names": list(contract.get("required_parameters", profile.tunable_gain_names)) if contract else list(profile.tunable_gain_names),
+        "tunable_gain_names": list(
+            contract.get("required_parameters", profile.tunable_gain_names)
+        )
+        if contract
+        else list(profile.tunable_gain_names),
         "implemented": implemented,
         "capability_gap": capability_gap,
         "diagnostic_ids": list(DIAGNOSTIC_IDS),
@@ -201,11 +247,24 @@ def route_capability(route: Mapping[str, Any]) -> RouteCapability:
         class_id=str(route.get("class") or profile.compatible_class),
         profile_id=profile.profile_id,
         implemented=bool(route.get("implemented", False)),
-        required_feature_ids=tuple(str(item) for item in route.get("feature_ids", profile.required_feature_ids)),
-        controller_template_id=str(route.get("controller_template_id") or profile.controller_template_id),
-        experiment_primitives=tuple(str(item) for item in route.get("experiment_primitives", profile.experiment_primitives)),
-        limitations=tuple(str(item) for item in route.get("limitations", profile.limitations)),
-        capability_gap=(str(route["capability_gap"]) if route.get("capability_gap") else None),
+        required_feature_ids=tuple(
+            str(item) for item in route.get("feature_ids", profile.required_feature_ids)
+        ),
+        controller_template_id=str(
+            route.get("controller_template_id") or profile.controller_template_id
+        ),
+        experiment_primitives=tuple(
+            str(item)
+            for item in route.get(
+                "experiment_primitives", profile.experiment_primitives
+            )
+        ),
+        limitations=tuple(
+            str(item) for item in route.get("limitations", profile.limitations)
+        ),
+        capability_gap=(
+            str(route["capability_gap"]) if route.get("capability_gap") else None
+        ),
     )
 
 

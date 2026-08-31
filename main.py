@@ -162,7 +162,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--task-type",
-        choices=["local_setpoint_hold", "transition_then_hold", "disturbance_recovery_to_hold"],
+        choices=[
+            "local_setpoint_hold",
+            "transition_then_hold",
+            "disturbance_recovery_to_hold",
+        ],
         default=None,
         help="Kernel task type; selecting it automatically uses the migrated workflow.",
     )
@@ -645,7 +649,9 @@ def _bind_training_providers(
     action_id: str,
     context,
 ):
-    identification_registry, identification_id, evaluation_registry, evaluation_id = context
+    identification_registry, identification_id, evaluation_registry, evaluation_id = (
+        context
+    )
     for role, registry, provider_id in (
         ("identification", identification_registry, identification_id),
         ("evaluation", evaluation_registry, evaluation_id),
@@ -654,7 +660,9 @@ def _bind_training_providers(
         existing = session.provider_bindings.get(role)
         if isinstance(existing, dict):
             if existing.get("provider_id") != provider_id:
-                raise SystemExit(f"registered {role} provider does not match --kernel-case")
+                raise SystemExit(
+                    f"registered {role} provider does not match --kernel-case"
+                )
             continue
         session = service.set_provider(
             session.session_id,
@@ -672,11 +680,15 @@ def _bind_training_providers(
 
 
 def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -> None:
-    service = WorkflowService(args.kernel_session_dir or Path("output") / "kernel-sessions")
+    service = WorkflowService(
+        args.kernel_session_dir or Path("output") / "kernel-sessions"
+    )
     action_id = args.kernel_action or f"cli-{uuid4().hex}"
     if args.kernel_import_v3 is not None:
         if args.kernel_session:
-            raise SystemExit("--kernel-import-v3 cannot be combined with --kernel-session")
+            raise SystemExit(
+                "--kernel-import-v3 cannot be combined with --kernel-session"
+            )
         session = service.import_v3(args.kernel_import_v3)
     elif args.kernel_session:
         session = service.read(args.kernel_session)
@@ -710,7 +722,9 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
                 "signal_units": {},
                 "workspace": {"source": "cli"},
             }
-            payload = {key: value for key, value in payload.items() if value is not None}
+            payload = {
+                key: value for key, value in payload.items() if value is not None
+            }
         rag_snapshot = args.rag_snapshot
         rag_requested = not args.no_rag
         if rag_requested and args.rag_index is not None:
@@ -738,13 +752,19 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
                     if rag_requested
                     else "disabled"
                 ),
-                "rag_index_dir": str(args.rag_index) if args.rag_index is not None else None,
+                "rag_index_dir": str(args.rag_index)
+                if args.rag_index is not None
+                else None,
                 "llm_configured": bool(args.use_llm),
             },
             rag_snapshot=rag_snapshot,
         )
     if args.confirm_kernel_budget:
-        session = service.confirm_task(session.session_id, action_id=f"{action_id}:confirm", revision=session.revision)
+        session = service.confirm_task(
+            session.session_id,
+            action_id=f"{action_id}:confirm",
+            revision=session.revision,
+        )
     if args.kernel_answer is not None:
         try:
             answer = json.loads(args.kernel_answer)
@@ -752,7 +772,12 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
             raise SystemExit(f"invalid --kernel-answer JSON: {exc}") from None
         if not isinstance(answer, dict):
             raise SystemExit("--kernel-answer must be a JSON object")
-        session = service.submit_answer(session.session_id, action_id=f"{action_id}:answer", revision=session.revision, answer=answer)
+        session = service.submit_answer(
+            session.session_id,
+            action_id=f"{action_id}:answer",
+            revision=session.revision,
+            answer=answer,
+        )
     if args.kernel_relevance is not None:
         declarations = _read_kernel_json(args.kernel_relevance, "kernel relevance")
         session = service.apply_task_relevance(
@@ -762,12 +787,23 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
             declarations={str(key): str(value) for key, value in declarations.items()},
         )
     if args.kernel_advance:
-        session = service.advance(session.session_id, action_id=f"{action_id}:advance", revision=session.revision)
+        session = service.advance(
+            session.session_id,
+            action_id=f"{action_id}:advance",
+            revision=session.revision,
+        )
     if args.kernel_evidence is not None:
         evidence = _read_kernel_json(args.kernel_evidence, "kernel evidence")
-        session = service.submit_evidence(session.session_id, action_id=f"{action_id}:evidence", revision=session.revision, evidence=evidence)
+        session = service.submit_evidence(
+            session.session_id,
+            action_id=f"{action_id}:evidence",
+            revision=session.revision,
+            evidence=evidence,
+        )
     if args.kernel_phase_result is not None:
-        phase_result = _read_kernel_json(args.kernel_phase_result, "kernel phase result")
+        phase_result = _read_kernel_json(
+            args.kernel_phase_result, "kernel phase result"
+        )
         session = service.record_phase_result(
             session.session_id,
             action_id=f"{action_id}:phase",
@@ -778,10 +814,21 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
         features = _read_kernel_json(args.kernel_features, "kernel features")
         quality = features.pop("quality", None)
         payload = features.get("features", features)
-        session = service.submit_features(session.session_id, action_id=f"{action_id}:features", revision=session.revision, features=payload, quality=quality)
+        session = service.submit_features(
+            session.session_id,
+            action_id=f"{action_id}:features",
+            revision=session.revision,
+            features=payload,
+            quality=quality,
+        )
     if args.kernel_controller is not None:
         controller = _read_kernel_json(args.kernel_controller, "kernel controller")
-        session = service.submit_controller(session.session_id, action_id=f"{action_id}:controller", revision=session.revision, controller=controller)
+        session = service.submit_controller(
+            session.session_id,
+            action_id=f"{action_id}:controller",
+            revision=session.revision,
+            controller=controller,
+        )
     if args.kernel_provider is not None:
         provider = _read_kernel_json(args.kernel_provider, "kernel provider")
         session = service.set_provider(
@@ -838,7 +885,9 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
             output_dir=output_dir,
         )
     if args.kernel_operator_report is not None:
-        report = _read_kernel_json(args.kernel_operator_report, "kernel operator report")
+        report = _read_kernel_json(
+            args.kernel_operator_report, "kernel operator report"
+        )
         session = service.record_operator_report(
             session.session_id,
             action_id=f"{action_id}:operator-report",
@@ -884,14 +933,22 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
         )
     if args.kernel_freeze:
         if not session.controller_candidate:
-            raise SystemExit("--kernel-freeze requires a submitted --kernel-controller candidate")
+            raise SystemExit(
+                "--kernel-freeze requires a submitted --kernel-controller candidate"
+            )
         controller = session.controller_candidate.get("ir", {})
         session = service.freeze_controller(
             session.session_id,
             action_id=f"{action_id}:freeze",
             revision=session.revision,
             controller=controller,
-            runtime_contract={"software_only": True, "command_bounds": [safety_bounds.get("input_min", -1.0), safety_bounds.get("input_max", 1.0)]},
+            runtime_contract={
+                "software_only": True,
+                "command_bounds": [
+                    safety_bounds.get("input_min", -1.0),
+                    safety_bounds.get("input_max", 1.0),
+                ],
+            },
             evaluation_contract={"criteria": "public_stability_then_performance"},
         )
     if args.kernel_run_evaluation:
@@ -907,7 +964,12 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
         )
     if args.kernel_evaluation is not None:
         packet = _read_kernel_json(args.kernel_evaluation, "kernel evaluation")
-        session = service.record_evaluation(session.session_id, action_id=f"{action_id}:evaluation", revision=session.revision, packet=packet)
+        session = service.record_evaluation(
+            session.session_id,
+            action_id=f"{action_id}:evaluation",
+            revision=session.revision,
+            packet=packet,
+        )
     if args.kernel_replay:
         session = service.replay_evaluation(
             session.session_id,
@@ -919,20 +981,36 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
         if args.kernel_tuning_results is None:
             raise SystemExit("--kernel-tuning requires --kernel-tuning-results")
         try:
-            results_value = json.loads(args.kernel_tuning_results.read_text(encoding="utf-8"))
+            results_value = json.loads(
+                args.kernel_tuning_results.read_text(encoding="utf-8")
+            )
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise SystemExit(f"invalid kernel tuning results JSON: {exc}") from None
-        result_rows = results_value.get("results", results_value) if isinstance(results_value, dict) else results_value
-        if not isinstance(result_rows, list) or not all(isinstance(item, dict) for item in result_rows):
+        result_rows = (
+            results_value.get("results", results_value)
+            if isinstance(results_value, dict)
+            else results_value
+        )
+        if not isinstance(result_rows, list) or not all(
+            isinstance(item, dict) for item in result_rows
+        ):
             raise SystemExit("kernel tuning results must be a JSON list of objects")
 
         def evaluate(parameters, split, repeats):
             for row in result_rows:
-                if str(row.get("split")) == split and int(row.get("repeats", repeats)) == repeats and row.get("parameters") == dict(parameters):
+                if (
+                    str(row.get("split")) == split
+                    and int(row.get("repeats", repeats)) == repeats
+                    and row.get("parameters") == dict(parameters)
+                ):
                     value = row.get("result", row)
                     if isinstance(value, dict):
                         return dict(value)
-            return {"hard_failure": True, "stable": False, "reason": "missing_precomputed_tuning_result"}
+            return {
+                "hard_failure": True,
+                "stable": False,
+                "reason": "missing_precomputed_tuning_result",
+            }
 
         session = service.run_tuning(
             session.session_id,
@@ -975,9 +1053,12 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
         if training_context is None:
             session = service.run_until_blocked(session.session_id)
         else:
-            identification_registry, identification_id, evaluation_registry, evaluation_id = (
-                training_context
-            )
+            (
+                identification_registry,
+                identification_id,
+                evaluation_registry,
+                evaluation_id,
+            ) = training_context
             session = service.run_until_blocked(
                 session.session_id,
                 provider_registry=identification_registry,

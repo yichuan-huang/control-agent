@@ -8,7 +8,9 @@ from typing import Any
 
 from cfdc.kernel.contracts import fingerprint
 
-_UNRESOLVED = frozenset({"", "unknown", "todo", "tbd", "pending", "null", "none", "待填写", "未知"})
+_UNRESOLVED = frozenset(
+    {"", "unknown", "todo", "tbd", "pending", "null", "none", "待填写", "未知"}
+)
 
 
 def unresolved_fields(value: Any, path: str = "") -> list[str]:
@@ -23,7 +25,9 @@ def unresolved_fields(value: Any, path: str = "") -> list[str]:
         for index, item in enumerate(value):
             result.extend(unresolved_fields(item, f"{path}[{index}]"))
         return result
-    if value is None or (isinstance(value, str) and value.strip().casefold() in _UNRESOLVED):
+    if value is None or (
+        isinstance(value, str) and value.strip().casefold() in _UNRESOLVED
+    ):
         return [path]
     if isinstance(value, float) and not math.isfinite(value):
         return [path]
@@ -44,23 +48,32 @@ def audit_physical_preflight(bundle: Mapping[str, Any]) -> dict[str, Any]:
     protocol = bundle.get("protocol")
     reasons: list[str] = []
     if isinstance(freeze, Mapping) and isinstance(protocol, Mapping):
-        expected = freeze.get("protocol_fingerprint") or freeze.get("evidence_fingerprint")
+        expected = freeze.get("protocol_fingerprint") or freeze.get(
+            "evidence_fingerprint"
+        )
         if expected and expected != protocol.get("protocol_fingerprint"):
             reasons.append("freeze_protocol_binding_mismatch")
-    status = "ready_for_operator_review" if not unresolved and not reasons else "not_ready"
+    status = (
+        "ready_for_operator_review" if not unresolved and not reasons else "not_ready"
+    )
     result = {
         "preflight_version": "cfdc-physical-preflight/v1",
         "status": status,
         "unresolved_fields": unresolved,
         "reasons": reasons,
         "hardware_execution_authorized": False,
-        "claims_forbidden": ["physical safety certification", "autonomous hardware execution"],
+        "claims_forbidden": [
+            "physical safety certification",
+            "autonomous hardware execution",
+        ],
     }
     result["preflight_fingerprint"] = fingerprint(result)
     return result
 
 
-def normalize_engineering_values(values: Any, contract: Mapping[str, Any]) -> list[float]:
+def normalize_engineering_values(
+    values: Any, contract: Mapping[str, Any]
+) -> list[float]:
     zero = float(contract.get("zero", 0.0))
     scale = float(contract.get("scale", 1.0))
     if not math.isfinite(scale) or scale == 0.0:
@@ -71,4 +84,8 @@ def normalize_engineering_values(values: Any, contract: Mapping[str, Any]) -> li
     return result
 
 
-__all__ = ["audit_physical_preflight", "normalize_engineering_values", "unresolved_fields"]
+__all__ = [
+    "audit_physical_preflight",
+    "normalize_engineering_values",
+    "unresolved_fields",
+]

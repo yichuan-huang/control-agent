@@ -50,7 +50,11 @@ def _clean_names(values: Any, label: str) -> tuple[str, ...]:
 
 
 def _bounds(value: Any, label: str) -> tuple[float, float]:
-    if isinstance(value, (str, bytes)) or not isinstance(value, (tuple, list)) or len(value) != 2:
+    if (
+        isinstance(value, (str, bytes))
+        or not isinstance(value, (tuple, list))
+        or len(value) != 2
+    ):
         raise ValueError(f"controller_{label}_bounds_invalid")
     lower = _finite(value[0], f"{label}_lower")
     upper = _finite(value[1], f"{label}_upper")
@@ -116,7 +120,11 @@ class ControllerIR:
             if lower >= upper or not lower <= number <= upper:
                 raise ValueError(f"controller_parameter_out_of_domain: {name}")
         for name, bounds in self.state_limits.items():
-            if not str(name).strip() or not isinstance(bounds, (tuple, list)) or len(bounds) != 2:
+            if (
+                not str(name).strip()
+                or not isinstance(bounds, (tuple, list))
+                or len(bounds) != 2
+            ):
                 raise ValueError("controller_state_limit_invalid")
             lower = _finite(bounds[0], f"state_{name}_lower")
             upper = _finite(bounds[1], f"state_{name}_upper")
@@ -131,28 +139,43 @@ class ControllerIR:
     def from_mapping(cls, value: Mapping[str, Any]) -> ControllerIR:
         raw = dict(value)
         _reject_executable_values(raw)
-        supplied_fingerprint = raw.pop("controller_fingerprint", raw.pop("fingerprint", None))
+        supplied_fingerprint = raw.pop(
+            "controller_fingerprint", raw.pop("fingerprint", None)
+        )
         params_raw = raw.get("parameters") or {}
         domains_raw = raw.get("parameter_domains") or {}
         states_raw = raw.get("state_limits") or {}
-        if not isinstance(params_raw, Mapping) or not isinstance(domains_raw, Mapping) or not isinstance(states_raw, Mapping):
+        if (
+            not isinstance(params_raw, Mapping)
+            or not isinstance(domains_raw, Mapping)
+            or not isinstance(states_raw, Mapping)
+        ):
             raise TypeError("controller_parameter_mappings_required")
-        params = {str(key): _finite(item, f"parameter_{key}") for key, item in params_raw.items()}
+        params = {
+            str(key): _finite(item, f"parameter_{key}")
+            for key, item in params_raw.items()
+        }
         domains = {
             str(key): _bounds(item, f"domain_{key}")
             for key, item in domains_raw.items()
         }
         state_limits = {
-            str(key): _bounds(item, f"state_{key}")
-            for key, item in states_raw.items()
+            str(key): _bounds(item, f"state_{key}") for key, item in states_raw.items()
         }
         output_bounds = raw.get("output_bounds")
         if output_bounds is not None:
             output_bounds = _bounds(output_bounds, "output")
         controller = cls(
             family=str(raw.get("family") or raw.get("controller_family") or "").strip(),
-            measured_signals=_clean_names(raw.get("measured_signals") or raw.get("sensed_signals"), "signals"),
-            control_inputs=_clean_names(raw.get("control_inputs") or raw.get("control_input") or raw.get("actuators"), "inputs"),
+            measured_signals=_clean_names(
+                raw.get("measured_signals") or raw.get("sensed_signals"), "signals"
+            ),
+            control_inputs=_clean_names(
+                raw.get("control_inputs")
+                or raw.get("control_input")
+                or raw.get("actuators"),
+                "inputs",
+            ),
             parameters=params,
             parameter_domains=domains,
             output_bounds=output_bounds,
@@ -162,7 +185,10 @@ class ControllerIR:
             phase_id=str(raw["phase_id"]) if raw.get("phase_id") is not None else None,
             ir_version=str(raw.get("ir_version") or CONTROLLER_IR_VERSION),
         )
-        if supplied_fingerprint is not None and str(supplied_fingerprint) != controller.fingerprint:
+        if (
+            supplied_fingerprint is not None
+            and str(supplied_fingerprint) != controller.fingerprint
+        ):
             raise ValueError("controller_ir_fingerprint_mismatch")
         return controller
 
@@ -177,9 +203,15 @@ class ControllerIR:
             "measured_signals": list(self.measured_signals),
             "control_inputs": list(self.control_inputs),
             "parameters": dict(self.parameters),
-            "parameter_domains": {key: list(bounds) for key, bounds in self.parameter_domains.items()},
-            "output_bounds": list(self.output_bounds) if self.output_bounds is not None else None,
-            "state_limits": {key: list(bounds) for key, bounds in self.state_limits.items()},
+            "parameter_domains": {
+                key: list(bounds) for key, bounds in self.parameter_domains.items()
+            },
+            "output_bounds": list(self.output_bounds)
+            if self.output_bounds is not None
+            else None,
+            "state_limits": {
+                key: list(bounds) for key, bounds in self.state_limits.items()
+            },
             "stop_conditions": list(self.stop_conditions),
             "integral_handling": self.integral_handling,
             "phase_id": self.phase_id,
@@ -189,7 +221,9 @@ class ControllerIR:
         return value
 
 
-def validate_controller_for_route(controller: ControllerIR, route: Mapping[str, Any]) -> dict[str, Any]:
+def validate_controller_for_route(
+    controller: ControllerIR, route: Mapping[str, Any]
+) -> dict[str, Any]:
     """Check family and required features before an IR can be frozen."""
 
     validate_controller_family_for_route(controller.family, route)
@@ -205,14 +239,14 @@ def validate_controller_for_route(controller: ControllerIR, route: Mapping[str, 
             required = {str(item) for item in contract.get("required_parameters", ())}
             missing = sorted(required - set(controller.parameters))
             if missing:
-                raise ValueError("controller_required_parameters_missing: " + ", ".join(missing))
+                raise ValueError(
+                    "controller_required_parameters_missing: " + ", ".join(missing)
+                )
         allowed = set(controller.parameters)
     if allowed:
         extra = sorted(set(controller.parameters) - allowed)
         if extra:
-            raise ValueError(
-                "controller_parameter_not_allowed: " + ", ".join(extra)
-            )
+            raise ValueError("controller_parameter_not_allowed: " + ", ".join(extra))
     return {
         "status": "validated",
         "route_id": route.get("route_id"),
@@ -225,11 +259,16 @@ def validate_controller_for_route(controller: ControllerIR, route: Mapping[str, 
 def validate_controller_family_for_route(family: str, route: Mapping[str, Any]) -> None:
     """Validate only the registered controller family for compatibility paths."""
 
-    expected = str(route.get("controller_contract_id") or route.get("controller_template_id") or "")
+    expected = str(
+        route.get("controller_contract_id") or route.get("controller_template_id") or ""
+    )
     if route.get("controller_contract_id"):
         from .route_catalog import canonical_controller_family
 
-        if canonical_controller_family(family).casefold() != canonical_controller_family(expected).casefold():
+        if (
+            canonical_controller_family(family).casefold()
+            != canonical_controller_family(expected).casefold()
+        ):
             raise ValueError(f"controller_family_incompatible: expected {expected}")
         return
     aliases = {
@@ -248,4 +287,8 @@ def validate_controller_family_for_route(family: str, route: Mapping[str, Any]) 
         raise ValueError(f"controller_family_incompatible: expected {expected}")
 
 
-__all__ = ["ControllerIR", "validate_controller_family_for_route", "validate_controller_for_route"]
+__all__ = [
+    "ControllerIR",
+    "validate_controller_family_for_route",
+    "validate_controller_for_route",
+]

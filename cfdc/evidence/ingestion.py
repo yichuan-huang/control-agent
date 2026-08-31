@@ -18,7 +18,10 @@ from cfdc.kernel.providers import PublicTrace
 
 GATE_DEFINITIONS = {
     "operator_authorization": ("操作角色权限", "先阅读操作卡并完成全部预检查。"),
-    "file_format": ("文件与列格式", "重新导出包含 time_s、input 和全部观测输出的 CSV/JSON。"),
+    "file_format": (
+        "文件与列格式",
+        "重新导出包含 time_s、input 和全部观测输出的 CSV/JSON。",
+    ),
     "session_binding": ("会话与协议绑定", "只上传当前会话和当前协议采集的数据。"),
     "repeat_count": ("重复次数", "按操作卡完成全部独立重复。"),
     "timebase": ("时间轴与采样", "从 0 秒开始，保持严格递增并覆盖完整时长。"),
@@ -36,31 +39,49 @@ class UploadGateError(ValueError):
 
 def _gates() -> list[dict[str, Any]]:
     return [
-        {"id": key, "label": label, "status": "not_reached", "details": "", "redo": redo}
+        {
+            "id": key,
+            "label": label,
+            "status": "not_reached",
+            "details": "",
+            "redo": redo,
+        }
         for key, (label, redo) in GATE_DEFINITIONS.items()
     ]
 
 
-def _set(gates: list[dict[str, Any]], gate_id: str, status: str, details: str = "") -> None:
-    next(item for item in gates if item["id"] == gate_id).update(status=status, details=details)
+def _set(
+    gates: list[dict[str, Any]], gate_id: str, status: str, details: str = ""
+) -> None:
+    next(item for item in gates if item["id"] == gate_id).update(
+        status=status, details=details
+    )
 
 
 def _receipt(path: Path) -> dict[str, Any]:
     raw = path.read_bytes()
-    return {"name": path.name, "size_bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+    return {
+        "name": path.name,
+        "size_bytes": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
 
 
 def _finite_vector(values: Sequence[Any], label: str) -> np.ndarray:
     try:
         result = np.asarray([float(item) for item in values], dtype=float)
     except (TypeError, ValueError) as exc:
-        raise UploadGateError("file_format", f"{label} contains a non-numeric value") from exc
+        raise UploadGateError(
+            "file_format", f"{label} contains a non-numeric value"
+        ) from exc
     if result.ndim != 1 or not result.size or not np.all(np.isfinite(result)):
         raise UploadGateError("file_format", f"{label} must be a finite vector")
     return result
 
 
-def _column(row: Mapping[str, Any], aliases: Sequence[str], *, required: bool = True) -> str | None:
+def _column(
+    row: Mapping[str, Any], aliases: Sequence[str], *, required: bool = True
+) -> str | None:
     lookup = {str(key).strip().casefold(): str(key) for key in row}
     for alias in aliases:
         if alias.casefold() in lookup:
@@ -99,7 +120,11 @@ def _csv_records(
     for index, output in enumerate(output_names):
         output_columns[output] = _column(
             first,
-            (output, "output" if index == 0 else f"output_{index + 1}", f"y{index + 1}"),
+            (
+                output,
+                "output" if index == 0 else f"output_{index + 1}",
+                f"y{index + 1}",
+            ),
         )
     groups: dict[str, list[dict[str, str]]] = {}
     for row in rows:
@@ -107,17 +132,28 @@ def _csv_records(
         groups.setdefault(key, []).append(row)
     records: list[dict[str, Any]] = []
     for key, group in groups.items():
-        records.append({
-            "repeat": key,
-            "time_s": _finite_vector([row[time_name] for row in group], "time_s"),
-            "inputs": {
-                name: _finite_vector([row[column] for row in group], name)
-                for name, column in input_columns.items()
-            },
-            "outputs": {name: _finite_vector([row[column] for row in group], name) for name, column in output_columns.items()},
-            "declared_session_id": str(group[0].get(session_name) or "").strip() if session_name else None,
-            "declared_protocol_fingerprint": str(group[0].get(protocol_name) or "").strip() if protocol_name else None,
-        })
+        records.append(
+            {
+                "repeat": key,
+                "time_s": _finite_vector([row[time_name] for row in group], "time_s"),
+                "inputs": {
+                    name: _finite_vector([row[column] for row in group], name)
+                    for name, column in input_columns.items()
+                },
+                "outputs": {
+                    name: _finite_vector([row[column] for row in group], name)
+                    for name, column in output_columns.items()
+                },
+                "declared_session_id": str(group[0].get(session_name) or "").strip()
+                if session_name
+                else None,
+                "declared_protocol_fingerprint": str(
+                    group[0].get(protocol_name) or ""
+                ).strip()
+                if protocol_name
+                else None,
+            }
+        )
     return records
 
 
@@ -134,7 +170,10 @@ def _json_records(
         raise UploadGateError("file_format", "JSON upload must contain an object")
     common = {
         "declared_session_id": str(value.get("session_id") or "").strip() or None,
-        "declared_protocol_fingerprint": str(value.get("protocol_fingerprint") or "").strip() or None,
+        "declared_protocol_fingerprint": str(
+            value.get("protocol_fingerprint") or ""
+        ).strip()
+        or None,
     }
     repeats = value.get("repeats")
     if isinstance(repeats, list):
@@ -143,7 +182,9 @@ def _json_records(
         groups: dict[str, list[Mapping[str, Any]]] = {}
         for row in value["records"]:
             if not isinstance(row, Mapping):
-                raise UploadGateError("file_format", "JSON records must contain objects")
+                raise UploadGateError(
+                    "file_format", "JSON records must contain objects"
+                )
             groups.setdefault(str(row.get("repeat", 1)), []).append(row)
         sources = [
             {
@@ -160,7 +201,13 @@ def _json_records(
                     ]
                     for index, name in enumerate(input_names)
                 },
-                **{name: [row.get(name, row.get("output") if index == 0 else None) for row in rows] for index, name in enumerate(output_names)},
+                **{
+                    name: [
+                        row.get(name, row.get("output") if index == 0 else None)
+                        for row in rows
+                    ]
+                    for index, name in enumerate(output_names)
+                },
             }
             for key, rows in groups.items()
         ]
@@ -191,7 +238,9 @@ def _json_records(
         raw_inputs = source.get("inputs")
         inputs: dict[str, np.ndarray] = {}
         for input_index, name in enumerate(input_names):
-            raw_input = raw_inputs.get(name) if isinstance(raw_inputs, Mapping) else None
+            raw_input = (
+                raw_inputs.get(name) if isinstance(raw_inputs, Mapping) else None
+            )
             if raw_input is None:
                 raw_input = source.get(name)
             if raw_input is None and input_index == 0:
@@ -199,13 +248,15 @@ def _json_records(
             if raw_input is None:
                 raise UploadGateError("file_format", f"missing input vector: {name}")
             inputs[name] = _finite_vector(raw_input, name)
-        records.append({
-            "repeat": source.get("repeat", index + 1),
-            "time_s": _finite_vector(source.get("time_s", ()), "time_s"),
-            "inputs": inputs,
-            "outputs": outputs,
-            **common,
-        })
+        records.append(
+            {
+                "repeat": source.get("repeat", index + 1),
+                "time_s": _finite_vector(source.get("time_s", ()), "time_s"),
+                "inputs": inputs,
+                "outputs": outputs,
+                **common,
+            }
+        )
     return records
 
 
@@ -226,7 +277,9 @@ def _read(
         elif path.suffix.casefold() == ".json":
             records.extend(_json_records(path, output_names, input_names))
         else:
-            raise UploadGateError("file_format", f"unsupported upload type: {path.suffix}")
+            raise UploadGateError(
+                "file_format", f"unsupported upload type: {path.suffix}"
+            )
     return records, receipts
 
 
@@ -243,22 +296,39 @@ def inspect_upload(
     metrics: dict[str, Any] = {}
     try:
         if not operator_report or operator_report.get("decision") != "accepted":
-            raise UploadGateError("operator_authorization", "operator acceptance is required before upload")
+            raise UploadGateError(
+                "operator_authorization",
+                "operator acceptance is required before upload",
+            )
         _set(gates, "operator_authorization", "passed")
-        output_names = tuple(str(item) for item in protocol.get("requested_signals", ()))
-        input_names = tuple(str(item) for item in protocol.get("control_inputs", ())) or ("input",)
+        output_names = tuple(
+            str(item) for item in protocol.get("requested_signals", ())
+        )
+        input_names = tuple(
+            str(item) for item in protocol.get("control_inputs", ())
+        ) or ("input",)
         records, receipts = _read(paths, output_names, input_names)
         _set(gates, "file_format", "passed", f"parsed {len(records)} repeat record(s)")
         for record in records:
             declared_session = record.get("declared_session_id")
             declared_protocol = record.get("declared_protocol_fingerprint")
             if declared_session and declared_session != session_id:
-                raise UploadGateError("session_binding", "uploaded data declares a different session")
-            if declared_protocol and declared_protocol != protocol["protocol_fingerprint"]:
-                raise UploadGateError("session_binding", "uploaded data declares a different protocol")
+                raise UploadGateError(
+                    "session_binding", "uploaded data declares a different session"
+                )
+            if (
+                declared_protocol
+                and declared_protocol != protocol["protocol_fingerprint"]
+            ):
+                raise UploadGateError(
+                    "session_binding", "uploaded data declares a different protocol"
+                )
         _set(gates, "session_binding", "passed")
         if len(records) != int(protocol["repeats"]):
-            raise UploadGateError("repeat_count", f"expected {protocol['repeats']} repeats, received {len(records)}")
+            raise UploadGateError(
+                "repeat_count",
+                f"expected {protocol['repeats']} repeats, received {len(records)}",
+            )
         _set(gates, "repeat_count", "passed")
         expected_t, expected_inputs = expected_input_waveforms(protocol)
         time_errors: list[float] = []
@@ -274,12 +344,20 @@ def inspect_upload(
                 *(len(values) for values in record["outputs"].values()),
             }
             if len(lengths) != 1 or len(time_s) != len(expected_t):
-                raise UploadGateError("timebase", "sample count does not match the compiled protocol")
-            if abs(float(time_s[0])) > max(1e-9, 0.02 * float(protocol["sample_period_s"])) or np.any(np.diff(time_s) <= 0):
-                raise UploadGateError("timebase", "time must start at zero and be strictly increasing")
+                raise UploadGateError(
+                    "timebase", "sample count does not match the compiled protocol"
+                )
+            if abs(float(time_s[0])) > max(
+                1e-9, 0.02 * float(protocol["sample_period_s"])
+            ) or np.any(np.diff(time_s) <= 0):
+                raise UploadGateError(
+                    "timebase", "time must start at zero and be strictly increasing"
+                )
             time_error = float(np.max(np.abs(time_s - expected_t)))
             if time_error > max(1e-8, 0.05 * float(protocol["sample_period_s"])):
-                raise UploadGateError("timebase", "timestamps exceed the public sample-time tolerance")
+                raise UploadGateError(
+                    "timebase", "timestamps exceed the public sample-time tolerance"
+                )
             time_errors.append(time_error)
             tolerance = max(1e-8, 0.02 * max(upper - lower, 1e-6))
             for name, command in inputs.items():
@@ -291,7 +369,9 @@ def inspect_upload(
                         f"measured input {name} does not match the authorized waveform",
                     )
                 input_errors.append(input_error)
-                if np.any(command < lower - tolerance) or np.any(command > upper + tolerance):
+                if np.any(command < lower - tolerance) or np.any(
+                    command > upper + tolerance
+                ):
                     raise UploadGateError(
                         "safety_limits",
                         f"measured input {name} exceeds the declared bounds",
@@ -301,7 +381,9 @@ def inspect_upload(
         _set(gates, "timebase", "passed")
         _set(gates, "input_waveform", "passed")
         if stopped_on_limit:
-            raise UploadGateError("safety_limits", "operator reported a stop-limit event")
+            raise UploadGateError(
+                "safety_limits", "operator reported a stop-limit event"
+            )
         _set(gates, "safety_limits", "passed")
         repeat_cv: dict[str, float] = {}
         for name, values in output_stacks.items():
@@ -310,9 +392,15 @@ def inspect_upload(
             span = float(np.ptp(np.median(stack, axis=0)))
             repeat_cv[name] = spread / max(span, 1e-9)
             if not math.isfinite(repeat_cv[name]) or repeat_cv[name] > 0.5:
-                raise UploadGateError("signal_quality", f"repeat inconsistency is too high for {name}")
+                raise UploadGateError(
+                    "signal_quality", f"repeat inconsistency is too high for {name}"
+                )
         _set(gates, "signal_quality", "passed")
-        metrics = {"max_time_error_s": max(time_errors), "max_input_error": max(input_errors), "repeat_cv": repeat_cv}
+        metrics = {
+            "max_time_error_s": max(time_errors),
+            "max_input_error": max(input_errors),
+            "repeat_cv": repeat_cv,
+        }
         traces = []
         for index, record in enumerate(records, 1):
             primary_input = record["inputs"][input_names[0]]

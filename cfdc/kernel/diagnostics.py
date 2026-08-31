@@ -37,9 +37,16 @@ class DiagnosticEntry:
         if self.status == "not_relevant":
             if not self.evidence.strip() or not self.source.startswith("task_policy:"):
                 raise ValueError("not_relevant_requires_deterministic_policy")
-            if self.blocking_for_current_route or self.next_resolving_action is not None:
+            if (
+                self.blocking_for_current_route
+                or self.next_resolving_action is not None
+            ):
                 raise ValueError("not_relevant_cannot_block_or_require_action")
-        if self.status == "known" and self.assessment is not None and not str(self.assessment).strip():
+        if (
+            self.status == "known"
+            and self.assessment is not None
+            and not str(self.assessment).strip()
+        ):
             raise ValueError("diagnostic_assessment_invalid")
 
     def to_dict(self) -> dict[str, Any]:
@@ -85,7 +92,9 @@ class DiagnosticLedger:
     def __post_init__(self) -> None:
         ids = tuple(item.id for item in self.entries)
         if ids != DIAGNOSTIC_IDS:
-            raise ValueError("diagnostic_ledger_must_contain_exactly_eight_ordered_dimensions")
+            raise ValueError(
+                "diagnostic_ledger_must_contain_exactly_eight_ordered_dimensions"
+            )
         if self.revision < 0:
             raise ValueError("diagnostic_revision_invalid")
 
@@ -152,7 +161,11 @@ class DiagnosticLedger:
                     assessment=value.get("assessment"),
                     value=value.get("value"),
                 )
-        return replace(self, entries=tuple(by_id[item] for item in DIAGNOSTIC_IDS), revision=self.revision + 1)
+        return replace(
+            self,
+            entries=tuple(by_id[item] for item in DIAGNOSTIC_IDS),
+            revision=self.revision + 1,
+        )
 
     def apply_not_relevant(
         self,
@@ -164,12 +177,18 @@ class DiagnosticLedger:
     ) -> DiagnosticLedger:
         """Apply the small deterministic relevance policy, never an LLM claim."""
 
-        if task_type != "local_setpoint_hold" or len(measured_signals) != 1 or not control_input:
+        if (
+            task_type != "local_setpoint_hold"
+            or len(measured_signals) != 1
+            or not control_input
+        ):
             raise ValueError("task_relevance_policy_not_activated")
         allowed = {"coupling_underactuation"}
         unknown = set(declarations) - allowed
         if unknown:
-            raise ValueError("not_relevant_dimension_not_authorized: " + ", ".join(sorted(unknown)))
+            raise ValueError(
+                "not_relevant_dimension_not_authorized: " + ", ".join(sorted(unknown))
+            )
         updates = {
             key: {
                 "status": "not_relevant",
@@ -182,11 +201,15 @@ class DiagnosticLedger:
         }
         return self.update(updates, source="task_policy:v1")
 
-    def readiness(self, required_dimensions: tuple[str, ...] | None = None) -> DiagnosticReadiness:
+    def readiness(
+        self, required_dimensions: tuple[str, ...] | None = None
+    ) -> DiagnosticReadiness:
         required = set(required_dimensions or DIAGNOSTIC_IDS)
         by_id = {item.id: item for item in self.entries}
         unresolved = tuple(item.id for item in self.entries if item.status == "unknown")
-        blocking = tuple(item.id for item in self.entries if item.blocking_for_current_route)
+        blocking = tuple(
+            item.id for item in self.entries if item.blocking_for_current_route
+        )
         required_not_known = tuple(
             item
             for item in DIAGNOSTIC_IDS
@@ -195,7 +218,11 @@ class DiagnosticLedger:
         invalid = tuple(
             item.id
             for item in self.entries
-            if item.status == "not_relevant" and (item.blocking_for_current_route or not item.source.startswith("task_policy:"))
+            if item.status == "not_relevant"
+            and (
+                item.blocking_for_current_route
+                or not item.source.startswith("task_policy:")
+            )
         )
         complete = len(self.entries) == len(DIAGNOSTIC_IDS)
         passed = complete and not blocking and not required_not_known and not invalid
@@ -221,9 +248,13 @@ class DiagnosticLedger:
     def from_dict(cls, value: Mapping[str, Any]) -> DiagnosticLedger:
         if value.get("ledger_version") != DIAGNOSTIC_LEDGER_VERSION:
             raise ValueError("diagnostic_ledger_version_mismatch")
-        entries = tuple(DiagnosticEntry(**dict(item)) for item in value.get("entries", ()))
+        entries = tuple(
+            DiagnosticEntry(**dict(item)) for item in value.get("entries", ())
+        )
         ledger = cls(entries=entries, revision=int(value.get("revision", 0)))
         stored = value.get("ledger_fingerprint")
-        if stored is not None and stored != fingerprint({k: v for k, v in value.items() if k != "ledger_fingerprint"}):
+        if stored is not None and stored != fingerprint(
+            {k: v for k, v in value.items() if k != "ledger_fingerprint"}
+        ):
             raise ValueError("diagnostic_ledger_fingerprint_mismatch")
         return ledger

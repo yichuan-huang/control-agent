@@ -87,10 +87,33 @@ DIAGNOSTIC_IDS = (
 )
 
 _UNSUPPORTED_TASK_MARKERS: dict[str, tuple[str, ...]] = {
-    "trajectory_tracking": ("trajectory tracking", "track a trajectory", "轨迹跟踪", "跟踪轨迹"),
-    "periodic_operation": ("periodic operation", "periodic orbit", "limit cycle", "周期运行", "周期轨道"),
-    "constraint_optimization": ("constraint optimization", "constrained optimization", "economic optimum", "约束优化", "经济最优"),
-    "online_adaptation": ("online adaptation", "online adaptive", "adapt parameters online", "在线适应", "在线自适应"),
+    "trajectory_tracking": (
+        "trajectory tracking",
+        "track a trajectory",
+        "轨迹跟踪",
+        "跟踪轨迹",
+    ),
+    "periodic_operation": (
+        "periodic operation",
+        "periodic orbit",
+        "limit cycle",
+        "周期运行",
+        "周期轨道",
+    ),
+    "constraint_optimization": (
+        "constraint optimization",
+        "constrained optimization",
+        "economic optimum",
+        "约束优化",
+        "经济最优",
+    ),
+    "online_adaptation": (
+        "online adaptation",
+        "online adaptive",
+        "adapt parameters online",
+        "在线适应",
+        "在线自适应",
+    ),
 }
 
 
@@ -182,15 +205,28 @@ class TaskContract:
         if not isinstance(wrapped, Mapping):
             wrapped = payload.get("task")
         raw = dict(wrapped) if isinstance(wrapped, Mapping) else dict(payload)
-        supplied_fingerprint = raw.pop("task_fingerprint", payload.get("task_fingerprint"))
+        supplied_fingerprint = raw.pop(
+            "task_fingerprint", payload.get("task_fingerprint")
+        )
         for source, target in cls._ALIASES.items():
-            if target not in raw and source in raw and source != "task_success_requirements":
+            if (
+                target not in raw
+                and source in raw
+                and source != "task_success_requirements"
+            ):
                 raw[target] = raw[source]
         declared_task_type = raw.get("task_type")
         if declared_task_type is None:
-            visible = " ".join(str(raw.get(key) or "").casefold() for key in ("description", "natural_language_description", "objective"))
+            visible = " ".join(
+                str(raw.get(key) or "").casefold()
+                for key in ("description", "natural_language_description", "objective")
+            )
             task_type = next(
-                (candidate for candidate, markers in _UNSUPPORTED_TASK_MARKERS.items() if any(marker in visible for marker in markers)),
+                (
+                    candidate
+                    for candidate, markers in _UNSUPPORTED_TASK_MARKERS.items()
+                    if any(marker in visible for marker in markers)
+                ),
                 "local_setpoint_hold",
             )
         else:
@@ -200,14 +236,25 @@ class TaskContract:
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"unsupported_task_type: {task_type}")
         semantics_version = raw.get("task_semantics_version")
-        if semantics_version is not None and str(semantics_version).strip() not in {"", P1_1_TASK_SEMANTICS_VERSION}:
+        if semantics_version is not None and str(semantics_version).strip() not in {
+            "",
+            P1_1_TASK_SEMANTICS_VERSION,
+        }:
             raise ValueError("task_semantics_version_mismatch")
         declared_schema = raw.get("schema_version")
         if declared_schema is None:
-            declared_schema = raw.get("contract_version", raw.get("task_contract_version"))
-        if declared_schema is not None and str(declared_schema).strip() not in {"", TASK_CONTRACT_VERSION, "1.1.0"}:
+            declared_schema = raw.get(
+                "contract_version", raw.get("task_contract_version")
+            )
+        if declared_schema is not None and str(declared_schema).strip() not in {
+            "",
+            TASK_CONTRACT_VERSION,
+            "1.1.0",
+        }:
             raise ValueError("task_contract_version_mismatch")
-        description = str(raw.get("description") or raw.get("natural_language_description") or "").strip()
+        description = str(
+            raw.get("description") or raw.get("natural_language_description") or ""
+        ).strip()
         if not description:
             raise ValueError("task_description_required")
         signals = _clean_tuple(raw.get("measured_signals"))
@@ -219,7 +266,11 @@ class TaskContract:
         if declared_inputs is None:
             declared_inputs = raw.get("control_input")
         control_inputs = _clean_tuple(declared_inputs)
-        control_input = control_inputs[0] if control_inputs else str(raw.get("control_input") or "").strip()
+        control_input = (
+            control_inputs[0]
+            if control_inputs
+            else str(raw.get("control_input") or "").strip()
+        )
         if not control_input:
             raise ValueError("control_input_required")
         if not control_inputs:
@@ -231,17 +282,27 @@ class TaskContract:
             raise ValueError("input_bounds_invalid")
         output_min = _optional_float(raw.get("output_min"))
         output_max = _optional_float(raw.get("output_max"))
-        if output_min is not None and output_max is not None and output_min >= output_max:
+        if (
+            output_min is not None
+            and output_max is not None
+            and output_min >= output_max
+        ):
             raise ValueError("output_bounds_invalid")
         state_stop = _optional_float(raw.get("state_stop"))
         if state_stop is not None and state_stop <= 0:
             raise ValueError("state_stop_invalid")
         initial_output_value = _optional_float(raw.get("initial_output_value"))
         declared_control_target = raw.get("control_target")
-        declared_control_target = declared_control_target if isinstance(declared_control_target, Mapping) else {}
+        declared_control_target = (
+            declared_control_target
+            if isinstance(declared_control_target, Mapping)
+            else {}
+        )
         target_bandwidth_value = raw.get("target_bandwidth_rad_s")
         if target_bandwidth_value is None:
-            target_bandwidth_value = declared_control_target.get("target_bandwidth_rad_s")
+            target_bandwidth_value = declared_control_target.get(
+                "target_bandwidth_rad_s"
+            )
         target_bandwidth = _optional_float(target_bandwidth_value)
         response_time = _optional_float(raw.get("response_time_preference_s"))
         if target_bandwidth is not None and target_bandwidth <= 0:
@@ -249,7 +310,9 @@ class TaskContract:
         if response_time is not None and response_time <= 0:
             raise ValueError("response_time_preference_invalid")
         try:
-            intermediate = tuple(float(value) for value in raw.get("intermediate_targets", ()) or ())
+            intermediate = tuple(
+                float(value) for value in raw.get("intermediate_targets", ()) or ()
+            )
         except (TypeError, ValueError) as exc:
             raise ValueError("intermediate_targets_invalid") from exc
         if len(intermediate) > 3:
@@ -325,11 +388,17 @@ class TaskContract:
                 if output_max is None:
                     output_max = output_abs_max
         workspace = dict(raw.get("workspace") or {})
-        if isinstance(simulation_limits, Mapping) and any(value is not None for value in simulation_limits.values()):
+        if isinstance(simulation_limits, Mapping) and any(
+            value is not None for value in simulation_limits.values()
+        ):
             workspace.setdefault("simulation_limits", dict(simulation_limits))
         if isinstance(engineering_units, Mapping) and engineering_units:
             workspace.setdefault("engineering_units", dict(engineering_units))
-        if output_min is not None and output_max is not None and output_min >= output_max:
+        if (
+            output_min is not None
+            and output_max is not None
+            and output_min >= output_max
+        ):
             raise ValueError("output_bounds_invalid")
         if input_min is not None and input_max is not None and input_min >= input_max:
             raise ValueError("input_bounds_invalid")
@@ -337,13 +406,21 @@ class TaskContract:
             raise ValueError("state_stop_invalid")
         declared_phase_schedule = raw.get("phase_schedule")
         if isinstance(declared_phase_schedule, (list, tuple)):
-            phase_schedule: dict[str, Any] = {"phases": [dict(item) for item in declared_phase_schedule if isinstance(item, Mapping)]}
+            phase_schedule: dict[str, Any] = {
+                "phases": [
+                    dict(item)
+                    for item in declared_phase_schedule
+                    if isinstance(item, Mapping)
+                ]
+            }
         elif isinstance(declared_phase_schedule, Mapping):
             phase_schedule = dict(declared_phase_schedule)
         else:
             phase_schedule = {}
         if initial_output_value is None and isinstance(phase_schedule, Mapping):
-            initial_output_value = _optional_float(phase_schedule.get("initial_output_value"))
+            initial_output_value = _optional_float(
+                phase_schedule.get("initial_output_value")
+            )
         if not intermediate and isinstance(phase_schedule, Mapping):
             scheduled_targets = phase_schedule.get("intermediate_targets")
             if isinstance(scheduled_targets, (list, tuple)):
@@ -351,39 +428,78 @@ class TaskContract:
                     intermediate = tuple(float(value) for value in scheduled_targets)
                 except (TypeError, ValueError) as exc:
                     raise ValueError("intermediate_targets_invalid") from exc
-                if len(intermediate) > 3 or any(not math.isfinite(value) for value in intermediate):
+                if len(intermediate) > 3 or any(
+                    not math.isfinite(value) for value in intermediate
+                ):
                     raise ValueError("intermediate_targets_invalid")
         reference_value = raw.get("reference")
         if reference_value is None and isinstance(phase_schedule, Mapping):
             reference_value = phase_schedule.get("final_reference")
         if reference_value is None:
             reference_value = declared_control_target.get("reference")
-        initial_region = str(raw["initial_region"]).strip() if raw.get("initial_region") is not None else None
-        goal_region = str(raw["goal_region"]).strip() if raw.get("goal_region") is not None else None
+        initial_region = (
+            str(raw["initial_region"]).strip()
+            if raw.get("initial_region") is not None
+            else None
+        )
+        goal_region = (
+            str(raw["goal_region"]).strip()
+            if raw.get("goal_region") is not None
+            else None
+        )
         declared_disturbance = raw.get("disturbance_contract")
-        declared_disturbance = declared_disturbance if isinstance(declared_disturbance, Mapping) else {}
-        disturbance_event_value = raw.get("disturbance_event", declared_disturbance.get("event"))
-        recovery_start_value = raw.get("recovery_start_condition", declared_disturbance.get("recovery_start_condition"))
-        disturbance_hold_value = raw.get("disturbance_hold_region", declared_disturbance.get("hold_region"))
-        disturbance_event = str(disturbance_event_value).strip() if disturbance_event_value is not None else None
-        recovery_start_condition = str(recovery_start_value).strip() if recovery_start_value is not None else None
-        disturbance_hold_region = str(disturbance_hold_value).strip() if disturbance_hold_value is not None else None
-        if task_type == "transition_then_hold" and (not initial_region or not goal_region):
+        declared_disturbance = (
+            declared_disturbance if isinstance(declared_disturbance, Mapping) else {}
+        )
+        disturbance_event_value = raw.get(
+            "disturbance_event", declared_disturbance.get("event")
+        )
+        recovery_start_value = raw.get(
+            "recovery_start_condition",
+            declared_disturbance.get("recovery_start_condition"),
+        )
+        disturbance_hold_value = raw.get(
+            "disturbance_hold_region", declared_disturbance.get("hold_region")
+        )
+        disturbance_event = (
+            str(disturbance_event_value).strip()
+            if disturbance_event_value is not None
+            else None
+        )
+        recovery_start_condition = (
+            str(recovery_start_value).strip()
+            if recovery_start_value is not None
+            else None
+        )
+        disturbance_hold_region = (
+            str(disturbance_hold_value).strip()
+            if disturbance_hold_value is not None
+            else None
+        )
+        if task_type == "transition_then_hold" and (
+            not initial_region or not goal_region
+        ):
             raise ValueError("transition_then_hold_requires_initial_and_goal_regions")
         if task_type == "disturbance_recovery_to_hold" and not all(
             (disturbance_event, recovery_start_condition, disturbance_hold_region)
         ):
-            raise ValueError("disturbance_recovery_requires_event_start_and_hold_region")
+            raise ValueError(
+                "disturbance_recovery_requires_event_start_and_hold_region"
+            )
         if task_type != "transition_then_hold" and intermediate:
             raise ValueError("intermediate_targets_require_transition_task")
         if intermediate:
             if initial_output_value is None or reference_value is None:
-                raise ValueError("numeric_intermediate_targets_require_initial_and_reference")
+                raise ValueError(
+                    "numeric_intermediate_targets_require_initial_and_reference"
+                )
             points = (initial_output_value, *intermediate, float(reference_value))
             if math.isclose(points[0], points[-1], rel_tol=0.0, abs_tol=1e-12):
                 raise ValueError("initial_output_and_reference_must_differ")
             direction = 1.0 if points[-1] > points[0] else -1.0
-            if any(direction * (right - left) <= 0.0 for left, right in pairwise(points)):
+            if any(
+                direction * (right - left) <= 0.0 for left, right in pairwise(points)
+            ):
                 raise ValueError("intermediate_targets_must_follow_execution_order")
         required_phase_count = raw.get(
             "required_phase_count_min", requirements.get("required_phase_count_min")
@@ -392,16 +508,23 @@ class TaskContract:
             "verified_handoff_count_min", requirements.get("verified_handoff_count_min")
         )
         final_hold_duration = _optional_float(
-            raw.get("final_hold_duration_min_s", requirements.get("final_hold_duration_min_s"))
+            raw.get(
+                "final_hold_duration_min_s",
+                requirements.get("final_hold_duration_min_s"),
+            )
         )
         if final_hold_duration is not None and final_hold_duration <= 0:
             raise ValueError("final_hold_duration_invalid")
         if required_phase_count is not None:
-            required_phase_count = _optional_int(required_phase_count, "required_phase_count_invalid")
+            required_phase_count = _optional_int(
+                required_phase_count, "required_phase_count_invalid"
+            )
             if required_phase_count < 2 or required_phase_count > 5:
                 raise ValueError("required_phase_count_invalid")
         if verified_handoff_count is not None:
-            verified_handoff_count = _optional_int(verified_handoff_count, "verified_handoff_count_invalid")
+            verified_handoff_count = _optional_int(
+                verified_handoff_count, "verified_handoff_count_invalid"
+            )
             if verified_handoff_count < 1 or verified_handoff_count > 4:
                 raise ValueError("verified_handoff_count_invalid")
         # Keep top-level v3 spellings and the nested success contract in one
@@ -413,9 +536,18 @@ class TaskContract:
             ("required_phase_count_min", required_phase_count),
             ("verified_handoff_count_min", verified_handoff_count),
             ("final_hold_duration_min_s", final_hold_duration),
-            ("goal_region_entry_required", raw.get("goal_region_entry_required", requirements.get("goal_region_entry_required"))),
+            (
+                "goal_region_entry_required",
+                raw.get(
+                    "goal_region_entry_required",
+                    requirements.get("goal_region_entry_required"),
+                ),
+            ),
             ("recovery_abs_error_max", raw.get("recovery_abs_error_max")),
-            ("post_recovery_hold_duration_min_s", raw.get("post_recovery_hold_duration_min_s")),
+            (
+                "post_recovery_hold_duration_min_s",
+                raw.get("post_recovery_hold_duration_min_s"),
+            ),
         ):
             if value is not None:
                 requirements.setdefault(key, value)
@@ -443,7 +575,9 @@ class TaskContract:
                 try:
                     number = float(value)
                 except (TypeError, ValueError) as exc:
-                    raise ValueError(f"task_success_requirement_invalid: {key}") from exc
+                    raise ValueError(
+                        f"task_success_requirement_invalid: {key}"
+                    ) from exc
                 if not math.isfinite(number):
                     raise ValueError(f"task_success_requirement_invalid: {key}")
                 if key in positive_criteria and number <= 0:
@@ -452,7 +586,10 @@ class TaskContract:
                     raise ValueError(f"task_success_requirement_invalid: {key}")
                 if key in rate_criteria and not 0 <= number <= 1:
                     raise ValueError(f"task_success_requirement_invalid: {key}")
-        if semantics_version is not None and str(semantics_version).strip() == P1_1_TASK_SEMANTICS_VERSION:
+        if (
+            semantics_version is not None
+            and str(semantics_version).strip() == P1_1_TASK_SEMANTICS_VERSION
+        ):
             missing_boundary = [
                 name
                 for name, value in (
@@ -465,25 +602,38 @@ class TaskContract:
                 if value is None or (isinstance(value, str) and not value.strip())
             ]
             if missing_boundary:
-                raise ValueError("task_contract_boundary_missing: " + ", ".join(missing_boundary))
+                raise ValueError(
+                    "task_contract_boundary_missing: " + ", ".join(missing_boundary)
+                )
             required_by_type = {
                 "local_setpoint_hold": (
-                    "final_abs_error_max", "overshoot_max", "settling_time_max_s",
-                    "perturbed_success_rate_min", "hold_duration_min_s",
+                    "final_abs_error_max",
+                    "overshoot_max",
+                    "settling_time_max_s",
+                    "perturbed_success_rate_min",
+                    "hold_duration_min_s",
                 ),
                 "transition_then_hold": (
-                    "required_phase_count_min", "verified_handoff_count_min",
-                    "goal_region_entry_required", "final_hold_duration_min_s",
+                    "required_phase_count_min",
+                    "verified_handoff_count_min",
+                    "goal_region_entry_required",
+                    "final_hold_duration_min_s",
                     "perturbed_success_rate_min",
                 ),
                 "disturbance_recovery_to_hold": (
-                    "recovery_abs_error_max", "recovery_time_max_s",
-                    "post_recovery_hold_duration_min_s", "perturbed_success_rate_min",
+                    "recovery_abs_error_max",
+                    "recovery_time_max_s",
+                    "post_recovery_hold_duration_min_s",
+                    "perturbed_success_rate_min",
                 ),
             }
-            missing = [key for key in required_by_type[task_type] if key not in requirements]
+            missing = [
+                key for key in required_by_type[task_type] if key not in requirements
+            ]
             if missing:
-                raise ValueError("task_success_requirements_missing: " + ", ".join(missing))
+                raise ValueError(
+                    "task_success_requirements_missing: " + ", ".join(missing)
+                )
         budget_confirmed_value = raw.get("budget_confirmed", False)
         if not isinstance(budget_confirmed_value, bool):
             raise ValueError("budget_confirmed_must_be_boolean")  # noqa: TRY004 - stable API error
@@ -491,7 +641,9 @@ class TaskContract:
         disturbance_contract = dict(raw.get("disturbance_contract") or {})
         if task_type == "disturbance_recovery_to_hold":
             disturbance_contract.setdefault("event", disturbance_event)
-            disturbance_contract.setdefault("recovery_start_condition", recovery_start_condition)
+            disturbance_contract.setdefault(
+                "recovery_start_condition", recovery_start_condition
+            )
             disturbance_contract.setdefault("hold_region", disturbance_hold_region)
         if final_hold_duration is not None:
             requirements.setdefault("final_hold_duration_min_s", final_hold_duration)
@@ -508,7 +660,11 @@ class TaskContract:
             output_min=output_min,
             output_max=output_max,
             state_stop=state_stop,
-            operating_region=(str(raw["operating_region"]).strip() if raw.get("operating_region") is not None else None),
+            operating_region=(
+                str(raw["operating_region"]).strip()
+                if raw.get("operating_region") is not None
+                else None
+            ),
             success_requirements=requirements,
             budgets=budgets,
             initial_region=initial_region,
@@ -520,7 +676,11 @@ class TaskContract:
             disturbance_hold_region=disturbance_hold_region,
             target_bandwidth_rad_s=target_bandwidth,
             response_time_preference_s=response_time,
-            time_requirement_source=(str(raw["time_requirement_source"]).strip() if raw.get("time_requirement_source") is not None else None),
+            time_requirement_source=(
+                str(raw["time_requirement_source"]).strip()
+                if raw.get("time_requirement_source") is not None
+                else None
+            ),
             required_phase_count_min=required_phase_count,
             verified_handoff_count_min=verified_handoff_count,
             final_hold_duration_min_s=final_hold_duration,
@@ -530,11 +690,20 @@ class TaskContract:
             control_target=dict(declared_control_target),
             disturbance_contract=disturbance_contract,
             phase_schedule=phase_schedule,
-            engineering_units=dict(engineering_units or {}) if isinstance(engineering_units, Mapping) else {},
-            task_semantics_version=(str(semantics_version).strip() if semantics_version is not None else None),
+            engineering_units=dict(engineering_units or {})
+            if isinstance(engineering_units, Mapping)
+            else {},
+            task_semantics_version=(
+                str(semantics_version).strip()
+                if semantics_version is not None
+                else None
+            ),
             budget_confirmed=budget_confirmed,
         )
-        if supplied_fingerprint is not None and str(supplied_fingerprint) != contract.fingerprint:
+        if (
+            supplied_fingerprint is not None
+            and str(supplied_fingerprint) != contract.fingerprint
+        ):
             raise ValueError("task_contract_fingerprint_mismatch")
         return contract
 
@@ -618,7 +787,9 @@ class TaskContract:
                 "input_max": self.input_max,
                 "state_stop": self.state_stop,
             }
-            if all(limits.get(key) == item for key, item in canonical_limits.items()) and set(limits) <= set(canonical_limits):
+            if all(
+                limits.get(key) == item for key, item in canonical_limits.items()
+            ) and set(limits) <= set(canonical_limits):
                 workspace.pop("simulation_limits", None)
         value["workspace"] = workspace
         return fingerprint(value)
@@ -685,7 +856,11 @@ class ControllerFreeze:
             raise ValueError("controller_freeze_version_mismatch")
         if not self.session_id.strip() or not self.task_fingerprint.strip():
             raise ValueError("controller_freeze_binding_required")
-        if not self.controller or not self.runtime_contract or not self.evaluation_contract:
+        if (
+            not self.controller
+            or not self.runtime_contract
+            or not self.evaluation_contract
+        ):
             raise ValueError("controller_freeze_contract_incomplete")
 
     @classmethod
@@ -697,13 +872,18 @@ class ControllerFreeze:
             session_id=str(raw.get("session_id") or ""),
             task_fingerprint=str(raw.get("task_fingerprint") or ""),
             controller=dict(raw.get("controller") or {}),
-            evidence_fingerprints=tuple(str(item) for item in raw.get("evidence_fingerprints", ()) or ()),
+            evidence_fingerprints=tuple(
+                str(item) for item in raw.get("evidence_fingerprints", ()) or ()
+            ),
             runtime_contract=dict(raw.get("runtime_contract") or {}),
             evaluation_contract=dict(raw.get("evaluation_contract") or {}),
             source_version=str(raw.get("source_version") or ""),
             freeze_version=str(raw.get("freeze_version") or FREEZE_VERSION),
         )
-        if supplied is not None and str(supplied) != freeze.to_dict()["freeze_fingerprint"]:
+        if (
+            supplied is not None
+            and str(supplied) != freeze.to_dict()["freeze_fingerprint"]
+        ):
             raise ValueError("controller_freeze_fingerprint_mismatch")
         return freeze
 
@@ -739,11 +919,17 @@ class EvaluationPacket:
     def __post_init__(self) -> None:
         if self.packet_version != PACKET_VERSION:
             raise ValueError("evaluation_packet_version_mismatch")
-        if not self.session_id.strip() or not self.freeze_fingerprint.strip() or not self.task_fingerprint.strip():
+        if (
+            not self.session_id.strip()
+            or not self.freeze_fingerprint.strip()
+            or not self.task_fingerprint.strip()
+        ):
             raise ValueError("evaluation_packet_binding_required")
         if not self.provider_id.strip() or not self.provider_version.strip():
             raise ValueError("evaluation_packet_provider_required")
-        if not self.trials or not all(isinstance(item, Mapping) for item in self.trials):
+        if not self.trials or not all(
+            isinstance(item, Mapping) for item in self.trials
+        ):
             raise ValueError("evaluation_packet_trials_required")
         if self.evaluation_split not in {"development", "fresh_confirmation", "replay"}:
             raise ValueError("evaluation_packet_split_invalid")
@@ -758,9 +944,15 @@ class EvaluationPacket:
         private_truth_value = raw.get("private_truth_returned", False)
         if not isinstance(private_truth_value, bool):
             raise ValueError("private_truth_returned_must_be_boolean")  # noqa: TRY004 - stable API error
-        provider = raw.get("provider_contract") if isinstance(raw.get("provider_contract"), Mapping) else {}
+        provider = (
+            raw.get("provider_contract")
+            if isinstance(raw.get("provider_contract"), Mapping)
+            else {}
+        )
         provider_id = raw.get("provider_id") or provider.get("provider_id")
-        provider_version = raw.get("provider_version") or provider.get("provider_version")
+        provider_version = raw.get("provider_version") or provider.get(
+            "provider_version"
+        )
         raw_evidence = raw.get("evidence_fingerprints")
         if raw_evidence is None and raw.get("evidence_fingerprint"):
             raw_evidence = (raw.get("evidence_fingerprint"),)
@@ -776,7 +968,11 @@ class EvaluationPacket:
                 or raw.get("evaluation_freeze_fingerprint")
                 or ""
             ),
-            task_fingerprint=str(raw.get("task_fingerprint") or raw.get("task_contract_fingerprint") or ""),
+            task_fingerprint=str(
+                raw.get("task_fingerprint")
+                or raw.get("task_contract_fingerprint")
+                or ""
+            ),
             provider_id=str(provider_id or ""),
             provider_version=str(provider_version or ""),
             trials=tuple(dict(item) for item in raw.get("trials", ()) or ()),
@@ -787,7 +983,10 @@ class EvaluationPacket:
             metadata=dict(raw.get("metadata") or {}),
             packet_version=str(raw.get("packet_version") or PACKET_VERSION),
         )
-        if supplied is not None and str(supplied) != packet.to_dict()["packet_fingerprint"]:
+        if (
+            supplied is not None
+            and str(supplied) != packet.to_dict()["packet_fingerprint"]
+        ):
             raise ValueError("evaluation_packet_fingerprint_mismatch")
         return packet
 

@@ -35,7 +35,9 @@ def start_kernel_workflow(
     return create_kernel_service(root).start(payload)
 
 
-def read_kernel_workflow(session_id: str, *, root: str | Path | None = None) -> EvidenceSession:
+def read_kernel_workflow(
+    session_id: str, *, root: str | Path | None = None
+) -> EvidenceSession:
     return create_kernel_service(root).read(session_id)
 
 
