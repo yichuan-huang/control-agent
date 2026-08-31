@@ -1,0 +1,321 @@
+{
+  "registry_version": "1.10.0",
+  "executor_id": "cfdc_unknown_system_executor",
+  "max_information_retries": 1,
+  "interaction_budgets": {
+    "clarification_rounds": 6,
+    "distinct_experiments": 4,
+    "same_failure_retries": 1,
+    "elapsed_time_s": 7200,
+    "cumulative_excitation_time_s": 1800
+  },
+  "experiment_information_capabilities": {
+    "bipolar_pulse": {
+      "screening_cost_rank": 1,
+      "observable_feature_ids": [
+        "static_gain",
+        "dominant_time_constant",
+        "delay_bound",
+        "natural_frequency",
+        "damping_ratio",
+        "derivative_gain",
+        "acceleration_gain",
+        "drag_rate",
+        "inverse_response_recovery_time"
+      ],
+      "coverage": "dominant low-frequency adjacent-SISO structure inside the declared task band",
+      "known_limit": "does not close an unprobed fast-mode obligation above the declared bipolar-pulse excitation band"
+    },
+    "bounded_modal_probe": {
+      "screening_cost_rank": 2,
+      "observable_feature_ids": [
+        "static_gain",
+        "dominant_time_constant",
+        "delay_bound",
+        "natural_frequency",
+        "damping_ratio",
+        "derivative_gain",
+        "acceleration_gain",
+        "drag_rate",
+        "inverse_response_recovery_time",
+        "parasitic_mode_frequency",
+        "fast_mode_presence"
+      ],
+      "coverage": "dominant adjacent-SISO structure plus the registered bounded modal sweep band",
+      "known_limit": "does not establish behavior above the compiled sweep band or outside the declared operating region"
+    },
+    "bounded_bidirectional_staircase": {
+      "observable_feature_ids": [
+        "matched_history_gap",
+        "static_map_shape",
+        "deadzone_width",
+        "dominant_time_constant"
+      ],
+      "coverage": "matched up/down local static-map and stable-dwell evidence",
+      "known_limit": "does not identify dynamic hysteresis or a nonsettling operating point"
+    },
+    "bounded_two_level_multisine": {
+      "screening_cost_rank": 2,
+      "observable_feature_ids": [
+        "task_band_magnitude_at_crossover",
+        "phase_guard_frequency",
+        "low_order_residual_index",
+        "amplitude_dependence_index"
+      ],
+      "coverage": "registered task-band frequency lines at two bounded amplitudes",
+      "known_limit": "does not distinguish self-excitation from amplitude-dependent damping without release evidence"
+    },
+    "amplitude_stratified_release": {
+      "screening_cost_rank": 3,
+      "observable_feature_ids": [
+        "modal_frequency",
+        "base_decay_rate",
+        "quadratic_decay_rate",
+        "minimum_decay_rate",
+        "damping_change_fraction",
+        "release_model_fit_r2"
+      ],
+      "coverage": "amplitude-stratified zero-input decay with public position and velocity signals",
+      "known_limit": "resolves tested-region decay structure but does not estimate signed actuator input gain or task-band forced-response coverage"
+    },
+    "bounded_two_level_multisine_then_amplitude_release": {
+      "screening_cost_rank": 4,
+      "observable_feature_ids": [
+        "task_band_magnitude_at_crossover",
+        "phase_guard_frequency",
+        "low_order_residual_index",
+        "amplitude_dependence_index",
+        "modal_frequency",
+        "input_gain",
+        "base_decay_rate",
+        "quadratic_decay_rate",
+        "minimum_decay_rate",
+        "damping_change_fraction",
+        "release_model_fit_r2"
+      ],
+      "coverage": "two-level task-band frequency evidence plus amplitude-stratified zero-input decay",
+      "known_limit": "requires public position and velocity signals and remains local to the tested amplitude region"
+    },
+    "safe_downward_release_and_pulse": {
+      "observable_feature_ids": [
+        "unstable_mode_rate",
+        "angular_input_gain",
+        "outer_channel_dc_gain",
+        "capture_region_bound"
+      ],
+      "coverage": "stable-configuration releases and signed pulse pairs for a measurable local unstable variable",
+      "known_limit": "does not authorize swing-up, unmeasured-state stabilization, or global nonlinear control"
+    },
+    "bounded_mimo_dc_then_hadamard_multisine": {
+      "observable_feature_ids": [
+        "local_gain_k11",
+        "local_gain_k12",
+        "local_gain_k21",
+        "local_gain_k22",
+        "paired_time_constant_1",
+        "paired_time_constant_2",
+        "gain_matrix_condition",
+        "inband_static_decoupler_residual",
+        "dc_static_cross_ratio",
+        "dc_rga_deviation",
+        "pairing_bootstrap_probability",
+        "static_inverse_amplification",
+        "dynamic_decoupler_fit_residual",
+        "dynamic_inverse_peak_amplification"
+      ],
+      "coverage": "registered 2x2 DC pairing and coded task-band frequency evidence",
+      "known_limit": "does not cover nonsquare, underactuated, or robust-MIMO output-feedback design"
+    }
+  },
+  "experiment_information_card_metadata": {
+    "bipolar_pulse": {
+      "applicable_public_interfaces": ["time_s", "input", "repeated_outputs"],
+      "distinguishable_hypotheses": ["adjacent-SISO low-frequency response", "signed input/output response"],
+      "indistinguishable_hypotheses": ["unprobed fast mode", "private mechanisms with the same low-frequency trace"],
+      "possible_same_results": ["different stable structures can share gain and dominant time constant"],
+      "ambiguous_result_next_step": "run bounded_modal_probe when the fast-mode obligation remains unresolved",
+      "capability_gap_condition": "the required discriminator is outside the pulse band or no compatible public repeat exists",
+      "safety_constraints": ["bounded bipolar amplitude", "automatic nonfinite/absolute-output stop"],
+      "measurement_quality_requirements": ["finite repeated output", "declared sample time", "uncertainty interval and fit quality"],
+      "evidence_sources": ["compiled bipolar pulse protocol", "public repeated time series"],
+      "valid_working_region": "declared SISO task band and bounded pulse amplitude",
+      "independent_verification_source": "deterministic repeated-trace numeric audit"
+    },
+    "bounded_modal_probe": {
+      "applicable_public_interfaces": ["time_s", "input", "repeated_outputs"],
+      "distinguishable_hypotheses": ["bounded fast-mode presence", "modal feature inside compiled sweep band"],
+      "indistinguishable_hypotheses": ["behavior above the sweep band", "unmeasured internal state mechanisms"],
+      "possible_same_results": ["a missing modal feature may mean absence or insufficient excitation"],
+      "ambiguous_result_next_step": "retain the high-frequency blocker and use a registered repeat only for quality failure",
+      "capability_gap_condition": "fast-mode resolution is required but no public bounded modal protocol is compatible",
+      "safety_constraints": ["bounded sweep amplitude", "automatic output and duration stop"],
+      "measurement_quality_requirements": ["repeatable finite response", "frequency coverage declaration", "uncertainty and residual checks"],
+      "evidence_sources": ["compiled bounded modal protocol", "public repeated time series"],
+      "valid_working_region": "compiled modal sweep band and declared local operating region",
+      "independent_verification_source": "deterministic frequency-domain and residual audit"
+    },
+    "bounded_bidirectional_staircase": {
+      "applicable_public_interfaces": ["time_s", "input", "repeated_outputs", "levels", "samples_per_level"],
+      "distinguishable_hypotheses": ["local static map", "dead zone", "history dependence"],
+      "indistinguishable_hypotheses": ["dynamic hysteresis without adequate dwell", "nonsettling behavior"],
+      "possible_same_results": ["dead zone and weak gain can overlap within noise"],
+      "ambiguous_result_next_step": "repeat matched up/down levels with retained dwell and quality audit",
+      "capability_gap_condition": "static inversion or hysteresis resolution is required but public dwell evidence is unavailable",
+      "safety_constraints": ["bounded levels", "stable-dwell prerequisite", "automatic output stop"],
+      "measurement_quality_requirements": ["plateau-tail samples", "repeat cycles", "noise and direction comparison"],
+      "evidence_sources": ["compiled staircase protocol", "public repeated plateau traces"],
+      "valid_working_region": "tested levels with declared dwell and local map region",
+      "independent_verification_source": "deterministic plateau and up/down comparison"
+    },
+    "bounded_two_level_multisine": {
+      "applicable_public_interfaces": ["frequencies_rad_s", "low_level_frf_repeats", "high_level_frf_repeats"],
+      "distinguishable_hypotheses": ["task-band low-order adequacy", "amplitude dependence"],
+      "indistinguishable_hypotheses": ["self-excitation without release evidence", "out-of-band dynamics"],
+      "possible_same_results": ["nonlinearity and noise can produce overlapping residual indices"],
+      "ambiguous_result_next_step": "retain the dynamic-nonlinearity blocker and request registered release evidence when available",
+      "capability_gap_condition": "self-excitation or unmeasured dynamic nonlinearity cannot be separated by registered public actions",
+      "safety_constraints": ["two bounded amplitudes", "declared task-band frequencies", "automatic stop"],
+      "measurement_quality_requirements": ["retained periods", "repeat FRF estimates", "phase and residual uncertainty"],
+      "evidence_sources": ["compiled multisine protocol", "public FRF repeats"],
+      "valid_working_region": "declared task band and tested amplitude levels",
+      "independent_verification_source": "deterministic FRF repeat and residual audit"
+    },
+    "amplitude_stratified_release": {
+      "applicable_public_interfaces": ["release_time_s", "release_initial_amplitudes", "position_release_repeats", "velocity_release_repeats"],
+      "distinguishable_hypotheses": ["decay sign", "amplitude-dependent damping"],
+      "indistinguishable_hypotheses": ["unknown signed input gain", "global behavior outside tested release region"],
+      "possible_same_results": ["noise and finite-duration truncation can mimic weak decay"],
+      "ambiguous_result_next_step": "repeat releases for quality; otherwise retain controller qualification gap",
+      "capability_gap_condition": "controller synthesis requires signed input gain or forced-response coverage absent from release data",
+      "safety_constraints": ["zero-input release only", "bounded initial amplitudes", "nonfinite and output stop"],
+      "measurement_quality_requirements": ["position and velocity repeats", "fit residual and lower decay bound", "declared uncertainty"],
+      "evidence_sources": ["compiled release protocol", "public position/velocity traces"],
+      "valid_working_region": "tested release amplitudes and declared local region",
+      "independent_verification_source": "deterministic decay-fit and residual audit"
+    },
+    "bounded_two_level_multisine_then_amplitude_release": {
+      "applicable_public_interfaces": ["frequencies_rad_s", "low_level_frf_repeats", "high_level_frf_repeats", "release_time_s", "position_release_repeats", "velocity_release_repeats"],
+      "distinguishable_hypotheses": ["task-band response plus local amplitude-dependent decay"],
+      "indistinguishable_hypotheses": ["unmeasured states", "global nonlinear behavior outside tested region"],
+      "possible_same_results": ["different mechanisms can share FRF and release summaries"],
+      "ambiguous_result_next_step": "retain unresolved mechanism and require a supported public discriminator",
+      "capability_gap_condition": "combined evidence is insufficient for a registered controller contract",
+      "safety_constraints": ["bounded multisine", "bounded zero-input release", "automatic stop"],
+      "measurement_quality_requirements": ["repeat FRFs and releases", "fit quality", "uncertainty and region checks"],
+      "evidence_sources": ["compiled composed protocol", "public FRF and release traces"],
+      "valid_working_region": "tested task-band amplitudes and release region",
+      "independent_verification_source": "deterministic composed-protocol audit"
+    },
+    "safe_downward_release_and_pulse": {
+      "applicable_public_interfaces": ["release_time_s", "pulse_time_s", "stable_internal_release_repeats", "positive_internal_pulse_repeats", "negative_internal_pulse_repeats"],
+      "distinguishable_hypotheses": ["local unstable rate", "signed input gain", "capture-region bound"],
+      "indistinguishable_hypotheses": ["unmeasured internal state", "global swing-up behavior"],
+      "possible_same_results": ["local rates can overlap across different nonlinear balances"],
+      "ambiguous_result_next_step": "repeat the bounded stable release and signed pulse pair or report a local-balance gap",
+      "capability_gap_condition": "required internal measurement or signed authority is unavailable",
+      "safety_constraints": ["stable configuration only", "bounded downward release", "signed pulse limits", "automatic stop"],
+      "measurement_quality_requirements": ["paired pulses", "repeatability", "finite public traces and uncertainty"],
+      "evidence_sources": ["compiled safe release/pulse protocol", "public internal and outer traces"],
+      "valid_working_region": "declared local balance region",
+      "independent_verification_source": "deterministic signed-pair and local-rate audit"
+    },
+    "bounded_mimo_dc_then_hadamard_multisine": {
+      "applicable_public_interfaces": ["dc_gain_repeats", "settling_uncertainty", "frequencies_rad_s", "frf_repeats"],
+      "distinguishable_hypotheses": ["static pairing", "in-band dynamic coupling", "fragile inversion"],
+      "indistinguishable_hypotheses": ["nonsquare or underactuated behavior", "out-of-band coupling"],
+      "possible_same_results": ["different channel dynamics can share condition and residual summaries"],
+      "ambiguous_result_next_step": "repeat DC and coded multisine evidence or retain MIMO capability gap",
+      "capability_gap_condition": "required channel or robust output-feedback evidence is outside the registered 2x2 protocol",
+      "safety_constraints": ["bounded channel amplitudes", "declared frequency band", "automatic stop"],
+      "measurement_quality_requirements": ["DC settling uncertainty", "FRF repeats", "bootstrap pairing and inverse residual bounds"],
+      "evidence_sources": ["compiled MIMO protocol", "public channel traces"],
+      "valid_working_region": "declared 2x2 task band and tested channel amplitudes",
+      "independent_verification_source": "deterministic pairing, conditioning, and residual audit"
+    }
+  },
+  "principles": [
+    "The executor never accepts template identifiers, hidden truth, expected classes, or reference routes.",
+    "The LLM proposes a revisable structure and one information action; deterministic rules compile the executable protocol.",
+    "Every compiler change records its reason, added data cost, and the blocking risk it removes.",
+    "A retry is permitted only for a named gray-zone or data-quality failure and is never silently converted into another controller.",
+    "Routes explicitly listed as unsupported remain capability gaps. Previously unseen planner routes remain unregistered, unverified provisional proposals in an independent-simulation queue; they receive no evidence or authorization credit.",
+    "Explicit task bandwidth and engineering units scale protocol time, frequency, amplitude, sampling, features, and the controller runtime normalization contract.",
+    "Physical evidence requires protocol-conformant raw records, excitation sufficiency, an immutable controller freeze, and confidence-bound performance adjudication.",
+    "Topology is resolved before scalar preclassification. A Step-B flag can authorize a staircase only for SISO tasks with public route-changing static-nonlinearity evidence and a credible stable-dwell premise; A+B, MIMO+B, and nonsettling+B combinations remain explicit capability gaps."
+  ],
+  "adapters": {
+    "siso_repeated_timeseries": {
+      "ops": ["bipolar_pulse", "bounded_modal_probe"],
+      "scope": "SISO Class I-III, stable output-only NMP, and Step-A high-frequency modal screening",
+      "required_data": ["time_s", "input", "repeated_outputs"],
+      "supported_routes": ["PI", "delay_aware_PI", "notch_then_PI", "two_dof_pid", "P_integrator", "PD_integrator", "lead_lag_series", "two_dof_PI"]
+    },
+    "step_b_repeated_staircase": {
+      "ops": ["bounded_bidirectional_staircase"],
+      "scope": "memoryless invertible map, dead zone, hysteresis, and non-monotone static-map counterexamples",
+      "required_data": ["time_s", "input", "repeated_outputs", "levels", "samples_per_level"],
+      "supported_routes": ["local_PI_without_inverse", "partial_inverse_then_PI", "deadzone_right_inverse_then_PI"],
+      "unsupported_routes": ["hysteresis_observer_or_inverse", "global_nonmonotone_inverse"]
+    },
+    "class_iv_frequency_repeats": {
+      "ops": ["bounded_two_level_multisine"],
+      "scope": "stable higher-order minimum-phase task-band reduction and output-only amplitude-dependent dynamics",
+      "required_data": ["frequencies_rad_s", "low_level_frf_repeats", "high_level_frf_repeats"],
+      "supported_routes": ["reduced_low_order_PI", "phase_guarded_2dof_PI"],
+      "unsupported_routes": ["unmeasured_dynamic_nonlinearity", "self_excited_dynamic_nonlinearity"]
+    },
+    "class_iv_amplitude_release_repeats": {
+      "ops": ["bounded_two_level_multisine_then_amplitude_release"],
+      "scope": "local SISO amplitude-dependent damping or a single-mode self-excited oscillation with measured position and velocity, adequate release-model fit, signed actuation, and task bandwidth covered by the measured FRF band",
+      "required_data": ["frequencies_rad_s", "low_level_frf_repeats", "high_level_frf_repeats", "release_time_s", "release_initial_amplitudes", "position_release_repeats", "velocity_release_repeats"],
+      "supported_routes": ["local_fixed_PID", "scheduled_damping_PID", "self_excitation_energy_guarded_PID"],
+      "unsupported_routes": ["unmeasured_dynamic_nonlinearity", "global_bifurcation_control"]
+    },
+    "class_iv_release_repeats": {
+      "ops": ["amplitude_stratified_release"],
+      "scope": "local zero-input decay sign and amplitude dependence with measured position and velocity; controller synthesis remains blocked until signed input gain and task-band forced-response coverage exist",
+      "required_data": ["release_time_s", "release_initial_amplitudes", "position_release_repeats", "velocity_release_repeats"],
+      "supported_routes": [],
+      "unsupported_routes": ["controller_synthesis_without_signed_input_gain", "unmeasured_dynamic_nonlinearity", "global_bifurcation_control"]
+    },
+    "unstable_local_balance_repeats": {
+      "ops": ["safe_downward_release_and_pulse"],
+      "scope": "local gravity-dominated unstable balance with a measurable internal variable, an outer task variable, and a stable alternative probe configuration",
+      "required_data": ["release_time_s", "stable_internal_release_repeats", "pulse_time_s", "positive_pulse_input", "negative_pulse_input", "positive_internal_pulse_repeats", "negative_internal_pulse_repeats", "positive_outer_pulse_repeats", "negative_outer_pulse_repeats"],
+      "supported_routes": ["cascaded_control"],
+      "unsupported_routes": ["swing_up", "unmeasured_internal_state", "unknown_signed_input_gain", "global_nonlinear_stabilization"]
+    },
+    "class_v_mimo_summary": {
+      "ops": ["bounded_mimo_dc_then_hadamard_multisine"],
+      "scope": "2x2 channelwise, static coupling, in-band dynamic coupling, and fragile inversion triage",
+      "required_data": ["dc_gain_repeats", "settling_uncertainty", "frequencies_rad_s", "frf_repeats"],
+      "supported_routes": ["decentralized_channel_PI", "static_decoupler_then_PI", "lag_dynamic_decoupler_then_PI"],
+      "unsupported_routes": ["robust_mimo_output_feedback"]
+    }
+  },
+  "compiler_precedence": [
+    "mimo_coupling",
+    "public_evidence_and_stable_dwell_gated_step_b_static_nonlinearity",
+    "high_order_or_dynamic_nonlinearity",
+    "step_a_high_frequency_mode",
+    "adjacent_siso_structure"
+  ],
+  "retry_policy": {
+    "siso_repeated_timeseries": "replace a bipolar pulse with a bounded modal probe, or add two repeats if already modal",
+    "step_b_repeated_staircase": "repeat the same bidirectional levels with two additional complete cycles",
+    "class_iv_frequency_repeats": "repeat the same two amplitude levels and frequency lines with two additional retained periods",
+    "class_iv_amplitude_release_repeats": "repeat the same two-level frequency lines and amplitude-stratified zero-input releases twice more",
+    "class_iv_release_repeats": "repeat the same amplitude-stratified zero-input releases twice more",
+    "unstable_local_balance_repeats": "repeat the same stable-configuration release and signed pulse pairs twice more",
+    "class_v_mimo_summary": "repeat the same DC and coded multisine design with two additional repeats"
+  },
+  "post_controller_adjudication": {
+    "packet_schema": "performance_evaluation_packet_schema.json",
+    "precondition": "task_contract.performance_requirements is fixed before planning and controller compilation",
+    "binding": "SHA-256 over candidate route, controller result, and consumed feature records",
+    "required_sections": ["nominal", "perturbed_noisy", "feature_ablation", "traditional_data_only baseline", "known_model_same_family baseline", "data_budget", "evidence_boundary"],
+    "rule": "Provider-private model information may be used only after controller compilation and may never revise the diagnostic, feature, or controller record.",
+    "statistical_gate": "The pre-registered perturbed success-rate threshold is applied to the 95% Wilson lower confidence bound, not to the point estimate.",
+    "physical_gate": "A physical provider requires prior physical identification data from the compiled protocol, persisted raw trajectories, and controller_freeze.json; a physical adjudication is immutable."
+  }
+}

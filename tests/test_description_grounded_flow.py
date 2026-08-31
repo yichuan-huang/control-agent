@@ -14,9 +14,6 @@ from cfdc.diagnosis.measurements import description_excerpt_answers_field
 from cfdc.models import SystemDescription
 from cfdc.runtime import run_cfdc_route
 from cfdc.specifications import collect_profile_fact_candidates
-from cfdc.web import service as web_service
-from cfdc.web import ui as web_ui
-from cfdc.web.presentation import render_report
 from cfdc.workflow import deterministic_profile_selection
 
 AUTOMOTIVE_DESCRIPTION = (
@@ -300,74 +297,6 @@ def test_first_user_reply_after_complete_description_is_profile_data_only():
         session.description_assessment
         == initial.diagnostic_session.description_assessment
     )
-
-
-def test_complete_description_view_shows_profile_questions_not_eight_item_plan():
-    report = run_cfdc_route(
-        "generic",
-        description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
-        diagnostic_adapter=DescriptionGroundedAdapter(),
-    )
-
-    view = render_report(report)
-
-    assert view["checklist_collapsed"] is True
-    assert view["checklist_title"] == "诊断检查清单（8/8 已完成）"
-    assert [row[1] for row in view["checklist"]] == ["✓ 描述证据已核验"] * 8
-    assert "补充当前设备的已知规格" in view["measurement_guidance"]
-    assert "63% 响应时间" in view["measurement_guidance"]
-    assert "open_loop_stability" not in view["measurement_guidance"]
-    assert "Review an existing record" not in view["measurement_guidance"]
-    assert view["route"]
-    assert view["progress"].index("系统分类") < view["progress"].index(
-        "核心参数测量计划"
-    )
-
-
-def test_incomplete_description_view_keeps_checklist_open_and_hides_parameters():
-    responses = dict(_EXCERPTS)
-    responses.pop("uncertainty_magnitude")
-    description = AUTOMOTIVE_DESCRIPTION.replace(_EXCERPTS["uncertainty_magnitude"], "")
-    report = run_cfdc_route(
-        "generic",
-        description=SystemDescription(text=description),
-        diagnostic_adapter=DescriptionGroundedAdapter(responses),
-    )
-
-    view = render_report(report)
-
-    assert report.status == "need_more_information"
-    assert view["checklist_collapsed"] is False
-    assert view["checklist_title"] == "诊断检查清单（7/8 已完成）"
-    assert view["measurement_guidance"].startswith("### 八项问题描述尚未完成")
-    assert "63% 响应时间" not in view["measurement_guidance"]
-    assert view["route"] == []
-
-
-def test_gradio_callback_collapses_only_a_completed_grounded_checklist():
-    complete = run_cfdc_route(
-        "generic",
-        description=SystemDescription(text=AUTOMOTIVE_DESCRIPTION),
-        diagnostic_adapter=DescriptionGroundedAdapter(),
-    )
-    incomplete_responses = dict(_EXCERPTS)
-    incomplete_responses.pop("uncertainty_magnitude")
-    incomplete_description = AUTOMOTIVE_DESCRIPTION.replace(
-        _EXCERPTS["uncertainty_magnitude"], ""
-    )
-    incomplete = run_cfdc_route(
-        "generic",
-        description=SystemDescription(text=incomplete_description),
-        diagnostic_adapter=DescriptionGroundedAdapter(incomplete_responses),
-    )
-
-    complete_outputs = web_ui._outputs(complete, {})
-    incomplete_outputs = web_ui._outputs(incomplete, {})
-
-    assert complete_outputs[5]["label"] == "诊断检查清单（8/8 已完成）"
-    assert complete_outputs[5]["open"] is False
-    assert incomplete_outputs[5]["label"] == "诊断检查清单（7/8 已完成）"
-    assert incomplete_outputs[5]["open"] is True
 
 
 def test_profile_parameters_already_in_description_are_prefilled_without_a_round():
@@ -993,11 +922,7 @@ def test_fully_prefilled_profile_uses_a_confirmation_only_action():
         diagnostic_adapter=adapter,
     )
 
-    outputs = web_ui._outputs(initial, {})
     assert initial.specification_assessment.status == "ready"
-    assert outputs[17]["visible"] is False
-    assert outputs[18]["visible"] is True
-    assert outputs[19]["visible"] is True
 
     completed = run_cfdc_route(
         "generic",
@@ -1080,36 +1005,6 @@ def test_session_owns_the_caller_description_and_adapter_inputs():
     assert guided_description.text == "still original"
 
 
-def test_incomplete_web_start_uses_one_description_guidance_call(monkeypatch):
-    class CountingAdapter(DescriptionGroundedAdapter):
-        def __init__(self):
-            super().__init__({field_id: "unknown" for field_id in _EXCERPTS})
-            self.guide_calls = 0
-
-        def guide_description(self, description, guidance):
-            self.guide_calls += 1
-            return super().guide_description(description, guidance)
-
-    adapter = CountingAdapter()
-    monkeypatch.setattr(web_service, "build_adapter", lambda *args: adapter)
-
-    report, state = web_service.start_app_run(
-        "这是一个住宅供暖系统。",
-        "",
-        "",
-        "",
-        "generic",
-        True,
-        "https://provider.example/v1",
-        "provider-model",
-        "test-secret",
-    )
-
-    assert report.status == "need_more_information"
-    assert adapter.guide_calls == 1
-    assert state["session"]["session_id"] == report.diagnostic_session.session_id
-
-
 def test_profile_selection_is_registry_determined_and_cannot_add_dead_time():
     class DelayProfileAdapter(DescriptionGroundedAdapter):
         def select_profile(self, description, diagnosis, classification, catalog):
@@ -1167,7 +1062,6 @@ def test_complete_labeled_profile_in_description_compiles_without_profile_round(
     confirmation = session.accumulated_description.simulation_boundary_confirmation
     assert confirmation is not None
     assert confirmation.scope == "software_simulation_only"
-    assert web_ui._outputs(report, {})[17]["visible"] is False
 
 
 def test_profile_lines_do_not_expose_a_diagnostic_llm_omission():
@@ -1239,12 +1133,9 @@ def test_incomplete_checklist_caches_complete_profile_and_reuses_it_later():
         for candidate in session.description_profile_assessment.candidates
         if candidate.template_id == "spec_first_order_lag"
     }
-    view = render_report(initial)
     assert initial.status == "need_more_information"
     assert session.status == "collecting_description"
     assert len(selected_candidates) == 7
-    assert web_ui._outputs(initial, {})[17]["visible"] is False
-    assert view["measurement_guidance"].count("\n- 已知输入变化量：") == 1
 
     grounded = continue_description_session(
         session,
@@ -1792,7 +1683,6 @@ def test_profile_reply_reopens_diagnosis_without_losing_complete_profile_data():
     assert session.status == "collecting_description"
     assert len(selected_candidates) == 7
     assert session.specification_answer_history == [profile_reply]
-    assert web_ui._outputs(reopened, {})[17]["visible"] is False
 
     migration_payload = session.model_dump(mode="json")
     migration_payload.pop("description_profile_assessment")

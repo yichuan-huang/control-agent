@@ -1,48 +1,198 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
+from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
+from threading import Event, RLock
 from typing import Any
-from uuid import uuid4
 
 from cfdc.agents import wrap_agent_adapter
-from cfdc.diagnosis import (
-    OpenAICompatibleDiagnosticAdapter,
-    clarification_question_map,
-    continue_diagnostic_session,
-    start_diagnostic_session,
-    submit_evidence_to_session,
-    validate_guided_adapter_capabilities,
+from cfdc.diagnosis import OpenAICompatibleDiagnosticAdapter
+from cfdc.kernel import WorkflowService
+from cfdc.kernel.agents import KernelAgentCoordinator
+from cfdc.kernel.cases import public_training_case
+from cfdc.kernel.replies import (
+    KernelReplyMode,
+    build_kernel_input_contract,
+    prepare_kernel_reply,
 )
-from cfdc.models import (
-    CFDCRunReport,
-    ClosedLoopValidationSpec,
-    DiagnosticSessionState,
-    MeasuredTraceManifest,
-    PlantEvidencePackage,
-    SimulationBoundaryConfirmation,
-    SystemDescription,
+
+
+class _ReplyPreparation:
+    def __init__(self) -> None:
+        self.done = Event()
+        self.result: dict[str, Any] | None = None
+        self.error: Exception | None = None
+
+
+_KERNEL_REPLY_PREPARATIONS: dict[str, _ReplyPreparation] = {}
+_KERNEL_REPLY_PREPARATIONS_LOCK = RLock()
+
+KERNEL_STAGE_LABELS = (
+    "任务",
+    "诊断",
+    "取证",
+    "路线／特征",
+    "控制器",
+    "冻结",
+    "评价",
+    "调优／确认",
+    "结果",
 )
-from cfdc.runtime import run_cfdc_route
 
-ROUTE_CHOICES = {
-    "自然语言自动分析（主流程）": "generic",
+
+def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate one typed public artifact without mutating a session."""
+
+    if not isinstance(payload, Mapping):
+        raise TypeError("Artifact 必须是 JSON 对象。")
+    from cfdc.experiments.protocols import ExperimentProtocol
+    from cfdc.kernel.contracts import (
+        ControllerFreeze,
+        EvaluationPacket,
+        TaskContract,
+        fingerprint,
+    )
+    from cfdc.kernel.controllers import ControllerIR
+    from cfdc.kernel.session import EvidenceSession
+    from cfdc.kernel.tuning import TuningContract
+
+    value = dict(payload)
+    if value.get("session_version"):
+        artifact = EvidenceSession.from_dict(value)
+        kind = "session"
+        artifact_fingerprint = artifact.fingerprint
+    elif value.get("protocol_version"):
+        artifact = ExperimentProtocol.from_mapping(value)
+        kind = "protocol"
+        artifact_fingerprint = artifact.fingerprint
+    elif value.get("ir_version"):
+        artifact = ControllerIR.from_mapping(value)
+        kind = "controller_ir"
+        artifact_fingerprint = artifact.fingerprint
+    elif value.get("freeze_version"):
+        artifact = ControllerFreeze.from_mapping(value)
+        kind = "freeze"
+        artifact_fingerprint = artifact.to_dict()["freeze_fingerprint"]
+    elif value.get("packet_version"):
+        artifact = EvaluationPacket.from_mapping(value)
+        kind = "evaluation_packet"
+        artifact_fingerprint = artifact.to_dict()["packet_fingerprint"]
+    elif value.get("contract_version") == "cfdc-tuning/v1.0":
+        artifact = TuningContract.from_mapping(value)
+        kind = "tuning_contract"
+        artifact_fingerprint = artifact.fingerprint
+    elif value.get("schema_version") or value.get("task_type"):
+        artifact = TaskContract.from_user_input(value)
+        kind = "task"
+        artifact_fingerprint = artifact.fingerprint
+    else:
+        typed_fingerprints = {
+            ("feature_version", "cfdc-features/v1"): (
+                "artifact_fingerprint",
+                "features",
+            ),
+            ("qualification_version", "cfdc-qualification/v1"): (
+                "qualification_fingerprint",
+                "qualification",
+            ),
+            ("upload_version", "cfdc-upload/v1"): (
+                "upload_fingerprint",
+                "upload_receipt",
+            ),
+            ("import_version", "cfdc-import/v1"): (
+                "import_fingerprint",
+                "import_report",
+            ),
+            ("judge_version", "cfdc-independent-judge/v1"): (
+                "judge_fingerprint",
+                "evaluation",
+            ),
+            ("feedback_version", "cfdc-feedback/v1"): (
+                "feedback_fingerprint",
+                "feedback",
+            ),
+            ("confirmation_version", "cfdc-confirmation/v1"): (
+                "confirmation_fingerprint",
+                "confirmation",
+            ),
+            ("result_version", "cfdc-result/v1"): (
+                "result_fingerprint",
+                "result",
+            ),
+        }
+        matches = [
+            fingerprint_contract
+            for (version_field, version), fingerprint_contract in typed_fingerprints.items()
+            if value.get(version_field) == version
+        ]
+        if len(matches) != 1:
+            raise ValueError("无法识别版本化 CFDC Artifact 类型。")
+        fingerprint_field, kind = matches[0]
+        if not value.get(fingerprint_field):
+            raise ValueError(f"{fingerprint_field}_required")
+        supplied = str(value.pop(fingerprint_field))
+        expected = fingerprint(value)
+        if supplied != expected:
+            raise ValueError(f"{fingerprint_field}_mismatch")
+        artifact_fingerprint = expected
+    return {
+        "status": "valid",
+        "artifact_kind": kind,
+        "artifact_fingerprint": artifact_fingerprint,
+    }
+
+_KERNEL_PUBLIC_ACTIONS = frozenset(
+    {
+        "confirm_task",
+        "answer",
+        "relevance",
+        "advance",
+        "evidence",
+        "phase",
+        "features",
+        "controller",
+        "freeze",
+        "evaluation",
+        "cancel",
+        "replay",
+        "confirmation",
+        "set_provider",
+        "compile_protocol",
+        "prepare_operator_handoff",
+        "record_operator_report",
+        "ingest_upload",
+        "derive_features",
+        "synthesize_controller",
+        "qualify_controller",
+        "run_provider",
+        "run_evaluation",
+        "run_feedback_iteration",
+        "confirm_result",
+    }
+)
+
+_KERNEL_ACTION_ALIASES = {
+    "submit_answer": "answer",
+    "resolve": "answer",
+    "submit_evidence": "evidence",
+    "submit_features": "features",
+    "submit_controller": "controller",
+    "freeze_controller": "freeze",
+    "record_evaluation": "evaluation",
+    "replay_evaluation": "replay",
+    "record_confirmation": "confirmation",
+    "record_fresh_confirmation": "confirmation",
 }
-
-LEGACY_ROUTE_LABELS = {
-    "自动选择": "generic",
-}
-
-
-def _textbox_text(value: str | None) -> str:
-    return "" if value is None else value
 
 
 def parse_names(value: str | None) -> list[str]:
-    text = _textbox_text(value)
-    names = []
+    text = "" if value is None else str(value)
+    names: list[str] = []
     for item in text.replace("、", ",").replace("\n", ",").split(","):
         name = re.sub(r"^(?:and|与|和)\s+", "", item.strip(), flags=re.IGNORECASE)
         if name:
@@ -50,56 +200,707 @@ def parse_names(value: str | None) -> list[str]:
     return names
 
 
-def parse_forbidden_actions(value: str | None) -> list[str]:
-    text = _textbox_text(value)
-    return [line.strip() for line in text.splitlines() if line.strip()]
-
-
-def parse_safety_bounds(value: str | None) -> dict[str, float]:
-    text = _textbox_text(value)
-    bounds: dict[str, float] = {}
-    for line in text.replace(",", "\n").splitlines():
-        if not line.strip():
-            continue
-        key, separator, raw = line.partition("=")
-        clean_key = key.strip()
-        if not separator or not clean_key or not raw.strip():
-            raise ValueError(f"安全边界格式错误：{line!r}，应使用 name=value")
-        if clean_key in bounds:
-            raise ValueError(f"安全边界 {clean_key!r} 重复定义")
-        try:
-            parsed = float(raw)
-        except ValueError as exc:
-            raise ValueError(f"安全边界 {clean_key!r} 必须是数字") from exc
-        if not math.isfinite(parsed):
-            raise ValueError(f"安全边界 {clean_key!r} 必须是有限数字")
-        bounds[clean_key] = parsed
-    if "max_abs_output_normalized" in bounds:
-        value = bounds["max_abs_output_normalized"]
-        bounds.setdefault("max_abs_output", value)
-        bounds.setdefault("output_min", -value)
-        bounds.setdefault("output_max", value)
-    if "max_abs_actuator_normalized" in bounds:
-        value = bounds["max_abs_actuator_normalized"]
-        bounds.setdefault("max_abs_control", value)
-        bounds.setdefault("input_min", -value)
-        bounds.setdefault("input_max", value)
-    return bounds
-
-
-def parse_time_scale_hint(value: str | float | None) -> float | None:
-    if value is None:
-        return None
-    raw = str(value).strip()
-    if not raw:
-        return None
+def _required_finite_number(payload: Mapping[str, Any], key: str, label: str) -> float:
+    value = payload.get(key)
+    if isinstance(value, bool) or value is None:
+        raise ValueError(f"请填写{label}。")
     try:
-        parsed = float(raw)
-    except ValueError as exc:
-        raise ValueError("主导时间尺度必须是有限的正数，单位为秒") from exc
-    if not math.isfinite(parsed) or parsed <= 0.0:
-        raise ValueError("主导时间尺度必须是有限的正数，单位为秒")
-    return parsed
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label}必须是有限数字。") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"{label}必须是有限数字。")
+    return number
+
+
+def _optional_finite_number(payload: Mapping[str, Any], key: str, label: str) -> float | None:
+    value = payload.get(key)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"{label}必须是有限数字。")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label}必须是有限数字。") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"{label}必须是有限数字。")
+    return number
+
+
+def _validated_web_optional_fields(payload: dict[str, Any]) -> None:
+    for key, label in (
+        ("reference", "目标参考值"),
+        ("initial_output_value", "初始输出数值"),
+    ):
+        if key in payload:
+            payload[key] = _optional_finite_number(payload, key, label)
+
+    if "response_time_preference_s" in payload:
+        response_time = _optional_finite_number(
+            payload,
+            "response_time_preference_s",
+            "响应时间偏好",
+        )
+        if response_time is not None and response_time <= 0:
+            raise ValueError("响应时间偏好必须大于 0。")
+        payload["response_time_preference_s"] = response_time
+
+    raw_requirements = payload.get("success_requirements")
+    if raw_requirements is not None and not isinstance(raw_requirements, Mapping):
+        raise ValueError("性能要求必须是 JSON 对象。")
+    requirements = dict(raw_requirements or {})
+    requirement_rules = {
+        "final_abs_error_max": ("最大终值绝对误差", "positive"),
+        "overshoot_max": ("最大超调", "nonnegative"),
+        "settling_time_max_s": ("最大调节时间", "positive"),
+        "hold_duration_min_s": ("最短保持时间", "positive"),
+        "perturbed_success_rate_min": ("扰动重复成功率下限", "rate"),
+    }
+    for key, (label, rule) in requirement_rules.items():
+        source = payload if key in payload else requirements
+        if key not in source:
+            continue
+        number = _optional_finite_number(source, key, label)
+        if number is None:
+            raise ValueError(f"已启用{label}，请填写数值。")
+        if rule == "positive" and number <= 0:
+            raise ValueError(f"{label}必须大于 0。")
+        if rule == "nonnegative" and number < 0:
+            raise ValueError(f"{label}不能小于 0。")
+        if rule == "rate" and not 0 <= number <= 1:
+            raise ValueError(f"{label}必须在 0 到 1 之间。")
+        source[key] = number
+    if raw_requirements is not None:
+        payload["success_requirements"] = requirements
+
+    raw_budgets = payload.get("budgets")
+    if raw_budgets is not None and not isinstance(raw_budgets, Mapping):
+        raise ValueError("实验预算必须是 JSON 对象。")
+    budgets = dict(raw_budgets or {})
+    if "distinct_experiments" in budgets:
+        distinct = _optional_finite_number(
+            budgets,
+            "distinct_experiments",
+            "不同实验预算",
+        )
+        if distinct is None or distinct < 1 or not distinct.is_integer():
+            raise ValueError("不同实验预算必须是大于等于 1 的整数。")
+        budgets["distinct_experiments"] = int(distinct)
+    if "cumulative_excitation_time_s" in budgets:
+        cumulative = _optional_finite_number(
+            budgets,
+            "cumulative_excitation_time_s",
+            "累计激励预算",
+        )
+        if cumulative is None or cumulative <= 0:
+            raise ValueError("累计激励预算必须大于 0。")
+        budgets["cumulative_excitation_time_s"] = cumulative
+    if raw_budgets is not None:
+        payload["budgets"] = budgets
+
+
+def _validated_web_task(task: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(task, Mapping):
+        raise TypeError("Web 任务合同必须是 JSON 对象。")
+    payload = dict(task)
+    description = str(payload.get("description") or "").strip()
+    if not description:
+        raise ValueError("请描述需要控制的对象和目标。")
+    measured_signals = payload.get("measured_signals")
+    control_inputs = payload.get("control_inputs")
+    if control_inputs is None:
+        control_inputs = payload.get("control_input")
+    if isinstance(measured_signals, str):
+        measured_signals = parse_names(measured_signals)
+    if isinstance(control_inputs, str):
+        control_inputs = parse_names(control_inputs)
+    if not isinstance(measured_signals, (list, tuple)) or not measured_signals:
+        raise ValueError("请至少填写一个观测输出。")
+    if not isinstance(control_inputs, (list, tuple)) or not control_inputs:
+        raise ValueError("请至少填写一个控制输入。")
+
+    input_min = _required_finite_number(payload, "input_min", "控制输入下界")
+    input_max = _required_finite_number(payload, "input_max", "控制输入上界")
+    state_stop = _required_finite_number(payload, "state_stop", "状态停止阈值")
+    if input_min >= input_max:
+        raise ValueError("控制输入下界必须小于上界。")
+    if state_stop <= 0:
+        raise ValueError("状态停止阈值必须大于 0。")
+
+    output_min = _optional_finite_number(payload, "output_min", "观测输出下界")
+    output_max = _optional_finite_number(payload, "output_max", "观测输出上界")
+    if (output_min is None) != (output_max is None):
+        raise ValueError("观测输出下界和上界必须同时填写或同时留空。")
+    if output_min is not None and output_max is not None and output_min >= output_max:
+        raise ValueError("观测输出下界必须小于上界。")
+
+    _validated_web_optional_fields(payload)
+
+    payload.update(
+        description=description,
+        measured_signals=[str(item).strip() for item in measured_signals],
+        control_inputs=[str(item).strip() for item in control_inputs],
+        control_input=str(control_inputs[0]).strip(),
+        input_min=input_min,
+        input_max=input_max,
+        output_min=output_min,
+        output_max=output_max,
+        state_stop=state_stop,
+        workspace={**dict(payload.get("workspace") or {}), "source": "web"},
+    )
+    return payload
+
+
+def _kernel_pending_actions(session) -> tuple[dict[str, Any], ...]:
+    normalized: list[dict[str, Any]] = []
+    for item in session.pending_actions or ():
+        value = dict(item)
+        if str(value.get("action") or "") in {"run_experiment", "retry"}:
+            value.setdefault("ui_action", "evidence")
+        normalized.append(value)
+    if normalized:
+        return tuple(normalized)
+    if (
+        session.status == "intake"
+        and not session.task.budget_confirmed
+        and not session.read_only
+    ):
+        return (
+            {
+                "kind": "budget",
+                "action": "confirm_task",
+                "reason": "task_boundary_confirmation_required",
+            },
+        )
+    return ()
+
+
+def _kernel_action_id(
+    session_id: str,
+    revision: int,
+    action: str,
+    payload: Mapping[str, Any],
+) -> str:
+    try:
+        canonical = json.dumps(
+            dict(payload),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("kernel_payload_not_json") from exc
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:24]
+    return f"web:{session_id}:{revision}:{action}:{digest}"
+
+
+def _kernel_action_already_recorded(session, action_id: str) -> bool:
+    return any(event.action_id == action_id for event in session.events)
+
+
+def _normalise_kernel_action(action: str) -> str:
+    return _KERNEL_ACTION_ALIASES.get(action, action)
+
+
+def start_kernel_app_run(
+    task: Mapping[str, Any],
+    *,
+    session_dir: str | Path | None = None,
+    rag_index_dir: str | Path | None = None,
+    rag_snapshot: str | None = None,
+    use_rag: bool = True,
+    llm_configured: bool = False,
+    provider_case_id: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Create a Kernel Web task from one explicit public task contract."""
+
+    payload = _validated_web_task(task)
+    service = WorkflowService(session_dir or Path("output") / "kernel-sessions")
+    resolved_snapshot = rag_snapshot
+    if use_rag and rag_snapshot and not rag_index_dir:
+        raise ValueError("rag_snapshot_requires_index_dir")
+    if use_rag and rag_index_dir:
+        from cfdc.rag import load_index
+
+        index = load_index(rag_index_dir, snapshot_name=rag_snapshot, load_encoder=False)
+        resolved_snapshot = index.index_snapshot
+    rag_active = bool(use_rag and resolved_snapshot)
+    session = service.start(
+        payload,
+        agent_config={
+            "mode": "multi",
+            "rag_requested": bool(use_rag),
+            "rag_enabled": rag_active,
+            "rag_status": (
+                "active" if rag_active else "not_initialized" if use_rag else "disabled"
+            ),
+            "rag_index_dir": str(rag_index_dir) if rag_index_dir else None,
+            "llm_configured": bool(llm_configured),
+        },
+        rag_snapshot=resolved_snapshot,
+    )
+    report = _kernel_report(session)
+    return report, {
+        "kernel_session_id": session.session_id,
+        "kernel_session_dir": str(service.root),
+        "kernel_revision": session.revision,
+        "workflow_version": session.workflow_version,
+        "pending_actions": list(report["pending_actions"]),
+        "rag_index_dir": str(rag_index_dir) if rag_index_dir else None,
+        "rag_snapshot": resolved_snapshot,
+        "use_rag": bool(use_rag),
+        "provider_case_id": provider_case_id,
+    }
+
+
+def _training_registries(case_id: str):
+    from cfdc.sim.training import build_training_provider_registries
+
+    return build_training_provider_registries(case_id)
+
+
+def _run_configured_automatic(
+    service: WorkflowService,
+    session,
+    app_state: Mapping[str, Any],
+):
+    case_id = str(app_state.get("provider_case_id") or "").strip()
+    if not case_id:
+        return session
+    identification_registry, identification_id, evaluation_registry, evaluation_id = (
+        _training_registries(case_id)
+    )
+    return service.run_until_blocked(
+        session.session_id,
+        provider_registry=identification_registry,
+        identification_provider_id=identification_id,
+        evaluation_provider_registry=evaluation_registry,
+        evaluation_provider_id=evaluation_id,
+    )
+
+
+def continue_kernel_app_run(
+    app_state: Mapping[str, Any],
+    *,
+    action: str,
+    payload: Mapping[str, Any] | None = None,
+    request_identity: Mapping[str, Any] | None = None,
+    reply_source_text: str | None = None,
+    reply_input_mode: str | None = None,
+    agent_records: Any = (),
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Apply one revisioned Kernel action and return its public projection."""
+
+    session_id = str(app_state.get("kernel_session_id") or "")
+    if not session_id:
+        raise ValueError("当前没有 CFDC Kernel 任务会话。")
+    state_workflow = str(app_state.get("workflow_version") or "")
+    if not state_workflow.startswith("cfdc-v6-kernel"):
+        raise ValueError("当前页面状态不属于 CFDC Kernel，不能提交动作。")
+    service = WorkflowService(
+        app_state.get("kernel_session_dir") or Path("output") / "kernel-sessions"
+    )
+    session = service.read(session_id)
+    if not str(session.workflow_version).startswith("cfdc-v6-kernel"):
+        raise ValueError("当前会话不属于 CFDC Kernel，不能提交动作。")
+    if not isinstance(action, str) or action not in _KERNEL_PUBLIC_ACTIONS:
+        raise ValueError(f"未知 Kernel 动作：{action}")
+    if not isinstance(payload, Mapping):
+        if payload is not None:
+            raise ValueError("Kernel 动作 payload 必须是 JSON 对象。")
+        raw: dict[str, Any] = {}
+    else:
+        raw = dict(payload)
+    if "action_id" in raw or "revision" in raw:
+        raise ValueError("Kernel payload 不能覆盖 action_id 或 revision。")
+    page_revision = app_state.get("kernel_revision")
+    if isinstance(page_revision, bool) or not isinstance(page_revision, int):
+        raise ValueError("页面 Kernel revision 无效，请刷新后重试。")
+    identity = dict(request_identity) if isinstance(request_identity, Mapping) else {}
+    if reply_input_mode is not None:
+        identity.setdefault("input_mode", str(reply_input_mode))
+    if reply_source_text is not None:
+        identity.setdefault("source_text", str(reply_source_text))
+    action_for_identity = (
+        identity
+        if reply_source_text is not None or reply_input_mode is not None
+        else {**identity, "payload": raw}
+        if identity
+        else raw
+    )
+    action_id = _kernel_action_id(session_id, page_revision, action, action_for_identity)
+    if _kernel_action_already_recorded(session, action_id):
+        report = _kernel_report(session)
+        return report, {
+            **dict(app_state),
+            "kernel_revision": session.revision,
+            "workflow_version": session.workflow_version,
+            "pending_actions": list(report["pending_actions"]),
+        }
+    if page_revision != session.revision:
+        raise ValueError("stale_revision: 页面状态已更新，请刷新后重试。")
+
+    pending = _kernel_pending_actions(session)
+    if action != "cancel" and pending:
+        expected = pending[0]
+        expected_action = str(
+            expected.get("ui_action")
+            or _normalise_kernel_action(str(expected.get("action") or ""))
+        )
+        if not expected_action:
+            raise ValueError("当前待处理动作没有可执行入口。")
+        if action != expected_action:
+            raise ValueError(f"当前待处理动作是 {expected_action}，不能执行 {action}。")
+    elif action != "cancel":
+        if session.status in {"performance_met", "capability_gap", "cancelled"}:
+            raise ValueError(f"当前会话已终止：{session.status}")
+        raise ValueError("当前没有待处理动作，请刷新页面读取最新状态。")
+
+    if action == "confirm_task":
+        session = service.confirm_task(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            budgets=raw or None,
+        )
+    elif action == "answer":
+        if (
+            reply_source_text is not None
+            or "diagnostic_updates" in raw
+            or "diagnosis" in raw
+            or "parameter_candidates" in raw
+            or "parameters" in raw
+        ):
+            diagnostic_payload = raw.get("diagnostic_updates")
+            if diagnostic_payload is None:
+                diagnostic_payload = raw.get("diagnosis")
+            if diagnostic_payload is None:
+                diagnostic_payload = {
+                    key: value
+                    for key, value in raw.items()
+                    if key not in {"parameter_candidates", "parameters"}
+                }
+            parameter_payload = raw.get("parameter_candidates")
+            if parameter_payload is None:
+                parameter_payload = raw.get("parameters", ())
+            session = service.submit_reply(
+                session_id,
+                action_id=action_id,
+                revision=page_revision,
+                diagnostic_updates=diagnostic_payload,
+                parameter_facts=parameter_payload,
+                source_text=reply_source_text or str(raw.get("source_text") or ""),
+                input_mode=reply_input_mode or str(raw.get("input_mode") or "json"),
+                agent_records=agent_records,
+            )
+        else:
+            session = service.submit_answer(
+                session_id,
+                action_id=action_id,
+                revision=page_revision,
+                answer=raw,
+            )
+    elif action == "relevance":
+        session = service.apply_task_relevance(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            declarations=raw,
+        )
+    elif action == "advance":
+        session = service.advance(session_id, action_id=action_id, revision=page_revision)
+    elif action == "evidence":
+        session = service.submit_evidence(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            evidence=raw,
+        )
+    elif action == "phase":
+        session = service.record_phase_result(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            result=raw,
+        )
+    elif action == "features":
+        quality = raw.pop("quality", None)
+        session = service.submit_features(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            features=raw.get("features", raw),
+            quality=quality,
+        )
+    elif action == "controller":
+        session = service.submit_controller(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            controller=raw.get("controller", raw),
+            phases=raw.get("phases"),
+        )
+    elif action == "freeze":
+        session = service.freeze_controller(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            controller=raw["controller"],
+            runtime_contract=raw["runtime_contract"],
+            evaluation_contract=raw["evaluation_contract"],
+        )
+    elif action == "evaluation":
+        session = service.record_evaluation(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            packet=raw,
+        )
+    elif action == "cancel":
+        session = service.cancel(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            reason=str(raw.get("reason", "operator_cancelled")),
+        )
+    elif action == "replay":
+        session = service.replay_evaluation(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+        )
+    elif action == "confirmation":
+        session = service.record_confirmation(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            packet=raw,
+        )
+    elif action == "set_provider":
+        session = service.set_provider(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            provider=raw,
+        )
+    elif action == "compile_protocol":
+        session = service.compile_protocol(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            request=raw or None,
+        )
+    elif action == "prepare_operator_handoff":
+        session = service.prepare_operator_handoff(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+        )
+    elif action == "record_operator_report":
+        session = service.record_operator_report(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            report=raw,
+        )
+    elif action == "ingest_upload":
+        paths = raw.get("paths") or raw.get("files") or ()
+        if isinstance(paths, str):
+            paths = [paths]
+        session = service.ingest_upload(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            paths=[Path(item) for item in paths],
+            stopped_on_limit=bool(raw.get("stopped_on_limit", False)),
+        )
+    elif action == "derive_features":
+        session = service.derive_features(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+        )
+    elif action == "synthesize_controller":
+        session = service.synthesize_controller(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+        )
+    elif action == "qualify_controller":
+        session = service.qualify_controller(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+        )
+    elif action in {"run_provider", "run_evaluation", "run_feedback_iteration", "confirm_result"}:
+        case_id = str(app_state.get("provider_case_id") or "").strip()
+        if not case_id:
+            raise ValueError("当前会话没有注册可执行的软件案例 Provider。")
+        identification_registry, identification_id, evaluation_registry, evaluation_id = (
+            _training_registries(case_id)
+        )
+        if action == "run_provider":
+            session = service.run_provider(
+                session_id,
+                action_id=action_id,
+                revision=page_revision,
+                provider_registry=identification_registry,
+                provider_id=identification_id,
+            )
+        elif action == "run_evaluation":
+            session = service.run_evaluation(
+                session_id,
+                action_id=action_id,
+                revision=page_revision,
+                provider_registry=evaluation_registry,
+                provider_id=evaluation_id,
+            )
+        elif action == "run_feedback_iteration":
+            session = service.run_feedback_iteration(
+                session_id,
+                action_id=action_id,
+                revision=page_revision,
+                provider_registry=evaluation_registry,
+                provider_id=evaluation_id,
+                contract=raw or None,
+            )
+        else:
+            session = service.confirm_result(
+                session_id,
+                action_id=action_id,
+                revision=page_revision,
+                provider_registry=evaluation_registry,
+                provider_id=evaluation_id,
+            )
+    session = _run_configured_automatic(service, session, app_state)
+    report = _kernel_report(session)
+    return report, {
+        **dict(app_state),
+        "kernel_revision": session.revision,
+        "workflow_version": session.workflow_version,
+        "pending_actions": list(report["pending_actions"]),
+    }
+
+
+def _kernel_report(session) -> dict[str, Any]:
+    readiness = session.ledger.readiness()
+    pending_actions = _kernel_pending_actions(session)
+    return {
+        "workflow_version": session.workflow_version,
+        "session_id": session.session_id,
+        "status": session.status,
+        "revision": session.revision,
+        "task": session.task.to_dict(),
+        "parameter_facts": [dict(item) for item in session.parameter_facts],
+        "diagnostic": {
+            "readiness": readiness.to_dict(),
+            "entries": [item.to_dict() for item in session.ledger.entries],
+        },
+        "route": dict(session.route) if session.route else None,
+        "features": dict(session.feature_artifact) if session.feature_artifact else None,
+        "controller": (
+            dict(session.controller_candidate) if session.controller_candidate else None
+        ),
+        "phase_plan": dict(session.phase_plan) if session.phase_plan else None,
+        "phase_results": [dict(item) for item in session.phase_results],
+        "freeze": dict(session.controller_freeze) if session.controller_freeze else None,
+        "evaluation": dict(session.evaluation) if session.evaluation else None,
+        "tuning": dict(session.tuning) if session.tuning else None,
+        "confirmation": dict(session.confirmation) if session.confirmation else None,
+        "protocols": [dict(item) for item in session.protocols],
+        "operator_handoffs": [dict(item) for item in session.operator_handoffs],
+        "operator_reports": [dict(item) for item in session.operator_reports],
+        "upload_attempts": [dict(item) for item in session.upload_attempts],
+        "qualification": dict(session.controller_qualification) if session.controller_qualification else None,
+        "provider_bindings": dict(session.provider_bindings),
+        "import_report": dict(session.import_report) if session.import_report else None,
+        "evidence": [dict(item) for item in session.evidence],
+        "evaluation_packets": [dict(item) for item in session.evaluation_packets],
+        "evaluation_replays": [dict(item) for item in session.evaluation_replays],
+        "agent_config": dict(session.agent_config) if session.agent_config else None,
+        "agent_records": [dict(item) for item in session.agent_records],
+        "rag_snapshot": session.rag_snapshot,
+        "events": [event.to_dict() for event in session.events],
+        "pending_actions": [dict(item) for item in pending_actions],
+        "input_contract": build_kernel_input_contract(
+            session,
+            pending_actions=pending_actions,
+        ),
+        "stages": list(KERNEL_STAGE_LABELS),
+    }
+
+
+def start_kernel_case_run(
+    case_id: str,
+    **kwargs: Any,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    case = public_training_case(case_id)
+    return start_kernel_app_run(
+        case["task"],
+        provider_case_id=case_id,
+        **kwargs,
+    )
+
+
+def load_kernel_app_run(
+    session_id: str,
+    *,
+    session_dir: str | Path | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    service = WorkflowService(session_dir or Path("output") / "kernel-sessions")
+    session = service.read(str(session_id))
+    if not str(session.workflow_version).startswith("cfdc-v6-kernel"):
+        raise ValueError("WebUI 只接受 CFDC Kernel 会话。")
+    report = _kernel_report(session)
+    return report, {
+        "kernel_session_id": session.session_id,
+        "kernel_session_dir": str(service.root),
+        "kernel_revision": session.revision,
+        "workflow_version": session.workflow_version,
+        "pending_actions": list(report["pending_actions"]),
+    }
+
+
+def import_v3_app_run(
+    source: str | Path,
+    *,
+    session_dir: str | Path | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    service = WorkflowService(session_dir or Path("output") / "kernel-sessions")
+    session = service.import_v3(source)
+    report = _kernel_report(session)
+    return report, {
+        "kernel_session_id": session.session_id,
+        "kernel_session_dir": str(service.root),
+        "kernel_revision": session.revision,
+        "workflow_version": session.workflow_version,
+        "pending_actions": list(report["pending_actions"]),
+    }
+
+
+def export_kernel_app_bundle(app_state: Mapping[str, Any]) -> str:
+    session_id = str(app_state.get("kernel_session_id") or "")
+    if not session_id:
+        raise ValueError("当前没有 CFDC Kernel 会话。")
+    service = WorkflowService(
+        app_state.get("kernel_session_dir") or Path("output") / "kernel-sessions"
+    )
+    return str(service.export_result_bundle(session_id))
+
+
+def export_kernel_app_artifact(
+    app_state: Mapping[str, Any],
+    artifact_kind: str,
+) -> str:
+    session_id = str(app_state.get("kernel_session_id") or "")
+    if not session_id:
+        raise ValueError("当前没有 CFDC Kernel 会话。")
+    service = WorkflowService(
+        app_state.get("kernel_session_dir") or Path("output") / "kernel-sessions"
+    )
+    return str(service.export_artifact(session_id, artifact_kind))
 
 
 def build_adapter(
@@ -108,738 +909,258 @@ def build_adapter(
     model: str | None,
     api_key: str | None,
     *,
-    agent_mode: str | None = None,
     rag_index_dir: str | Path | None = None,
     rag_snapshot: str | None = None,
     use_rag: bool = True,
     timeout_s: float = 60.0,
-    max_tokens: int = 1400,
+    max_tokens: int = 2200,
 ):
     if not use_llm:
         return None
     adapter = OpenAICompatibleDiagnosticAdapter(
-        base_url=_textbox_text(base_url).strip() or None,
-        model=_textbox_text(model).strip() or None,
-        api_key=_textbox_text(api_key).strip() or None,
+        base_url=str(base_url or "").strip() or None,
+        model=str(model or "").strip() or None,
+        api_key=str(api_key or "").strip() or None,
         timeout_s=timeout_s,
         max_tokens=max_tokens,
     )
     return wrap_agent_adapter(
         adapter,
-        agent_mode=agent_mode,
+        agent_mode="multi",
         rag_index_dir=str(rag_index_dir) if rag_index_dir is not None else None,
         rag_snapshot=rag_snapshot,
         use_rag=use_rag,
     )
 
 
-def _attach_agent_trace(
-    report: CFDCRunReport,
-    adapter: Any,
-    previous: list[dict[str, Any]] | None = None,
-) -> CFDCRunReport:
-    trace_reader = getattr(adapter, "agent_trace", None)
-    current = trace_reader() if callable(trace_reader) else []
-    return report.model_copy(update={"agent_trace": [*(previous or []), *current]})
-
-
 def _build_app_adapter(
-    use_llm: bool,
     base_url: str | None,
     model: str | None,
     api_key: str | None,
     *,
-    agent_mode: str | None = None,
-    rag_index_dir: str | Path | None = None,
-    rag_snapshot: str | None = None,
-    use_rag: bool = True,
-    explicit: bool = False,
+    rag_index_dir: str | Path | None,
+    rag_snapshot: str | None,
+    use_rag: bool,
 ):
-    if explicit:
-        return build_adapter(
-            use_llm,
-            base_url,
-            model,
-            api_key,
-            agent_mode=agent_mode,
-            rag_index_dir=rag_index_dir,
-            rag_snapshot=rag_snapshot,
-            use_rag=use_rag,
-        )
-    # Keep the legacy positional call shape for embedding applications that
-    # monkeypatch/build their own adapter factories.
-    return build_adapter(use_llm, base_url, model, api_key)
-
-
-def _run_ready_session(
-    session: DiagnosticSessionState,
-    adapter,
-    include_trajectory: bool,
-) -> CFDCRunReport:
-    class SessionReplayAdapter:
-        guided_measurement_verified = True
-
-        def diagnose(self, description):
-            del description
-            return session.current_diagnosis.model_dump(mode="json")
-
-        def select_profile(self, description, diagnosis, classification, catalog):
-            del description, diagnosis, classification, catalog
-            return session.semantic_selection.model_dump(mode="json")
-
-    if session.status == "ready_for_experiments":
-        if session.current_diagnosis is None or session.semantic_selection is None:
-            raise RuntimeError(
-                "ready diagnostic session is missing cached routing evidence"
-            )
-
-        return run_cfdc_route(
-            session.route_id,
-            description=session.accumulated_description,
-            diagnostic_adapter=SessionReplayAdapter(),
-            include_trajectory=include_trajectory,
-        )
-    return run_cfdc_route(
-        session.route_id,
-        diagnostic_session_state=session,
-        diagnostic_adapter=adapter,
-        include_trajectory=include_trajectory,
+    return build_adapter(
+        True,
+        base_url,
+        model,
+        api_key,
+        rag_index_dir=rag_index_dir,
+        rag_snapshot=rag_snapshot,
+        use_rag=use_rag,
     )
 
 
-def start_app_run(
-    description: str | None,
-    observed_outputs: str | None,
-    actuators: str | None,
-    safety_bounds: str | None,
-    route_label: str | None,
-    use_llm: bool,
+def _selected_reply_mode(
+    mode: KernelReplyMode | str,
+    contract: Mapping[str, Any],
+) -> KernelReplyMode:
+    allowed = [str(item) for item in contract.get("allowed_modes", ())]
+    if not allowed:
+        return KernelReplyMode.NATURAL_LANGUAGE
+    if len(allowed) == 1:
+        return KernelReplyMode(allowed[0])
+    if isinstance(mode, KernelReplyMode):
+        selected = mode
+    elif str(mode) in {"自然语言", "natural_language"}:
+        selected = KernelReplyMode.NATURAL_LANGUAGE
+    elif str(mode) in {"高级 JSON", "json"}:
+        selected = KernelReplyMode.JSON
+    else:
+        raise ValueError("未知输入模式：请选择自然语言或高级 JSON。")
+    if selected.value not in allowed:
+        raise ValueError("当前动作不允许使用该输入模式。")
+    return selected
+
+
+def prepare_kernel_reply_for_ui(
+    app_state: Mapping[str, Any],
+    text: str,
+    *,
+    mode: KernelReplyMode | str,
     base_url: str | None,
     model: str | None,
     api_key: str | None,
-    include_trajectory: bool = False,
-    forbidden_actions: str | None = None,
-    time_scale_hint_s: str | float | None = None,
-    *,
-    agent_mode: str | None = None,
-    rag_index_dir: str | Path | None = None,
-    rag_snapshot: str | None = None,
-    use_rag: bool = True,
-) -> tuple[CFDCRunReport, dict[str, Any]]:
-    route_id = ROUTE_CHOICES.get(
-        route_label,
-        LEGACY_ROUTE_LABELS.get(route_label, route_label or "generic"),
-    )
-    known_route_ids = set(ROUTE_CHOICES.values())
-    if route_id not in known_route_ids:
-        raise ValueError(f"未知运行方式：{route_label!r}")
-    description_text = _textbox_text(description).strip()
-    base_url_text = _textbox_text(base_url)
-    model_text = _textbox_text(model)
-    api_key_text = _textbox_text(api_key)
-    if not description_text:
-        raise ValueError("请描述需要控制的对象、可观察输出和可用执行器。")
-    if route_id == "generic" and not use_llm:
-        raise ValueError("通用引导测量流程需要启用 LLM。")
-    explicit_agent_config = (
-        agent_mode is not None or rag_index_dir is not None or not use_rag
-    )
-    adapter = _build_app_adapter(
-        use_llm,
-        base_url_text,
-        model_text,
-        api_key_text,
-        agent_mode=agent_mode,
-        rag_index_dir=rag_index_dir,
-        use_rag=use_rag,
-        rag_snapshot=rag_snapshot,
-        explicit=explicit_agent_config,
-    )
-    # A loaded snapshot must remain pinned across multi-turn UI callbacks even
-    # when the directory came from the environment rather than an explicit
-    # function argument.
-    explicit_agent_config = explicit_agent_config or bool(
-        getattr(adapter, "rag_snapshot", None)
-    )
-    if route_id == "generic":
-        validate_guided_adapter_capabilities(adapter)
-
-    system = SystemDescription(
-        text=description_text,
-        observed_outputs=parse_names(observed_outputs),
-        actuators=parse_names(actuators),
-        safety_bounds=parse_safety_bounds(safety_bounds),
-        forbidden_actions=parse_forbidden_actions(forbidden_actions),
-        time_scale_hint_s=parse_time_scale_hint(time_scale_hint_s),
-    )
-    report = run_cfdc_route(
-        route_id,
-        description=system,
-        diagnostic_adapter=adapter,
-        include_trajectory=include_trajectory,
-    )
-    report = _attach_agent_trace(report, adapter)
-    session = report.diagnostic_session
-    if report.status in {"need_more_information", "awaiting_specifications"}:
-        if report.diagnosis is None:
-            raise RuntimeError("incomplete route report is missing its diagnosis")
-        if report.status == "awaiting_specifications":
-            session = DiagnosticSessionState(
-                session_id=f"diagnostic-{uuid4().hex[:16]}",
-                route_id=route_id,
-                initial_description=system,
-                accumulated_description=system,
-                current_diagnosis=report.diagnosis,
-                classification=report.classification,
-                semantic_selection=report.semantic_selection,
-                experiment_plan=report.experiment_plan,
-                evidence_requirement_plan=report.evidence_requirement_plan,
-                specification_templates=report.specification_templates,
-                specification_assessment=report.specification_assessment,
-                candidate_route=report.candidate_route,
-                compiled_route=report.compiled_route,
-                pending_clarification_questions=[],
-                status="awaiting_specifications",
-            )
-        elif session is None:
-            session = start_diagnostic_session(
-                system,
-                route_id=route_id,
-                diagnostic_adapter=adapter,
-                diagnosis=report.diagnosis,
-            )
-        report = report.model_copy(update={"diagnostic_session": session})
-    awaiting_llm_dialogue = bool(
-        session is not None
-        and session.status
-        in {
-            "collecting_description",
-            "awaiting_measurements",
-            "measurement_needs_more",
-            "measurement_conflict",
-            "awaiting_profile_measurements",
-            "specification_conflict",
-        }
-    )
-    return report, {
-        "session": session.model_dump(mode="json") if session is not None else None,
-        "use_llm": use_llm if awaiting_llm_dialogue else False,
-        "include_trajectory": include_trajectory,
-        "input_source": "natural_language",
-        "agent_mode": getattr(adapter, "agent_mode", "single") if adapter else "single",
-        "rag_enabled": bool(getattr(adapter, "rag_enabled", False))
-        if adapter
-        else False,
-        "agent_trace": report.agent_trace,
-        "rag_index_dir": getattr(adapter, "rag_index_dir", None) if adapter else None,
-        "rag_snapshot": getattr(adapter, "rag_snapshot", None) if adapter else None,
-        "_agent_config_explicit": explicit_agent_config,
-    }
-
-
-def continue_app_run(
-    app_state: dict[str, Any],
-    answers: list[str | None],
-    supplemental_description: str | None,
-    *,
-    base_url: str | None = None,
-    model: str | None = None,
-    api_key: str | None = None,
-) -> tuple[CFDCRunReport, dict[str, Any]]:
-    if not app_state or not app_state.get("session"):
-        raise ValueError("当前没有等待回答的诊断会话。")
-    session = DiagnosticSessionState.model_validate(app_state["session"])
-    adapter = _build_app_adapter(
-        bool(app_state.get("use_llm")),
-        base_url,
-        model,
-        api_key,
-        agent_mode=app_state.get("agent_mode"),
-        rag_index_dir=app_state.get("rag_index_dir"),
-        rag_snapshot=app_state.get("rag_snapshot"),
-        use_rag=bool(app_state.get("rag_enabled", True)),
-        explicit=bool(app_state.get("_agent_config_explicit")),
-    )
-    question_ids = list(clarification_question_map(session))
-    question_map = clarification_question_map(session)
-    keyed_answers = {}
-    for question_id, answer in zip(question_ids, answers):
-        answer_text = _textbox_text(answer).strip()
-        if answer_text:
-            keyed_answers[question_id] = answer_text
-    observed_outputs = list(session.accumulated_description.observed_outputs)
-    actuators = list(session.accumulated_description.actuators)
-    for question_id, answer in keyed_answers.items():
-        question = question_map[question_id].lower()
-        if "watch or record" in question and answer not in observed_outputs:
-            observed_outputs.append(answer)
-        if "physical action or device" in question and answer not in actuators:
-            actuators.append(answer)
-    if (
-        observed_outputs != session.accumulated_description.observed_outputs
-        or actuators != session.accumulated_description.actuators
-    ):
-        session = session.model_copy(
-            update={
-                "accumulated_description": session.accumulated_description.model_copy(
-                    update={
-                        "observed_outputs": observed_outputs,
-                        "actuators": actuators,
-                    }
-                )
-            }
-        )
-    updated = continue_diagnostic_session(
-        session,
-        keyed_answers,
-        supplemental_description=_textbox_text(supplemental_description).strip()
-        or None,
-        expected_revision=session.revision,
-        diagnostic_adapter=adapter,
-    )
-    report = _run_ready_session(
-        updated,
-        adapter,
-        bool(app_state.get("include_trajectory")),
-    )
-    report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
-    if report.diagnostic_session is None:
-        report = report.model_copy(update={"diagnostic_session": updated})
-    report_session = report.diagnostic_session
-    next_state = dict(app_state)
-    next_state["agent_trace"] = report.agent_trace
-    next_state["session"] = (
-        report_session.model_dump(mode="json")
-        if report_session is not None
-        and report_session.status
-        in {
-            "collecting_description",
-            "awaiting_measurements",
-            "measurement_needs_more",
-            "measurement_conflict",
-            "awaiting_profile_measurements",
-            "awaiting_specifications",
-            "need_more_specifications",
-            "specification_conflict",
-            "evidence_rejected",
-        }
-        else None
-    )
-    if next_state["session"] is None:
-        next_state["use_llm"] = False
-    return report, next_state
-
-
-def submit_app_measurement_response(
-    app_state: dict[str, Any],
-    measurement_response: str | None,
-    *,
-    base_url: str | None = None,
-    model: str | None = None,
-    api_key: str | None = None,
-    simulation_bounds_confirmed: bool = False,
-) -> tuple[CFDCRunReport, dict[str, Any]]:
-    """Advance diagnostic records or profile facts through the shared textbox."""
-
-    if not app_state or not app_state.get("session"):
-        raise ValueError("当前没有等待测量记录的诊断会话。")
-    session = DiagnosticSessionState.model_validate(app_state["session"])
-    text = _textbox_text(measurement_response).strip()
-    confirmation_only = bool(
-        not text
-        and simulation_bounds_confirmed
-        and session.status
-        in {
-            "awaiting_profile_measurements",
-            "specification_conflict",
-            "specification_model_ready",
-        }
-        and session.specification_assessment is not None
-        and session.specification_assessment.status == "ready"
-    )
-    if not text and not confirmation_only:
-        raise ValueError("请填写现有记录、手册摘录或明确说明未知。")
-    adapter = _build_app_adapter(
-        bool(app_state.get("use_llm")),
-        base_url,
-        model,
-        api_key,
-        agent_mode=app_state.get("agent_mode"),
-        rag_index_dir=app_state.get("rag_index_dir"),
-        rag_snapshot=app_state.get("rag_snapshot"),
-        use_rag=bool(app_state.get("rag_enabled", True)),
-        explicit=bool(app_state.get("_agent_config_explicit")),
-    )
-    if adapter is None and not confirmation_only:
-        raise ValueError("通用引导测量流程需要启用 LLM。")
-    report = run_cfdc_route(
-        session.route_id,
-        diagnostic_session_state=session,
-        diagnostic_adapter=adapter,
-        measurement_response=text,
-        simulation_bounds_confirmed=simulation_bounds_confirmed,
-        include_trajectory=bool(app_state.get("include_trajectory")),
-    )
-    report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
-    waiting = report.status in {
-        "awaiting_measurements",
-        "measurement_needs_more",
-        "measurement_conflict",
-        "awaiting_profile_measurements",
-        "specification_conflict",
-        "awaiting_evidence",
-        "evidence_rejected",
-    }
-    next_state = dict(app_state)
-    next_state["agent_trace"] = report.agent_trace
-    next_state["session"] = (
-        report.diagnostic_session.model_dump(mode="json")
-        if waiting and report.diagnostic_session is not None
-        else None
-    )
-    if next_state["session"] is None:
-        next_state["use_llm"] = False
-    return report, next_state
-
-
-def _session_replay_adapter(session: DiagnosticSessionState):
-    class SessionReplayAdapter:
-        guided_measurement_verified = True
-
-        def diagnose(self, description):
-            del description
-            return session.current_diagnosis.model_dump(mode="json")
-
-        def select_profile(self, description, diagnosis, classification, catalog):
-            del description, diagnosis, classification, catalog
-            return session.semantic_selection.model_dump(mode="json")
-
-    return SessionReplayAdapter()
-
-
-def _record_simulation_boundary_confirmation(
-    session: DiagnosticSessionState,
-    confirmed: bool,
-) -> DiagnosticSessionState:
-    description = session.accumulated_description
-    if description.simulation_boundary_confirmation is not None:
-        return session
-    if not confirmed:
-        raise ValueError(
-            "提交用户规格或模型前，请确认所填范围仅作为本次软件仿真的运行/停止边界；"
-            "该确认不代表真实硬件安全认证，也不授权下发硬件命令。"
-        )
-    updated_description = description.model_copy(
-        update={"simulation_boundary_confirmation": SimulationBoundaryConfirmation()}
-    )
-    return session.model_copy(update={"accumulated_description": updated_description})
-
-
-def submit_app_specifications(
-    app_state: dict[str, Any],
-    specification_text: str | None,
-    simulation_bounds_confirmed: bool = False,
-    *,
-    base_url: str | None = None,
-    model: str | None = None,
-    api_key: str | None = None,
-) -> tuple[CFDCRunReport, dict[str, Any]]:
-    """Advance the ordinary-user natural-language specification dialogue."""
-
-    if not app_state or not app_state.get("session"):
-        raise ValueError("当前没有等待设备规格的诊断会话。")
-    session = DiagnosticSessionState.model_validate(app_state["session"])
-    if session.status not in {
-        "awaiting_profile_measurements",
-        "specification_conflict",
-    }:
-        raise ValueError("当前诊断会话不处于设备规格补充阶段。")
-    session = _record_simulation_boundary_confirmation(
-        session,
-        simulation_bounds_confirmed,
-    )
-    text = _textbox_text(specification_text).strip()
-    if not text:
-        raise ValueError("请填写已知设备规格、手册原文或明确选择暂时不知道。")
-    adapter = _build_app_adapter(
-        bool(app_state.get("use_llm")),
-        base_url,
-        model,
-        api_key,
-        agent_mode=app_state.get("agent_mode"),
-        rag_index_dir=app_state.get("rag_index_dir"),
-        rag_snapshot=app_state.get("rag_snapshot"),
-        use_rag=bool(app_state.get("rag_enabled", True)),
-        explicit=bool(app_state.get("_agent_config_explicit")),
-    )
-    report = run_cfdc_route(
-        session.route_id,
-        diagnostic_session_state=session,
-        diagnostic_adapter=adapter,
-        measurement_response=text,
-        include_trajectory=bool(app_state.get("include_trajectory")),
-    )
-    report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
-    waiting = report.status in {
-        "awaiting_profile_measurements",
-        "specification_conflict",
-    }
-    next_state = dict(app_state)
-    next_state["agent_trace"] = report.agent_trace
-    next_state["session"] = (
-        report.diagnostic_session.model_dump(mode="json")
-        if waiting and report.diagnostic_session is not None
-        else None
-    )
-    if not waiting:
-        next_state["use_llm"] = False
-    return report, next_state
-
-
-def _read_json_submission_source(
-    uploaded_json, pasted_json: str | None
 ) -> dict[str, Any]:
-    uploaded = (
-        uploaded_json is not None
-        and str(getattr(uploaded_json, "name", uploaded_json)).strip() != ""
+    """Prepare one Web reply through the fixed multi-agent Kernel boundary."""
+
+    session_id = str(app_state.get("kernel_session_id") or "")
+    if not session_id:
+        raise ValueError("当前没有 CFDC Kernel 任务会话。")
+    if not str(app_state.get("workflow_version") or "").startswith("cfdc-v6-kernel"):
+        raise ValueError("当前页面状态不属于 CFDC Kernel。")
+    service = WorkflowService(
+        app_state.get("kernel_session_dir") or Path("output") / "kernel-sessions"
     )
-    pasted = bool(_textbox_text(pasted_json).strip())
-    if not uploaded and not pasted:
-        raise ValueError("请选择一种 JSON 提交方式：上传 .json 文件或粘贴 JSON 数据。")
-    if uploaded and pasted:
-        raise ValueError("上传文件和粘贴内容只能选择一种，以免提交来源不明确。")
-    if uploaded:
-        path = Path(str(getattr(uploaded_json, "name", uploaded_json)))
-        if path.suffix.lower() != ".json":
-            raise ValueError("上传文件必须使用 .json 扩展名。")
-        try:
-            if path.stat().st_size > 5_000_000:
-                raise ValueError("JSON 文件不能超过 5 MB。")
-            source = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            raise ValueError(f"无法读取上传的 JSON 文件：{exc}") from None
-    else:
-        source = _textbox_text(pasted_json).strip()
+    session = service.read(session_id)
+    projected_pending = app_state.get("pending_actions") or _kernel_pending_actions(session)
+    contract = build_kernel_input_contract(session, pending_actions=projected_pending)
+    selected_mode = _selected_reply_mode(mode, contract)
+    contract_action = str(contract.get("action") or "")
+    public_action = _normalise_kernel_action(contract_action)
+    raw_text = str(text or "")
+
+    if not contract_action or contract.get("disabled_reason"):
+        return prepare_kernel_reply(
+            session,
+            raw_text,
+            mode=selected_mode,
+            pending_actions=projected_pending,
+        )
+
+    if raw_text.strip() and public_action in _KERNEL_PUBLIC_ACTIONS:
+        identity_revision = app_state.get("kernel_revision", session.revision)
+        if isinstance(identity_revision, bool) or not isinstance(identity_revision, int):
+            identity_revision = session.revision
+        replay_action_id = _kernel_action_id(
+            session.session_id,
+            identity_revision,
+            public_action,
+            {"input_mode": selected_mode.value, "source_text": raw_text},
+        )
+        if _kernel_action_already_recorded(session, replay_action_id):
+            return {
+                "action": contract_action,
+                "input_mode": selected_mode.value,
+                "source_text": raw_text,
+                "diagnostic_updates": {},
+                "parameter_candidates": [],
+                "payload": {},
+                "agent_records": [],
+                "replayed": True,
+            }
+    if not raw_text.strip() and contract_action in {
+        "confirm_task",
+        "advance",
+        "cancel",
+        "replay",
+        "submit_answer",
+    }:
+        prepared = prepare_kernel_reply(
+            session,
+            raw_text,
+            mode=selected_mode,
+            pending_actions=projected_pending,
+        )
+        prepared["agent_records"] = []
+        return prepared
+
+    cache_entry: _ReplyPreparation | None = None
+    cache_key: str | None = None
+    owner = True
+    if raw_text.strip() and public_action in _KERNEL_PUBLIC_ACTIONS:
+        identity_revision = app_state.get("kernel_revision", session.revision)
+        if isinstance(identity_revision, bool) or not isinstance(identity_revision, int):
+            identity_revision = session.revision
+        cache_key = _kernel_action_id(
+            session.session_id,
+            identity_revision,
+            public_action,
+            {"input_mode": selected_mode.value, "source_text": raw_text},
+        )
+        with _KERNEL_REPLY_PREPARATIONS_LOCK:
+            cache_entry = _KERNEL_REPLY_PREPARATIONS.get(cache_key)
+            owner = cache_entry is None
+            if owner:
+                cache_entry = _ReplyPreparation()
+                _KERNEL_REPLY_PREPARATIONS[cache_key] = cache_entry
+        if not owner:
+            cache_entry.done.wait()
+            if cache_entry.error is not None:
+                raise cache_entry.error
+            if cache_entry.result is None:
+                raise RuntimeError("kernel_reply_preparation_missing_result")
+            return deepcopy(cache_entry.result)
+
     try:
-        payload = json.loads(source)
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"JSON 格式无效：第 {exc.lineno} 行第 {exc.colno} 列。"
-        ) from None
-    if not isinstance(payload, dict):
-        raise ValueError("JSON 顶层必须是对象。")
-    return payload
-
-
-def _specification_facts_to_text(
-    session: DiagnosticSessionState,
-    facts_payload: Any,
-) -> str:
-    if not isinstance(facts_payload, list) or not facts_payload:
-        raise ValueError("specification_facts 必须是非空数组。")
-    allowed_ids = {
-        field.fact_id
-        for template in session.specification_templates
-        for field in template.fields
-    }
-    rendered: list[str] = []
-    seen: set[str] = set()
-    for index, item in enumerate(facts_payload, 1):
-        if not isinstance(item, dict):
-            raise ValueError(f"specification_facts[{index}] 必须是对象。")
-        fact_id = item.get("fact_id")
-        value = item.get("value")
-        unit = item.get("unit")
-        if not isinstance(fact_id, str) or fact_id not in allowed_ids:
-            raise ValueError(
-                f"specification_facts[{index}] 的 fact_id 不属于当前规格模板。"
-            )
-        if fact_id in seen:
-            raise ValueError(f"specification_facts 中重复定义了 {fact_id!r}。")
-        if (
-            isinstance(value, bool)
-            or not isinstance(value, (int, float))
-            or not math.isfinite(float(value))
-        ):
-            raise ValueError(f"specification_facts[{index}] 的 value 必须是有限数值。")
-        if (
-            not isinstance(unit, str)
-            or not unit.strip()
-            or ";" in unit
-            or any(character.isspace() for character in unit.strip())
-            or re.search(r"[\x00-\x1f]", unit)
-        ):
-            raise ValueError(
-                f"specification_facts[{index}] 的 unit 必须是无空白的单一单位标记。"
-            )
-        seen.add(fact_id)
-        rendered.append(f"{fact_id}={float(value):.17g} {unit.strip()};")
-    return " ".join(rendered)
-
-
-def submit_app_json(
-    app_state: dict[str, Any],
-    *,
-    uploaded_json,
-    pasted_json: str | None,
-    simulation_bounds_confirmed: bool = False,
-    base_url: str | None = None,
-    model: str | None = None,
-    api_key: str | None = None,
-) -> tuple[CFDCRunReport, dict[str, Any]]:
-    """Submit a dataset wrapper, a bare executable model, or specification facts."""
-
-    payload = _read_json_submission_source(uploaded_json, pasted_json)
-    if not app_state or not app_state.get("session"):
-        raise ValueError("当前没有等待 JSON 数据的诊断会话。")
-    session = DiagnosticSessionState.model_validate(app_state["session"])
-    session = _record_simulation_boundary_confirmation(
-        session,
-        simulation_bounds_confirmed,
-    )
-    confirmed_state = dict(app_state)
-    confirmed_state["session"] = session.model_dump(mode="json")
-
-    # Dataset wrappers intentionally carry both a model and specification facts.
-    # At the specification stage, use the facts first so the ordinary compiler
-    # preserves its safety bounds and provenance. Bare/full-model JSON remains a
-    # supported advanced path below.
-    if payload.get("specification_facts"):
-        return submit_app_specifications(
-            confirmed_state,
-            _specification_facts_to_text(session, payload["specification_facts"]),
-            simulation_bounds_confirmed=True,
+        prepared = _prepare_kernel_reply_for_ui_uncached(
+            app_state,
+            session,
+            raw_text,
+            selected_mode=selected_mode,
+            projected_pending=projected_pending,
             base_url=base_url,
             model=model,
             api_key=api_key,
         )
-
-    model_payload = payload if "kind" in payload else payload.get("model")
-    if model_payload is not None:
-        validation_payload = payload.get("validation_spec")
-        if validation_payload is None:
-            validation_payload = payload.get("validation")
-        return submit_app_evidence(
-            confirmed_state,
-            model_json=json.dumps(model_payload, ensure_ascii=False),
-            trace_files=None,
-            trace_manifest_json="",
-            validation_json=(
-                json.dumps(validation_payload, ensure_ascii=False)
-                if validation_payload is not None
-                else ""
-            ),
-            demo_confirmed=False,
-            simulation_bounds_confirmed=True,
-        )
-
-    raise ValueError(
-        "JSON 必须包含 model、specification_facts，或本身就是带 kind 的完整数值模型。"
-    )
+    except Exception as exc:
+        if cache_key is not None and cache_entry is not None:
+            with _KERNEL_REPLY_PREPARATIONS_LOCK:
+                cache_entry.error = exc
+                cache_entry.done.set()
+                _KERNEL_REPLY_PREPARATIONS.pop(cache_key, None)
+        raise
+    if cache_key is not None and cache_entry is not None:
+        with _KERNEL_REPLY_PREPARATIONS_LOCK:
+            cache_entry.result = deepcopy(prepared)
+            cache_entry.done.set()
+            _KERNEL_REPLY_PREPARATIONS.pop(cache_key, None)
+    return prepared
 
 
-def submit_app_evidence(
-    app_state: dict[str, Any],
+def _prepare_kernel_reply_for_ui_uncached(
+    app_state: Mapping[str, Any],
+    session,
+    text: str,
     *,
-    model_json: str | None,
-    trace_files,
-    trace_manifest_json: str | None,
-    validation_json: str | None,
-    demo_confirmed: bool,
-    simulation_bounds_confirmed: bool = False,
-) -> tuple[CFDCRunReport, dict[str, Any]]:
-    """Parse structured UI evidence and resume the cached diagnostic route."""
-
-    if not app_state or not app_state.get("session"):
-        raise ValueError("当前没有等待对象证据的诊断会话。")
-    session = DiagnosticSessionState.model_validate(app_state["session"])
-    if session.status not in {
-        "awaiting_specifications",
-        "need_more_specifications",
-        "specification_conflict",
-        "awaiting_evidence",
-        "evidence_rejected",
-    }:
-        raise ValueError("当前诊断会话不处于对象证据收集阶段。")
-    adapter = _session_replay_adapter(session)
-    if demo_confirmed:
-        if (
-            (model_json or "").strip()
-            or trace_files
-            or (trace_manifest_json or "").strip()
-            or (validation_json or "").strip()
-        ):
-            raise ValueError("标准对象演示不能与用户模型或实测数据同时提交。")
-        report = run_cfdc_route(
-            session.route_id,
-            description=session.accumulated_description,
-            diagnostic_adapter=adapter,
-            include_trajectory=bool(app_state.get("include_trajectory")),
-            execution_mode="demo_fixture",
+    selected_mode: KernelReplyMode,
+    projected_pending: Any,
+    base_url: str | None,
+    model: str | None,
+    api_key: str | None,
+) -> dict[str, Any]:
+    coordinator = None
+    if selected_mode is KernelReplyMode.NATURAL_LANGUAGE:
+        index_dir = app_state.get("rag_index_dir") or (session.agent_config or {}).get(
+            "rag_index_dir"
         )
-        report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
-        next_state = dict(app_state)
-        next_state["session"] = None
-        next_state["agent_trace"] = report.agent_trace
-        return report, next_state
-
-    session = _record_simulation_boundary_confirmation(
+        use_rag = bool(
+            app_state.get(
+                "use_rag",
+                (session.agent_config or {}).get("rag_requested", True),
+            )
+        )
+        adapter = _build_app_adapter(
+            base_url,
+            model,
+            api_key,
+            rag_index_dir=index_dir,
+            rag_snapshot=app_state.get("rag_snapshot") or session.rag_snapshot,
+            use_rag=use_rag,
+        )
+        if str(getattr(adapter, "agent_mode", "")).strip().casefold() != "multi":
+            raise ValueError("WebUI 需要支持 multi-agent 边界的 Provider adapter。")
+        coordinator = KernelAgentCoordinator(
+            adapter,
+            retriever=getattr(adapter, "retriever", None),
+            agent_mode="multi",
+        )
+    prepared = prepare_kernel_reply(
         session,
-        simulation_bounds_confirmed,
+        text,
+        mode=selected_mode,
+        coordinator=coordinator,
+        pending_actions=projected_pending,
     )
+    prepared["agent_records"] = (
+        list(coordinator.audit_log) if coordinator is not None else []
+    )
+    return prepared
 
-    try:
-        model_payload = json.loads(model_json) if (model_json or "").strip() else None
-        manifest_payload = (
-            json.loads(trace_manifest_json)
-            if (trace_manifest_json or "").strip()
-            else []
-        )
-        if isinstance(manifest_payload, dict):
-            manifest_payload = manifest_payload.get("measured_traces", [])
-        file_paths = []
-        for item in trace_files or []:
-            file_paths.append(str(getattr(item, "name", item)))
-        if len(file_paths) != len(manifest_payload):
-            raise ValueError("每个实测 manifest 都必须一一对应界面中上传的 CSV。")
-        manifests = []
-        for index, item in enumerate(manifest_payload):
-            payload = dict(item)
-            # Never trust a browser-provided server path.  The path is always
-            # replaced by the file object created by Gradio's upload handler.
-            payload["csv_path"] = file_paths[index]
-            manifests.append(MeasuredTraceManifest.model_validate(payload))
-        validation = (
-            ClosedLoopValidationSpec.model_validate_json(validation_json)
-            if (validation_json or "").strip()
-            else None
-        )
-        package = PlantEvidencePackage.model_validate(
-            {
-                "plant_id": session.evidence_requirement_plan.plant_id,
-                "model": model_payload,
-                "measured_traces": manifests,
-                "validation_spec": validation,
-                "provenance": ["Gradio structured object evidence"],
-            }
-        )
-    except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
-        raise ValueError(f"对象证据格式无效：{exc}") from None
 
-    reviewed = submit_evidence_to_session(session, package)
-    report = run_cfdc_route(
-        session.route_id,
-        description=session.accumulated_description,
-        diagnostic_adapter=adapter,
-        include_trajectory=bool(app_state.get("include_trajectory")),
-        evidence_package=package,
-    )
-    report = _attach_agent_trace(report, adapter, app_state.get("agent_trace", []))
-    next_state = dict(app_state)
-    next_state["agent_trace"] = report.agent_trace
-    next_state["session"] = (
-        reviewed.model_dump(mode="json")
-        if report.status in {"awaiting_evidence", "evidence_rejected"}
-        else None
-    )
-    return report, next_state
+__all__ = [
+    "KERNEL_STAGE_LABELS",
+    "build_adapter",
+    "continue_kernel_app_run",
+    "export_kernel_app_artifact",
+    "export_kernel_app_bundle",
+    "import_v3_app_run",
+    "load_kernel_app_run",
+    "parse_names",
+    "prepare_kernel_reply_for_ui",
+    "start_kernel_app_run",
+    "start_kernel_case_run",
+    "validate_kernel_artifact",
+]

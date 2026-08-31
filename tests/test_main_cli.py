@@ -99,6 +99,28 @@ def _complete_description(text: str) -> str:
     return text + "\n" + "\n".join(_VALID_FIELD_FACTS.values())
 
 
+def _kernel_answers() -> dict[str, dict[str, object]]:
+    assessments = {
+        "open_loop_stability": "stable",
+        "nonminimum_phase": "minimum_phase",
+        "significant_delay": "not_significant",
+        "relative_degree": "low",
+        "sensing_actuation_adequacy": "adequate",
+        "nonlinearity_strength": "weak",
+        "coupling_underactuation": "siso",
+        "uncertainty_variation": "small",
+    }
+    return {
+        key: {
+            "status": "known",
+            "assessment": value,
+            "evidence": f"public CLI evidence for {key}",
+            "confidence": 0.95,
+        }
+        for key, value in assessments.items()
+    }
+
+
 def test_cli_measurement_response_text_and_file_are_mutually_exclusive(tmp_path):
     response_file = tmp_path / "response.txt"
     response_file.write_text("existing record", encoding="utf-8")
@@ -356,6 +378,172 @@ def test_cli_v4_session_round_trip_accepts_measurement_response_file(
     assert restored.classification is not None
     assert restored.measurement_round_count == 0
     assert restored.profile_measurement_round_count == 1
+
+
+def test_documented_legacy_cli_three_step_flow_is_offline_and_auditable(
+    tmp_path, monkeypatch, capsys
+):
+    _enable_cli_guided_adapter(monkeypatch)
+    monkeypatch.setenv("CFDC_LLM_BASE_URL", "https://your-provider.example/v1")
+    monkeypatch.setenv("CFDC_LLM_MODEL", "your-model")
+    monkeypatch.setenv("CFDC_LLM_API_KEY", "test-secret")
+    session_paths = [tmp_path / f"legacy-0{index}.json" for index in range(1, 4)]
+    compatibility_args = [
+        "--workflow-version",
+        "legacy",
+        "--use-llm",
+        "--agent-mode",
+        "single",
+        "--no-rag",
+    ]
+    commands = [
+        [
+            "main.py",
+            *compatibility_args,
+            "--description",
+            "A heater changes measured temperature.",
+            "--diagnostic-session-output",
+            str(session_paths[0]),
+        ],
+        [
+            "main.py",
+            *compatibility_args,
+            "--diagnostic-session-input",
+            str(session_paths[0]),
+            "--diagnostic-description",
+            _complete_description(
+                "The observed output is temperature and the actuator is heater."
+            ),
+            "--diagnostic-session-output",
+            str(session_paths[1]),
+        ],
+        [
+            "main.py",
+            *compatibility_args,
+            "--diagnostic-session-input",
+            str(session_paths[1]),
+            "--measurement-response",
+            (
+                "input_change=1 V; steady_output_change=10 degC; "
+                "response_time_s=5 s; input_min=-2 V; input_max=2 V; "
+                "output_min=-30 degC; output_max=80 degC; all ranges are "
+                "software simulation run and stop bounds."
+            ),
+            "--confirm-simulation-bounds",
+            "--diagnostic-session-output",
+            str(session_paths[2]),
+        ],
+    ]
+
+    payloads = []
+    for command in commands:
+        monkeypatch.setattr(sys, "argv", command)
+        main()
+        payloads.append(json.loads(capsys.readouterr().out))
+
+    restored = [
+        DiagnosticSessionState.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in session_paths
+    ]
+    assert [payload["status"] for payload in payloads] == [
+        "need_more_information",
+        "awaiting_profile_measurements",
+        "candidate_unvalidated",
+    ]
+    assert len({session.session_id for session in restored}) == 1
+    assert [session.revision for session in restored] == [0, 2, 4]
+    assert [session.status for session in restored] == [
+        "collecting_description",
+        "awaiting_profile_measurements",
+        "specification_model_ready",
+    ]
+
+
+def test_kernel_cli_registered_case_auto_runs_full_chain_and_exports_bundle(
+    tmp_path, monkeypatch, capsys
+):
+    session_dir = tmp_path / "sessions"
+    result_dir = tmp_path / "results"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--workflow-version",
+            "kernel",
+            "--kernel-session-dir",
+            str(session_dir),
+            "--kernel-case",
+            "dc_motor_speed_v1",
+            "--confirm-kernel-budget",
+            "--kernel-answer",
+            json.dumps(_kernel_answers()),
+            "--kernel-advance",
+            "--kernel-auto",
+            "--kernel-result-dir",
+            str(result_dir),
+            "--no-rag",
+        ],
+    )
+
+    main()
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["status"] == "performance_met"
+    assert payload["feature_artifact"]["feature_version"] == "cfdc-features/v1"
+    assert payload["controller_qualification"]["status"] == "offline_qualified"
+    assert payload["provider_bindings"]["identification"]["provider_id"] != payload[
+        "provider_bindings"
+    ]["evaluation"]["provider_id"]
+    bundle = Path(payload["result_bundle_path"])
+    assert bundle.parent == result_dir
+    assert bundle.is_file()
+
+
+def test_kernel_cli_v3_import_creates_new_session_without_modifying_source(
+    tmp_path, monkeypatch, capsys
+):
+    source = tmp_path / "v3"
+    source.mkdir()
+    task = source / "task.json"
+    task.write_text(
+        json.dumps(
+            {
+                "task": {
+                    "description": "Hold a public measured output.",
+                    "measured_signals": ["output"],
+                    "control_input": "input",
+                    "input_min": -1,
+                    "input_max": 1,
+                    "state_stop": 4,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    original = task.read_bytes()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--workflow-version",
+            "kernel",
+            "--kernel-session-dir",
+            str(tmp_path / "sessions"),
+            "--kernel-import-v3",
+            str(source),
+            "--no-rag",
+        ],
+    )
+
+    main()
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["session_id"].startswith("cfdc-import-")
+    assert payload["import_report"]["source_modified"] is False
+    assert payload["pending_actions"][0]["action"] == "confirm_task"
+    assert task.read_bytes() == original
 
 
 def test_documented_deepseek_model_is_v4_pro():

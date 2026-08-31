@@ -1,0 +1,592 @@
+{
+  "registry_version": "2.7.1",
+  "principles": [
+    "The five classes are route-oriented dominant-structure families, not exhaustive plant identities.",
+    "Class IV and V require a mechanism subtype before a controller can be authorized.",
+    "A subtype is selected by observable evidence and deterministic analysis, never by benchmark case identity.",
+    "Controller synthesis features, route guards, and diagnostic-only evidence are recorded separately.",
+    "Unsupported subtypes end in an explicit capability gap; no neighboring controller is silently substituted."
+  ],
+  "controller_contracts": {
+    "PI": {
+      "label_cn": "比例积分控制",
+      "required_parameters": ["kp", "ki", "reference_filter_rate"],
+      "controller_features": ["static_gain", "dominant_time_constant"],
+      "optional_controller_features": [],
+      "route_guard_features": [],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "filtered_reference_PI_on_measured_output_error",
+        "state_variables": ["reference_filter_state", "integral_error"],
+        "update_order": [
+          "advance the reference filter using the recorded positive sample interval",
+          "form tracking error from filtered reference and measured output",
+          "form and clip the PI actuator command using the current integral state",
+          "commit the error integral only when unsaturated or when the error drives the raw command back toward the admissible interval"
+        ],
+        "equations": {
+          "reference_filter": "r_f+=dt*reference_filter_rate*(reference-r_f)",
+          "raw_actuator": "u_raw=kp*(r_f-y)+ki*integral_error",
+          "actuator_command": "u=clip(u_raw,input_saturation)",
+          "integral_update": "integral_error+=dt*(r_f-y) only if abs(u_raw)<=limit or sign(r_f-y)!=sign(u_raw)"
+        },
+        "anti_windup": "conditional_integration",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "delay_aware_PI": {
+      "label_cn": "延迟约束比例积分控制",
+      "required_parameters": ["kp", "ki", "reference_filter_rate"],
+      "controller_features": ["static_gain", "dominant_time_constant", "delay_bound"],
+      "optional_controller_features": [],
+      "route_guard_features": [],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "filtered_reference_PI_on_measured_output_error",
+        "state_variables": ["reference_filter_state", "integral_error"],
+        "update_order": [
+          "advance the reference filter using the recorded positive sample interval",
+          "form tracking error from filtered reference and measured output",
+          "form and clip the delay-constrained PI actuator command using the current integral state",
+          "commit the error integral only when unsaturated or when the error drives the raw command back toward the admissible interval"
+        ],
+        "equations": {
+          "reference_filter": "r_f+=dt*reference_filter_rate*(reference-r_f)",
+          "raw_actuator": "u_raw=kp*(r_f-y)+ki*integral_error",
+          "actuator_command": "u=clip(u_raw,input_saturation)",
+          "integral_update": "integral_error+=dt*(r_f-y) only if abs(u_raw)<=limit or sign(r_f-y)!=sign(u_raw)"
+        },
+        "anti_windup": "conditional_integration",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "notch_then_PI": {
+      "label_cn": "陷波器加比例积分控制",
+      "required_parameters": ["kp", "ki", "reference_filter_rate", "notch_center_rad_s", "notch_zero_damping", "notch_pole_damping"],
+      "controller_features": ["static_gain", "dominant_time_constant", "parasitic_mode_frequency"],
+      "optional_controller_features": ["delay_bound"],
+      "route_guard_features": ["fast_mode_presence"],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "filtered_reference_PI_then_stable_notch",
+        "state_variables": ["reference_filter_state", "integral_error", "notch_filter_state"],
+        "update_order": [
+          "advance the reference filter using the recorded positive sample interval",
+          "form tracking error and the PI signal using the current integral state",
+          "advance the stable notch state and form the notch-filtered raw actuator command",
+          "clip the actuator command to the frozen saturation",
+          "commit the error integral only when unsaturated or when the error drives the filtered raw command back toward the admissible interval"
+        ],
+        "equations": {
+          "reference_filter": "r_f+=dt*reference_filter_rate*(reference-r_f)",
+          "pi_signal": "v=kp*(r_f-y)+ki*integral_error",
+          "notch_filter": "u_raw=notch(v;notch_center_rad_s,notch_zero_damping,notch_pole_damping)",
+          "actuator_command": "u=clip(u_raw,input_saturation)",
+          "integral_update": "integral_error+=dt*(r_f-y) only if abs(u_raw)<=limit or sign(r_f-y)!=sign(u_raw)"
+        },
+        "anti_windup": "conditional_integration_after_notch",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "two_dof_pid": {
+      "label_cn": "参考前馈加两自由度 PID",
+      "required_parameters": ["feedforward_gain", "kp", "ki", "kd", "reference_filter_rate", "derivative_filter_rate"],
+      "controller_features": ["static_gain", "natural_frequency", "damping_ratio"],
+      "optional_controller_features": [],
+      "route_guard_features": [],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "filtered_reference_feedforward_PID_with_filtered_output_derivative",
+        "state_variables": ["reference_filter_state", "integral_error", "filtered_output_derivative", "previous_measured_output"],
+        "update_order": [
+          "advance the reference filter using the recorded positive sample interval",
+          "estimate and low-pass filter the measured-output derivative",
+          "form tracking error from filtered reference and measured output",
+          "form and clip the feedforward PID actuator command",
+          "commit the error integral only when unsaturated or when the error drives the raw command back toward the admissible interval"
+        ],
+        "equations": {
+          "reference_filter": "r_f+=dt*reference_filter_rate*(reference-r_f)",
+          "derivative_filter": "dy_f+=alpha*((y-y_previous)/dt-dy_f), alpha=1-exp(-derivative_filter_rate*dt)",
+          "raw_actuator": "u_raw=feedforward_gain*r_f+kp*(r_f-y)+ki*integral_error-kd*dy_f",
+          "actuator_command": "u=clip(u_raw,input_saturation)",
+          "integral_update": "integral_error+=dt*(r_f-y) only if abs(u_raw)<=limit or sign(r_f-y)!=sign(u_raw)"
+        },
+        "anti_windup": "conditional_integration",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "P_integrator": {
+      "label_cn": "积分对象比例控制",
+      "required_parameters": ["kp", "reference_filter_rate"],
+      "controller_features": ["derivative_gain"],
+      "optional_controller_features": [],
+      "route_guard_features": []
+    },
+    "PD_integrator": {
+      "label_cn": "积分运动对象比例微分控制",
+      "required_parameters": ["kp", "kd", "reference_filter_rate", "derivative_filter_rate"],
+      "controller_features": ["acceleration_gain"],
+      "optional_controller_features": ["drag_rate"],
+      "route_guard_features": [],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "filtered_reference_PD_on_integrating_plant_output",
+        "state_variables": ["reference_filter_state", "filtered_output_derivative", "previous_measured_output"],
+        "update_order": [
+          "advance the reference filter using the recorded positive sample interval",
+          "estimate and low-pass filter the measured-output derivative",
+          "form tracking error from filtered reference and measured output",
+          "form and clip the PD actuator command"
+        ],
+        "equations": {
+          "reference_filter": "r_f+=dt*reference_filter_rate*(reference-r_f)",
+          "derivative_filter": "dy_f+=alpha*((y-y_previous)/dt-dy_f), alpha=1-exp(-derivative_filter_rate*dt)",
+          "raw_actuator": "u_raw=kp*(r_f-y)-kd*dy_f",
+          "actuator_command": "u=clip(u_raw,input_saturation)"
+        },
+        "anti_windup": "not_applicable_no_controller_integrator",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "lead_lag_series": {
+      "label_cn": "串联超前滞后动态补偿",
+      "required_parameters": ["gain", "lead_zero_rate", "lead_pole_rate", "lag_zero_rate", "lag_pole_rate"],
+      "controller_features": ["velocity_gain", "slow_lag_rate", "fast_lag_rate"],
+      "optional_controller_features": [],
+      "route_guard_features": [],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "proper_series_lead_lag_on_unity_feedback_error",
+        "state_variables": ["lead_section_state", "lag_section_state"],
+        "update_order": [
+          "form tracking error from the public reference and measured output",
+          "advance the stable lead section state using the recorded positive sample interval",
+          "advance the stable lag section state from the lead-section output",
+          "multiply the cascade output by the frozen gain",
+          "clip the final command to the frozen actuator limits"
+        ],
+        "equations": {
+          "lead_section": "v_lead=e+(z_lead-p_lead)*x_lead; dx_lead=-p_lead*x_lead+e",
+          "lag_section": "v_lag=v_lead+(z_lag-p_lag)*x_lag; dx_lag=-p_lag*x_lag+v_lead",
+          "raw_actuator": "u_raw=gain*v_lag",
+          "actuator_command": "u=clip(u_raw,input_saturation)"
+        },
+        "parameter_ordering": "0 < lead_zero_rate < lead_pole_rate and 0 < lag_pole_rate <= lag_zero_rate",
+        "anti_windup": "not_applicable_no_integrator",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "cascaded_control": {
+      "label_cn": "局部不稳定内环 PD 加慢外环 PD",
+      "required_parameters": ["inner_kp", "inner_kd", "inner_target_rate", "outer_target_rate", "outer_damping", "internal_reference_limit", "reference_acceleration_scale"],
+      "controller_features": ["unstable_mode_rate", "angular_input_gain"],
+      "optional_controller_features": [],
+      "route_guard_features": ["sensing_actuation_adequacy", "control_authority"],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "measured_internal_PD_with_bounded_outer_acceleration_reference",
+        "state_variables": [],
+        "update_order": [
+          "compute outer desired acceleration from task position and velocity",
+          "convert desired acceleration to a bounded internal-variable reference",
+          "compute inner PD command from measured internal variable and rate",
+          "clip the final actuator command to the frozen saturation"
+        ],
+        "equations": {
+          "outer_desired_acceleration": "a_ref=outer_target_rate^2*(reference-position)-2*outer_damping*outer_target_rate*velocity",
+          "internal_reference": "internal_ref=clip(-a_ref/reference_acceleration_scale,+/-internal_reference_limit)",
+          "actuator_command": "u=clip(-inner_kp*(internal-internal_ref)-inner_kd*internal_rate,input_saturation)"
+        },
+        "anti_windup": "not_applicable_no_integrator",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "two_dof_PI": {
+      "label_cn": "非最小相位约束两自由度 PI",
+      "required_parameters": ["feedforward_gain", "kp", "ki", "reference_filter_rate"],
+      "controller_features": ["static_gain", "dominant_natural_frequency", "nmp_zero_rate_estimate"],
+      "optional_controller_features": [],
+      "route_guard_features": [],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "filtered_reference_feedforward_PI_on_measured_output_error",
+        "state_variables": ["reference_filter_state", "integral_error"],
+        "update_order": [
+          "advance the reference filter using the recorded positive sample interval",
+          "form tracking error from filtered reference and measured output",
+          "form and clip the frozen feedforward plus PI actuator command",
+          "commit the error integral only when unsaturated or when the error drives the raw command back toward the admissible interval"
+        ],
+        "equations": {
+          "reference_filter": "r_f+=dt*reference_filter_rate*(reference-r_f)",
+          "raw_actuator": "u_raw=feedforward_gain*r_f+kp*(r_f-y)+ki*integral_error",
+          "actuator_command": "u=clip(u_raw,input_saturation)",
+          "integral_update": "integral_error+=dt*(r_f-y) only if abs(u_raw)<=limit or sign(r_f-y)!=sign(u_raw)"
+        },
+        "anti_windup": "conditional_integration",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "local_PI_without_inverse": {
+      "label_cn": "局部斜率比例积分控制",
+      "required_parameters": ["Kp_virtual", "Ki_virtual", "reference_feedforward", "map_linear", "target_bandwidth"],
+      "controller_features": ["static_map_linear_coefficient", "dominant_time_constant"],
+      "optional_controller_features": [],
+      "route_guard_features": ["local_invertibility_margin"]
+    },
+    "partial_inverse_then_PI": {
+      "label_cn": "局部静态逆加比例积分控制",
+      "required_parameters": ["Kp_virtual", "Ki_virtual", "map_linear", "map_cubic", "target_bandwidth"],
+      "controller_features": ["static_map_linear_coefficient", "static_map_cubic_coefficient", "dominant_time_constant"],
+      "optional_controller_features": [],
+      "route_guard_features": ["local_invertibility_margin"]
+    },
+    "deadzone_right_inverse_then_PI": {
+      "label_cn": "死区右逆加比例积分控制",
+      "required_parameters": ["Kp_virtual", "Ki_virtual", "positive_deadzone", "negative_deadzone", "outer_slope", "virtual_noise_guard", "target_bandwidth"],
+      "controller_features": ["positive_deadzone_bound", "negative_deadzone_bound", "outer_static_slope", "dominant_time_constant"],
+      "optional_controller_features": [],
+      "route_guard_features": []
+    },
+    "reduced_low_order_PI": {
+      "label_cn": "任务频带降阶比例积分控制",
+      "required_parameters": ["kp", "ki", "reference_filter_rate", "target_bandwidth"],
+      "controller_features": ["task_band_magnitude_at_crossover"],
+      "optional_controller_features": [],
+      "route_guard_features": ["low_order_residual_index", "amplitude_dependence_index"]
+    },
+    "phase_guarded_2dof_PI": {
+      "label_cn": "相位保护两自由度 PI",
+      "required_parameters": ["kp", "ki", "reference_filter_rate", "target_bandwidth"],
+      "controller_features": ["task_band_magnitude_at_crossover", "phase_guard_frequency"],
+      "optional_controller_features": [],
+      "route_guard_features": ["low_order_residual_index", "amplitude_dependence_index"]
+    },
+    "local_fixed_PID": {
+      "label_cn": "局部固定 PID",
+      "required_parameters": ["kp", "ki", "kd", "feedforward", "input_gain_estimate", "target_bandwidth"],
+      "controller_features": ["modal_frequency", "input_gain", "base_decay_rate"],
+      "optional_controller_features": [],
+      "route_guard_features": ["minimum_decay_rate", "damping_change_fraction", "amplitude_dependence_index", "release_model_fit_r2"],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "measured_state_fixed_PID_with_feedforward",
+        "state_variables": ["integral_error"],
+        "update_order": [
+          "compute position error from the frozen reference and measured position",
+          "form and clip the fixed PID actuator command using measured velocity and the current integral state",
+          "advance the integral state with frozen back-calculation anti-windup"
+        ],
+        "equations": {
+          "raw_actuator": "u_raw=feedforward*reference+kp*(reference-position)+integral_error-kd*velocity",
+          "actuator_command": "u=clip(u_raw,input_saturation)",
+          "integral_update": "integral_error+=dt*(ki*(reference-position)+antiwindup_gain*(u-u_raw))"
+        },
+        "anti_windup": "back_calculation_with_frozen_gain",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "scheduled_damping_PID": {
+      "label_cn": "阻尼调度 PID",
+      "required_parameters": ["kp", "ki", "kd", "feedforward", "input_gain_estimate", "base_decay", "quadratic_decay", "desired_damping", "target_bandwidth", "antiwindup_gain"],
+      "controller_features": ["modal_frequency", "input_gain", "base_decay_rate", "quadratic_decay_rate"],
+      "optional_controller_features": [],
+      "route_guard_features": ["minimum_decay_rate", "damping_change_fraction", "amplitude_dependence_index", "release_model_fit_r2"],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "measured_state_PID_with_positive_region_amplitude_dependent_damping_schedule",
+        "state_variables": ["integral_error"],
+        "update_order": [
+          "compute position error from the frozen reference and measured position",
+          "estimate local plant decay from the frozen base and quadratic decay coefficients",
+          "compute a nonnegative scheduled derivative gain from measured position",
+          "form and clip the actuator command using the current integral state",
+          "advance the integral state with frozen back-calculation anti-windup"
+        ],
+        "equations": {
+          "plant_decay": "d_hat=base_decay+quadratic_decay*position^2",
+          "scheduled_derivative": "kd_hat=max((2*desired_damping*target_bandwidth-2*d_hat)/input_gain_estimate,0)",
+          "raw_actuator": "u_raw=feedforward*reference+kp*(reference-position)+integral_error-kd_hat*velocity",
+          "actuator_command": "u=clip(u_raw,input_saturation)",
+          "integral_update": "integral_error+=dt*(ki*(reference-position)+antiwindup_gain*(u-u_raw))"
+        },
+        "anti_windup": "back_calculation_with_frozen_gain",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "decentralized_channel_PI": {
+      "label_cn": "配对去中心化 PI",
+      "required_parameter_prefixes": ["kp_", "ki_", "input_map_"],
+      "required_parameters": ["target_bandwidth"],
+      "controller_features": ["local_gain_k11", "local_gain_k12", "local_gain_k21", "local_gain_k22", "paired_time_constant_1", "paired_time_constant_2", "gain_matrix_condition", "inband_static_decoupler_residual"],
+      "optional_controller_features": [],
+      "route_guard_features": ["dc_static_cross_ratio", "dc_rga_deviation", "pairing_bootstrap_probability"],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "two_virtual_PI_channels_through_static_input_map",
+        "state_variables": ["integral_error_1", "integral_error_2"],
+        "update_order": [
+          "form both public output errors from the shared frozen reference",
+          "form candidate integral states using the recorded positive sample interval",
+          "form both virtual PI commands and apply the frozen 2x2 input map",
+          "clip both actuator commands to the frozen per-channel saturation",
+          "commit both candidate integrals only when neither raw actuator command is saturated"
+        ],
+        "equations": {
+          "candidate_integral": "I_candidate=I+error*dt",
+          "virtual_command": "v=kp*error+ki*I_candidate",
+          "raw_actuator": "u_raw=input_map*v",
+          "actuator_command": "u=clip(u_raw,input_saturation)"
+        },
+        "anti_windup": "all-channel conditional integration",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    },
+    "static_decoupler_then_PI": {
+      "label_cn": "静态解耦器加双通道 PI",
+      "required_parameter_prefixes": ["kp_", "ki_", "input_map_"],
+      "required_parameters": ["target_bandwidth"],
+      "controller_features": ["local_gain_k11", "local_gain_k12", "local_gain_k21", "local_gain_k22", "paired_time_constant_1", "paired_time_constant_2", "gain_matrix_condition", "inband_static_decoupler_residual"],
+      "optional_controller_features": [],
+      "route_guard_features": ["static_inverse_amplification", "pairing_bootstrap_probability"]
+    },
+    "lag_dynamic_decoupler_then_PI": {
+      "label_cn": "稳定滞后基动态解耦器加双通道 PI",
+      "required_parameter_prefixes": ["kp_", "ki_", "dynamic_map_base_", "dynamic_map_lag1_", "dynamic_map_lag2_", "dynamic_map_lag3_"],
+      "required_parameters": ["target_bandwidth", "dynamic_filter_tau_1", "dynamic_filter_tau_2", "dynamic_filter_tau_3"],
+      "controller_features": [
+        "paired_time_constant_1", "paired_time_constant_2",
+        "dynamic_map_base_11", "dynamic_map_base_12", "dynamic_map_base_21", "dynamic_map_base_22",
+        "dynamic_map_lag1_11", "dynamic_map_lag1_12", "dynamic_map_lag1_21", "dynamic_map_lag1_22",
+        "dynamic_map_lag2_11", "dynamic_map_lag2_12", "dynamic_map_lag2_21", "dynamic_map_lag2_22",
+        "dynamic_map_lag3_11", "dynamic_map_lag3_12", "dynamic_map_lag3_21", "dynamic_map_lag3_22"
+      ],
+      "optional_controller_features": [],
+      "route_guard_features": [
+        "gain_matrix_condition", "static_inverse_amplification",
+        "inband_static_decoupler_residual", "pairing_bootstrap_probability",
+        "dynamic_decoupler_fit_residual", "dynamic_inverse_peak_amplification"
+      ],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "form": "two_virtual_PI_channels_through_DC_preserving_stable_lag_input_map",
+        "state_variables": ["integral_error_1", "integral_error_2", "three_two_channel_lag_states"],
+        "update_order": [
+          "form candidate integral states from both output errors and recorded dt",
+          "form both virtual PI commands using the candidate integrals",
+          "advance each stable lag state toward the virtual command using recorded dt",
+          "apply the DC base map plus lag corrections to the virtual commands",
+          "clip both actuator commands to the frozen saturation",
+          "commit both candidate integrals only when neither raw actuator command is saturated"
+        ],
+        "equations": {
+          "candidate_integral": "I_candidate=I+error*dt",
+          "virtual_command": "v=kp*error+ki*I_candidate",
+          "lag_update": "z_k=z_k+dt*(v-z_k)/dynamic_filter_tau_k",
+          "raw_actuator": "u_raw=D_base*v+sum_k(D_lag_k*(z_k-v))",
+          "actuator_command": "u=clip(u_raw,input_saturation)"
+        },
+        "anti_windup": "all-channel conditional integration",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    }
+  },
+  "class_subtypes": {
+    "I": {
+      "I_SELF_REGULATING_DOMINANT_LAG": {
+        "label_cn": "稳定自调节主导滞后结构",
+        "evidence": ["有限局部静态增益", "撤去增量输入后恢复", "一个任务带主时间尺度充分"],
+        "controller_features": ["static_gain", "dominant_time_constant"],
+        "route_guard_features": [],
+        "routes": ["PI"],
+        "capability_boundary": "只在声明工作区和已验证任务频带内使用，不声称对象全局一阶"
+      },
+      "I_DELAY_RELEVANT": {
+        "label_cn": "延迟相对任务带宽不可忽略的自调节结构",
+        "evidence": ["重复响应支持正延迟", "延迟上界相对目标时间尺度不可忽略"],
+        "controller_features": ["static_gain", "dominant_time_constant", "delay_bound"],
+        "route_guard_features": [],
+        "routes": ["delay_aware_PI"],
+        "capability_boundary": "延迟只作局部带宽约束，不等于已辨识全部输运机理"
+      },
+      "I_STABLE_PARASITIC_MODE": {
+        "label_cn": "稳定主滞后叠加可激发快速寄生模态",
+        "evidence": ["任务带外快速稳定共振可重复", "模态频率高于主环带宽但可能被命令激发"],
+        "controller_features": ["static_gain", "dominant_time_constant", "parasitic_mode_frequency"],
+        "route_guard_features": [],
+        "routes": ["notch_then_PI"],
+        "capability_boundary": "陷波只衰减稳定共振，不能冒充不稳定模态的内环稳定器"
+      }
+    },
+    "II": {
+      "II_SECOND_ORDER_RESTORING": {
+        "label_cn": "具有静态恢复作用的二阶主导结构",
+        "evidence": ["有限静态增益", "欠阻尼、临界或两个任务带稳定实极点之一", "二阶候选通过残差比较"],
+        "controller_features": ["static_gain", "natural_frequency", "damping_ratio"],
+        "route_guard_features": [],
+        "routes": ["two_dof_pid"],
+        "capability_boundary": "自然频率和阻尼比是局部聚合特征；两个稳定实极点不得改称双积分"
+      }
+    },
+    "III": {
+      "III_SINGLE_INTEGRATOR": {
+        "label_cn": "单积分主导运动结构",
+        "evidence": ["无静态恢复", "恒定小输入导致持续斜坡", "单积分候选通过残差比较"],
+        "controller_features": ["derivative_gain"],
+        "route_guard_features": [],
+        "routes": ["P_integrator"],
+        "capability_boundary": "只授权声明行程内的位置反馈；摩擦、延迟和快模态变化需重测"
+      },
+      "III_ACCELERATION_DOMINANT": {
+        "label_cn": "双积分或带黏性阻力的积分运动结构",
+        "evidence": ["无静态恢复", "加速度增益可由重复脉冲估计", "阻力率可选"],
+        "controller_features": ["acceleration_gain"],
+        "route_guard_features": [],
+        "routes": ["PD_integrator"],
+        "capability_boundary": "阻力率是可选特征，不得用两个稳定滞后替代积分证据"
+      },
+      "III_INTEGRATING_SERVO_WITH_STABLE_LAGS": {
+        "label_cn": "单积分叠加两个可分辨稳定滞后的伺服结构",
+        "evidence": ["无静态恢复", "任务频带模态实验支持单积分与两个稳定滞后", "两滞后速率和速度增益具有正置信下界"],
+        "controller_features": ["velocity_gain", "slow_lag_rate", "fast_lag_rate"],
+        "route_guard_features": [],
+        "routes": ["lead_lag_series"],
+        "capability_boundary": "只适用于公开 step+ramp 合同、已探测任务频带和两个可分辨稳定滞后；逆响应、未解析高阶相位或所需超前超过注册范围时必须保留能力缺口"
+      }
+    },
+    "IV": {
+      "IV_UNSTABLE_NMP_INTERNAL": {
+        "label_cn": "不稳定且具有内部可测变量的欠驱动/非最小相位结构",
+        "evidence": ["不稳定增长证据", "内部变量可测", "执行器对不稳定模态的有符号增益"],
+        "controller_features": ["unstable_mode_rate", "angular_input_gain"],
+        "route_guard_features": ["sensing_actuation_adequacy", "control_authority"],
+        "routes": ["cascaded_control", "unstable_balance_input_gain_capability_gap", "unstable_balance_sensing_capability_gap", "unstable_balance_authority_capability_gap"],
+        "capability_boundary": "缺少内部变量或控制权下界时不得生成平衡控制器"
+      },
+      "IV_STABLE_OUTPUT_NMP": {
+        "label_cn": "稳定输出侧非最小相位结构",
+        "evidence": ["可重复逆响应", "稳定局部增益", "无不稳定零点消除"],
+        "controller_features": ["static_gain", "dominant_natural_frequency", "nmp_zero_rate_estimate"],
+        "route_guard_features": ["inverse_response_recovery_time"],
+        "routes": ["two_dof_PI", "two_degree_of_freedom_PI", "low_bandwidth_PI"],
+        "capability_boundary": "经验恢复时间只能作为带宽守卫，不能冒充物理 RHP 零点"
+      },
+      "IV_STABLE_HIGH_ORDER_MINIMUM_PHASE": {
+        "label_cn": "稳定高阶最小相位任务频带结构",
+        "evidence": ["低阶残差显著", "任务频带相位损失", "未观察到逆响应"],
+        "controller_features": ["task_band_magnitude_at_crossover", "phase_guard_frequency"],
+        "route_guard_features": ["low_order_residual_index", "amplitude_dependence_index"],
+        "routes": ["phase_guarded_2dof_PI"],
+        "capability_boundary": "只在已探测频带和局部工作区有效，不进行高阶极零消除"
+      },
+      "IV_STABLE_AMPLITUDE_DEPENDENT_DAMPING": {
+        "label_cn": "稳定幅值相关阻尼结构",
+        "evidence": ["多幅值衰减差异", "测试区域最小阻尼为正", "位置和速度可测"],
+        "controller_features": ["modal_frequency", "input_gain", "base_decay_rate", "quadratic_decay_rate"],
+        "route_guard_features": ["minimum_decay_rate", "damping_change_fraction", "amplitude_dependence_index", "release_model_fit_r2"],
+        "routes": ["scheduled_damping_PID"],
+        "capability_boundary": "仅在正衰减已验证的幅值区域内允许调度"
+      },
+      "IV_SELF_EXCITED_OR_UNRESOLVED_NONLINEAR": {
+        "label_cn": "自激或未解析动态非线性结构",
+        "evidence": ["负局部衰减、自激极限环或幅值证据冲突"],
+        "controller_features": [],
+        "route_guard_features": ["minimum_decay_rate", "amplitude_dependence_index", "release_model_fit_r2"],
+        "routes": ["dynamic_nonlinearity_capability_gap"],
+        "capability_boundary": "当前不以固定 PID、滑模或 MPC 进行未验证替代"
+      },
+      "IV_UNRESOLVED_HIGH_ORDER": {
+        "label_cn": "高阶充分性未解析结构",
+        "evidence": ["低阶残差置信区间跨越决策边界"],
+        "controller_features": [],
+        "route_guard_features": ["low_order_residual_index", "phase_guard_frequency"],
+        "routes": ["high_order_capability_gap"],
+        "capability_boundary": "补充频带证据或保留能力缺口"
+      }
+    },
+    "V": {
+      "V_CHANNELWISE_PAIRABLE": {
+        "label_cn": "可可靠配对的弱耦合多变量结构",
+        "evidence": ["配对置信度充分", "静态交叉比和 RGA 偏差较小", "带内残差可接受"],
+        "controller_features": ["local_gain_k11", "local_gain_k12", "local_gain_k21", "local_gain_k22", "paired_time_constant_1", "paired_time_constant_2", "gain_matrix_condition", "inband_static_decoupler_residual"],
+        "route_guard_features": ["pairing_bootstrap_probability", "dc_static_cross_ratio", "dc_rga_deviation"],
+        "routes": ["decentralized_channel_PI"],
+        "capability_boundary": "各配对通道的 I-IV 子结构仍需分别辨识，当前只实现稳定低阶 PI"
+      },
+      "V_STATIC_COUPLING_WELL_CONDITIONED": {
+        "label_cn": "良态静态耦合多变量结构",
+        "evidence": ["DC 增益矩阵可逆且良态", "静态解耦后带内残差可接受"],
+        "controller_features": ["local_gain_k11", "local_gain_k12", "local_gain_k21", "local_gain_k22", "paired_time_constant_1", "paired_time_constant_2", "gain_matrix_condition", "inband_static_decoupler_residual"],
+        "route_guard_features": ["static_inverse_amplification", "pairing_bootstrap_probability"],
+        "routes": ["static_decoupler_then_PI"],
+        "capability_boundary": "工作点或频带变化后必须重新验证静态解耦"
+      },
+      "V_DYNAMIC_COUPLING": {
+        "label_cn": "任务频带内动态耦合结构",
+        "evidence": ["静态解耦后带内残差仍显著或交叉动态时间尺度不同"],
+        "controller_features": [
+          "paired_time_constant_1", "paired_time_constant_2",
+          "dynamic_map_base_11", "dynamic_map_base_12", "dynamic_map_base_21", "dynamic_map_base_22",
+          "dynamic_map_lag1_11", "dynamic_map_lag1_12", "dynamic_map_lag1_21", "dynamic_map_lag1_22",
+          "dynamic_map_lag2_11", "dynamic_map_lag2_12", "dynamic_map_lag2_21", "dynamic_map_lag2_22",
+          "dynamic_map_lag3_11", "dynamic_map_lag3_12", "dynamic_map_lag3_21", "dynamic_map_lag3_22"
+        ],
+        "route_guard_features": ["gain_matrix_condition", "static_inverse_amplification", "inband_static_decoupler_residual", "pairing_bootstrap_probability", "dynamic_decoupler_fit_residual", "dynamic_inverse_peak_amplification"],
+        "routes": ["lag_dynamic_decoupler_then_PI", "dynamic_mimo_capability_gap"],
+        "capability_boundary": "仅支持已测 2x2、良态 DC 矩阵及任务频带内可由固定稳定滞后基近似的局部动态解耦；不覆盖鲁棒 MIMO、在线适应或全局对象变化"
+      },
+      "V_FRAGILE_STATIC_INVERSION": {
+        "label_cn": "静态逆病态或控制分配脆弱结构",
+        "evidence": ["增益矩阵条件数或逆放大过大"],
+        "controller_features": [],
+        "route_guard_features": ["gain_matrix_condition", "static_inverse_amplification"],
+        "routes": ["static_decoupling_capability_gap"],
+        "capability_boundary": "不得用缩放后的病态静态逆冒充可靠解耦"
+      },
+      "V_UNRESOLVED_PAIRING": {
+        "label_cn": "输入输出配对证据不足结构",
+        "evidence": ["bootstrap 配对概率不足或灰区"],
+        "controller_features": [],
+        "route_guard_features": ["pairing_bootstrap_probability"],
+        "routes": ["mimo_pairing_capability_gap"],
+        "capability_boundary": "补充联合激励，不猜测配对"
+      },
+      "V_NONSQUARE_OR_UNDERACTUATED": {
+        "label_cn": "非方阵或欠驱动多变量结构",
+        "evidence": ["输入输出数量不等或部分任务方向无控制权"],
+        "controller_features": [],
+        "route_guard_features": ["controllability_direction_evidence"],
+        "routes": ["mimo_allocation_capability_gap"],
+        "capability_boundary": "当前 2x2 执行器不覆盖控制分配与欠驱动 MIMO"
+      }
+    }
+  },
+  "route_to_subtype": {
+    "PI": "I_SELF_REGULATING_DOMINANT_LAG",
+    "delay_aware_PI": "I_DELAY_RELEVANT",
+    "notch_then_PI": "I_STABLE_PARASITIC_MODE",
+    "two_dof_pid": "II_SECOND_ORDER_RESTORING",
+    "P_integrator": "III_SINGLE_INTEGRATOR",
+    "PD_integrator": "III_ACCELERATION_DOMINANT",
+    "lead_lag_series": "III_INTEGRATING_SERVO_WITH_STABLE_LAGS",
+    "cascaded_control": "IV_UNSTABLE_NMP_INTERNAL",
+    "unstable_balance_input_gain_capability_gap": "IV_UNSTABLE_NMP_INTERNAL",
+    "unstable_balance_sensing_capability_gap": "IV_UNSTABLE_NMP_INTERNAL",
+    "unstable_balance_authority_capability_gap": "IV_UNSTABLE_NMP_INTERNAL",
+    "two_dof_PI": "IV_STABLE_OUTPUT_NMP",
+    "two_degree_of_freedom_PI": "IV_STABLE_OUTPUT_NMP",
+    "low_bandwidth_PI": "IV_STABLE_OUTPUT_NMP",
+    "phase_guarded_2dof_PI": "IV_STABLE_HIGH_ORDER_MINIMUM_PHASE",
+    "scheduled_damping_PID": "IV_STABLE_AMPLITUDE_DEPENDENT_DAMPING",
+    "dynamic_nonlinearity_capability_gap": "IV_SELF_EXCITED_OR_UNRESOLVED_NONLINEAR",
+    "high_order_capability_gap": "IV_UNRESOLVED_HIGH_ORDER",
+    "decentralized_channel_PI": "V_CHANNELWISE_PAIRABLE",
+    "static_decoupler_then_PI": "V_STATIC_COUPLING_WELL_CONDITIONED",
+    "lag_dynamic_decoupler_then_PI": "V_DYNAMIC_COUPLING",
+    "dynamic_mimo_capability_gap": "V_DYNAMIC_COUPLING",
+    "static_decoupling_capability_gap": "V_FRAGILE_STATIC_INVERSION",
+    "mimo_pairing_capability_gap": "V_UNRESOLVED_PAIRING",
+    "mimo_allocation_capability_gap": "V_NONSQUARE_OR_UNDERACTUATED"
+  }
+}

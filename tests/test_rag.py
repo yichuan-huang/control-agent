@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from cfdc.knowledge import RetrievalRequest
 from cfdc.rag import build_index, load_index
 
 
@@ -107,3 +108,13 @@ def test_missing_or_corrupt_index_fails_loudly(tmp_path):
     (index_dir / "CURRENT").write_text("snapshot-does-not-exist", encoding="utf-8")
     with pytest.raises(ValueError, match="corrupt"):
         load_index(index_dir)
+
+
+def test_legacy_search_includes_builtin_registry_and_prioritizes_exact_id(tmp_path):
+    index = build_index(None, tmp_path / "index", encoder=FakeEncoder())
+    results = index.retrieve(
+        RetrievalRequest(role="all", operation="query", summary="first_order_lag")
+    )
+    assert results
+    assert results[0].artifact_id == "first_order_lag"
+    assert results[0].source_kind == "builtin_registry"

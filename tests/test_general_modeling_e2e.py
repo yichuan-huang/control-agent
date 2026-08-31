@@ -13,7 +13,6 @@ from cfdc.lab import (
     run_next_trial,
 )
 from cfdc.models import SystemDescription
-from cfdc.web.model_discovery_presentation import render_model_discovery
 from tests.test_model_discovery_llm import _evidence
 from tests.test_model_discovery_session import stage5_snapshot
 
@@ -388,9 +387,6 @@ def test_all_explicit_examples_reach_confirmed_simulation_without_initial_bound_
     assert session.current_questions == []
     assert session.pending_envelope.model_role == "example_hypothesis"
     assert {answer.source for answer in session.answers} == {"user_adopted_example"}
-    model_card = render_model_discovery(session)["model_card_markdown"]
-    assert "偏差坐标" in model_card
-    assert "相对起始值的目标变化 temperature" in model_card
     confirmed = confirm_generated_model(
         session,
         expected_revision=session.revision,

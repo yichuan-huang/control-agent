@@ -109,6 +109,29 @@ class SearchResult:
     def content(self) -> str:
         return self.text
 
+    def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-safe provenance record for audit and UI projections."""
+
+        return {
+            "text": self.text,
+            "content": self.text,
+            "source_path": self.source_path,
+            "source_id": self.source_id,
+            "content_hash": self.content_hash,
+            "section": self.section,
+            "page": self.page,
+            "score": self.score,
+            "artifact_type": self.artifact_type,
+            "artifact_id": self.artifact_id,
+            "source_kind": self.source_kind,
+            "canonical_class": self.canonical_class,
+            "profile_id": self.profile_id,
+            "rule_id": self.rule_id,
+            "source_aliases": [dict(item) for item in self.source_aliases],
+            "dense_score": self.dense_score,
+            "lexical_score": self.lexical_score,
+        }
+
 
 @dataclass(frozen=True)
 class _SourceRecord:
@@ -667,6 +690,7 @@ class RAGIndex:
         if len(self._rows) != len(self._vectors):
             raise ValueError("RAG metadata/vector row count mismatch")
         self._query_cache: OrderedDict[str, tuple[SearchResult, ...]] = OrderedDict()
+        self._tokenizer = _tokenizer_for_encoder(self.encoder)
 
     def _load_metadata(self) -> list[dict[str, Any]]:
         try:
@@ -739,7 +763,7 @@ class RAGIndex:
         self, query: str, allowed: set[int]
     ) -> list[tuple[int, float]]:
         fts_query = _fts_query(query)
-        candidates: list[tuple[int, float]] = []
+        candidates: list[tuple[int, float, bool]] = []
         if fts_query:
             try:
                 with sqlite3.connect(self._db) as conn:
@@ -905,20 +929,33 @@ class RAGIndex:
                 rrf += 1.0 / (RRF_K + dense_rank[index])
             if index in lexical_rank:
                 rrf += 1.0 / (RRF_K + lexical_rank[index])
-            candidates.append((index, rrf))
-        candidates.sort(key=lambda item: (-item[1], self._rows[item[0]]["source_id"]))
+            # A canonical rule/profile/feature ID is a deterministic lookup
+            # key.  Keep exact ID hits ahead of approximate dense/lexical
+            # matches so a query such as ``first_order_lag`` cannot be crowded
+            # out by semantically broad mechanism-card text.
+            candidates.append((index, rrf, exact))
+        candidates.sort(
+            key=lambda item: (
+                -int(item[2]),
+                -item[1],
+                self._rows[item[0]]["source_id"],
+            )
+        )
         selected: list[SearchResult] = []
         per_document: defaultdict[str, int] = defaultdict(int)
         token_budget = MAX_REFERENCE_TOKENS
         max_per_document = (
             MAX_RESULTS if request.operation == "search" else MAX_RESULTS_PER_DOCUMENT
         )
-        for index, rrf in candidates:
+        for index, rrf, _exact in candidates:
             row = self._rows[index]
             document_key = str(row.get("source_path") or row["source_id"])
             if per_document[document_key] >= max_per_document:
                 continue
-            token_count = len(_fallback_token_spans(str(row["text"])))
+            token_count = len(
+                _model_token_spans(str(row["text"]), self._tokenizer)
+                or _fallback_token_spans(str(row["text"]))
+            )
             if token_count > token_budget:
                 continue
             selected.append(
@@ -943,6 +980,9 @@ class RAGIndex:
         """Compatibility wrapper around structured retrieval."""
 
         return self.retrieve(
+            # Preserve the original ``search`` behavior (external documents
+            # only); structured role callers can request builtin Registry
+            # artifacts explicitly with ``role="all"`` or a configured role.
             RetrievalRequest(role="legacy", operation="search", summary=str(query)),
             limit=limit,
         )

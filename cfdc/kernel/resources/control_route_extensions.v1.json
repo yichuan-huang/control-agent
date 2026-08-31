@@ -1,0 +1,95 @@
+{
+  "extension_version": "1.0.0",
+  "base_registry": "control_route_registry.json",
+  "controller_contracts": {
+    "self_excitation_energy_guarded_PID": {
+      "label_cn": "自激振荡能量捕获与守卫切换 PID",
+      "required_parameters": [
+        "capture_damping_gain",
+        "capture_target_damping_ratio",
+        "kp",
+        "ki",
+        "kd",
+        "feedforward",
+        "input_gain_estimate",
+        "target_bandwidth",
+        "antiwindup_gain",
+        "handoff_amplitude",
+        "handoff_hysteresis",
+        "handoff_dwell_s",
+        "envelope_filter_rate"
+      ],
+      "controller_features": [
+        "modal_frequency",
+        "signed_input_gain",
+        "small_amplitude_decay_rate",
+        "quadratic_decay_rate"
+      ],
+      "optional_controller_features": [],
+      "route_guard_features": [
+        "zero_decay_crossing_amplitude",
+        "release_model_fit_r2"
+      ],
+      "runtime_contract": {
+        "version": "1.0.0",
+        "ir_id": "capture_damping_then_local_hold_pid_v1",
+        "form": "energy_damping_capture_guarded_handoff_then_local_hold_PID",
+        "state_variables": [
+          "integral_error",
+          "capture_or_hold_mode",
+          "oscillation_envelope",
+          "handoff_dwell_elapsed_s"
+        ],
+        "update_order": [
+          "update the nonnegative oscillation envelope from measured position and velocity",
+          "in capture mode hold the equilibrium reference and inject bounded measured-velocity damping",
+          "enter hold only after the frozen envelope guard remains true for the frozen dwell time",
+          "in hold mode compute the frozen local PID command with conditional recovery to capture",
+          "clip every raw command to the frozen task input limit",
+          "update the integral state with frozen back-calculation anti-windup"
+        ],
+        "equations": {
+          "capture_command": "u_raw=-capture_damping_gain*measured_velocity",
+          "hold_command": "u_raw=feedforward*reference+kp*(reference-position)+integral_error-kd*velocity",
+          "handoff_guard": "envelope<=handoff_amplitude continuously for handoff_dwell_s",
+          "recovery_guard": "envelope>handoff_amplitude+handoff_hysteresis",
+          "actuator_command": "u=clip(u_raw,input_saturation)",
+          "integral_update": "integral_error+=dt*(ki*(reference-position)+antiwindup_gain*(u-u_raw))"
+        },
+        "anti_windup": "back_calculation_with_frozen_gain",
+        "time_base": "provider-recorded positive sample interval"
+      }
+    }
+  },
+  "class_subtypes": {
+    "IV": {
+      "IV_SELF_EXCITED_LOCAL_OSCILLATION": {
+        "label_cn": "局部自激单模态振荡",
+        "evidence": [
+          "小幅 release 衰减率 95% 上界小于零",
+          "外幅 release 衰减率 95% 下界大于零",
+          "单模态 release 拟合通过且零衰减交点位于测试幅值内",
+          "带符号输入增益区间排除零且位置速度可测"
+        ],
+        "controller_features": [
+          "modal_frequency",
+          "signed_input_gain",
+          "small_amplitude_decay_rate",
+          "quadratic_decay_rate"
+        ],
+        "route_guard_features": [
+          "zero_decay_crossing_amplitude",
+          "release_model_fit_r2"
+        ],
+        "routes": ["self_excitation_energy_guarded_PID"],
+        "capability_boundary": "仅限公开 release 覆盖的单模态局部区域、测得位置速度和有界双向执行器；不含全局分岔控制、鲁棒性、MPC、在线适应或物理授权"
+      }
+    }
+  },
+  "route_to_subtype": {
+    "self_excitation_energy_guarded_PID": "IV_SELF_EXCITED_LOCAL_OSCILLATION"
+  },
+  "implementation_route_ids": {
+    "self_excitation_energy_guarded_PID": "class_iv_self_excited_local_oscillation_suppression_v1"
+  }
+}

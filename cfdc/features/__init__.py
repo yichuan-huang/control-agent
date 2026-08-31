@@ -35,3 +35,6 @@ __all__ = [
     "low_pass_filter",
     "steady_state_detected",
 ]
+from .kernel import FeatureArtifact, derive_feature_artifact
+
+__all__ = ["FeatureArtifact", "derive_feature_artifact"]

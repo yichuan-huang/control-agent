@@ -2,192 +2,278 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。系统只运行软件模型仿真，不向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.0` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
-## 主流程
+## 最快开始：WebUI + Ollama
 
-```text
-1 问题描述与八项 checklist
-→ 2 系统分类
-→ 3 核心参数测量计划
-→ 4 参数回填与模型编译
-→ 5 初始控制器
-→ 6 效果验证与调优
-```
+下面的步骤使用已经验收过的本地模型 `gemma3:4b`。Ollama 只负责理解自然语言回复；路线、实验、控制器、数值评价和最终结论仍由 Kernel 决定。
 
-通用 Web 与 CLI 流程必须配置 OpenAI-compatible LLM 服务。流程从一段自然语言控制问题描述开始。八项 checklist 是结构描述检查，不是第二份测量表：AI 提取的证据必须逐字存在于问题描述中，并且确定性诊断后端能够解释；缺少或无法解释的项目保持空心圈，用户直接在原“控制问题描述”栏继续补充。描述补充和所选 Profile 的参数回填各自最多进行 8 轮；未知值始终保留为缺口，不会被虚构默认值填补。
-
-八项全部核验后，系统自动完成分类和闭目录 Profile 选择。完成的 checklist 折叠为可回看的“8/8 已完成”，统一回复框只显示该 Profile 真正缺少的参数，例如输入/输出变化量及单位、约 63% 响应时间、仅在适用时的显著纯时延，以及软件仿真的输入/输出边界。问题描述中已经明确给出的参数会自动预填；回答“不知道”时保留缺口。
-
-八项描述证据全部核验前，正式分类和闭集 Profile 选择都保持为空。分类只用于选择模型族，不能提供对象数值。每个系数、矩阵元素、物理参数、工作范围和试验条件都必须来自问题原文、已提交的记录/手册事实，或可复算的确定性派生。Profile 参数完整后，后端确定性编译模型并生成初始控制器候选。
-
-运行时不会按题号、案例 ID 或 Profile 查找对象模型。`dataset/` 下的 200 道 Markdown 问题只用于离线研究和评测，不被生产代码导入。
-
-## 支持的模型
-
-- 连续/离散 SISO 传递函数，包括显式输入时延。
-- 连续/离散 SISO/MIMO 状态空间模型。
-- 注册非线性模板 `underactuated_cartpole` 和 `vtol_cascaded`。
-- 用户确认工作点和有效范围附近的局部线性传递函数或状态空间假设。
-
-LLM 只能返回严格类型化数据。任意 Python、MATLAB、ODE 字符串、动态导入、回调、URL、模块路径和表达式求值都会被拒绝。局部模型轨迹一旦越出确认范围，试验立即以 `inconclusive` 终止，不能继续调增益。
-
-## 目录
-
-| 路径 | 职责 |
-| --- | --- |
-| `cfdc/lab/model_contracts.py` | 严格模型问题、事实、模型信封、有效范围和试验契约。 |
-| `cfdc/lab/model_discovery.py` | 带 revision 与内容哈希的模型发现状态机。 |
-| `cfdc/lab/model_discovery_llm.py` | 对 `need_more`、`ready`、`rejected` 的脱敏 LLM 调用和校验。 |
-| `cfdc/lab/controller_compatibility.py` | 控制器/模型兼容性与类型化确定性替代建议。 |
-| `cfdc/lab/model_validity.py` | 局部线性假设的运行时有效范围门。 |
-| `cfdc/lab/resources/` | 与 200 题无关的版本化通用建模问题示例。 |
-| `cfdc/web/linked_tuning_service.py` | 已编译对象模型与第五步控制器到效果验证会话的链接服务。 |
-| `cfdc/web/model_discovery_presentation.py` | 通俗语言与数学方程混合模型卡。 |
-| `cfdc/web/linked_tuning_ui.py` | “调优与适应”中的效果验证、AI 增益建议和审批界面。 |
-| `cfdc/sim/` | 确定性线性、CartPole 和 VTOL 仿真后端。 |
-| `dataset/` | 原始 200 题 Markdown 数据集；生产代码不导入。 |
-| `tests/` | 契约、安全、状态机、仿真、Web 和端到端测试。 |
-
-## 安装与测试
-
-1. 克隆仓库并进入项目目录：
-
-```bash
-git clone https://github.com/yichuan-huang/control-agent.git
-cd control-agent
-```
-
-2. 安装 uv 并同步项目环境：
+1. 安装依赖并准备模型：
 
 ```bash
 uv sync
+uv run python -m compileall -q cfdc tests main.py app.py
+ollama pull gemma3:4b
 ```
 
-uv 会读取 `.python-version` 中的 Python 版本，需要时自动安装受 uv 管理的 Python 3.12，
-创建 `.venv`，并安装项目及开发工具。使用 `uv run` 时不需要手动激活环境。
-
-本地 RAG 是可选依赖；需要建立 PDF/Markdown 索引时再同步：
+2. 确认 Ollama 正在运行。macOS 桌面版通常会自动启动服务；否则另开终端运行：
 
 ```bash
-uv sync --extra rag
-# 省略 --source-dir 时只建立内置 Registry、机制卡和能力目录
-uv run python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
-# 查看快照和语料覆盖（不加载 embedding）
-uv run python -m cfdc.rag inspect --index-dir ./rag-index
+ollama serve
 ```
 
-3. 运行测试套件并检查源代码是否可编译：
-
-```bash
-uv run pytest -q
-uv run python -m compileall -q cfdc tests
-```
-
-## Web 界面
-
-完成 `uv sync`、测试套件和上面的编译检查后，再启动 Web 界面：
+3. 启动 WebUI：
 
 ```bash
 uv run python app.py
 ```
 
-浏览器访问 `http://127.0.0.1:7860`。通用 Web 流程只有一个领域输入“控制问题描述”，并要求填写 Provider Base URL、Model 和 API Key；不存在可选的无 LLM 模式，Gradio 也不提供任何案例示例。六个进度阶段严格为：问题描述与八项 checklist、系统分类、核心参数测量计划、参数回填与模型编译、初始控制器、效果验证与调优。
+4. 打开 `http://127.0.0.1:7860`，在“引导工作台”选择一个内置案例，例如“01｜直流电机转速”。Provider 填写：
 
-八项描述检查和所选 Profile 的数值事实完整后：
+```text
+Base URL: http://127.0.0.1:11434/v1
+Model:    gemma3:4b
+API Key:  ollama
+```
 
-1. 用户确认已声明的输入/输出范围只作为软件仿真的运行与停止边界，不是硬件安全认证。
-2. 后端校验 Profile 事实并确定性编译被控对象模型。
-3. “控制器”页签展示尚未验证的初始控制器候选。
-4. “调优与适应”接收同一个已编译模型和控制器，并运行第一次软件试验。
-5. 输出曲线展示参考值、初始控制器输出、存在差异时的最新执行输出，以及每个已展示通道的输出上下界。
-6. 稳定性只能由确定性的 `StabilityDecision` 映射为“稳定”“不稳定”或“证据不足”。最新试验若回滚，曲线仍作为“未采纳”证据显示，但不会成为当前安全控制器。
+5. 没有建立本地 RAG 索引时关闭“启用本地 RAG”。创建任务并确认边界后，按页面提示提交结构诊断。内置软件案例会自动推进协议、公开取证、特征、控制器、资格审查、冻结和独立评价，直到需要用户决定或到达终态。
 
-完整规格流程不会再次询问相同的建模信息，也不需要二次确认数学模型。
+首次使用建议先选择内置软件案例。自定义对象不会自动获得仿真模型；实体或外部实验也不会由页面直接执行，而是通过 operator bundle、操作员确认和协议绑定的数据上传继续。
 
-主界面没有案例选择、独立仿真实验室、固定 MIMO Demo 或连续自动调参按钮。
+## Kernel 主流程
 
-通用引导流程必须填写 Base URL、Model 和 API Key，系统只从当前 Provider 输入读取这些信息。API Key 不写入 Gradio 状态、诊断/模型/仿真会话、审计 JSON、日志、哈希或导出文件。
+WebUI 只运行当前 CFDC Kernel，并严格展示九阶段状态机：
 
-## CLI 使用
+```text
+1 任务 -> 2 诊断 -> 3 取证 -> 4 路线／特征
+-> 5 控制器 -> 6 冻结 -> 7 评价
+-> 8 调优／确认 -> 9 结果
+```
 
-可使用任意 OpenAI-compatible 服务：
+Kernel 使用带 revision 的 `TaskContract`、只追加事件、确定性 action ID、过期 revision 检查和类型化公开产物。系统不执行生成代码。Provider 可以返回类型化回复和公开 JSON/CSV 证据；路线解析、控制器 IR 校验、冻结绑定、评价和有界调优均受确定性 Kernel 契约约束。
+
+当前注册的软件任务类型为：
+
+- `local_setpoint_hold`
+- `transition_then_hold`
+- `disturbance_recovery_to_hold`
+
+其他目标会明确拒绝。本地 RAG 可选；启用后，每个会话固定使用一个已校验的索引快照。
+
+运行时定义 Diagnosis、Modeling、Controller 和 Critic 四个角色边界。当前 Web 自然语言回复实际调用 Diagnosis 提取八维诊断、Modeling 提取白名单参数，再由 Critic 审查合并后的类型化 candidate，并最多允许一次修正。Controller 角色保留给受约束的解释或 proposal 接口；Web 自动主线的控制器由确定性合成器生成。Python Kernel 是状态迁移、数值计算、路线选择、安全门和最终主张的唯一权威。Agent 调用失败时，本次用户回复不会写入业务状态，页面会返回明确错误；已经记录的 Kernel artifact 不会被模型输出覆盖。
+
+RAG 是可选的本地参考层。索引启用时，会话固定使用一个经过 schema、Registry fingerprint 和文件 checksum 校验的快照。当前 Web 的 `user_reply` 提取操作有意不注入检索片段，避免参考资料被误当成用户事实；RAG 用于其他显式的角色操作和扩展入口。页面显示“RAG 已启用”表示索引已加载并固定，不表示每一次 Agent 调用都执行了检索。
+
+## 已迁移的 v3 能力
+
+`archive/CFDC_Project_v3` 中当前有效的生产能力已经通过版本化 Kernel 合同提供，运行时代码不导入 archive。
+
+- `cfdc-protocol/v1` 支持有界 SISO、重复时序、阶梯实验、Class IV 频率／幅值／release、局部不稳定平衡、2x2 MIMO 和多阶段协议。Provider 执行前会重新编译并核对全部绑定和 fingerprint。
+- Operator handoff 会生成操作卡、预检查清单、JSON schema、重复 CSV 模板和 ZIP。CSV/JSON 上传必须依次通过操作员授权、格式、会话／协议、重复次数、时间轴、输入波形、安全边界和信号质量八道门。拒绝的尝试只追加失败回执，不消耗有效实验次数。
+- `cfdc-features/v1` 自动生成带来源和区间的 SISO 相邻结构、时延／NMP／积分／二阶、Step-B 非线性、Class IV、局部不稳定平衡和 2x2 静态／动态耦合特征，同时生成有界参数域。证据不足时返回明确 feature gap。
+- 包内路线注册表提供 20 个可执行控制器合同，并保留明确的 capability-gap 路线。Controller proposal 必须是受限 `ControllerIR`；确定性合成和 `cfdc-qualification/v1` 只返回 `offline_qualified`、`diagnostic_trial_only` 或 `not_qualified`。
+- Identification Provider 与 Evaluation Provider 使用两个独立且不可混淆的绑定。独立 judge 先判断稳定与停止事件，再判断任务性能、扰动重复和 95% Wilson 下界。只有稳定但性能不足才允许有界调优；接受的候选会创建新 freeze，并且必须通过 fresh confirmation。
+- `cfdc-session/v2.0` 保留 revision、幂等 action、stale revision 拒绝、不可覆盖的 artifact 历史和只追加事件链。已有 Kernel v1 会话可原样读取，并在下一次显式 mutation 时升级。
+- v3 importer 接受目录或 ZIP，拒绝不安全路径和错误 hash，不导入 private truth 与原始 LLM 响应，并从当前 Kernel 能重新验证的最后阶段继续。迁移能力映射由 `cfdc.kernel.migration_manifest` 提供，运行时无需读取 archive 或本地文档。
+
+## 安装与测试
 
 ```bash
-export CFDC_LLM_BASE_URL="https://your-provider.example"
-export CFDC_LLM_MODEL="your-provider-model"
-export CFDC_LLM_API_KEY="..."
+git clone https://github.com/yichuan-huang/control-agent.git
+cd control-agent
+uv sync
+uv run pytest -q
+uv run python -m compileall -q cfdc tests main.py app.py
+```
 
+`uv` 会读取 `.python-version` 中固定的 Python 版本，创建 `.venv`，并安装项目及开发工具。使用 `uv run` 时不需要手动激活环境。
+
+需要本地 RAG 时，可以建立并检查索引。`references` 目录可包含 Markdown 或 PDF；索引还会包含版本化的内置 Registry 知识：
+
+```bash
+uv sync --extra rag
+uv run python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
+uv run python -m cfdc.rag inspect --index-dir ./rag-index
+```
+
+## Web 界面
+
+启动应用后访问 `http://127.0.0.1:7860`：
+
+```bash
+uv run python app.py
+```
+
+“引导工作台”通过显式结构化表单创建 Kernel 任务。所有任务都必须填写任务描述、至少一个观测输出、至少一个控制输入、有限的输入上下界，以及正数 `state_stop`。输出上下界可选，但必须成对填写。`transition_then_hold` 还必须填写初始区域和目标区域；`disturbance_recovery_to_hold` 还必须填写扰动事件、恢复起点条件和恢复后保持区域。表单也支持工程单位、性能阈值、实验预算、时间偏好、初始数值和 intermediate targets。
+
+页面在每个状态只突出一个主要操作：确认任务、回答诊断问题、选择实验 Provider、下载 operator bundle、提交操作员报告、上传数据、启动隔离评价、接受有界调优或确认结果。协议波形、已接受公开 trace、特征区间、资格检查、参考／输出／输入／误差曲线、重复试次置信度和九阶段审计时间线都直接来自 Kernel artifact。
+
+“专家合同”页可以提交完整 `TaskContract`、加载 Kernel session、执行 typed action JSON、只读导入 v3 ZIP，并校验下载 artifact 的 fingerprint。可单独导出协议、operator bundle、上传回执、特征、Controller IR、qualification、freeze、evaluation、feedback、confirmation、最终结果和完整会话审计，也可导出完整结果 ZIP。
+
+Web Agent 编排固定为 `multi`。页面没有工作流版本和 Agent 模式控件；Provider 配置、RAG 开关和本地索引目录继续保留。高级 JSON 也继续保留，因为它属于 Kernel 的类型化公开证据与动作接口。
+
+回复方式始终使用固定选项 `natural_language` 和 `json`。当前 Kernel 输入契约决定两种方式是否都能选择、是否必须使用 JSON，或在无输入动作时隐藏控件。确认、继续、重算和终态不会再让 Gradio Radio 保存非法值。
+
+WebUI 不加载也不运行 legacy 会话，不提供 `single` 基线，不会自动回退到兼容流程。缺失、未知或非 Kernel 的 Web state 会返回明确错误。需要 legacy 时，请使用下方 CLI 步骤。
+
+Provider 凭据只从当前表单读取。API Key 不写入 Gradio state、Kernel 会话、审计 JSON、日志、哈希或导出文件。
+
+内置选择器包含 18 个公开案例：
+
+- 5 个工程训练案例：`dc_motor_speed_v1`、`tclab_single_heater_v1`、`dc_motor_position_v1`、`quadruple_tank_nmp_v1`、`tclab_dual_heater_v1`。
+- 6 个 transition 变体：直流电机转速、单加热器和四水箱各自的单段及 staged transition-hold 版本。
+- 7 个审计案例：`audit_class_i_level`、`audit_class_ii_thermal`、`audit_class_ii_oscillator`、`audit_class_iii_motion`、`audit_class_iv_nmp`、`audit_class_iv_high_order`、`audit_class_v_mimo`。
+
+## Kernel CLI
+
+CLI 同时保留两套工作流的兼容接口。创建自定义 Kernel 任务时应显式选择 Kernel。命令会停在下一个用户或证据边界，并输出 session ID 与当前 input contract：
+
+```bash
+uv run python main.py --workflow-version kernel \
+  --kernel-session-dir ./output/kernel-sessions \
+  --description "加热器保持箱体温度。" \
+  --observed-output temperature --actuator voltage \
+  --safety-bound input_min=-1 --safety-bound input_max=1 \
+  --safety-bound state_stop=3
+```
+
+续跑时使用 `--kernel-session SESSION_ID`、唯一的 `--kernel-action`，以及 `pending_actions` 要求的类型化参数。`--kernel-auto` 会自动执行确定性步骤，直到需要用户、外部数据、确认、遇到 capability gap 或到达终态。
+
+注册工程案例在提供公开诊断后，可以一次跑完整个软件 Provider 链：
+
+```bash
+DIAGNOSIS_JSON='{
+  "open_loop_stability":{"status":"known","assessment":"stable","evidence":"有界公开试验","confidence":0.95},
+  "nonminimum_phase":{"status":"known","assessment":"minimum_phase","evidence":"有界公开试验","confidence":0.95},
+  "significant_delay":{"status":"known","assessment":"not_significant","evidence":"有界公开试验","confidence":0.95},
+  "relative_degree":{"status":"known","assessment":"low","evidence":"有界公开试验","confidence":0.95},
+  "sensing_actuation_adequacy":{"status":"known","assessment":"adequate","evidence":"操作记录","confidence":0.95},
+  "nonlinearity_strength":{"status":"known","assessment":"weak","evidence":"有界公开试验","confidence":0.95},
+  "coupling_underactuation":{"status":"known","assessment":"siso","evidence":"已声明接口","confidence":0.95},
+  "uncertainty_variation":{"status":"known","assessment":"small","evidence":"重复公开试验","confidence":0.95}
+}'
+
+uv run python main.py --workflow-version kernel \
+  --kernel-case dc_motor_speed_v1 \
+  --kernel-action motor-run-001 \
+  --confirm-kernel-budget \
+  --kernel-answer "$DIAGNOSIS_JSON" \
+  --kernel-advance --kernel-auto \
+  --kernel-result-dir ./output/results \
+  --kernel-export-bundle
+```
+
+对于实体或外部操作实验，在诊断和路线解析后绑定公开 Provider 合同，再生成 handoff：
+
+```bash
+uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
+  --kernel-action physical-001 \
+  --kernel-provider physical-provider.json \
+  --kernel-compile-protocol --kernel-prepare-operator-handoff \
+  --kernel-result-dir ./output/results
+
+uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
+  --kernel-action physical-002 \
+  --kernel-operator-report operator-report.json \
+  --kernel-upload repeat-01.csv --kernel-upload repeat-02.csv \
+  --kernel-upload repeat-03.csv --kernel-auto
+```
+
+如果声明的停止条件曾触发，应增加 `--kernel-upload-stopped-on-limit`；该上传会作为安全门失败记录，系统不会修补数据，也不会把它计作已接受证据。
+
+只读导入 v3 目录或 ZIP，并从最后一个重新验证通过的阶段继续：
+
+```bash
+uv run python main.py --workflow-version kernel \
+  --kernel-import-v3 ./old-v3-session.zip \
+  --kernel-action import-001 --confirm-kernel-budget --kernel-auto \
+  --kernel-result-dir ./output/imported --kernel-export-bundle
+```
+
+自然语言 Agent 使用的 Provider 可通过 `CFDC_LLM_BASE_URL`、`CFDC_LLM_MODEL`、`CFDC_LLM_API_KEY` 或对应 `--llm-*` 参数配置。它们只影响角色内 proposal 和解释，路线、数值结果与授权仍由 Kernel 决定。
+
+例如，可以在 Kernel 命令中增加：
+
+```bash
 uv run python main.py --use-llm \
-  --description "一个弹簧质量系统在施加力脉冲后会振荡。" \
-  --diagnostic-session-output session-v4.json
-```
-
-内置 Provider 适配器默认使用四个角色（Diagnosis、Modeling、Controller、Critic）和一次修正审查。五类分类与唯一 Profile 始终由 Registry 的确定性规则决定；Controller 只解释选择依据和提出受限候选。可以显式选择旧的单适配器基线，或指定本地 RAG 快照：
-
-```bash
-uv run python main.py --use-llm --agent-mode multi \
-  --rag-index ./rag-index \
-  --rag-snapshot snapshot-... \
-  --description "加热器改变箱体内测得的温度。"
-
-uv run python main.py --use-llm --agent-mode single --no-rag \
-  --description "加热器改变箱体内测得的温度。"
-```
-
-Web 界面的 Provider 面板也提供同样的 Agent 模式、RAG 开关和索引目录输入；继续补充描述或参数时会沿用本次运行的配置。
-
-RAG 只读取显式提供的资料目录和项目内置控制知识；文档内容作为带来源的数据片段发送给角色模型，不会获得代码执行或修改对象事实的权限。索引每次生成一个快照并原子切换 `CURRENT`，快照内保存文件、页码/标题、内容哈希和 embedding 版本。
-
-可用 `query` 查看按角色、阶段、Class 或 Profile 过滤后的召回，`eval` 只报告检索策略，不调用 LLM：
-
-```bash
-uv run python -m cfdc.rag query --index-dir ./rag-index \
-  --role controller --operation explain_profile \
-  --profile first_order_lag --query "方法前提和限制"
-uv run python -m cfdc.rag eval --index-dir ./rag-index
-```
-
-也可通过命令行传入同一配置：
-
-```bash
-uv run python main.py --use-llm \
+  --workflow-version kernel \
   --llm-base-url "https://api.deepseek.com" \
   --llm-model "deepseek-v4-pro" \
   --llm-api-key "$DEEPSEEK_API_KEY" \
   --description "加热器改变箱体内测得的温度。" \
-  --diagnostic-session-output session-v4.json
+  --observed-output temperature --actuator voltage \
+  --safety-bound input_min=-1 --safety-bound input_max=1 \
+  --safety-bound state_stop=3
 ```
 
-以下继续命令假定上文导出的 `CFDC_LLM_BASE_URL`、`CFDC_LLM_MODEL` 和
-`CFDC_LLM_API_KEY` 环境变量仍然有效。继续处理已保存的 v4 会话时，可以在命令行直接回填，
-也可以使用一个 UTF-8 文本文件。checklist 完成后，该回复会直接解释为所选 Profile 的参数：
+## Legacy CLI 分步操作
+
+Legacy 只在 CLI 中提供。每条命令都应显式选择兼容工作流、`single` Agent 基线并关闭 RAG。请把示例 Provider 和中文占位文本替换为实际控制问题的事实。
+
+1. 配置 OpenAI-compatible Provider：
 
 ```bash
-uv run python main.py --use-llm \
-  --diagnostic-session-input session-v4.json \
-  --diagnostic-session-output session-v4-next.json \
-  --measurement-response "油门变化 1 deg，稳态车速变化 10 mph，响应时间 5 s；油门范围 -3 至 3 deg，车速范围 45 至 80 mph。" \
-  --confirm-simulation-bounds
-
-uv run python main.py --use-llm \
-  --diagnostic-session-input session-v4.json \
-  --diagnostic-session-output session-v4-next.json \
-  --measurement-response-file measurement-response.txt
+export CFDC_LLM_BASE_URL="https://your-provider.example/v1"
+export CFDC_LLM_MODEL="your-model"
+export CFDC_LLM_API_KEY="..."
 ```
 
-`--measurement-response` 与 `--measurement-response-file` 互斥；参数回填必须同时提供 `--diagnostic-session-input`。checklist 尚未完成时，应使用 `--diagnostic-description` 扩写原问题描述，不要把八项摘录重新作为测量回复。当所选 Profile 的回填已包含完整数值仿真范围时，还必须传入 `--confirm-simulation-bounds`，确认这些范围只用于软件仿真。
+2. 创建第一份 legacy 诊断会话：
 
-持久化引导会话的 schema 版本为 `4.0`。已核验的 v4 会话可以继续恢复；未完成的 v4 会话会从已验证的问题描述原文重建 checklist，不再要求重复粘贴八项内容。版本 3 会话会被明确拒绝而不会迁移；更早的已保存会话同样与本流程不兼容，应使用原始问题描述重新创建 v4 会话。
+```bash
+uv run python main.py --workflow-version legacy \
+  --use-llm --agent-mode single --no-rag \
+  --description "控制问题描述" \
+  --diagnostic-session-output legacy-01.json
+```
 
-## 证据边界
+3. 如果 `legacy-01.json` 仍要求补充描述事实，就补充缺少的对象、传感器、执行器或行为信息，并写入新文件：
 
-应用不会向硬件发送命令。确认输入/输出边界只允许执行有界软件仿真，不代表允许驱动实体硬件，也不是硬件安全认证。“稳定”只说明当前用户确认的软件模型通过了确定性稳定判据。`example_hypothesis` 仍是可重复演示假设；`local_linear_hypothesis` 只在确认范围内有效。任何结果都不代表真实对象的稳定性、鲁棒性、性能或安全性。
+```bash
+uv run python main.py --workflow-version legacy \
+  --use-llm --agent-mode single --no-rag \
+  --diagnostic-session-input legacy-01.json \
+  --diagnostic-description "补充缺少的对象、传感器或执行器信息" \
+  --diagnostic-session-output legacy-02.json
+```
+
+4. 当最新 JSON 开始要求所选 Profile 的参数时，提交已知数值、单位、来源和软件仿真范围：
+
+```bash
+uv run python main.py --workflow-version legacy \
+  --use-llm --agent-mode single --no-rag \
+  --diagnostic-session-input legacy-02.json \
+  --measurement-response "已知参数、单位、来源和软件仿真范围" \
+  --confirm-simulation-bounds \
+  --diagnostic-session-output legacy-03.json
+```
+
+每次续跑都应使用新的 `--diagnostic-session-output` 路径。这样会保留每个 revision 的审计记录，也不会覆盖输入会话。每次续跑前先检查最新 JSON：状态仍要求描述或诊断事实时使用 `--diagnostic-description`；只有状态开始要求 Profile 参数后才使用 `--measurement-response`。也可以改用 `--measurement-response-file` 读取 UTF-8 文本，但它与 `--measurement-response` 互斥。
+
+## 支持模型、能力缺口与物理边界
+
+确定性运行时支持连续或离散 SISO 传递函数、连续或离散 SISO/MIMO 状态空间模型、注册非线性模板 `underactuated_cartpole` 与 `vtol_cascaded`，以及确认工作点和有效范围附近的局部线性假设。
+
+LLM 输出不能包含可执行 Python、MATLAB、ODE 代码、动态导入、回调、模块路径、URL 或表达式。局部模型轨迹一旦离开确认的有效范围，试验立即以 `inconclusive` 终止。未注册拓扑、缺少判别特征、未解析的高阶／动态非线性、输入符号权威不足或不支持的 MIMO 分配会进入带名称的 `capability_gap`；注册表不会悄悄替换成相邻控制器。
+
+WebUI 永远不会控制硬件。物理能力止于工程单位规范化、preflight、操作员 handoff、协议绑定的数据回收、冻结控制器绑定和独立裁决。`ready_for_operator_review` 不等于执行授权。确认软件边界只允许有界软件仿真，不代表允许驱动实体硬件，也不是硬件安全认证。
+
+## 目录
+
+| 路径 | 职责 |
+| --- | --- |
+| `cfdc/kernel/` | 任务合同、会话、诊断、路线、控制器、评价、调优和工作流服务。 |
+| `cfdc/web/service.py` | Kernel-only Web 服务边界、state 校验和 multi-Agent 回复准备。 |
+| `cfdc/web/ui.py` | Kernel 任务表单和九阶段 Gradio 展示。 |
+| `cfdc/runtime/kernel_bridge.py` | Kernel 工作流的 runtime 集成。 |
+| `cfdc/sim/` | 确定性线性、CartPole 和 VTOL 仿真后端。 |
+| `dataset/` | 离线研究与评测数据；生产代码不导入。 |
+| `tests/` | 契约、安全、状态机、CLI、Web、仿真和端到端测试。 |
 
 ## 许可证
 
 Copyright (C) 2026 Yichuan Huang
 
-本项目采用 [GNU Affero General Public License v3.0 only](LICENSE)，SPDX 标识为 `AGPL-3.0-only`。该许可证允许商业使用，但必须遵守许可证条款。通过网络向用户提供修改版服务时，须遵守许可证中的相应源代码义务。
+本项目采用 [GNU Affero General Public License v3.0 only](LICENSE)，SPDX 标识为 `AGPL-3.0-only`。该许可证允许商业使用，但必须遵守许可证条款。通过网络向用户提供修改版服务时，须履行相应的源代码义务。
 
 仓库地址：https://github.com/yichuan-huang/control-agent

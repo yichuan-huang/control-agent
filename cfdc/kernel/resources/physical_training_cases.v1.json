@@ -1,0 +1,213 @@
+{
+  "artifact_type": "cfdc_physical_training_case_contract",
+  "contract_version": "1.0.0",
+  "provider_version": "physical_training_provider_v1.0.0",
+  "evidence_boundary": {
+    "data_type": "protocol-bound software simulation in engineering units",
+    "claims_allowed": [
+      "workbench full-flow software evidence",
+      "engineering-unit protocol and packet handling",
+      "task-local initial-controller generation"
+    ],
+    "claims_forbidden": [
+      "physical-device validation",
+      "parameter identification of the cited hardware",
+      "industrial safety authorization",
+      "universal controller performance"
+    ],
+    "parameter_policy": "Published sources bind the physical interface and model form. Private simulation parameters are representative training values, not copied measurements and not claimed as calibration of the cited hardware."
+  },
+  "cases": {
+    "dc_motor_speed_v1": {
+      "label_cn": "01｜直流电机转速：电枢电压 → 转轴角速度",
+      "short_name_cn": "直流电机转速",
+      "learning_purpose_cn": "同一台电机以转速作为输出时，检验CFDC能否从电压—转速数据形成稳定自调节对象所需的控制特征。",
+      "source_binding": [
+        {
+          "title": "DC Motor Speed: System Modeling",
+          "publisher": "Control Tutorials for MATLAB and Simulink, University of Michigan/Carnegie Mellon",
+          "url": "https://ctms.engin.umich.edu/CTMS/index.php?example=MotorSpeed&section=SystemModeling",
+          "used_for": "armature voltage input, shaft speed output, electromechanical model form"
+        }
+      ],
+      "task": {
+        "description": "一台实验室直流电机工作在空载附近。我可以在驱动器允许范围内改变电枢电压，并用编码器记录转轴角速度。目标是在不超过电压和转速停止边界的前提下，让转速达到一个小幅目标并保持。当前没有可用的实验记录。",
+        "objective": "把转轴角速度保持在目标值附近，同时限制电枢电压并避免超过允许转速。",
+        "measured_signals": ["转轴角速度_rad_s"],
+        "control_input": "电枢电压_V",
+        "reference": 20.0,
+        "operating_region": "空载附近；电枢电压 -6 至 6 V；转轴角速度绝对值不超过 60 rad/s",
+        "input_min": -6.0,
+        "input_max": 6.0,
+        "state_stop": 60.0,
+        "response_time_preference_s": 2.0,
+        "final_abs_error_max": 1.5,
+        "overshoot_max": 4.0,
+        "settling_time_max_s": 3.0,
+        "perturbed_success_rate_min": 0.8,
+        "engineering_units": {
+          "input": {"unit": "V", "zero": 0.0, "scale": 3.0, "resolution": 0.001},
+          "outputs": {
+            "转轴角速度_rad_s": {"unit": "rad/s", "zero": 0.0, "scale": 20.0, "resolution": 0.01}
+          },
+          "acquisition_sample_time_s": 0.005,
+          "max_experiment_duration_s": 30.0
+        }
+      }
+    },
+    "tclab_single_heater_v1": {
+      "label_cn": "02｜单加热器温控：功率变化 → 温升",
+      "short_name_cn": "单加热器温控",
+      "learning_purpose_cn": "检验热传导、对流与传感器滞后共同形成的多时间尺度是否会由数据改变初始候选和控制器带宽。",
+      "source_binding": [
+        {
+          "title": "Temperature Control Lab",
+          "publisher": "APMonitor / Brigham Young University",
+          "url": "https://apmonitor.com/pdc/index.php/Main/ArduinoTemperatureControl",
+          "used_for": "heater power input, temperature sensor output, single/two-heater identification and control workflow"
+        }
+      ],
+      "task": {
+        "description": "一套桌面温控实验台在室温附近运行。我可以在当前偏置功率上下改变一号加热器功率，并记录一号温度传感器相对室温的温升。目标是在功率变化和温升停止边界内，把温升保持在目标值附近。当前没有可用的实验记录。",
+        "objective": "把一号传感器温升保持在目标值附近，优先限制超调和加热器长时间高功率。",
+        "measured_signals": ["一号温升_degC"],
+        "control_input": "一号加热功率变化_percentage_point",
+        "reference": 8.0,
+        "operating_region": "室温附近的小信号区域；相对偏置功率变化 -20 至 20 个百分点；温升绝对值不超过 25 degC",
+        "input_min": -20.0,
+        "input_max": 20.0,
+        "state_stop": 25.0,
+        "response_time_preference_s": 120.0,
+        "final_abs_error_max": 0.6,
+        "overshoot_max": 2.0,
+        "settling_time_max_s": 160.0,
+        "perturbed_success_rate_min": 0.8,
+        "engineering_units": {
+          "input": {"unit": "percentage_point", "zero": 0.0, "scale": 15.0, "resolution": 0.1},
+          "outputs": {
+            "一号温升_degC": {"unit": "degC", "zero": 0.0, "scale": 10.0, "resolution": 0.05}
+          },
+          "acquisition_sample_time_s": 0.2,
+          "max_experiment_duration_s": 1200.0
+        }
+      }
+    },
+    "dc_motor_position_v1": {
+      "label_cn": "03｜直流电机定位：电枢电压 → 转轴角度",
+      "short_name_cn": "直流电机定位",
+      "learning_purpose_cn": "与转速案例使用相同物理执行机构，但把位置作为任务输出，检验CFDC是否会因控制任务和测量量改变而形成不同诊断。",
+      "source_binding": [
+        {
+          "title": "DC Motor Position: System Modeling",
+          "publisher": "Control Tutorials for MATLAB and Simulink, University of Michigan/Carnegie Mellon",
+          "url": "https://ctms.engin.umich.edu/CTMS/index.php?example=MotorPosition&section=SystemModeling",
+          "used_for": "armature voltage input, shaft position output, position as the integral of shaft speed"
+        }
+      ],
+      "task": {
+        "description": "一台实验室直流电机通过编码器测量转轴角度。我可以施加正负电枢电压，目标是让转轴从当前零点转到一个小角度并保持；若电压或角度超过边界必须停止。当前没有可用的实验记录。",
+        "objective": "让转轴角度到达目标并保持，限制超调、电压峰值和角度越界。",
+        "measured_signals": ["转轴角度_rad"],
+        "control_input": "电枢电压_V",
+        "reference": 0.5,
+        "operating_region": "局部转角区域；电枢电压 -6 至 6 V；转轴角度绝对值不超过 2 rad",
+        "input_min": -6.0,
+        "input_max": 6.0,
+        "state_stop": 2.0,
+        "response_time_preference_s": 4.0,
+        "final_abs_error_max": 0.04,
+        "overshoot_max": 0.15,
+        "settling_time_max_s": 6.0,
+        "perturbed_success_rate_min": 0.8,
+        "engineering_units": {
+          "input": {"unit": "V", "zero": 0.0, "scale": 3.0, "resolution": 0.001},
+          "outputs": {
+            "转轴角度_rad": {"unit": "rad", "zero": 0.0, "scale": 0.5, "resolution": 0.001}
+          },
+          "acquisition_sample_time_s": 0.01,
+          "max_experiment_duration_s": 40.0
+        }
+      }
+    },
+    "quadruple_tank_nmp_v1": {
+      "label_cn": "04｜四水箱通道：泵电压变化 → 下层液位变化",
+      "short_name_cn": "四水箱液位通道",
+      "learning_purpose_cn": "使用经典可调零点四水箱结构，检验只有外部液位测量时，实验数据是否能约束方向变化和保守控制带宽。",
+      "source_binding": [
+        {
+          "title": "The quadruple-tank process: a multivariable laboratory process with an adjustable zero",
+          "publisher": "IEEE Transactions on Control Systems Technology, 2000",
+          "doi": "10.1109/87.845876",
+          "url": "https://doi.org/10.1109/87.845876",
+          "used_for": "pump-voltage and tank-level interface, adjustable minimum/nonminimum-phase laboratory structure"
+        }
+      ],
+      "task": {
+        "description": "一套四水箱实验装置工作在固定液位偏置附近。我可以在偏置上下改变一号泵电压，并记录指定下层水箱相对工作点的液位变化；本练习不提供内部流量或上层水箱状态。目标是在泵电压和液位停止边界内保持一个小液位目标。当前没有可用的实验记录。",
+        "objective": "把指定下层水箱的液位变化保持在目标附近，同时限制泵电压、欠调、超调和液位越界。",
+        "measured_signals": ["下层水箱液位变化_cm"],
+        "control_input": "一号泵电压变化_V",
+        "reference": 2.0,
+        "operating_region": "固定偏置附近；泵电压变化 -2 至 2 V；下层液位变化绝对值不超过 8 cm",
+        "input_min": -2.0,
+        "input_max": 2.0,
+        "state_stop": 8.0,
+        "response_time_preference_s": 80.0,
+        "final_abs_error_max": 0.2,
+        "overshoot_max": 0.8,
+        "settling_time_max_s": 120.0,
+        "perturbed_success_rate_min": 0.8,
+        "engineering_units": {
+          "input": {"unit": "V", "zero": 0.0, "scale": 1.0, "resolution": 0.001},
+          "outputs": {
+            "下层水箱液位变化_cm": {"unit": "cm", "zero": 0.0, "scale": 2.0, "resolution": 0.01}
+          },
+          "acquisition_sample_time_s": 0.2,
+          "max_experiment_duration_s": 900.0
+        }
+      }
+    },
+    "tclab_dual_heater_v1": {
+      "label_cn": "05｜双加热器温控：两路功率变化 → 两路温升",
+      "short_name_cn": "双加热器温控",
+      "learning_purpose_cn": "检验两路加热器和两路温度传感器存在热耦合时，CFDC能否用成对静态与频域证据确定配对和多回路初始控制器。",
+      "source_binding": [
+        {
+          "title": "Temperature Control Lab - Two Heater Modeling and Control",
+          "publisher": "APMonitor / Brigham Young University",
+          "url": "https://apmonitor.com/pdc/index.php/Main/ArduinoTemperatureControl",
+          "used_for": "two independently commanded heaters, two temperature sensors, coupled thermal identification"
+        }
+      ],
+      "task": {
+        "description": "一套双加热器桌面温控实验台在室温附近运行。两路输入分别是两个加热器的功率变化，可以独立设置；两路输出是两个温度传感器相对室温的温升，可以同时记录。目标是在各自功率和温升边界内，让两个温升分别保持在同一个小幅目标附近。当前没有可用的实验记录。",
+        "objective": "让两路温升分别保持在目标附近，限制两路加热功率、交叉影响和温度超调。",
+        "measured_signals": ["一号温升_degC", "二号温升_degC"],
+        "control_input": "一号加热功率变化_percentage_point",
+        "control_inputs": [
+          "一号加热功率变化_percentage_point",
+          "二号加热功率变化_percentage_point"
+        ],
+        "reference": 6.0,
+        "operating_region": "室温附近的双输入双输出小信号区域；每路功率变化 -15 至 15 个百分点；每路温升绝对值不超过 20 degC",
+        "input_min": -15.0,
+        "input_max": 15.0,
+        "state_stop": 20.0,
+        "response_time_preference_s": 40.0,
+        "final_abs_error_max": 0.7,
+        "overshoot_max": 2.0,
+        "settling_time_max_s": 240.0,
+        "perturbed_success_rate_min": 0.8,
+        "engineering_units": {
+          "input": {"unit": "percentage_point", "zero": 0.0, "scale": 12.0, "resolution": 0.1},
+          "outputs": {
+            "一号温升_degC": {"unit": "degC", "zero": 0.0, "scale": 8.0, "resolution": 0.05},
+            "二号温升_degC": {"unit": "degC", "zero": 0.0, "scale": 8.0, "resolution": 0.05}
+          },
+          "acquisition_sample_time_s": 0.1,
+          "max_experiment_duration_s": 9000.0
+        }
+      }
+    }
+  }
+}

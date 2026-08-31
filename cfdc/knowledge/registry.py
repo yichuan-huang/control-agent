@@ -619,6 +619,11 @@ def canonical_knowledge_documents() -> tuple[KnowledgeArtifact, ...]:
             )
         )
     for profile in _PROFILES:
+        runtime_supported = not any(
+            "no registered" in str(limitation).casefold()
+            or "capability gap" in str(limitation).casefold()
+            for limitation in profile.limitations
+        )
         text = (
             f"Registry version: {REGISTRY_VERSION}\n"
             f"Profile ID: {profile.profile_id}\n"
@@ -629,7 +634,12 @@ def canonical_knowledge_documents() -> tuple[KnowledgeArtifact, ...]:
             f"Experiment primitives: {', '.join(profile.experiment_primitives)}\n"
             f"Preconditions: {'; '.join(profile.preconditions) or 'none'}\n"
             f"Limitations: {'; '.join(profile.limitations) or 'none'}\n"
-            "The profile is an implemented closed-catalog route; external method descriptions do not add capabilities."
+            + (
+                "Runtime support: this is an implemented closed-catalog route."
+                if runtime_supported
+                else "Runtime support: capability gap; this profile is documented but cannot execute without a registered object adapter."
+            )
+            + " External method descriptions do not add capabilities."
         )
         documents.append(
             KnowledgeArtifact(

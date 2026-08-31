@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cfdc-control"
-version = "0.2.3"
+version = "0.3.0"
 description = "Independent Core-Feature-Driven Control framework"
 authors = [{ name = "Yichuan Huang" }]
 license = "AGPL-3.0-only"
@@ -12,10 +12,12 @@ license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
   "gradio>=6.0,<7",
+  "jsonschema>=4.20",
   "numpy>=2.0",
   "openai>=1.0",
   "pandas>=2.2",
   "pydantic>=2.0",
+  "plotly>=5.24,<7",
   "scipy>=1.14",
 ]
 
@@ -39,7 +41,7 @@ exclude = ["archive*"]
 python-preference = "only-managed"
 
 [tool.setuptools.package-data]
-cfdc = ["diagnosis/*.json", "lab/resources/*.json"]
+cfdc = ["diagnosis/*.json", "lab/resources/*.json", "kernel/resources/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -62,6 +64,4 @@ target-version = "py311"
 "cfdc/sim/profile_runtime.py" = ["TRY004"]
 "cfdc/specifications/compiler.py" = ["TRY004"]
 "cfdc/specifications/dialogue.py" = ["TRY004"]
-"cfdc/web/linked_tuning_service.py" = ["TRY004"]
-"cfdc/web/linked_tuning_ui.py" = ["TRY004"]
 "cfdc/web/service.py" = ["TRY004"]

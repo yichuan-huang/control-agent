@@ -93,27 +93,17 @@ def _gain_context() -> GainProposalContext:
     )
 
 
-def test_multi_factory_wraps_existing_adapter_and_single_is_explicit(monkeypatch):
+def test_web_factory_always_wraps_existing_adapter_for_multi_agent(monkeypatch):
     monkeypatch.setattr("cfdc.web.service.OpenAICompatibleDiagnosticAdapter", _Adapter)
 
-    single = build_adapter(
-        True,
-        "https://provider.example/v1",
-        "test-model",
-        "secret",
-        agent_mode="single",
-        use_rag=False,
-    )
     multi = build_adapter(
         True,
         "https://provider.example/v1",
         "test-model",
         "secret",
-        agent_mode="multi",
         use_rag=False,
     )
 
-    assert isinstance(single, _Adapter)
     assert isinstance(multi, CompositeAgentAdapter)
     assert isinstance(multi.adapter, _Adapter)
 
@@ -174,7 +164,6 @@ def test_factory_loads_a_snapshot_only_when_rag_is_enabled(tmp_path, monkeypatch
         "https://provider.example/v1",
         "test-model",
         "secret",
-        agent_mode="multi",
         rag_index_dir=index_dir,
         use_rag=True,
     )
@@ -183,7 +172,6 @@ def test_factory_loads_a_snapshot_only_when_rag_is_enabled(tmp_path, monkeypatch
         "https://provider.example/v1",
         "test-model",
         "secret",
-        agent_mode="multi",
         rag_index_dir=index_dir,
         use_rag=False,
     )

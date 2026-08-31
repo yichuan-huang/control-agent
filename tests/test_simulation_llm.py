@@ -24,7 +24,6 @@ from cfdc.models import (
     StructuralDiagnosis,
     SystemDescription,
 )
-from cfdc.web.linked_tuning_presentation import render_linked_tuning
 from tests.simulation_fixtures import (
     cartpole_model,
     cartpole_session,
@@ -281,7 +280,7 @@ def test_unchanged_gain_call_is_rejected_and_explained():
         "change at least one" in error for error in result.call_record.validation_errors
     )
     assert updated.pending_proposal is None
-    assert "未通过后端校验" in render_linked_tuning(updated)["status"]
+    assert updated.llm_calls[-1].validation_status == "rejected"
 
 
 @pytest.mark.parametrize(
