@@ -88,6 +88,10 @@ def _resolved_case(service: WorkflowService, case_id: str, *, mimo: bool = False
 
 def test_migration_manifest_and_v3_parity_matrix_have_source_hashes() -> None:
     source = Path("archive/CFDC_Project_v3")
+    if not source.is_dir():
+        pytest.skip(
+            "development-only CFDC v3 archive is not shipped in release checkouts"
+        )
     manifest = build_migration_manifest(source)
     matrix = build_v3_parity_matrix(source)
 
