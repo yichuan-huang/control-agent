@@ -148,7 +148,14 @@ def test_all_executable_controller_contracts_synthesize_and_qualify() -> None:
             capture_damping=1.0,
             unstable_mode_rate=1.0,
             angular_input_gain=1.0,
+            inverse_input_lower=-1.0,
+            inverse_input_upper=1.0,
         )
+        for row in (1, 2):
+            for column in (1, 2):
+                values[f"dynamic_map_base_{row}{column}"] = float(row == column)
+                for basis in (1, 2, 3):
+                    values[f"dynamic_map_lag{basis}_{row}{column}"] = 0.0
         artifact = {
             "features": {
                 key: {
@@ -165,8 +172,20 @@ def test_all_executable_controller_contracts_synthesize_and_qualify() -> None:
             "artifact_fingerprint": f"features-{family}",
         }
         is_mimo = family in mimo_families
+        if is_mimo:
+            measured_signals = ["y1", "y2"]
+        elif family in {
+            "local_fixed_PID",
+            "scheduled_damping_PID",
+            "self_excitation_energy_guarded_PID",
+        }:
+            measured_signals = ["position", "velocity"]
+        elif family == "cascaded_control":
+            measured_signals = ["x", "x_dot", "theta", "theta_dot"]
+        else:
+            measured_signals = ["y"]
         task = {
-            "measured_signals": ["y1", "y2"] if is_mimo else ["y"],
+            "measured_signals": measured_signals,
             "control_inputs": ["u1", "u2"] if is_mimo else ["u"],
             "control_input": "u1" if is_mimo else "u",
             "input_min": -10.0,
@@ -177,6 +196,7 @@ def test_all_executable_controller_contracts_synthesize_and_qualify() -> None:
             "route_id": f"test:{family}",
             "profile_id": "mimo_2x2_coupled" if is_mimo else "first_order_lag",
             "controller_contract_id": family,
+            "feature_ids": sorted(feature_ids),
         }
         controller, audit = synthesize_controller(task, route, artifact)
         qualification = qualify_controller(
@@ -383,8 +403,8 @@ def test_registered_case_full_chain_reaches_independent_evaluation(
         evaluation_provider_id=evaluation_id,
     )
 
-    assert session.status == "performance_met"
-    assert session.feature_artifact["feature_version"] == "cfdc-features/v1"
+    assert session.status == ("performance_met" if mimo else "tuning_eligible")
+    assert session.feature_artifact["feature_version"] == "cfdc-features/v2"
     assert not session.feature_artifact["missing_feature_ids"]
     assert session.controller_candidate["ir"]["family"] == family
     assert session.controller_qualification["status"] == OFFLINE_QUALIFIED
@@ -392,7 +412,11 @@ def test_registered_case_full_chain_reaches_independent_evaluation(
         session.provider_bindings["identification"]["provider_id"]
         != session.provider_bindings["evaluation"]["provider_id"]
     )
-    assert session.evaluation["wilson_lower_bound_95"] >= 0.8
+    if mimo:
+        assert session.evaluation["wilson_lower_bound_95"] >= 0.8
+    else:
+        assert session.evaluation["status"] == "performance_not_met"
+        assert session.evaluation["success_count"] == 0
     assert all(
         "dc_gain_matrix" not in json.dumps(item, ensure_ascii=False)
         for item in session.evidence
@@ -407,6 +431,18 @@ def test_registered_case_full_chain_reaches_independent_evaluation(
             "local_gain_k21",
             "local_gain_k22",
         } <= set(session.feature_artifact["features"])
+    else:
+        session = service.run_feedback_iteration(
+            session.session_id,
+            action_id="exhaust-bounded-tuning",
+            revision=session.revision,
+            provider_registry=evaluation,
+            provider_id=evaluation_id,
+        )
+        assert session.status == "capability_gap"
+        assert session.tuning["status"] == "exhausted"
+        assert session.tuning["reason"] == "no_strict_development_improvement"
+        assert session.pending_actions == ()
 
 
 def test_v3_import_is_read_only_safe_and_idempotent(tmp_path: Path) -> None:
@@ -460,7 +496,9 @@ def test_v3_import_is_read_only_safe_and_idempotent(tmp_path: Path) -> None:
         service.import_v3(unsafe)
 
 
-def test_session_v1_upgrades_on_first_explicit_mutation(tmp_path: Path) -> None:
+def test_session_v1_is_read_only_and_can_fork_without_old_authority(
+    tmp_path: Path,
+) -> None:
     service = WorkflowService(tmp_path)
     session = service.start(
         {
@@ -480,16 +518,21 @@ def test_session_v1_upgrades_on_first_explicit_mutation(tmp_path: Path) -> None:
     loaded = service.read(session.session_id)
     assert loaded.session_version == "cfdc-session/v1.0"
 
-    upgraded = service.confirm_task(
-        loaded.session_id,
-        action_id="upgrade-v1",
-        revision=loaded.revision,
-    )
-    assert upgraded.session_version == "cfdc-session/v2.0"
-    assert (
-        json.loads(path.read_text(encoding="utf-8"))["session_version"]
-        == "cfdc-session/v2.0"
-    )
+    original = path.read_bytes()
+    with pytest.raises(ValueError, match="read_only_legacy_session"):
+        service.confirm_task(
+            loaded.session_id,
+            action_id="upgrade-v1",
+            revision=loaded.revision,
+        )
+    child = service.fork_session(loaded.session_id)
+    assert child.session_id != loaded.session_id
+    assert child.session_version == "cfdc-session/v3.0"
+    assert child.evidence == ()
+    assert child.controller_qualification is None
+    assert child.evaluation is None
+    assert child.legacy_lineage["source_session_id"] == loaded.session_id
+    assert path.read_bytes() == original
 
 
 def test_physical_preflight_and_engineering_unit_normalization() -> None:
@@ -601,9 +644,9 @@ def test_public_artifact_exports_validate_and_bundle_excludes_raw_uploads(
     tmp_path: Path,
 ) -> None:
     service = WorkflowService(tmp_path / "sessions")
-    session = _resolved_case(service, "dc_motor_speed_v1")
+    session = _resolved_case(service, "tclab_dual_heater_v1", mimo=True)
     identification, identification_id, evaluation, evaluation_id = (
-        build_training_provider_registries("dc_motor_speed_v1")
+        build_training_provider_registries("tclab_dual_heater_v1")
     )
     session = service.run_until_blocked(
         session.session_id,

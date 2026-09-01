@@ -229,14 +229,7 @@ class EvaluationProvider(Protocol):
     provider_version: str
     capabilities: frozenset[str]
 
-    def evaluate(
-        self,
-        freeze: Mapping[str, Any],
-        *,
-        task: Mapping[str, Any],
-        evaluation_split: str,
-        repeats: int,
-    ) -> Mapping[str, Any]: ...
+    def evaluate(self, request: Mapping[str, Any]) -> Mapping[str, Any]: ...
 
 
 @dataclass
@@ -268,20 +261,11 @@ class CallableEvaluationProvider:
 
     provider_id: str
     provider_version: str
-    callback: Callable[
-        [Mapping[str, Any], Mapping[str, Any], str, int], Mapping[str, Any]
-    ]
+    callback: Callable[[Mapping[str, Any]], Mapping[str, Any]]
     capabilities: frozenset[str] = frozenset({"software_evaluation"})
 
-    def evaluate(
-        self,
-        freeze: Mapping[str, Any],
-        *,
-        task: Mapping[str, Any],
-        evaluation_split: str,
-        repeats: int,
-    ) -> Mapping[str, Any]:
-        value = self.callback(freeze, task, evaluation_split, repeats)
+    def evaluate(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        value = self.callback(request)
         if not isinstance(value, Mapping):
             raise TypeError("evaluation_provider_must_return_mapping")
         return value

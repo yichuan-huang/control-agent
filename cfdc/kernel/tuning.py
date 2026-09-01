@@ -34,7 +34,7 @@ class TuningContract:
             raise ValueError("tuning_contract_version_mismatch")
         if not isinstance(self.budget_confirmed, bool):
             raise ValueError("tuning_budget_confirmed_must_be_boolean")  # noqa: TRY004 - stable API error
-        if not 0 < self.max_probes <= 6:
+        if not 0 < self.max_probes <= 100:
             raise ValueError("tuning_probe_budget_invalid")
         if (
             not math.isfinite(float(self.baseline_multiplier_min))
@@ -215,8 +215,14 @@ def bounded_parameter_candidates(
         for name in contract.parameter_whitelist:
             value = values[name] * float(multiplier)
             lower, upper = contract.parameter_domains[name]
-            lower = max(float(lower), values[name] * contract.baseline_multiplier_min)
-            upper = min(float(upper), values[name] * contract.baseline_multiplier_max)
+            scaled = sorted(
+                (
+                    values[name] * contract.baseline_multiplier_min,
+                    values[name] * contract.baseline_multiplier_max,
+                )
+            )
+            lower = max(float(lower), scaled[0])
+            upper = min(float(upper), scaled[1])
             if lower > upper or not lower <= value <= upper:
                 legal = False
                 break
@@ -232,93 +238,90 @@ def run_bounded_tuning(
     evaluate: Callable[[Mapping[str, float], str, int], Mapping[str, Any]],
     *,
     baseline_result: Mapping[str, Any],
+    confirm_selected: bool = True,
+    qualify: Callable[[Mapping[str, float]], Mapping[str, Any]] | None = None,
 ) -> TuningResult:
-    """Evaluate deterministic probes and confirm only the selected best.
+    """Select using development only; optionally confirm the frozen winner once.
 
-    ``evaluate(parameters, split, repeats)`` must return public metrics.  The
-    callback may be backed by the existing simulator but cannot expose private
-    object truth.  Fresh confirmation is deliberately never fed back into the
-    development search.
+    Callbacks are trusted Kernel numerical adapters, never decoded provider or
+    LLM verdicts. The service sets ``confirm_selected=False`` to persist the new
+    freeze before its separate one-shot confirmation command. Direct numerical
+    callers may complete both steps here. Fresh scores never affect selection.
     """
+    baseline = _validate_parameters(baseline_parameters, contract)
+    baseline_score = _score(baseline_result)
+
+    def result(status, parameters, score, probes=(), accepted=False, reason=""):
+        return TuningResult(
+            status,
+            baseline_result,
+            dict(parameters),
+            score,
+            tuple(probes),
+            accepted,
+            reason,
+            contract.fingerprint,
+        )
 
     if not contract.budget_confirmed:
-        return TuningResult(
-            "blocked",
-            baseline_result,
-            dict(baseline_parameters),
-            None,
-            reason="tuning_budget_not_confirmed",
-            contract_fingerprint=contract.fingerprint,
+        return result(
+            "blocked", baseline, baseline_score, reason="tuning_budget_not_confirmed"
         )
-    baseline = _validate_parameters(baseline_parameters, contract)
     if baseline_result.get("stable") is not True:
-        return TuningResult(
-            "blocked",
-            baseline_result,
-            baseline,
-            _score(baseline_result),
-            reason="initial_qualification_failed",
-            contract_fingerprint=contract.fingerprint,
+        return result(
+            "blocked", baseline, baseline_score, reason="initial_qualification_failed"
         )
     if baseline_result.get("performance_pass") is True:
-        return TuningResult(
+        return result(
             "skipped",
-            baseline_result,
             baseline,
-            _score(baseline_result),
+            baseline_score,
             reason="baseline_already_meets_contract",
-            contract_fingerprint=contract.fingerprint,
         )
-    baseline_score = _score(baseline_result)
-    if baseline_score is None:
-        return TuningResult(
+    if baseline_score is None or baseline_score < 0:
+        return result(
             "blocked",
-            baseline_result,
             baseline,
-            None,
-            reason="baseline_score_missing",
-            contract_fingerprint=contract.fingerprint,
+            baseline_score,
+            reason="baseline_violation_score_required",
         )
     best_parameters = dict(baseline)
     best_score = baseline_score
-    best_development_score = baseline_score
     probes: list[Mapping[str, Any]] = []
-    for index, candidate in enumerate(
-        bounded_parameter_candidates(baseline, contract), 1
-    ):
-        try:
-            development = dict(
-                evaluate(candidate, "development", contract.development_repeats)
-            )
-        except Exception as exc:  # noqa: BLE001 - provider failures are a hard tuning stop
-            probes.append(
-                {
-                    "probe_index": index,
-                    "parameters": dict(candidate),
-                    "development": None,
-                    "fresh": None,
-                    "accepted": False,
-                    "reason": "evaluation_infrastructure_error",
-                    "error_type": type(exc).__name__,
-                }
-            )
-            return TuningResult(
-                "blocked",
-                baseline_result,
-                best_parameters,
-                best_score,
-                tuple(probes),
-                False,
-                "evaluation_infrastructure_error",
-                contract.fingerprint,
-            )
+    # Materialize candidate order before the first result can influence it.
+    candidates = bounded_parameter_candidates(baseline, contract)
+    for index, candidate in enumerate(candidates, 1):
         row: dict[str, Any] = {
             "probe_index": index,
             "parameters": dict(candidate),
-            "development": development,
+            "development": None,
             "fresh": None,
             "accepted": False,
         }
+        try:
+            if qualify is not None:
+                qualification = dict(qualify(candidate))
+                row["qualification"] = qualification
+                if qualification.get("status") != "offline_qualified":
+                    row["reason"] = "candidate_qualification_failed"
+                    probes.append(row)
+                    continue
+            development = dict(
+                evaluate(candidate, "development", contract.development_repeats)
+            )
+            row["development"] = development
+        except Exception as exc:  # noqa: BLE001 - stop on infrastructure failure
+            row.update(
+                reason="evaluation_infrastructure_error", error_type=type(exc).__name__
+            )
+            probes.append(row)
+            return result(
+                "blocked",
+                best_parameters,
+                best_score,
+                probes,
+                reason="evaluation_infrastructure_error",
+            )
         if (
             development.get("hard_failure") is True
             or development.get("stable") is not True
@@ -327,63 +330,81 @@ def run_bounded_tuning(
             probes.append(row)
             continue
         score = _score(development)
-        if score is None or score < best_development_score * (
-            1.0 + contract.minimum_relative_improvement
+        strict_gain = best_score - score if score is not None else -1.0
+        numerical_floor = max(1e-12, abs(best_score) * 1e-12)
+        relative_gain = strict_gain / max(abs(best_score), 1e-12)
+        if (
+            score is None
+            or score < 0
+            or strict_gain <= numerical_floor
+            or relative_gain < contract.minimum_relative_improvement
         ):
             row["reason"] = "improvement_below_threshold"
             probes.append(row)
             continue
-        try:
-            fresh = dict(evaluate(candidate, "fresh", contract.fresh_repeats))
-        except Exception as exc:  # noqa: BLE001 - provider failures are a hard tuning stop
-            row["reason"] = "evaluation_infrastructure_error"
-            row["error_type"] = type(exc).__name__
-            probes.append(row)
-            return TuningResult(
-                "blocked",
-                baseline_result,
-                best_parameters,
-                best_score,
-                tuple(probes),
-                False,
-                "evaluation_infrastructure_error",
-                contract.fingerprint,
-            )
-        row["fresh"] = fresh
-        if fresh.get("hard_failure") is True or fresh.get("stable") is not True:
-            row["reason"] = "fresh_confirmation_failed"
-            probes.append(row)
-            continue
-        fresh_score = _score(fresh)
-        if fresh_score is None or fresh_score < best_development_score * (
-            1.0 + contract.minimum_relative_improvement
-        ):
-            row["reason"] = "fresh_improvement_below_threshold"
-            probes.append(row)
-            continue
-        row["accepted"] = True
-        row["reason"] = "accepted_improvement"
+        row.update(
+            accepted=True,
+            reason="accepted_development_improvement",
+            relative_improvement=relative_gain,
+        )
         probes.append(row)
-        # Fresh data confirms the candidate, but is not reused to generate new
-        # probes.  The deterministic sequence continues to exhaust the budget.
-        # Development results decide which later probes are eligible.  Fresh
-        # confirmation is retained as holdout evidence and never changes the
-        # next probe's threshold or sequence.
-        best_development_score = score
-        best_score = fresh_score
-        best_parameters = dict(candidate)
-    accepted = best_parameters != baseline
-    return TuningResult(
-        "completed",
-        baseline_result,
+        best_parameters, best_score = dict(candidate), score
+    if best_parameters == baseline:
+        return result(
+            "exhausted",
+            baseline,
+            baseline_score,
+            probes,
+            reason="no_strict_development_improvement",
+        )
+    if not confirm_selected:
+        return result(
+            "selected",
+            best_parameters,
+            best_score,
+            probes,
+            True,
+            "development_winner_requires_frozen_confirmation",
+        )
+    # There are no development calls after this point, even if fresh fails.
+    row = {
+        "kind": "final_confirmation",
+        "parameters": dict(best_parameters),
+        "fresh": None,
+        "accepted": False,
+    }
+    try:
+        fresh = dict(evaluate(best_parameters, "fresh", contract.fresh_repeats))
+        row["fresh"] = fresh
+    except Exception as exc:  # noqa: BLE001 - final confirmation is never retried here
+        row.update(
+            reason="confirmation_infrastructure_error", error_type=type(exc).__name__
+        )
+        probes.append(row)
+        return result(
+            "confirmation_failed",
+            best_parameters,
+            best_score,
+            probes,
+            reason="confirmation_infrastructure_error",
+        )
+    passed = (
+        fresh.get("stable") is True
+        and fresh.get("hard_failure") is not True
+        and fresh.get("performance_pass") is True
+    )
+    row.update(
+        accepted=passed,
+        reason="fresh_confirmation_passed" if passed else "fresh_confirmation_failed",
+    )
+    probes.append(row)
+    return result(
+        "completed" if passed else "confirmation_failed",
         best_parameters,
         best_score,
-        tuple(probes),
-        accepted,
-        "best_candidate_selected"
-        if accepted
-        else "no_candidate_met_improvement_and_fresh_gates",
-        contract.fingerprint,
+        probes,
+        passed,
+        row["reason"],
     )
 
 

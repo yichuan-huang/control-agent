@@ -42,13 +42,23 @@ def _positive(features: Mapping[str, float], *names: str, default: float) -> flo
 def _base_parameters(
     family: str, f: Mapping[str, float], task: Mapping[str, Any]
 ) -> dict[str, float]:
-    gain = _positive(
-        f,
-        "static_gain",
-        "input_gain",
-        "acceleration_gain",
-        "derivative_gain",
-        default=1.0,
+    gain = next(
+        (
+            float(f[name])
+            for name in (
+                "static_gain",
+                "input_gain",
+                "signed_input_gain",
+                "acceleration_gain",
+                "derivative_gain",
+                "static_map_linear_coefficient",
+                "outer_static_slope",
+            )
+            if name in f
+            and math.isfinite(float(f[name]))
+            and abs(float(f[name])) > 1e-9
+        ),
+        1.0,
     )
     tau = _positive(f, "dominant_time_constant", "time_constant", default=1.0)
     wn = _positive(
@@ -58,7 +68,13 @@ def _base_parameters(
         "modal_frequency",
         default=1.0 / tau,
     )
-    zeta = float(np.clip(f.get("damping_ratio", 0.7), 0.05, 1.5))
+    zeta = float(
+        np.clip(
+            f.get("damping_ratio", f.get("base_decay_rate", 0.1) / (2.0 * wn)),
+            0.01,
+            1.5,
+        )
+    )
     bandwidth = float(task.get("target_bandwidth_rad_s") or min(1.0 / tau, 0.35 * wn))
     bandwidth = max(bandwidth, 0.01)
     inverse_gain = 1.0 / gain
@@ -107,8 +123,8 @@ def _base_parameters(
             "gain": inverse_gain,
             "lead_zero_rate": slow,
             "lead_pole_rate": fast,
-            "lag_zero_rate": max(0.1 * slow, 1e-3),
-            "lag_pole_rate": slow,
+            "lag_zero_rate": slow,
+            "lag_pole_rate": max(0.1 * slow, 1e-3),
         }
     if family == "two_dof_PI":
         return {"feedforward_gain": inverse_gain, **pi}
@@ -123,27 +139,36 @@ def _base_parameters(
             "target_bandwidth": bandwidth,
         }
         if family == "local_PI_without_inverse":
-            return {**base, "reference_feedforward": 1.0, "map_linear": inverse_gain}
+            return {
+                **base,
+                "reference_feedforward": 1.0,
+                "map_linear": float(f["static_map_linear_coefficient"]),
+            }
         if family == "partial_inverse_then_PI":
             return {
                 **base,
-                "map_linear": inverse_gain,
-                "map_cubic": float(f.get("map_cubic", 0.0)),
+                "map_linear": float(f["static_map_linear_coefficient"]),
+                "map_cubic": float(f["static_map_cubic_coefficient"]),
+                "inverse_input_lower": float(f["inverse_input_lower"]),
+                "inverse_input_upper": float(f["inverse_input_upper"]),
             }
         return {
             **base,
-            "positive_deadzone": max(f.get("positive_deadzone", 0.01), 0.0),
-            "negative_deadzone": max(f.get("negative_deadzone", 0.01), 0.0),
-            "outer_slope": inverse_gain,
-            "virtual_noise_guard": max(f.get("virtual_noise_guard", 0.005), 1e-6),
+            "positive_deadzone": max(f["positive_deadzone_bound"], 0.0),
+            "negative_deadzone": max(f["negative_deadzone_bound"], 0.0),
+            "outer_slope": float(f["outer_static_slope"]),
+            "virtual_noise_guard": max(f["virtual_noise_guard"], 1e-9),
         }
     if family in {"reduced_low_order_PI", "phase_guarded_2dof_PI"}:
-        return {
+        result = {
             **pi,
             "target_bandwidth": min(
                 bandwidth, _positive(f, "phase_guard_frequency", default=bandwidth)
             ),
         }
+        if family == "phase_guarded_2dof_PI":
+            result["feedforward_gain"] = inverse_gain
+        return result
     if family == "local_fixed_PID":
         return {
             "kp": 1.2 * zeta * wn * inverse_gain,
@@ -152,6 +177,7 @@ def _base_parameters(
             "feedforward": inverse_gain,
             "input_gain_estimate": gain,
             "target_bandwidth": bandwidth,
+            "antiwindup_gain": 1.0,
         }
     if family == "scheduled_damping_PID":
         return {
@@ -160,8 +186,8 @@ def _base_parameters(
             "kd": 0.15 * inverse_gain,
             "feedforward": inverse_gain,
             "input_gain_estimate": gain,
-            "base_decay": _positive(f, "base_decay_rate", default=zeta * wn),
-            "quadratic_decay": max(f.get("quadratic_decay_rate", 0.01), 1e-6),
+            "base_decay": float(f["base_decay_rate"]),
+            "quadratic_decay": max(f["quadratic_decay_rate"], 1e-9),
             "desired_damping": max(0.15, zeta),
             "target_bandwidth": bandwidth,
             "antiwindup_gain": 1.0,
@@ -169,7 +195,7 @@ def _base_parameters(
     if family == "cascaded_control":
         unstable = _positive(f, "unstable_mode_rate", default=wn)
         input_gain = _positive(f, "angular_input_gain", "input_gain", default=gain)
-        return {
+        result = {
             "inner_kp": 2.0 * unstable**2 / input_gain,
             "inner_kd": 2.4 * unstable / input_gain,
             "inner_target_rate": 2.0 * unstable,
@@ -178,11 +204,52 @@ def _base_parameters(
             "internal_reference_limit": 0.2,
             "reference_acceleration_scale": 1.0,
         }
+        vt_interfaces = {
+            "x_m",
+            "z_m",
+            "pitch_rad",
+            "x_velocity_m_s",
+            "z_velocity_m_s",
+            "pitch_rate_rad_s",
+        }
+        if vt_interfaces <= set(task.get("measured_signals", ())):
+            workspace = task.get("workspace") or {}
+            equilibrium = (
+                workspace.get("local_equilibrium")
+                if isinstance(workspace, Mapping)
+                else None
+            )
+            if not isinstance(equilibrium, Mapping):
+                raise ValueError("vtol_local_equilibrium_required")
+            missing = {
+                "hover_thrust_n",
+                "vertical_input_gain",
+            } - set(equilibrium)
+            if missing:
+                raise ValueError(
+                    "vtol_local_equilibrium_fields_missing: "
+                    + ", ".join(sorted(missing))
+                )
+            hover = float(equilibrium["hover_thrust_n"])
+            vertical_gain = float(equilibrium["vertical_input_gain"])
+            if (
+                not math.isfinite(hover)
+                or not math.isfinite(vertical_gain)
+                or hover <= 0.0
+                or vertical_gain <= 0.0
+            ):
+                raise ValueError("vtol_local_equilibrium_invalid")
+            result.update(
+                hover_thrust=hover,
+                altitude_kp=bandwidth**2 / vertical_gain,
+                altitude_kd=2.0 * zeta * bandwidth / vertical_gain,
+            )
+        return result
     if family in {"decentralized_channel_PI", "static_decoupler_then_PI"}:
         matrix = np.asarray(
             [
-                [f.get("local_gain_k11", 1.0), f.get("local_gain_k12", 0.0)],
-                [f.get("local_gain_k21", 0.0), f.get("local_gain_k22", 1.0)],
+                [f["local_gain_k11"], f["local_gain_k12"]],
+                [f["local_gain_k21"], f["local_gain_k22"]],
             ],
             dtype=float,
         )
@@ -219,17 +286,25 @@ def _base_parameters(
         }
         for row in range(1, 3):
             for column in range(1, 3):
-                result[f"dynamic_map_base_{row}{column}"] = f.get(
-                    f"dynamic_map_base_{row}{column}", float(row == column)
-                )
+                result[f"dynamic_map_base_{row}{column}"] = f[
+                    f"dynamic_map_base_{row}{column}"
+                ]
                 for basis in range(1, 4):
-                    result[f"dynamic_map_lag{basis}_{row}{column}"] = f.get(
-                        f"dynamic_map_lag{basis}_{row}{column}", 0.0
-                    )
+                    result[f"dynamic_map_lag{basis}_{row}{column}"] = f[
+                        f"dynamic_map_lag{basis}_{row}{column}"
+                    ]
         return result
     if family == "self_excitation_energy_guarded_PID":
+        crossing = _positive(
+            f, "zero_decay_crossing_amplitude", default=max(0.1, 1.0 / wn)
+        )
+        capture_gain = max(
+            0.1,
+            -float(f["small_amplitude_decay_rate"])
+            + float(f["quadratic_decay_rate"]) * crossing**2,
+        )
         return {
-            "capture_damping_gain": max(0.1, zeta),
+            "capture_damping_gain": capture_gain,
             "capture_target_damping_ratio": 0.4,
             "kp": wn**2 * inverse_gain,
             "ki": 0.05 * wn**2 * inverse_gain,
@@ -238,8 +313,8 @@ def _base_parameters(
             "input_gain_estimate": gain,
             "target_bandwidth": bandwidth,
             "antiwindup_gain": 1.0,
-            "handoff_amplitude": 0.1,
-            "handoff_hysteresis": 0.02,
+            "handoff_amplitude": crossing,
+            "handoff_hysteresis": 0.2 * crossing,
             "handoff_dwell_s": max(2.0 / wn, 0.1),
             "envelope_filter_rate": wn,
         }
@@ -275,7 +350,14 @@ def synthesize_controller(
     contract = controller_contract(family)
     if contract is None:
         raise ValueError(f"controller_contract_not_registered: {family}")
-    parameters = _base_parameters(family, _values(feature_artifact), task)
+    feature_values = _values(feature_artifact)
+    consumed = {str(item) for item in contract.get("controller_features", ())}
+    missing_consumed = sorted(consumed - set(feature_values))
+    if missing_consumed:
+        raise ValueError(
+            "controller_consumed_features_missing: " + ", ".join(missing_consumed)
+        )
+    parameters = _base_parameters(family, feature_values, task)
     required = {str(item) for item in contract.get("required_parameters", ())}
     missing = sorted(required - set(parameters))
     if missing:
@@ -320,6 +402,17 @@ def synthesize_controller(
         "synthesis_features": list(contract.get("controller_features", ())),
         "route_guard_features": list(contract.get("route_guard_features", ())),
         "runtime_contract": contract.get("runtime_contract", {}),
+        "parameter_provenance": {
+            name: {
+                "feature_ids": (
+                    ["static_gain", "dominant_time_constant"]
+                    if family in {"PI", "delay_aware_PI"} and name in {"kp", "ki"}
+                    else list(contract.get("controller_features", ()))
+                ),
+                "calculation_rule": f"registered deterministic {family} synthesis/v2",
+            }
+            for name in parameters
+        },
     }
     return ir, audit
 

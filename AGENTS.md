@@ -43,7 +43,7 @@ CFDC_RUN_OLLAMA_SMOKE=1 \
 CFDC_OLLAMA_BASE_URL="http://127.0.0.1:11434/v1" \
 CFDC_OLLAMA_MODEL="gemma4:e4b" \
 CFDC_OLLAMA_API_KEY="ollama" \
-uv run --locked pytest -q tests/test_kernel_webui.py::test_live_ollama_dc_motor_flow_reaches_performance_met
+uv run --locked pytest -q tests/test_kernel_webui.py::test_live_ollama_dc_motor_flow_fails_closed_after_bounded_tuning
 ```
 
 - For changes affecting an LLM-backed WebUI or CLI path, exercise the affected path with this real model as well as automated tests. UI interaction changes also require a browser check; a service-level smoke test does not prove browser behavior. CLI changes require running the relevant command and inspecting its output and exit status.
@@ -59,6 +59,7 @@ uv run --locked pytest -q tests/test_kernel_webui.py::test_live_ollama_dc_motor_
 
 ## Repository and Documentation Hygiene
 
+- Work directly on the current `main` branch by default. Do not create a Git worktree or a task branch unless the user explicitly requests one. If unfinished task changes already exist in another worktree, inspect and safely transfer them to `main` before continuing there.
 - Do not upload `docs/`, `archive/`, secrets, local sessions, generated reports, model files, virtual environments, or build outputs. Respect `.gitignore`; do not force-add ignored material to make a test pass.
 - Never store real API keys in source, fixtures, logs, screenshots, session state, exports, or commit messages. Use environment variables or the application's credential form.
 - Inspect `git status` and the staged diff before committing. Stage only task-related files, preserve user work, and do not delete local archives or documentation as part of publication cleanup.
@@ -67,6 +68,7 @@ uv run --locked pytest -q tests/test_kernel_webui.py::test_live_ollama_dc_motor_
 
 ## GitHub CI and Release Gate
 
+- When creating or updating a release tag, verify that `[project].version` in `pyproject.toml` exactly matches the tag without the leading `v` (for example, tag `v0.3.1` requires version `0.3.1`). Update both together before running release validation.
 - Run all local release checks before pushing. After pushing, inspect GitHub Actions for the exact pushed commit SHA; an older successful run does not validate a new commit.
 - A published revision is not complete until the CI matrix for Python **3.11, 3.12, and 3.13** finishes successfully. Pending, cancelled, or failed jobs do not satisfy this gate.
 - If CI fails, inspect the failed job, fix the cause, rerun local checks, create a corrective commit, and push again. Repeat until the required jobs pass. Do not announce a failed revision as a completed release.

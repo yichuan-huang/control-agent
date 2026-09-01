@@ -489,9 +489,10 @@ def test_kernel_cli_registered_case_auto_runs_full_chain_and_exports_bundle(
     main()
     payload = json.loads(capsys.readouterr().out)
 
-    assert payload["status"] == "performance_met"
-    assert payload["feature_artifact"]["feature_version"] == "cfdc-features/v1"
+    assert payload["status"] == "tuning_eligible"
+    assert payload["feature_artifact"]["feature_version"] == "cfdc-features/v2"
     assert payload["controller_qualification"]["status"] == "offline_qualified"
+    assert payload["evaluation"]["status"] == "performance_not_met"
     assert (
         payload["provider_bindings"]["identification"]["provider_id"]
         != payload["provider_bindings"]["evaluation"]["provider_id"]

@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.0` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.1` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
@@ -80,21 +80,36 @@ RAG 是可选的本地参考层。索引启用时，会话固定使用一个经�
 
 Kernel 通过版本化合同提供以下能力，使实验、证据、控制器决策和结果都可以检查与验证。
 
-- `cfdc-protocol/v1` 支持有界 SISO、重复时序、阶梯实验、Class IV 频率／幅值／release、局部不稳定平衡、2x2 MIMO 和多阶段协议。Provider 执行前会重新编译并核对全部绑定和 fingerprint。
-- Operator handoff 会生成操作卡、预检查清单、JSON schema、重复 CSV 模板和 ZIP。CSV/JSON 上传必须依次通过操作员授权、格式、会话／协议、重复次数、时间轴、输入波形、安全边界和信号质量八道门。拒绝的尝试只追加失败回执，不消耗有效实验次数。
-- `cfdc-features/v1` 自动生成带来源和区间的 SISO 相邻结构、时延／NMP／积分／二阶、Step-B 非线性、Class IV、局部不稳定平衡和 2x2 静态／动态耦合特征，同时生成有界参数域。证据不足时返回明确 feature gap。
-- 包内路线注册表提供 20 个可执行控制器合同，并保留明确的 capability-gap 路线。Controller proposal 必须是受限 `ControllerIR`；确定性合成和 `cfdc-qualification/v1` 只返回 `offline_qualified`、`diagnostic_trial_only` 或 `not_qualified`。
-- Identification Provider 与 Evaluation Provider 使用两个独立且不可混淆的绑定。独立 judge 先判断稳定与停止事件，再判断任务性能、扰动重复和 95% Wilson 下界。只有稳定但性能不足才允许有界调优；接受的候选会创建新 freeze，并且必须通过 fresh confirmation。
-- `cfdc-session/v2.0` 保留 revision、幂等 action、stale revision 拒绝、不可覆盖的 artifact 历史和只追加事件链。
+- `cfdc-protocol/v2` 支持有界 SISO、重复时序、阶梯实验、Class IV 频率／幅值／release、局部不稳定平衡、2x2 MIMO 和多阶段协议。Provider 执行前会重新编译并核对全部绑定和 fingerprint。
+- Operator handoff 会生成操作卡、预检查清单、JSON schema、重复 CSV 模板和 ZIP。CSV/JSON 上传必须依次通过操作员授权、格式、会话／协议、重复次数、时间轴、输入波形、安全边界和信号质量八道门。拒绝的尝试只追加失败回执，不计入有效实验次数；但失败尝试和已请求的激励时间仍分别消耗预注册预算。
+- `cfdc-features/v2` 自动生成带来源和区间的 SISO 相邻结构、时延／NMP／积分／二阶、Step-B 非线性、Class IV、局部不稳定平衡和 2x2 静态／动态耦合特征，同时生成有界参数域。证据不足时返回明确 feature gap。
+- 包内路线注册表提供 20 个可执行控制器合同，并保留明确的 capability-gap 路线。Controller proposal 必须是受限 `ControllerIR`；确定性合成和 `cfdc-qualification/v2` 只返回 `offline_qualified`、`diagnostic_trial_only` 或 `not_qualified`。
+- Identification Provider 与 Evaluation Provider 使用两个独立且不可混淆的绑定。独立 `cfdc-independent-judge/v2.0` 从完整逐采样轨迹和停止事件重新计算逐通道指标，先判断硬稳定性与边界，再判断任务性能、扰动重复、最差试次和 95% Wilson 下界。只有稳定但性能不足才允许有界调优；接受的候选会创建新 freeze，并且必须通过 fresh confirmation。
+- `cfdc-session/v3.0` 保留 revision、幂等 action、stale revision 拒绝、不可覆盖的 artifact 历史和只追加事件链。
+
+工作流公开三个彼此独立的就绪门：合法取证、证据支持的路线选择、控制器综合。未知维度只阻塞实际消费它的动作。每次 Provider 调用都在执行前预留预算，因此重试次数、激励时间、有效实验数和不同协议数会分别审计。旧会话可以读取但不能修改；派生会话只复制任务和人工先验，不继承旧特征、资格或性能授权。
+
+可执行能力目录明确区分“合同已注册”和“端到端已验证”。以下 20 个 family 都有提交到仓库的验收：由公开证据综合类型化控制器、恢复稳定资格、冻结、执行非零逐采样闭环并由独立裁判复算；每个 family 另有与其机制相关的拒绝反例。
+
+- SISO 与积分对象：`PI`、`delay_aware_PI`、`notch_then_PI`、`two_dof_pid`、`P_integrator`、`PD_integrator`、`lead_lag_series`、`two_dof_PI`。
+- 静态非线性：`local_PI_without_inverse`、`partial_inverse_then_PI`、`deadzone_right_inverse_then_PI`。
+- 高阶频带：`reduced_low_order_PI`、`phase_guarded_2dof_PI`。
+- 局部状态与非线性：`cascaded_control`、`local_fixed_PID`、`scheduled_damping_PID`、`self_excitation_energy_guarded_PID`。级联运行时覆盖已声明的 CartPole 局部平衡和二维 VTOL 近悬停工作区，不主张摆起或全局恢复。
+- MIMO：`decentralized_channel_PI`、`static_decoupler_then_PI`、`lag_dynamic_decoupler_then_PI`。
 
 ## 开发检查与可选 RAG
 
 在项目目录中运行自动化测试和 Python 检查：
 
 ```bash
-uv sync
-uv run pytest -q
-uv run python -m compileall -q cfdc tests main.py app.py
+uv lock --check
+uv sync --locked
+uv run --locked ruff format --check .
+uv run --locked ruff check .
+uv run --locked pytest -q
+uv run --locked python main.py --benchmark > /tmp/cfdc-benchmark.json
+uv run --locked python main.py --validate-demo
+git diff --check
 ```
 
 `uv` 会读取 `.python-version` 中固定的 Python 版本，创建 `.venv`，并安装项目及开发工具。使用 `uv run` 时不需要手动激活环境。
@@ -117,7 +132,7 @@ uv run python app.py
 
 “引导工作台”通过显式结构化表单创建 Kernel 任务。所有任务都必须填写任务描述、至少一个观测输出、至少一个控制输入、有限的输入上下界，以及正数 `state_stop`。输出上下界可选，但必须成对填写。`transition_then_hold` 还必须填写初始区域和目标区域；`disturbance_recovery_to_hold` 还必须填写扰动事件、恢复起点条件和恢复后保持区域。表单也支持工程单位、性能阈值、实验预算、时间偏好、初始数值和 intermediate targets。
 
-页面在每个状态只突出一个主要操作：确认任务、回答诊断问题、选择实验 Provider、下载 operator bundle、提交操作员报告、上传数据、启动隔离评价、接受有界调优或确认结果。协议波形、已接受公开 trace、特征区间、资格检查、参考／输出／输入／误差曲线、重复试次置信度和九阶段审计时间线都直接来自 Kernel artifact。
+页面在每个状态只突出一个主要操作：确认任务、回答诊断问题、选择实验 Provider、下载 operator bundle、提交操作员报告、上传数据、启动隔离评价、接受有界调优或确认结果。协议波形、已接受公开 trace、特征区间、资格检查、冻结控制器的完整输出／参考／输入轨迹、重复试次置信度、剩余取证预算、路线修正原因、三个独立就绪门和九阶段审计时间线都直接来自 Kernel artifact。页面明确区分“证据不足”“未通过资格”“稳定但性能不足”和“最终独立确认达标”。
 
 “专家合同”页可以提交完整 `TaskContract`、加载 Kernel session、执行 typed action JSON，并校验下载 artifact 的 fingerprint。可单独导出协议、operator bundle、上传回执、特征、Controller IR、qualification、freeze、evaluation、feedback、confirmation、最终结果和完整会话审计，也可导出完整结果 ZIP。
 

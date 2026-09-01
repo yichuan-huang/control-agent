@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.0` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.1` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
@@ -80,21 +80,36 @@ RAG is an optional local reference layer. An enabled session pins one index snap
 
 The Kernel provides the following capabilities through versioned contracts, so experiments, evidence, controller decisions, and results can be inspected and validated.
 
-- `cfdc-protocol/v1` compiles bounded SISO, repeated time-series, staircase, Class IV frequency/amplitude/release, unstable-balance, 2x2 MIMO, and multi-stage protocols. A Provider run recompiles and verifies every binding and fingerprint before execution.
-- Operator handoff writes a card, precheck list, JSON schema, repeat CSV templates, and ZIP. CSV/JSON uploads pass authorization, format, session/protocol, repeat-count, timebase, waveform, safety-limit, and signal-quality gates. Rejected attempts append a receipt without consuming an accepted experiment.
-- `cfdc-features/v1` derives source-bound intervals and bounded parameter domains for SISO adjacent structures, delay/NMP/integrating/second-order behavior, Step-B nonlinearity, Class IV behavior, local unstable balance, and 2x2 static/dynamic coupling. Missing evidence produces a named feature gap.
-- The packaged route registry exposes 20 executable controller contracts plus explicit capability-gap routes. Controller proposals are restricted `ControllerIR`; deterministic synthesis and `cfdc-qualification/v1` return `offline_qualified`, `diagnostic_trial_only`, or `not_qualified`.
-- Identification and evaluation Providers use separate immutable bindings. The independent judge evaluates stability first, then task-specific performance, perturbed repeats, and a 95% Wilson lower bound. Only stable performance gaps may enter bounded tuning; every accepted candidate receives a new freeze and must pass fresh confirmation.
-- `cfdc-session/v2.0` preserves revision checks, idempotent actions, stale-revision rejection, immutable artifact histories, and an append-only event chain.
+- `cfdc-protocol/v2` compiles bounded SISO, repeated time-series, staircase, Class IV frequency/amplitude/release, unstable-balance, 2x2 MIMO, and multi-stage protocols. A Provider run recompiles and verifies every binding and fingerprint before execution.
+- Operator handoff writes a card, precheck list, JSON schema, repeat CSV templates, and ZIP. CSV/JSON uploads pass authorization, format, session/protocol, repeat-count, timebase, waveform, safety-limit, and signal-quality gates. Rejected attempts append a receipt. They do not count as valid experiments, but failed attempts and requested excitation time still consume their separate pre-registered budgets.
+- `cfdc-features/v2` derives source-bound intervals and bounded parameter domains for SISO adjacent structures, delay/NMP/integrating/second-order behavior, Step-B nonlinearity, Class IV behavior, local unstable balance, and 2x2 static/dynamic coupling. Missing evidence produces a named feature gap.
+- The packaged route registry exposes 20 executable controller contracts plus explicit capability-gap routes. Controller proposals are restricted `ControllerIR`; deterministic synthesis and `cfdc-qualification/v2` return `offline_qualified`, `diagnostic_trial_only`, or `not_qualified`.
+- Identification and evaluation Providers use separate immutable bindings. The independent `cfdc-independent-judge/v2.0` recomputes channel metrics from complete sampled trajectories and stop events, evaluates hard stability and limits first, then task-specific performance, perturbed repeats, the worst trial, and a 95% Wilson lower bound. Only stable performance gaps may enter bounded tuning; every accepted candidate receives a new freeze and must pass fresh confirmation.
+- `cfdc-session/v3.0` preserves revision checks, idempotent actions, stale-revision rejection, immutable artifact histories, and an append-only event chain.
+
+The workflow exposes three separate readiness gates: legal evidence acquisition, evidence-supported route selection, and controller synthesis. Unknown dimensions block only actions that consume them. Every provider attempt is reserved before execution, so retries, excitation time, valid experiments, and distinct protocols remain separate audit quantities. Old sessions remain readable but immutable; a derived session copies only the task and human priors, never old features, qualification, or performance authority.
+
+The executable capability catalog distinguishes registration from end-to-end validation. All 20 registered families have committed tests that synthesize a typed controller, qualify it from public evidence, freeze it, run a nonzero sampled closed loop, and recompute the result independently; each also has a family-relevant rejection case.
+
+- SISO and integrating: `PI`, `delay_aware_PI`, `notch_then_PI`, `two_dof_pid`, `P_integrator`, `PD_integrator`, `lead_lag_series`, `two_dof_PI`.
+- Static nonlinear: `local_PI_without_inverse`, `partial_inverse_then_PI`, `deadzone_right_inverse_then_PI`.
+- High-order band-limited: `reduced_low_order_PI`, `phase_guarded_2dof_PI`.
+- Local state and nonlinear: `cascaded_control`, `local_fixed_PID`, `scheduled_damping_PID`, `self_excitation_energy_guarded_PID`. The cascade runtime covers declared local CartPole and planar near-hover VTOL charts; it does not claim swing-up or global recovery.
+- MIMO: `decentralized_channel_PI`, `static_decoupler_then_PI`, `lag_dynamic_decoupler_then_PI`.
 
 ## Development checks and optional RAG
 
 From the project directory, run the automated tests and Python checks:
 
 ```bash
-uv sync
-uv run pytest -q
-uv run python -m compileall -q cfdc tests main.py app.py
+uv lock --check
+uv sync --locked
+uv run --locked ruff format --check .
+uv run --locked ruff check .
+uv run --locked pytest -q
+uv run --locked python main.py --benchmark > /tmp/cfdc-benchmark.json
+uv run --locked python main.py --validate-demo
+git diff --check
 ```
 
 `uv` reads the pinned Python version from `.python-version`, creates `.venv`, and installs the project and development tools. No environment activation is needed when commands use `uv run`.
@@ -117,7 +132,7 @@ uv run python app.py
 
 The Guided Workbench creates Kernel tasks from an explicit structured form. Every task requires a description, at least one measured output, at least one control input, finite input lower and upper bounds, and a positive `state_stop`. Output bounds are optional but must be supplied as a pair. `transition_then_hold` also requires an initial region and target region. `disturbance_recovery_to_hold` also requires a disturbance event, recovery start condition, and hold region. The form also accepts engineering units, performance thresholds, experiment budgets, timing preferences, initial values, and intermediate targets.
 
-At each state the workbench presents one primary next action: confirm the task, answer a diagnostic question, select an experiment Provider, download an operator bundle, record the operator report, upload data, run isolated evaluation, accept bounded tuning, or confirm the result. Protocol waveforms, accepted public traces, feature intervals, qualification checks, reference/output/input/error plots, repeat confidence, and the nine-stage audit timeline are shown from Kernel artifacts.
+At each state the workbench presents one primary next action: confirm the task, answer a diagnostic question, select an experiment Provider, download an operator bundle, record the operator report, upload data, run isolated evaluation, accept bounded tuning, or confirm the result. Protocol waveforms, accepted public traces, feature intervals, qualification checks, full frozen-controller output/reference/input trajectories, repeat confidence, remaining evidence budgets, route-revision reasons, three independent readiness gates, and the nine-stage audit timeline are shown from Kernel artifacts. The page distinguishes insufficient evidence, failed qualification, stable-but-insufficient performance, and final independent confirmation.
 
 The Expert Contracts tab accepts a full `TaskContract`, loads an existing Kernel session, submits typed action JSON, and validates a downloaded artifact fingerprint. It can export the protocol, operator bundle, upload receipt, feature artifact, Controller IR, qualification, freeze, evaluation, feedback, confirmation, final result, complete session audit, or the full result ZIP.
 

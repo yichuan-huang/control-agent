@@ -237,15 +237,15 @@
     },
     "partial_inverse_then_PI": {
       "label_cn": "局部静态逆加比例积分控制",
-      "required_parameters": ["Kp_virtual", "Ki_virtual", "map_linear", "map_cubic", "target_bandwidth"],
-      "controller_features": ["static_map_linear_coefficient", "static_map_cubic_coefficient", "dominant_time_constant"],
+      "required_parameters": ["Kp_virtual", "Ki_virtual", "map_linear", "map_cubic", "target_bandwidth", "inverse_input_lower", "inverse_input_upper"],
+      "controller_features": ["static_map_linear_coefficient", "static_map_cubic_coefficient", "dominant_time_constant", "inverse_input_lower", "inverse_input_upper"],
       "optional_controller_features": [],
       "route_guard_features": ["local_invertibility_margin"]
     },
     "deadzone_right_inverse_then_PI": {
       "label_cn": "死区右逆加比例积分控制",
       "required_parameters": ["Kp_virtual", "Ki_virtual", "positive_deadzone", "negative_deadzone", "outer_slope", "virtual_noise_guard", "target_bandwidth"],
-      "controller_features": ["positive_deadzone_bound", "negative_deadzone_bound", "outer_static_slope", "dominant_time_constant"],
+      "controller_features": ["positive_deadzone_bound", "negative_deadzone_bound", "outer_static_slope", "virtual_noise_guard", "dominant_time_constant"],
       "optional_controller_features": [],
       "route_guard_features": []
     },
@@ -258,14 +258,14 @@
     },
     "phase_guarded_2dof_PI": {
       "label_cn": "相位保护两自由度 PI",
-      "required_parameters": ["kp", "ki", "reference_filter_rate", "target_bandwidth"],
+      "required_parameters": ["kp", "ki", "reference_filter_rate", "target_bandwidth", "feedforward_gain"],
       "controller_features": ["task_band_magnitude_at_crossover", "phase_guard_frequency"],
       "optional_controller_features": [],
       "route_guard_features": ["low_order_residual_index", "amplitude_dependence_index"]
     },
     "local_fixed_PID": {
       "label_cn": "局部固定 PID",
-      "required_parameters": ["kp", "ki", "kd", "feedforward", "input_gain_estimate", "target_bandwidth"],
+      "required_parameters": ["kp", "ki", "kd", "feedforward", "input_gain_estimate", "target_bandwidth", "antiwindup_gain"],
       "controller_features": ["modal_frequency", "input_gain", "base_decay_rate"],
       "optional_controller_features": [],
       "route_guard_features": ["minimum_decay_rate", "damping_change_fraction", "amplitude_dependence_index", "release_model_fit_r2"],

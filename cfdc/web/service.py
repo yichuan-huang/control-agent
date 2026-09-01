@@ -52,12 +52,15 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise TypeError("Artifact 必须是 JSON 对象。")
     from cfdc.experiments.protocols import ExperimentProtocol
     from cfdc.kernel.contracts import (
+        FEATURE_ARTIFACT_VERSION,
+        QUALIFICATION_VERSION,
         ControllerFreeze,
         EvaluationPacket,
         TaskContract,
         fingerprint,
     )
     from cfdc.kernel.controllers import ControllerIR
+    from cfdc.kernel.judging import JUDGE_VERSION
     from cfdc.kernel.session import EvidenceSession
     from cfdc.kernel.tuning import TuningContract
 
@@ -96,7 +99,15 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
                 "artifact_fingerprint",
                 "features",
             ),
+            ("feature_version", FEATURE_ARTIFACT_VERSION): (
+                "artifact_fingerprint",
+                "features",
+            ),
             ("qualification_version", "cfdc-qualification/v1"): (
+                "qualification_fingerprint",
+                "qualification",
+            ),
+            ("qualification_version", QUALIFICATION_VERSION): (
                 "qualification_fingerprint",
                 "qualification",
             ),
@@ -109,6 +120,10 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
                 "import_report",
             ),
             ("judge_version", "cfdc-independent-judge/v1"): (
+                "judge_fingerprint",
+                "evaluation",
+            ),
+            ("judge_version", JUDGE_VERSION): (
                 "judge_fingerprint",
                 "evaluation",
             ),
@@ -191,6 +206,7 @@ _KERNEL_ACTION_ALIASES = {
     "replay_evaluation": "replay",
     "record_confirmation": "confirmation",
     "record_fresh_confirmation": "confirmation",
+    "run_tuning": "run_feedback_iteration",
 }
 
 
@@ -807,6 +823,7 @@ def continue_kernel_app_run(
 def _kernel_report(session) -> dict[str, Any]:
     readiness = session.ledger.readiness()
     pending_actions = _kernel_pending_actions(session)
+    projection = WorkflowService.project(session)
     return {
         "workflow_version": session.workflow_version,
         "session_id": session.session_id,
@@ -818,6 +835,8 @@ def _kernel_report(session) -> dict[str, Any]:
             "readiness": readiness.to_dict(),
             "entries": [item.to_dict() for item in session.ledger.entries],
         },
+        "readiness_gates": projection["readiness_gates"],
+        "information_budget": projection["information_budget"],
         "route": dict(session.route) if session.route else None,
         "features": dict(session.feature_artifact)
         if session.feature_artifact
@@ -1066,6 +1085,14 @@ def prepare_kernel_reply_for_ui(
         "advance",
         "cancel",
         "replay",
+        "prepare_operator_handoff",
+        "derive_features",
+        "synthesize_controller",
+        "qualify_controller",
+        "run_provider",
+        "run_evaluation",
+        "run_feedback_iteration",
+        "confirm_result",
         "submit_answer",
     }:
         prepared = prepare_kernel_reply(

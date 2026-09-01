@@ -31,7 +31,8 @@ def test_docs_and_ci_publish_only_uv_workflow():
     for path in readmes:
         text = path.read_text(encoding="utf-8")
         assert "uv sync" in text
-        assert "uv run pytest -q" in text
+        assert "uv run --locked pytest -q" in text
+        assert "uv run pytest -q" not in text
         assert "conda create" not in text
         assert "conda activate" not in text
         assert "pip install" not in text

@@ -11,7 +11,7 @@ from scipy import signal
 
 from cfdc.experiments.operator import expected_input_waveforms
 from cfdc.kernel.cases import AUDIT_CASES, TRANSITION_VARIANTS
-from cfdc.kernel.contracts import fingerprint
+from cfdc.kernel.contracts import PROTOCOL_VERSION, fingerprint
 from cfdc.kernel.providers import (
     EvaluationProviderRegistry,
     ProviderRegistry,
@@ -136,7 +136,7 @@ class PhysicalTrainingProvider:
         self, operation: dict[str, Any], *, task: dict[str, Any]
     ) -> tuple[PublicTrace, ...]:
         protocol = operation
-        if protocol.get("protocol_version") != "cfdc-protocol/v1":
+        if protocol.get("protocol_version") != PROTOCOL_VERSION:
             raise ValueError("training_provider_requires_compiled_protocol")
         base_id = _base_case_id(self.case_id)
         if base_id not in _MODELS:
@@ -230,7 +230,7 @@ class PhysicalTrainingEvaluationProvider:
 
     case_id: str
     seed: int = 9109
-    provider_version: str = "physical-training-evaluation/v1"
+    provider_version: str = "physical-training-evaluation/v2"
     capabilities: frozenset[str] = frozenset(
         {"software_evaluation", "perturbed_repeats", "multistage", "disturbance"}
     )
@@ -239,124 +239,76 @@ class PhysicalTrainingEvaluationProvider:
     def provider_id(self) -> str:
         return f"physical-training-evaluation:{self.case_id}"
 
-    def evaluate(
-        self,
-        freeze: Mapping[str, Any],
-        *,
-        task: Mapping[str, Any],
-        evaluation_split: str,
-        repeats: int,
-    ) -> Mapping[str, Any]:
-        if evaluation_split not in {"development", "fresh_confirmation"}:
-            raise ValueError("training_evaluation_split_invalid")
-        if repeats < 1 or repeats > 200:
-            raise ValueError("training_evaluation_repeats_invalid")
-        base_id = _base_case_id(self.case_id)
-        if base_id not in _MODELS:
-            raise ValueError(f"unknown_training_case: {self.case_id}")
-        controller = freeze.get("controller")
-        if not isinstance(controller, Mapping):
-            raise TypeError("training_evaluation_controller_required")
-        parameters = controller.get("parameters")
-        if not isinstance(parameters, Mapping) or not parameters:
-            raise ValueError("training_evaluation_parameters_required")
-        numeric_parameters = [float(item) for item in parameters.values()]
-        stable_candidate = (
-            all(np.isfinite(numeric_parameters))
-            and max(abs(item) for item in numeric_parameters) < 1e6
-        )
-        criteria = dict(
-            task.get("success_requirements")
-            or task.get("task_success_requirements")
-            or {}
-        )
-        task_type = str(task.get("task_type") or "local_setpoint_hold")
-        phase_plan = freeze.get("evaluation_contract", {}).get("phase_plan", {})
-        phases = (
-            [
-                str(item.get("phase_id") or item.get("id"))
-                for item in phase_plan.get("phases", ())
-                if isinstance(item, Mapping)
-                and (item.get("phase_id") or item.get("id"))
-            ]
-            if isinstance(phase_plan, Mapping)
-            else []
-        )
-        rng = np.random.default_rng(
-            self.seed + (10_000 if evaluation_split == "fresh_confirmation" else 0)
-        )
-        trials: list[dict[str, Any]] = []
-        for index in range(repeats):
-            perturbation = float(rng.uniform(0.88, 1.12))
-            final_limit = float(
-                criteria.get(
-                    "final_abs_error_max", criteria.get("recovery_abs_error_max", 1.0)
-                )
-            )
-            settling_limit = float(
-                criteria.get(
-                    "settling_time_max_s", criteria.get("recovery_time_max_s", 10.0)
-                )
-            )
-            hold_min = float(
-                criteria.get(
-                    "hold_duration_min_s",
-                    criteria.get(
-                        "final_hold_duration_min_s",
-                        criteria.get("post_recovery_hold_duration_min_s", 1.0),
-                    ),
-                )
-            )
-            performance_pass = stable_candidate
-            metrics = {
-                "final_abs_error": 0.55 * final_limit * perturbation,
-                "overshoot": 0.55
-                * float(criteria.get("overshoot_max", 1.0))
-                * perturbation,
-                "settling_time_s": 0.65 * settling_limit * perturbation,
-                "hold_duration_s": 1.25 * hold_min,
-                "score": perturbation,
-            }
-            trial: dict[str, Any] = {
-                "trial_id": f"{evaluation_split}-{index + 1:03d}",
-                "stable": bool(stable_candidate),
-                "stopped_on_limit": False,
-                "safety_failure": False,
-                "performance_pass": bool(performance_pass),
-                "metrics": metrics,
-                "perturbation_id": f"bounded-{index + 1:03d}",
-            }
-            if task_type == "transition_then_hold":
-                trial.update(
-                    completed_phase_ids=phases,
-                    verified_handoff_ids=[
-                        f"{phases[position]}__to__{phases[position + 1]}"
-                        for position in range(max(0, len(phases) - 1))
-                    ],
-                    entered_goal_region=True,
-                    final_hold_duration_s=1.25 * hold_min,
-                )
-            elif task_type == "disturbance_recovery_to_hold":
-                trial.update(
-                    disturbance_executed=True,
-                    disturbance_event_fingerprint=fingerprint(
-                        task.get("disturbance_contract") or {}
-                    ),
-                    recovered_to_hold=True,
-                    recovery_time_s=0.65 * settling_limit * perturbation,
-                    post_recovery_hold_duration_s=1.25 * hold_min,
-                )
-            trials.append(trial)
+    def evaluate(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Execute the frozen controller; no scoring contract enters the provider."""
+        from cfdc.kernel.execution_contract import EXECUTION_VERSION
+        from cfdc.sim.execution import simulate_trial
+
+        if request.get("request_version") != EXECUTION_VERSION:
+            raise ValueError("evaluation_execution_request_required")
+        trials = []
+        for scenario in request["trials"]:
+            plant = _evaluation_plant(self.case_id, request, int(scenario["seed"]))
+            trials.append(simulate_trial(request, scenario, plant))
         return {
-            "evaluation_split": evaluation_split,
+            "evaluation_split": request["evaluation_split"],
             "trials": trials,
             "provider_attestation": {
                 "case_id": self.case_id,
-                "scope": "task-bound engineering training simulation",
+                "scope": "actual sampled software execution",
                 "parameter_disclosure": "none",
             },
             "private_truth_returned": False,
         }
+
+
+def _evaluation_plant(case_id: str, request: Mapping[str, Any], seed: int):
+    """Private numerical factory; its parameters never leave the provider."""
+    from cfdc.sim.execution import LinearPlant
+
+    model = _MODELS[_base_case_id(case_id)]
+    rng = np.random.default_rng(seed)
+    gain_scale, time_scale = rng.uniform(0.97, 1.03, 2)
+    family = model["family"]
+    inputs = tuple(request["control_inputs"])
+    outputs = tuple(request["tracked_signals"])
+    delays = {}
+    if family == "mimo":
+        matrix = [
+            [
+                (
+                    [float(model["matrix"][i][j] * gain_scale)],
+                    [float(model["taus"][i][j] * time_scale), 1.0],
+                )
+                for j in range(2)
+            ]
+            for i in range(2)
+        ]
+    else:
+        gain = float(model["gain"] * gain_scale)
+        if family == "first_order":
+            numerator, denominator = [gain], [float(model["tau"] * time_scale), 1.0]
+        elif family == "two_lag":
+            tau1, tau2 = model["tau1"] * time_scale, model["tau2"] * time_scale
+            numerator, denominator = [gain], [tau1 * tau2, tau1 + tau2, 1.0]
+        elif family == "damped_integrator":
+            numerator, denominator = (
+                [gain],
+                [1.0, float(model["drag"] / time_scale), 0.0],
+            )
+        elif family == "stable_nmp":
+            wn = model["wn"] / time_scale
+            numerator, denominator = (
+                [-gain / model["zero"], gain],
+                [1 / wn**2, 2 * model["zeta"] / wn, 1.0],
+            )
+        else:
+            raise ValueError("training_evaluation_plant_unregistered")
+        matrix = [[(numerator, denominator)]]
+        delays = {inputs[0]: float(model.get("delay", 0.0))}
+    return LinearPlant.from_transfer_matrix(
+        matrix, inputs=inputs, outputs=outputs, delays=delays
+    )
 
 
 def build_training_provider_registries(

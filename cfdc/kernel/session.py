@@ -262,7 +262,10 @@ class EvidenceSession:
         _validate_event_chain(events)
         session_id = str(value["session_id"])
         controller_freeze = value.get("controller_freeze")
-        if controller_freeze is not None:
+        historical = version != EVIDENCE_SESSION_VERSION
+        if historical and controller_freeze is not None:
+            _validate_historical_freeze(controller_freeze, session_id, task.fingerprint)
+        if controller_freeze is not None and not historical:
             freeze = ControllerFreeze.from_mapping(controller_freeze)
             if (
                 freeze.session_id != session_id
@@ -271,6 +274,11 @@ class EvidenceSession:
                 raise ValueError("controller_freeze_session_binding_mismatch")
         freeze_history = tuple(dict(item) for item in value.get("freeze_history", ()))
         for previous_freeze in freeze_history:
+            if historical:
+                _validate_historical_freeze(
+                    previous_freeze, session_id, task.fingerprint
+                )
+                continue
             freeze = ControllerFreeze.from_mapping(previous_freeze)
             if (
                 freeze.session_id != session_id
@@ -356,11 +364,16 @@ class EvidenceSession:
             workflow_version=str(value.get("workflow_version", "cfdc-v6-kernel/v1")),
             legacy_lineage=value.get("legacy_lineage"),
             import_report=value.get("import_report"),
-            read_only=bool(value.get("read_only", False)),
+            read_only=historical or bool(value.get("read_only", False)),
             session_version=str(version),
             _path=str(path) if path is not None else None,
         )
-        if session.phase_plan is not None:
+        if session.phase_plan is not None and historical:
+            plan_raw = dict(session.phase_plan)
+            plan_digest = plan_raw.pop("plan_fingerprint", None)
+            if plan_digest and fingerprint(plan_raw) != plan_digest:
+                raise ValueError("historical_phase_plan_fingerprint_mismatch")
+        if session.phase_plan is not None and not historical:
             plan = MultiStagePlan.from_mapping(session.phase_plan)
             if plan.task_fingerprint != task.fingerprint:
                 raise ValueError("phase_plan_task_binding_mismatch")
@@ -413,3 +426,18 @@ def _validate_event_chain(events: tuple[SessionEvent, ...]) -> None:
             raise ValueError("session_event_revision_invalid")
         previous = event.event_fingerprint
         expected_revision = event.revision_after
+
+
+def _validate_historical_freeze(
+    value: Mapping[str, Any], session_id: str, task_fingerprint: str
+) -> None:
+    """Check stored integrity without upgrading historical execution authority."""
+    raw = dict(value)
+    supplied = raw.pop("freeze_fingerprint", None)
+    if not supplied or fingerprint(raw) != supplied:
+        raise ValueError("historical_freeze_fingerprint_mismatch")
+    if (
+        raw.get("session_id") != session_id
+        or raw.get("task_fingerprint") != task_fingerprint
+    ):
+        raise ValueError("historical_freeze_session_binding_mismatch")

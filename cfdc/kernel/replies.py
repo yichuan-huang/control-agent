@@ -50,9 +50,26 @@ _ACTION_ALIASES = {
     "qualify_controller": "qualify_controller",
     "run_provider": "run_provider",
     "run_evaluation": "run_evaluation",
+    "run_tuning": "run_feedback_iteration",
     "run_feedback_iteration": "run_feedback_iteration",
     "confirm_result": "confirm_result",
 }
+
+_NO_INPUT_ACTIONS = frozenset(
+    {
+        "advance",
+        "cancel",
+        "replay",
+        "prepare_operator_handoff",
+        "derive_features",
+        "synthesize_controller",
+        "qualify_controller",
+        "run_provider",
+        "run_evaluation",
+        "run_feedback_iteration",
+        "confirm_result",
+    }
+)
 
 _MODE_ALIASES = {
     "自然语言": KernelReplyMode.NATURAL_LANGUAGE,
@@ -170,18 +187,7 @@ def build_kernel_input_contract(
             guidance="请先确认边界和预算；此动作不需要在输入框填写内容。",
         )
         return result
-    if action in {
-        "advance",
-        "cancel",
-        "replay",
-        "prepare_operator_handoff",
-        "derive_features",
-        "synthesize_controller",
-        "qualify_controller",
-        "run_provider",
-        "run_evaluation",
-        "confirm_result",
-    }:
+    if action in _NO_INPUT_ACTIONS:
         result.update(
             title=(
                 "继续到下一阶段"
@@ -246,7 +252,6 @@ def build_kernel_input_contract(
         "compile_protocol",
         "record_operator_report",
         "ingest_upload",
-        "run_feedback_iteration",
     }:
         result.update(
             allowed_modes=[KernelReplyMode.JSON.value],
@@ -257,7 +262,7 @@ def build_kernel_input_contract(
         return result
     result["disabled_reason"] = (
         "当前 WebUI 尚未提供该实验动作的执行适配。"
-        if action in {"run_experiment", "retry", "run_tuning"}
+        if action in {"run_experiment", "retry"}
         else f"未知待处理动作：{action}"
     )
     return result
@@ -565,7 +570,7 @@ def prepare_kernel_reply(
             "parameter_candidates": [],
             "payload": {},
         }
-    if action in {"advance", "cancel", "replay"}:
+    if action in _NO_INPUT_ACTIONS:
         if str(text or "").strip():
             raise ValueError("当前动作使用专用按钮，不需要填写回复内容。")
         return {

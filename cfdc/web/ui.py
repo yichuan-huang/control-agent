@@ -59,6 +59,7 @@ _ACTION_ALIASES = {
     "replay_evaluation": "replay",
     "record_confirmation": "confirmation",
     "record_fresh_confirmation": "confirmation",
+    "run_tuning": "run_feedback_iteration",
 }
 
 _TERMINAL_STATES = {"performance_met", "capability_gap", "cancelled"}
@@ -176,8 +177,53 @@ def _trace_figure(report: Mapping[str, Any]) -> go.Figure:
 
 def _evaluation_figure(report: Mapping[str, Any]) -> go.Figure:
     figure = go.Figure()
+    packets = report.get("evaluation_packets") or []
+    packet = packets[-1] if packets and isinstance(packets[-1], Mapping) else {}
+    trials = packet.get("trials") if isinstance(packet, Mapping) else None
+    trial = trials[0] if isinstance(trials, list) and trials else {}
+    trajectory = trial.get("trajectory") if isinstance(trial, Mapping) else None
+    if isinstance(trajectory, Mapping):
+        time_s = trajectory.get("time_s")
+        outputs = trajectory.get("outputs")
+        references = trajectory.get("references")
+        controls = trajectory.get("control_inputs")
+        if isinstance(time_s, list) and isinstance(outputs, Mapping):
+            for name, values in outputs.items():
+                if isinstance(values, list) and len(values) == len(time_s):
+                    figure.add_scatter(
+                        x=time_s, y=values, mode="lines", name=f"output · {name}"
+                    )
+            if isinstance(references, Mapping):
+                for name, values in references.items():
+                    if isinstance(values, list) and len(values) == len(time_s):
+                        figure.add_scatter(
+                            x=time_s,
+                            y=values,
+                            mode="lines",
+                            line={"dash": "dash"},
+                            name=f"reference · {name}",
+                        )
+            if isinstance(controls, Mapping):
+                for name, values in controls.items():
+                    if isinstance(values, list) and len(values) == len(time_s):
+                        figure.add_scatter(
+                            x=time_s,
+                            y=values,
+                            mode="lines",
+                            line={"dash": "dot"},
+                            name=f"control · {name}",
+                            yaxis="y2",
+                        )
+            figure.update_layout(
+                yaxis2={
+                    "title": "control",
+                    "overlaying": "y",
+                    "side": "right",
+                    "showgrid": False,
+                }
+            )
     evaluation = report.get("evaluation")
-    if isinstance(evaluation, Mapping):
+    if not figure.data and isinstance(evaluation, Mapping):
         rate = float(evaluation.get("success_rate") or 0.0)
         wilson = float(evaluation.get("wilson_lower_bound_95") or 0.0)
         minimum = (
@@ -198,9 +244,11 @@ def _evaluation_figure(report: Mapping[str, Any]) -> go.Figure:
     figure.update_layout(
         height=310,
         margin={"l": 42, "r": 18, "t": 36, "b": 42},
-        title="重复试次置信结论",
-        yaxis_range=[0, 1],
+        title="冻结控制器真实评价轨迹" if figure.data else "重复试次置信结论",
+        xaxis_title="time (s)" if figure.data else None,
     )
+    if not figure.data or all(trace.type == "bar" for trace in figure.data):
+        figure.update_yaxes(range=[0, 1])
     return figure
 
 
@@ -344,7 +392,34 @@ def _progress_html(report: Mapping[str, Any]) -> str:
 def _summary_html(report: Mapping[str, Any]) -> str:
     task = report.get("task") if isinstance(report.get("task"), Mapping) else {}
     session_id = html.escape(str(report.get("session_id") or "未知"))
-    status = html.escape(str(report.get("status") or "intake"))
+    raw_status = str(report.get("status") or "intake")
+    qualification = report.get("qualification")
+    confirmation = report.get("confirmation")
+    tuning = report.get("tuning")
+    if raw_status == "performance_met" and isinstance(confirmation, Mapping):
+        claim = "最终独立确认达标"
+    elif raw_status == "performance_met":
+        claim = "冻结候选开发评价达标"
+    elif raw_status in {"tuning_eligible", "awaiting_confirmation"}:
+        claim = "稳定资格成立，但性能尚未最终达标"
+    elif raw_status == "capability_gap" and isinstance(tuning, Mapping):
+        claim = (
+            "有界调优已耗尽，未找到严格改善候选"
+            if tuning.get("reason") == "no_strict_development_improvement"
+            else "当前控制能力存在明确缺口"
+        )
+    elif raw_status == "capability_gap":
+        claim = "当前控制能力存在明确缺口"
+    elif isinstance(qualification, Mapping) and qualification.get("status") not in {
+        None,
+        "offline_qualified",
+    }:
+        claim = "控制器未通过稳定资格"
+    elif not report.get("features"):
+        claim = "公开证据不足"
+    else:
+        claim = "工作流进行中"
+    status = html.escape(f"{claim}（{raw_status}）")
     task_type = html.escape(str(task.get("task_type") or "未知"))
     signals = html.escape(
         ", ".join(str(item) for item in task.get("measured_signals", ()))
@@ -408,6 +483,44 @@ def _guidance_text(report: Mapping[str, Any]) -> str:
     contract = report.get("input_contract")
     contract = contract if isinstance(contract, Mapping) else {}
     text = str(contract.get("guidance") or "")
+    gates = report.get("readiness_gates")
+    if isinstance(gates, Mapping):
+        text += "\n\n### 三个独立门"
+        gate_labels = {
+            "evidence_acquisition": "可以取证",
+            "route_selection": "可以选择路线",
+            "controller_synthesis": "可以综合控制器",
+        }
+        for gate_id, label in gate_labels.items():
+            gate = gates.get(gate_id)
+            gate = gate if isinstance(gate, Mapping) else {}
+            blockers = ", ".join(str(item) for item in gate.get("blockers", ()))
+            text += f"\n- {label}：{'是' if gate.get('ready') else '否'}"
+            if blockers:
+                text += f"；阻塞：`{blockers}`"
+    budget = report.get("information_budget")
+    if isinstance(budget, Mapping):
+        text += (
+            "\n\n### 取证预算"
+            f"\n- 剩余协议：{budget.get('distinct_protocols_remaining', '未知')} / "
+            f"{budget.get('distinct_protocols_limit', '未知')}"
+            f"；剩余激励时间：{budget.get('excitation_time_remaining_s', '未知')} s"
+            f"；失败尝试：{budget.get('failed_attempts', 0)}"
+        )
+    route = report.get("route")
+    if isinstance(route, Mapping):
+        reason = route.get("selection_reason") or route.get("selection_basis")
+        if reason:
+            text += f"\n\n### 当前路线依据\n- {reason}"
+    tuning = report.get("tuning")
+    if report.get("status") == "capability_gap" and isinstance(tuning, Mapping):
+        tuning_reason = str(tuning.get("reason") or "tuning_capability_gap")
+        explanation = (
+            "有界候选已全部评估，但没有候选达到预注册的严格改善门槛。"
+            if tuning_reason == "no_strict_development_improvement"
+            else "有界调优无法生成可进入独立确认的候选。"
+        )
+        text += f"\n\n### 能力缺口\n- {explanation}\n- 原因：`{tuning_reason}`"
     parameter_facts = report.get("parameter_facts") or []
     if parameter_facts:
         text += "\n\n### 已记录但尚未验证的参数"

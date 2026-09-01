@@ -24,10 +24,83 @@ from cfdc.web.service import (
     start_kernel_case_run,
 )
 from cfdc.web.ui import (
+    _evaluation_figure,
+    _guidance_text,
     _kernel_outputs,
     _reply_mode_update,
+    _summary_html,
     submit_measurement_from_ui,
 )
+
+
+def test_webui_shows_real_evaluation_curve_and_readiness_budget() -> None:
+    report = {
+        "evaluation_packets": [
+            {
+                "trials": [
+                    {
+                        "trajectory": {
+                            "time_s": [0.0, 1.0],
+                            "outputs": {"y": [0.0, 1.0]},
+                            "references": {"y": [1.0, 1.0]},
+                            "control_inputs": {"u": [1.0, 0.0]},
+                        }
+                    }
+                ]
+            }
+        ],
+        "readiness_gates": {
+            "evidence_acquisition": {"ready": True, "blockers": []},
+            "route_selection": {
+                "ready": False,
+                "blockers": ["candidate_set_not_resolved"],
+            },
+            "controller_synthesis": {
+                "ready": False,
+                "blockers": ["public_feature_artifact_required"],
+            },
+        },
+        "information_budget": {
+            "distinct_protocols_remaining": 2,
+            "distinct_protocols_limit": 4,
+            "excitation_time_remaining_s": 120.0,
+            "failed_attempts": 1,
+        },
+        "input_contract": {"guidance": "继续取证。"},
+        "route": {"selection_reason": "maximin public evidence"},
+    }
+    figure = _evaluation_figure(report)
+    assert [trace.name for trace in figure.data] == [
+        "output · y",
+        "reference · y",
+        "control · u",
+    ]
+    guidance = _guidance_text(report)
+    assert "三个独立门" in guidance
+    assert "candidate_set_not_resolved" in guidance
+    assert "剩余协议：2 / 4" in guidance
+    assert "maximin public evidence" in guidance
+
+
+def test_webui_explains_tuning_exhaustion_as_a_terminal_capability_gap() -> None:
+    report = {
+        "status": "capability_gap",
+        "session_id": "session-gap",
+        "revision": 18,
+        "task": {
+            "task_type": "local_setpoint_hold",
+            "measured_signals": ["y"],
+            "control_inputs": ["u"],
+        },
+        "tuning": {"reason": "no_strict_development_improvement"},
+        "input_contract": {"disabled_reason": "会话已终止：capability_gap"},
+    }
+
+    assert "有界调优已耗尽，未找到严格改善候选" in _summary_html(report)
+    guidance = _guidance_text(report)
+    assert "能力缺口" in guidance
+    assert "没有候选达到预注册的严格改善门槛" in guidance
+    assert "no_strict_development_improvement" in guidance
 
 
 def _kernel_inputs(tmp_path):
@@ -211,6 +284,24 @@ def test_kernel_unconfirmed_advance_is_rejected(tmp_path):
 
     with pytest.raises(ValueError, match="当前待处理动作"):
         continue_kernel_app_run(state, action="advance", payload={})
+
+
+def test_kernel_tuning_action_maps_to_the_public_web_entry(tmp_path) -> None:
+    assert web_service._normalise_kernel_action("run_tuning") == (
+        "run_feedback_iteration"
+    )
+    assert web_ui._ACTION_ALIASES["run_tuning"] == "run_feedback_iteration"
+    service = WorkflowService(tmp_path)
+    session = service.read(_kernel_inputs(tmp_path)[1]["kernel_session_id"])
+    session = replace(
+        session,
+        status="tuning_eligible",
+        pending_actions=({"kind": "tuning", "action": "run_tuning"},),
+    )
+    contract = build_kernel_input_contract(session)
+    assert contract["action"] == "run_feedback_iteration"
+    assert contract["disabled_reason"] is None
+    assert contract["allowed_modes"] == []
 
 
 def test_webui_rejects_non_kernel_report():
@@ -496,9 +587,9 @@ def test_kernel_diagnosis_prompt_distinguishes_asserted_and_unknown_facts(tmp_pa
     os.getenv("CFDC_RUN_OLLAMA_SMOKE") != "1",
     reason="set CFDC_RUN_OLLAMA_SMOKE=1 to run the local Ollama acceptance test",
 )
-def test_live_ollama_dc_motor_flow_reaches_performance_met(tmp_path):
+def test_live_ollama_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
     base_url = os.getenv("CFDC_OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
-    model = os.getenv("CFDC_OLLAMA_MODEL", "gemma3:4b")
+    model = os.getenv("CFDC_OLLAMA_MODEL", "gemma4:e4b")
     api_key = os.getenv("CFDC_OLLAMA_API_KEY", "ollama")
     report, state = start_kernel_case_run(
         "dc_motor_speed_v1",
@@ -506,6 +597,7 @@ def test_live_ollama_dc_motor_flow_reaches_performance_met(tmp_path):
         use_rag=False,
         llm_configured=True,
     )
+    state = {**state, "provider_case_id": None}
     report, state = continue_kernel_app_run(
         state,
         action="confirm_task",
@@ -525,8 +617,8 @@ def test_live_ollama_dc_motor_flow_reaches_performance_met(tmp_path):
         model=model,
         api_key=api_key,
     )
-    report, _ = continue_kernel_app_run(
-        state,
+    report, state = continue_kernel_app_run(
+        {**state, "provider_case_id": "dc_motor_speed_v1"},
         action="answer",
         payload=prepared["payload"],
         request_identity={
@@ -538,17 +630,26 @@ def test_live_ollama_dc_motor_flow_reaches_performance_met(tmp_path):
         agent_records=prepared["agent_records"],
     )
 
-    assert report["status"] == "performance_met"
-    assert report["route"]["class"] == "class_i_first_order_lag"
+    assert report["status"] == "tuning_eligible"
     assert report["route"]["profile_id"] == "first_order_lag"
+    assert report["route"]["controller_contract_id"] == "PI"
     assert report["controller"]["ir"]["family"] == "PI"
     assert report["qualification"]["status"] == "offline_qualified"
-    assert report["evaluation"]["wilson_lower_bound_95"] >= 0.8
     assert {record["role"] for record in report["agent_records"]} >= {
         "diagnosis",
         "modeling",
         "critic",
     }
+
+    report, state = continue_kernel_app_run(
+        state,
+        action="run_feedback_iteration",
+        payload={},
+    )
+    assert report["status"] == "capability_gap"
+    assert report["tuning"]["status"] == "exhausted"
+    assert report["tuning"]["reason"] == "no_strict_development_improvement"
+    assert report["pending_actions"] == []
     serialized = json.dumps(report, ensure_ascii=False)
     assert api_key not in serialized
 
@@ -1357,40 +1458,13 @@ async def test_visible_gradio_flow_reaches_kernel_result_with_ollama_shaped_repl
         simple_format=True,
         explicit_call=True,
     )
-    source_text = "；".join(excerpt for excerpt, _ in evidence.values())
-    result = await app.process_api(
-        _fn_index(app, "submit_guided_action_from_ui", input_count=12),
-        [
-            confirm_result["data"][0],
-            source_text,
-            False,
-            "http://127.0.0.1:11434/v1",
-            "gemma3:4b",
-            "ollama",
-            "natural_language",
-            "accepted",
-            [],
-            "",
-            [],
-            False,
-        ],
-        state=session_state,
-        session_hash="kernel-visible-full-flow",
-        simple_format=True,
-        explicit_call=True,
-    )
-
-    report = result["data"][15].root
-    assert report["status"] == "performance_met"
-    assert report["features"]["feature_version"] == "cfdc-features/v1"
-    assert report["route"]["class"] == "class_i_first_order_lag"
+    report = confirm_result["data"][15].root
+    assert report["status"] == "tuning_eligible"
+    assert report["features"]["feature_version"] == "cfdc-features/v2"
     assert report["route"]["profile_id"] == "first_order_lag"
+    assert report["route"]["controller_contract_id"] == "PI"
     assert report["controller"]["ir"]["family"] == "PI"
     assert report["qualification"]["status"] == "offline_qualified"
-    assert report["freeze"]["freeze_version"] == "cfdc-freeze/v1.0"
-    assert report["evaluation"]["wilson_lower_bound_95"] >= 0.8
-    assert {record["role"] for record in report["agent_records"]} >= {
-        "diagnosis",
-        "modeling",
-        "critic",
-    }
+    assert report["freeze"]["freeze_version"] == "cfdc-freeze/v2.0"
+    assert report["evaluation"]["status"] == "performance_not_met"
+    assert report["evaluation"]["wilson_lower_bound_95"] == 0.0

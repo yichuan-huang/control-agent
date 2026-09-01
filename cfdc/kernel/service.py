@@ -16,6 +16,7 @@ from threading import RLock
 from typing import Any
 from uuid import uuid4
 
+from cfdc.controllers.execution import runtime_contract as controller_runtime_contract
 from cfdc.controllers.kernel_synthesis import (
     synthesize_controller as synthesize_registered_controller,
 )
@@ -34,10 +35,11 @@ from cfdc.features.kernel import derive_feature_artifact
 from cfdc.knowledge import REGISTRY_VERSION, feature_definitions
 from cfdc.specifications.templates import default_specification_template_catalog
 
+from .acquisition import ActionBudget, InformationAction, select_action
 from .contracts import (
     DIAGNOSTIC_IDS,
     EVIDENCE_SESSION_VERSION,
-    P1_1_TASK_SEMANTICS_VERSION,
+    PACKET_VERSION,
     ControllerFreeze,
     TaskContract,
     fingerprint,
@@ -48,6 +50,7 @@ from .controllers import (
     validate_controller_for_route,
 )
 from .diagnostics import DiagnosticLedger
+from .execution_contract import execution_request, freeze_trial_manifest
 from .importer import build_import_report, inspect_v3_source
 from .multistage import MultiStagePlan, compile_phase_plan
 from .providers import (
@@ -56,7 +59,7 @@ from .providers import (
     PublicTrace,
     evidence_from_trace,
 )
-from .route_catalog import known_feature_ids
+from .route_catalog import known_feature_ids, select_route_from_features
 from .routes import resolve_route
 from .session import TERMINAL_STATES, EvidenceSession, SessionEvent
 from .tuning import TuningContract, run_bounded_tuning
@@ -147,6 +150,25 @@ class WorkflowService:
         """Return the shared JSON projection used by WebUI, CLI and exports."""
 
         value = session.to_dict()
+        value["readiness_gates"] = _readiness_gates(session)
+        budget = _action_budget(session)
+        value["information_budget"] = {
+            "budget_version": "cfdc-information-budget/v1.0",
+            "attempts": budget.attempts,
+            "failed_attempts": budget.failed_attempts,
+            "valid_experiments": budget.valid_experiments,
+            "distinct_protocols_used": len(budget.distinct_protocols),
+            "distinct_protocols_limit": budget.max_distinct_experiments,
+            "distinct_protocols_remaining": max(
+                budget.max_distinct_experiments - len(budget.distinct_protocols), 0
+            ),
+            "excitation_time_used_s": budget.excitation_time_s,
+            "excitation_time_limit_s": budget.max_excitation_time_s,
+            "excitation_time_remaining_s": max(
+                budget.max_excitation_time_s - budget.excitation_time_s, 0.0
+            ),
+            "failures_by_action": dict(budget.action_failures),
+        }
         if (
             not value["pending_actions"]
             and value["status"] == "intake"
@@ -167,6 +189,45 @@ class WorkflowService:
         if not path.exists():
             raise FileNotFoundError(f"unknown_session: {session_id}")
         return EvidenceSession.from_json(path.read_text(encoding="utf-8"), path=path)
+
+    def fork_session(
+        self, session_id: str, *, agent_config: Mapping[str, Any] | None = None
+    ) -> EvidenceSession:
+        """Derive a task and human priors, never numerical or approval authority."""
+        parent = self.read(session_id)
+        task_value = parent.task.to_dict(include_fingerprint=False)
+        task_value["budget_confirmed"] = False
+        child = self.start(
+            TaskContract.from_user_input(task_value), agent_config=agent_config
+        )
+        human = {
+            entry.id: entry.to_dict()
+            for entry in parent.ledger.entries
+            if entry.source == "human_operator" and entry.status in {"known", "unknown"}
+        }
+        ledger = (
+            child.ledger.update(human, source="human_operator")
+            if human
+            else child.ledger
+        )
+        child = self._replace(
+            child,
+            ledger=ledger,
+            legacy_lineage={
+                "source_session_id": parent.session_id,
+                "source_session_fingerprint": parent.fingerprint,
+                "source_session_version": parent.session_version,
+                "import_policy": "task_and_human_priors_only; no_experimental_or_approval_authority",
+            },
+        )
+        return self._save(
+            self._append(
+                child,
+                "task_derived_from_session",
+                "derive-task",
+                {"parent_session_id": parent.session_id},
+            )
+        )
 
     def confirm_task(
         self,
@@ -506,7 +567,7 @@ class WorkflowService:
         self._check_elapsed_budget(session)
         payload = _validate_public_evidence(evidence)
         if (
-            session.task.task_semantics_version == P1_1_TASK_SEMANTICS_VERSION
+            session.session_version == EVIDENCE_SESSION_VERSION
             and payload.get("kind") == "experiment"
         ):
             if not isinstance(payload.get("trace"), Mapping):
@@ -737,6 +798,39 @@ class WorkflowService:
             raise ValueError("task_boundary_confirmation_required")
         readiness = session.ledger.readiness()
         if readiness.status != "ready":
+            information_route = _information_route(session)
+            if information_route is not None:
+                updated = self._replace(
+                    session,
+                    status="route_ready",
+                    route=information_route,
+                    route_history=(*session.route_history, deepcopy(information_route)),
+                    pending_actions=(
+                        {
+                            "kind": "information_action",
+                            "action": "set_provider",
+                            "operation": information_route["experiment_primitives"][0],
+                            "target_unknowns": information_route["target_unknowns"],
+                            "reason": information_route["selection_reason"],
+                        },
+                    ),
+                )
+                return self._save(
+                    self._append(
+                        updated,
+                        "information_action_selected",
+                        action_id,
+                        {
+                            "operation": information_route["experiment_primitives"][0],
+                            "candidate_profiles": information_route[
+                                "candidate_profile_ids"
+                            ],
+                            "target_unknowns": information_route["target_unknowns"],
+                            "selection_reason": information_route["selection_reason"],
+                            "blocked_actions": information_route["blocked_actions"],
+                        },
+                    )
+                )
             updated = self._replace(
                 session,
                 status="awaiting_evidence",
@@ -1126,7 +1220,7 @@ class WorkflowService:
             session.task,
             session.route,
             provider=provider,
-            request=request,
+            request=request or session.route.get("experiment_request"),
             phase=phase,
         ).to_dict()
         software_provider = str(provider.get("execution_kind") or "") == "software"
@@ -1207,8 +1301,61 @@ class WorkflowService:
             "provider_capabilities_fingerprint"
         ):
             raise ValueError("provider_capabilities_changed_after_protocol_compile")
+        budget = _action_budget(session)
         try:
-            result = provider.execute(verified, task=session.task.to_dict())
+            budget.reserve(
+                str(protocol["operation"]),
+                protocol_fingerprint=str(protocol["protocol_fingerprint"]),
+                excitation_time_s=float(
+                    protocol["derived_limits"]["cumulative_excitation_time_s"]
+                ),
+            )
+        except ValueError as exc:
+            updated = self._replace(
+                session,
+                status="capability_gap",
+                pending_actions=({"kind": "budget", "reason": str(exc)},),
+            )
+            return self._save(
+                self._append(
+                    updated,
+                    "experiment_budget_exhausted",
+                    action_id,
+                    {
+                        "reason": str(exc),
+                        "protocol_fingerprint": protocol["protocol_fingerprint"],
+                    },
+                )
+            )
+        reserved = self._save(
+            self._append(
+                session,
+                "experiment_attempt_reserved",
+                f"{action_id}:reservation",
+                {
+                    "requested_action_id": action_id,
+                    "operation": protocol["operation"],
+                    "protocol_fingerprint": protocol["protocol_fingerprint"],
+                    "excitation_time_s": protocol["derived_limits"][
+                        "cumulative_excitation_time_s"
+                    ],
+                },
+            )
+        )
+        try:
+            result = provider.execute(verified, task=reserved.task.to_dict())
+            traces = (result,) if isinstance(result, PublicTrace) else tuple(result)
+            if not traces or not all(isinstance(item, PublicTrace) for item in traces):
+                raise ValueError("experiment_provider_must_return_public_trace")
+            if len(traces) != int(protocol["repeats"]):
+                raise ValueError("provider_repeat_count_mismatch")
+            if any(
+                item.protocol_fingerprint != protocol["protocol_fingerprint"]
+                for item in traces
+            ):
+                raise ValueError("provider_trace_protocol_binding_mismatch")
+            if len({item.trial_id for item in traces}) != len(traces):
+                raise ValueError("provider_trial_id_duplicate")
         except Exception as exc:
             failure = {
                 "operation": protocol["operation"],
@@ -1218,7 +1365,7 @@ class WorkflowService:
                 "protocol_fingerprint": protocol["protocol_fingerprint"],
             }
             updated = self._replace(
-                session,
+                reserved,
                 experiment_failures=(*session.experiment_failures, failure),
                 status="awaiting_evidence",
                 pending_actions=(
@@ -1231,19 +1378,7 @@ class WorkflowService:
             )
             self._save(self._append(updated, "provider_run_failed", action_id, failure))
             raise
-        traces = (result,) if isinstance(result, PublicTrace) else tuple(result)
-        if not traces or not all(isinstance(item, PublicTrace) for item in traces):
-            raise ValueError("experiment_provider_must_return_public_trace")
-        if len(traces) != int(protocol["repeats"]):
-            raise ValueError("provider_repeat_count_mismatch")
-        if any(
-            item.protocol_fingerprint != protocol["protocol_fingerprint"]
-            for item in traces
-        ):
-            raise ValueError("provider_trace_protocol_binding_mismatch")
-        if len({item.trial_id for item in traces}) != len(traces):
-            raise ValueError("provider_trial_id_duplicate")
-        current = session
+        current = reserved
         for index, trace in enumerate(traces):
             evidence = evidence_from_trace(trace)
             evidence.update(
@@ -1472,19 +1607,42 @@ class WorkflowService:
         if session.route is None or not session.evidence:
             raise ValueError("route_and_public_evidence_required")
         artifact = derive_feature_artifact(session.evidence, session.route).to_dict()
-        missing = list(artifact.get("missing_feature_ids", ()))
+        revised_route = select_route_from_features(
+            artifact, session.task.to_dict(), prior_route=dict(session.route)
+        )
+        revised_required = {str(item) for item in revised_route.get("feature_ids", ())}
+        missing = sorted(revised_required - set(artifact.get("features", {})))
+        artifact["required_feature_ids"] = sorted(revised_required)
+        artifact["missing_feature_ids"] = missing
+        artifact["quality"] = {
+            **dict(artifact.get("quality") or {}),
+            "passed": bool(
+                (artifact.get("quality") or {}).get("passed", False) and not missing
+            ),
+        }
+        artifact.pop("artifact_fingerprint", None)
+        artifact["artifact_fingerprint"] = fingerprint(artifact)
         passed = bool((artifact.get("quality") or {}).get("passed", False))
+        route_gap = revised_route.get("capability_gap")
+        revised_ledger = _ledger_from_public_features(session.ledger, artifact)
         updated = self._replace(
             session,
+            ledger=revised_ledger,
+            route=revised_route,
+            route_history=(*session.route_history, deepcopy(revised_route)),
             feature_artifact=artifact,
             feature_history=(*session.feature_history, deepcopy(artifact)),
             status="controller_pending"
-            if passed and not missing
-            else "awaiting_evidence",
+            if passed and not missing and not route_gap
+            else ("capability_gap" if route_gap else "awaiting_evidence"),
             pending_actions=(
                 ({"kind": "controller", "action": "synthesize_controller"},)
-                if passed and not missing
-                else ({"kind": "feature", "missing": missing},)
+                if passed and not missing and not route_gap
+                else (
+                    ({"kind": "route_gap", "reason": route_gap},)
+                    if route_gap
+                    else ({"kind": "feature", "missing": missing},)
+                )
             ),
         )
         return self._save(
@@ -1496,6 +1654,9 @@ class WorkflowService:
                     "artifact_fingerprint": artifact["artifact_fingerprint"],
                     "missing": missing,
                     "quality_passed": passed,
+                    "previous_route_id": session.route.get("route_id"),
+                    "revised_route_id": revised_route.get("route_id"),
+                    "route_revision_reason": revised_route.get("selection_basis"),
                 },
             )
         )
@@ -1900,24 +2061,58 @@ class WorkflowService:
                     dict(catalog_runtime)
                     if isinstance(catalog_runtime, Mapping)
                     else {}
-                ),
-                "command_bounds": [session.task.input_min, session.task.input_max],
-                "stop_conditions": [
-                    f"state magnitude reaches {session.task.state_stop}"
-                ],
+                )
             }
         if evaluation_contract is None:
+            criteria = dict(session.task.success_requirements)
+            reference = session.task.reference
+            if reference is None:
+                raise ValueError("evaluation_reference_required")
+            sample_time = float(
+                session.task.engineering_units.get(
+                    "acquisition_sample_time_s",
+                    session.task.budgets.get("evaluation_sample_time_s", 0.02),
+                )
+            )
+            hold = float(
+                criteria.get(
+                    "hold_duration_min_s",
+                    criteria.get(
+                        "final_hold_duration_min_s",
+                        criteria.get("post_recovery_hold_duration_min_s", 1.0),
+                    ),
+                )
+            )
+            response = float(
+                criteria.get(
+                    "settling_time_max_s",
+                    criteria.get(
+                        "recovery_time_max_s",
+                        session.task.response_time_preference_s or 10.0,
+                    ),
+                )
+            )
+            horizon = float(
+                session.task.budgets.get(
+                    "evaluation_horizon_s",
+                    max(response + hold + 2 * sample_time, 2 * response),
+                )
+            )
+            repeats = int(session.task.budgets.get("evaluation_repeats", 20))
             evaluation_contract = {
-                "judge": "cfdc-independent-judge/v1",
-                "evaluation_repeats": int(
-                    session.task.budgets.get("evaluation_repeats", 20)
-                ),
+                "judge": "cfdc-independent-judge/v2.0",
+                "task_type": session.task.task_type,
+                "references": {
+                    name: float(reference) for name in session.task.measured_signals
+                },
+                "sample_time_s": sample_time,
+                "horizon_s": horizon,
+                "trial_manifest": freeze_trial_manifest(repeats),
+                **criteria,
             }
-        if not controller or not runtime_contract or not evaluation_contract:
+        if not controller or runtime_contract is None or not evaluation_contract:
             raise ValueError("freeze_contract_incomplete")
-        strict_contract = (
-            session.task.task_semantics_version == P1_1_TASK_SEMANTICS_VERSION
-        )
+        strict_contract = session.session_version == EVIDENCE_SESSION_VERSION
         if strict_contract and session.provider is None:
             raise ValueError("provider_required_before_freeze")
         if strict_contract and session.controller_candidate is None:
@@ -2015,8 +2210,52 @@ class WorkflowService:
             if session.phase_plan and session.controller_candidate
             else None,
         )
+        registered_runtime = controller_runtime_contract(str(controller["family"]))
+        input_names = tuple(
+            session.task.control_inputs or (session.task.control_input,)
+        )
+        if session.task.input_min is None or session.task.input_max is None:
+            raise ValueError("evaluation_input_bounds_required")
+        state_bounds = (
+            {
+                name: [-float(session.task.state_stop), float(session.task.state_stop)]
+                for name in candidate_ir.measured_signals
+            }
+            if candidate_ir is not None and session.task.state_stop is not None
+            else {}
+        )
+        output_bounds = (
+            {
+                name: [float(session.task.output_min), float(session.task.output_max)]
+                for name in session.task.measured_signals
+            }
+            if session.task.output_min is not None
+            and session.task.output_max is not None
+            else {}
+        )
         runtime_value = {
             **dict(runtime_contract),
+            **registered_runtime,
+            "tracked_signals": list(session.task.measured_signals),
+            "measured_signals": list(candidate_ir.measured_signals)
+            if candidate_ir is not None
+            else list(session.task.measured_signals),
+            "control_inputs": list(input_names),
+            "input_bounds": {
+                name: [float(session.task.input_min), float(session.task.input_max)]
+                for name in input_names
+            },
+            "output_bounds": output_bounds,
+            "state_bounds": state_bounds,
+            "controller_state_bounds": {
+                key: list(value)
+                for key, value in (
+                    candidate_ir.state_limits.items()
+                    if candidate_ir is not None
+                    else ()
+                )
+            },
+            "state_stop": session.task.state_stop,
             "phase_plan": phase_plan.to_dict(),
             "provider": deepcopy(session.provider)
             if session.provider is not None
@@ -2052,6 +2291,15 @@ class WorkflowService:
         evaluation_value["task_input_unit"] = session.task.input_units
         evaluation_value["runtime_contract"] = deepcopy(runtime_value)
         evaluation_value["phase_plan"] = phase_plan.to_dict()
+        evaluation_value["phases"] = _execution_phases(
+            session, phase_plan, evaluation_value
+        )
+        if session.task.task_type == "disturbance_recovery_to_hold":
+            disturbance = dict(session.task.disturbance_contract)
+            required = {"time_s", "duration_s", "channel", "amplitude"}
+            if not required <= set(disturbance):
+                raise ValueError("disturbance_execution_contract_incomplete")
+            evaluation_value["disturbance"] = disturbance
         for key, value in session.task.success_requirements.items():
             evaluation_value[str(key)] = deepcopy(value)
         if session.task.task_type == "disturbance_recovery_to_hold":
@@ -2122,12 +2370,10 @@ class WorkflowService:
         )
         if repeat_count < 1 or repeat_count > 10_000:
             raise ValueError("evaluation_repeat_count_invalid")
-        raw_packet = provider.evaluate(
-            session.controller_freeze,
-            task=session.task.to_dict(),
-            evaluation_split=evaluation_split,
-            repeats=repeat_count,
-        )
+        request = execution_request(session.controller_freeze, evaluation_split)
+        if repeat_count != len(request["trials"]):
+            raise ValueError("evaluation_repeat_count_frozen")
+        raw_packet = provider.evaluate(request)
         if not isinstance(raw_packet, Mapping):
             raise TypeError("evaluation_provider_must_return_mapping")
         public_packet = deepcopy(dict(raw_packet))
@@ -2155,6 +2401,7 @@ class WorkflowService:
             },
             "evaluation_split": evaluation_split,
             "private_truth_returned": False,
+            "packet_version": PACKET_VERSION,
         }
         packet.pop("packet_fingerprint", None)
         packet["packet_fingerprint"] = fingerprint(packet)
@@ -2201,32 +2448,21 @@ class WorkflowService:
             raise ValueError(
                 "evaluation_already_recorded_use_replay_or_fresh_confirmation"
             )
+        if evaluation_split == "fresh_confirmation" and any(
+            item.get("evaluation_split") == "fresh_confirmation"
+            for item in session.evaluation_packets
+        ):
+            raise ValueError("fresh_confirmation_already_consumed")
         result = independent_judge(session.controller_freeze, packet)
-        if result["status"] == "performance_met":
-            status = "performance_met"
-        elif evaluation_split == "fresh_confirmation":
-            # A fresh confirmation is a final holdout.  It can confirm the
-            # tuned freeze or expose a capability gap, but it must never reopen
-            # the development search or feed fresh data back into tuning.
-            status = "capability_gap"
-        elif result.get("stability_gate", {}).get("passed") and not result.get(
-            "performance_gate", {}
-        ).get("phase_failures"):
-            status = "tuning_eligible"
-        else:
-            status = "capability_gap"
-        pending = (
-            ({"kind": "tuning", "action": "run_tuning"},)
-            if evaluation_split != "fresh_confirmation"
-            and result["status"] == "performance_not_met"
-            and result.get("stability_gate", {}).get("passed")
-            and not result.get("performance_gate", {}).get("phase_failures")
-            else ()
-        )
+        # A calculated result is evidence, not yet a publishable state. The
+        # exact stored packet must be read back and reproduce its judge hash.
+        status = "evaluation_recorded_pending_replay"
+        pending = ({"kind": "evaluation_replay", "action": "replay_evaluation"},)
         packets = (*session.evaluation_packets, deepcopy(dict(packet)))
         confirmation = (
             {
-                "status": result["status"],
+                "status": "pending_replay",
+                "calculated_status": result["status"],
                 "packet_fingerprint": result["packet_fingerprint"],
                 "judge_fingerprint": result["judge_fingerprint"],
                 "freeze_fingerprint": session.controller_freeze.get(
@@ -2270,6 +2506,7 @@ class WorkflowService:
         revision: int,
         contract: TuningContract | Mapping[str, Any],
         evaluate: Any,
+        qualify: Any | None = None,
     ) -> EvidenceSession:
         """Run the deterministic tuning contract after an evaluation gate."""
 
@@ -2284,6 +2521,12 @@ class WorkflowService:
             raise ValueError("tuning_requires_frozen_evaluated_controller")
         if session.evaluation.get("status") != "performance_not_met":
             raise ValueError("tuning_requires_performance_gap")
+        if (
+            not session.evaluation_replays
+            or not session.evaluation_replays[-1].get("matches_previous")
+            or session.status != "tuning_eligible"
+        ):
+            raise ValueError("tuning_requires_verified_evaluation_replay")
         raw_contract = (
             contract
             if isinstance(contract, TuningContract)
@@ -2325,7 +2568,12 @@ class WorkflowService:
             "performance_pass": session.evaluation.get("status") == "performance_met",
         }
         result = run_bounded_tuning(
-            parameters, raw_contract, evaluate, baseline_result=baseline_result
+            parameters,
+            raw_contract,
+            evaluate,
+            baseline_result=baseline_result,
+            confirm_selected=False,
+            qualify=qualify,
         )
         tuning_value = result.to_dict()
         tuning_value.update(
@@ -2339,7 +2587,7 @@ class WorkflowService:
         next_history = session.freeze_history
         next_candidate = session.controller_candidate
         next_status = session.status
-        if result.status == "blocked":
+        if result.status in {"blocked", "exhausted"}:
             next_status = "capability_gap"
         elif result.accepted:
             # An accepted development candidate receives a new immutable
@@ -2417,11 +2665,7 @@ class WorkflowService:
             pending_actions=(
                 ({"kind": "confirmation", "action": "record_fresh_confirmation"},)
                 if result.accepted
-                else (
-                    ({"kind": "tuning", "reason": "tuning_blocked"},)
-                    if result.status == "blocked"
-                    else ()
-                )
+                else ()
             ),
         )
         return self._save(
@@ -2491,6 +2735,30 @@ class WorkflowService:
                 ),
             )
 
+        if (
+            session.route is None
+            or session.feature_artifact is None
+            or not session.protocols
+            or not session.active_protocol_fingerprint
+        ):
+            raise ValueError("tuning_candidate_qualification_context_required")
+        protocol = next(
+            item
+            for item in reversed(session.protocols)
+            if item.get("protocol_fingerprint") == session.active_protocol_fingerprint
+        )
+
+        def qualify_candidate(candidate: Mapping[str, float]) -> dict[str, Any]:
+            candidate_controller = _controller_with_parameters(controller, candidate)
+            candidate_ir = ControllerIR.from_mapping(candidate_controller)
+            return run_controller_qualification(
+                candidate_ir,
+                task=session.task.to_dict(),
+                route=session.route,
+                feature_artifact=session.feature_artifact,
+                protocol=protocol,
+            )
+
         def evaluate_candidate(
             candidate: Mapping[str, float], split: str, repeats: int
         ) -> dict[str, Any]:
@@ -2511,12 +2779,10 @@ class WorkflowService:
                 source_version="cfdc-kernel/tuning-probe-v1",
             ).to_dict()
             provider_split = "fresh_confirmation" if split == "fresh" else "development"
-            raw = provider.evaluate(
-                candidate_freeze,
-                task=session.task.to_dict(),
-                evaluation_split=provider_split,
-                repeats=repeats,
-            )
+            request = execution_request(candidate_freeze, provider_split)
+            if len(request["trials"]) != repeats:
+                raise ValueError("tuning_repeat_count_frozen")
+            raw = provider.evaluate(request)
             if not isinstance(raw, Mapping):
                 raise TypeError("evaluation_provider_public_packet_required")
             public_raw = deepcopy(dict(raw))
@@ -2540,17 +2806,29 @@ class WorkflowService:
                 },
                 "evaluation_split": provider_split,
                 "private_truth_returned": False,
+                "packet_version": PACKET_VERSION,
             }
             packet.pop("packet_fingerprint", None)
             packet["packet_fingerprint"] = fingerprint(packet)
             result = independent_judge(candidate_freeze, packet)
+            replay = independent_judge(candidate_freeze, deepcopy(packet))
+            if replay["judge_fingerprint"] != result["judge_fingerprint"]:
+                raise ValueError("tuning_probe_replay_mismatch")
             return {
                 "stable": bool(result["stability_gate"]["passed"]),
                 "performance_pass": result["status"] == "performance_met",
                 "hard_failure": not bool(result["stability_gate"]["passed"]),
-                "score": float(result.get("score", result["success_rate"])),
+                "score": float(result["score"]),
                 "packet_fingerprint": result["packet_fingerprint"],
                 "judge_fingerprint": result["judge_fingerprint"],
+                "freeze": candidate_freeze,
+                "packet": packet,
+                "judge": result,
+                "replay": {
+                    "matches_previous": True,
+                    "packet_fingerprint": replay["packet_fingerprint"],
+                    "judge_fingerprint": replay["judge_fingerprint"],
+                },
             }
 
         return self.run_tuning(
@@ -2559,6 +2837,7 @@ class WorkflowService:
             revision=revision,
             contract=contract,
             evaluate=evaluate_candidate,
+            qualify=qualify_candidate,
         )
 
     def confirm_result(
@@ -2612,8 +2891,6 @@ class WorkflowService:
             if session.status in TERMINAL_STATES or session.read_only:
                 return session
             if not session.task.budget_confirmed:
-                return session
-            if session.ledger.readiness().status != "ready":
                 return session
             action_id = f"auto:{session.session_id}:{session.revision}"
             if session.route is None:
@@ -2730,6 +3007,13 @@ class WorkflowService:
                     provider_id=evaluation_provider_id,
                 )
                 continue
+            if len(session.evaluation_replays) < len(session.evaluation_packets):
+                session = self.replay_evaluation(
+                    session_id,
+                    action_id=f"{action_id}:evaluation-replay:{len(session.evaluation_replays)}",
+                    revision=session.revision,
+                )
+                continue
             # Tuning acceptance and the final fresh confirmation are explicit
             # user decisions, even when their evaluators are registered.
             return session
@@ -2760,8 +3044,50 @@ class WorkflowService:
             == previous.get("judge_fingerprint"),
             "evaluation_split": packet.get("evaluation_split", "development"),
         }
+        if not replay["matches_previous"]:
+            status, pending = (
+                "capability_gap",
+                ({"kind": "evaluation_integrity", "reason": "replay_mismatch"},),
+            )
+        elif packet.get("evaluation_split") == "fresh_confirmation":
+            status = (
+                "performance_met"
+                if result["status"] == "performance_met"
+                else "capability_gap"
+            )
+            pending = ()
+        elif result["status"] == "performance_met":
+            status, pending = "performance_met", ()
+        elif result.get("stability_gate", {}).get("passed") and result.get(
+            "evidence_gate", {}
+        ).get("passed", True):
+            status, pending = (
+                "tuning_eligible",
+                ({"kind": "tuning", "action": "run_tuning"},),
+            )
+        else:
+            status, pending = "capability_gap", ()
+        confirmation = session.confirmation
+        confirmation_history = session.confirmation_history
+        if packet.get("evaluation_split") == "fresh_confirmation":
+            confirmation = {
+                "status": result["status"]
+                if replay["matches_previous"]
+                else "replay_mismatch",
+                "packet_fingerprint": result["packet_fingerprint"],
+                "judge_fingerprint": result["judge_fingerprint"],
+                "freeze_fingerprint": session.controller_freeze.get(
+                    "freeze_fingerprint"
+                ),
+            }
+            confirmation_history = (*confirmation_history, deepcopy(confirmation))
         updated = self._replace(
-            session, evaluation_replays=(*session.evaluation_replays, replay)
+            session,
+            status=status,
+            pending_actions=pending,
+            confirmation=confirmation,
+            confirmation_history=confirmation_history,
+            evaluation_replays=(*session.evaluation_replays, replay),
         )
         return self._save(
             self._append(
@@ -2793,18 +3119,9 @@ class WorkflowService:
         supplied = packet.get("tuned_parameters")
         if supplied is not None and fingerprint(supplied) != fingerprint(expected):
             raise ValueError("fresh_confirmation_parameter_binding_mismatch")
-        # A packet fingerprint binds the complete packet, including its split.
-        # Validate a caller-supplied development packet before changing the
-        # split, then issue the corresponding fresh-confirmation fingerprint;
-        # carrying the old digest would make the immutable packet unverifiable.
         packet_value = dict(packet)
-        supplied_packet_fingerprint = packet_value.pop("packet_fingerprint", None)
-        if supplied_packet_fingerprint is not None and str(
-            supplied_packet_fingerprint
-        ) != fingerprint(packet_value):
-            raise ValueError("evaluation_packet_mismatch")
-        packet_value["evaluation_split"] = "fresh_confirmation"
-        packet_value["packet_fingerprint"] = fingerprint(packet_value)
+        if packet_value.get("evaluation_split") != "fresh_confirmation":
+            raise ValueError("fresh_confirmation_packet_required")
         return self.record_evaluation(
             session_id,
             action_id=action_id,
@@ -3687,6 +4004,72 @@ def _validate_public_evidence(value: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _readiness_gates(session: EvidenceSession) -> dict[str, Any]:
+    """Project independent evidence, route, and synthesis authorization gates."""
+
+    evidence_blockers: list[str] = []
+    if session.read_only:
+        evidence_blockers.append("read_only_session")
+    if not session.task.budget_confirmed:
+        evidence_blockers.append("budget_confirmation_required")
+    route = session.route if isinstance(session.route, Mapping) else {}
+    has_evidence_action = bool(
+        route.get("experiment_request")
+        or route.get("experiment_primitives")
+        or session.protocols
+    )
+    if not has_evidence_action:
+        evidence_blockers.append("legal_information_action_not_selected")
+    if session.status == "capability_gap" and not has_evidence_action:
+        evidence_blockers.append("no_legal_information_action")
+
+    route_blockers: list[str] = []
+    if not route or route.get("provisional"):
+        route_blockers.append("candidate_set_not_resolved")
+    if route.get("capability_gap"):
+        route_blockers.append(str(route["capability_gap"]))
+    if (
+        route
+        and not route.get("provisional")
+        and not route.get("controller_contract_id")
+    ):
+        route_blockers.append("registered_controller_route_required")
+
+    artifact = (
+        session.feature_artifact
+        if isinstance(session.feature_artifact, Mapping)
+        else {}
+    )
+    synthesis_blockers = list(route_blockers)
+    if not artifact:
+        synthesis_blockers.append("public_feature_artifact_required")
+    else:
+        missing = [str(item) for item in artifact.get("missing_feature_ids", ())]
+        if missing:
+            synthesis_blockers.extend(
+                f"missing_feature:{feature_id}" for feature_id in missing
+            )
+        quality = artifact.get("quality")
+        if not isinstance(quality, Mapping) or quality.get("passed") is not True:
+            synthesis_blockers.append("public_feature_quality_not_passed")
+
+    return {
+        "readiness_version": "cfdc-readiness/v1.0",
+        "evidence_acquisition": {
+            "ready": not evidence_blockers,
+            "blockers": list(dict.fromkeys(evidence_blockers)),
+        },
+        "route_selection": {
+            "ready": not route_blockers,
+            "blockers": list(dict.fromkeys(route_blockers)),
+        },
+        "controller_synthesis": {
+            "ready": not synthesis_blockers,
+            "blockers": list(dict.fromkeys(synthesis_blockers)),
+        },
+    }
+
+
 def _contains_private_marker(value: Any) -> bool:
     if isinstance(value, Mapping):
         for key, item in value.items():
@@ -3703,180 +4086,329 @@ def _contains_private_marker(value: Any) -> bool:
     return False
 
 
+def _execution_phases(
+    session: EvidenceSession, phase_plan: MultiStagePlan, evaluation: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    if session.task.task_type != "transition_then_hold":
+        return []
+    targets = [*map(float, session.task.intermediate_targets)]
+    if session.task.reference is None:
+        raise ValueError("transition_numeric_reference_required")
+    targets.extend((float(session.task.reference), float(session.task.reference)))
+    if len(targets) != len(phase_plan.phases):
+        raise ValueError("transition_phase_target_count_mismatch")
+    qualification = session.controller_qualification or {}
+    validated = qualification.get("validated_region")
+    if not isinstance(validated, Mapping) or not set(
+        session.task.measured_signals
+    ) <= set(validated):
+        raise ValueError("transition_requires_qualified_numeric_region")
+    sample_time = float(evaluation["sample_time_s"])
+    final_dwell = float(
+        evaluation.get(
+            "final_hold_duration_min_s", evaluation.get("hold_duration_min_s", 1.0)
+        )
+    )
+    ordinary_dwell = float(
+        session.task.budgets.get(
+            "phase_dwell_s", max(5 * sample_time, min(final_dwell, 1.0))
+        )
+    )
+    phase_timeout = float(evaluation["horizon_s"]) / len(targets)
+    tolerance = float(
+        evaluation.get(
+            "final_abs_error_max", evaluation.get("recovery_abs_error_max", 0.0)
+        )
+    )
+    if tolerance <= 0:
+        raise ValueError("transition_phase_tolerance_required")
+    policy = str(session.task.phase_schedule.get("state_policy", "inherit"))
+    hysteresis = float(session.task.phase_schedule.get("hysteresis", tolerance * 0.2))
+    return [
+        {
+            "phase_id": phase.phase_id,
+            "references": {name: target for name in session.task.measured_signals},
+            "exit_predicate": {
+                "kind": "within_band",
+                "signal": session.task.measured_signals[0],
+                "target": target,
+                "tolerance": tolerance,
+            },
+            "dwell_s": final_dwell if index == len(targets) - 1 else ordinary_dwell,
+            "timeout_s": phase_timeout,
+            "hysteresis": hysteresis,
+            "state_policy": policy,
+            "stable_region": {key: list(value) for key, value in validated.items()},
+        }
+        for index, (phase, target) in enumerate(
+            zip(phase_plan.phases, targets, strict=True)
+        )
+    ]
+
+
+def _action_budget(session: EvidenceSession) -> ActionBudget:
+    reservations = [
+        event
+        for event in session.events
+        if event.event_type == "experiment_attempt_reserved"
+    ]
+    distinct = tuple(
+        dict.fromkeys(
+            str(event.payload.get("protocol_fingerprint")) for event in reservations
+        )
+    )
+    failures: dict[str, int] = {}
+    for item in session.experiment_failures:
+        operation = str(item.get("operation") or "unknown")
+        failures[operation] = failures.get(operation, 0) + 1
+    valid = sum(1 for item in session.evidence if item.get("kind") == "experiment")
+    return ActionBudget(
+        max_distinct_experiments=int(
+            session.task.budgets.get("distinct_experiments", 4)
+        ),
+        max_excitation_time_s=float(
+            session.task.budgets.get("cumulative_excitation_time_s", 1800.0)
+        ),
+        max_failures_per_action=int(
+            session.task.budgets.get("same_failure_retries", 1)
+        ),
+        attempts=len(reservations),
+        failed_attempts=len(session.experiment_failures),
+        excitation_time_s=sum(
+            float(event.payload.get("excitation_time_s", 0.0)) for event in reservations
+        ),
+        valid_experiments=valid,
+        distinct_protocols=distinct,
+        action_failures=failures,
+    )
+
+
+def _information_route(session: EvidenceSession) -> dict[str, Any] | None:
+    """Compile one legal evidence action without pretending a final route exists."""
+
+    task = session.task
+    if task.input_min is None or task.input_max is None:
+        return None
+    target_unknowns = tuple(
+        entry.id
+        for entry in session.ledger.entries
+        if entry.blocking_for_current_route and entry.status == "unknown"
+    )
+    if not target_unknowns:
+        return None
+    candidates = (
+        "stable_siso",
+        "delayed_or_high_order_siso",
+        "static_nonlinear",
+        "local_oscillator",
+        "underactuated_local",
+        "mimo",
+    )
+    bounds_known = task.input_min < task.input_max
+    safe_excitation = bounds_known and task.state_stop is not None
+    is_mimo = (
+        len(task.control_inputs or (task.control_input,)) >= 2
+        and len(task.measured_signals) >= 2
+    )
+    nonlinear = _assessment_text(session, "nonlinearity_strength")
+    stability = _assessment_text(session, "open_loop_stability")
+    if is_mimo:
+        active = "bounded_mimo_dc_then_hadamard_multisine"
+    elif any(word in nonlinear for word in ("strong", "nonlinear", "强", "死区")):
+        active = "bounded_bidirectional_staircase"
+    elif len(task.measured_signals) >= 2 and any(
+        word in stability for word in ("unstable", "marginal", "不稳定", "自激")
+    ):
+        active = "class_iv_amplitude_release_repeats"
+    else:
+        active = "bounded_input_sequence"
+    actions = [
+        InformationAction(
+            "passive_observation",
+            "bounded zero-input public observation",
+            {"bounds_known": True},
+            {candidate: ("unresolved",) for candidate in candidates},
+            risk=0.0,
+            cost=1.0,
+        ),
+        InformationAction(
+            active,
+            "distinguish the current mechanism candidates from public trajectories",
+            {"bounds_known": True, "safe_excitation": True},
+            {
+                candidate: (f"evidence_partition_{index}",)
+                for index, candidate in enumerate(candidates)
+            },
+            risk=1.0,
+            cost=2.0,
+        ),
+    ]
+    selection = select_action(
+        candidates,
+        actions,
+        {"bounds_known": bounds_known, "safe_excitation": safe_excitation},
+        _action_budget(session),
+    )
+    if selection.action_id is None:
+        return None
+    operation = selection.action_id
+    duration = min(
+        max(float(task.response_time_preference_s or 10.0), 1.0),
+        float(task.budgets.get("cumulative_excitation_time_s", 1800.0)) / 3.0,
+    )
+    amplitude = 0.1 * min(abs(float(task.input_min)), abs(float(task.input_max)))
+    if amplitude <= 0:
+        amplitude = 0.05 * (float(task.input_max) - float(task.input_min))
+    if operation == "passive_observation":
+        compiled_operation = "bounded_input_sequence"
+        levels = (0.0, 0.0, 0.0, 0.0)
+    else:
+        compiled_operation = operation
+        levels = (0.0, amplitude, -amplitude, 0.0)
+    request = {
+        "operation": compiled_operation,
+        "segments": [
+            {"duration_s": duration / 4.0, "input_value": level} for level in levels
+        ],
+        "repeats": 3,
+        "sample_period_s": max(min(duration / 200.0, 0.1), 0.001),
+        "requested_signals": list(task.measured_signals),
+        "control_inputs": list(task.control_inputs or (task.control_input,)),
+    }
+    return {
+        "route_id": f"information:{compiled_operation}",
+        "profile_id": "information_acquisition",
+        "provisional": True,
+        "controller_contract_id": None,
+        "controller_template_id": None,
+        "feature_ids": [],
+        "experiment_primitives": [compiled_operation],
+        "experiment_request": request,
+        "candidate_profile_ids": list(candidates),
+        "target_unknowns": list(target_unknowns),
+        "blocked_actions": dict(selection.blocked_actions),
+        "selection_reason": selection.reason,
+        "implemented": True,
+        "capability_gap": None,
+        "registry_version": REGISTRY_VERSION,
+    }
+
+
+def _assessment_text(session: EvidenceSession, dimension_id: str) -> str:
+    entry = session.ledger.entry(dimension_id)
+    return str(entry.assessment or entry.value or entry.evidence or "").casefold()
+
+
+def _ledger_from_public_features(
+    ledger: DiagnosticLedger, artifact: Mapping[str, Any]
+) -> DiagnosticLedger:
+    """Recompute task-relevant diagnoses from released numeric estimates."""
+
+    raw = artifact.get("features") or {}
+
+    def value(name: str, default: float = 0.0) -> float:
+        item = raw.get(name)
+        if isinstance(item, Mapping) and isinstance(item.get("value"), (int, float)):
+            return float(item["value"])
+        return default
+
+    updates: dict[str, dict[str, Any]] = {}
+    if "gain_matrix_condition" in raw:
+        updates["coupling_underactuation"] = {
+            "status": "known",
+            "assessment": "severe_mimo"
+            if value("dc_static_cross_ratio", 1.0) > 0.2
+            else "mimo_weak_coupling",
+            "evidence": "public 2x2 gain and dynamic coupling analysis",
+            "confidence": 0.95,
+        }
+        updates["sensing_actuation_adequacy"] = {
+            "status": "known",
+            "assessment": "adequate"
+            if value("mimo_input_output_rank", 0.0) >= 2
+            else "inadequate",
+            "evidence": "public 2x2 input-output rank estimate",
+            "confidence": 0.95,
+        }
+    elif "history_dependence_index" in raw:
+        updates["nonlinearity_strength"] = {
+            "status": "known",
+            "assessment": "history_dependent"
+            if value("history_dependence_index") > 0.03
+            else "static_nonlinear",
+            "evidence": "public bidirectional staircase regression",
+            "confidence": 0.95,
+        }
+    elif "small_amplitude_decay_rate" in raw:
+        updates["open_loop_stability"] = {
+            "status": "known",
+            "assessment": "locally_self_excited"
+            if value("small_amplitude_decay_rate") < 0
+            else "locally_damped",
+            "evidence": "public amplitude-release decay regression",
+            "confidence": 0.95,
+        }
+        updates["nonlinearity_strength"] = {
+            "status": "known",
+            "assessment": "amplitude_dependent_dynamic",
+            "evidence": "public amplitude-release decay regression",
+            "confidence": 0.95,
+        }
+    elif "static_gain" in raw:
+        tau = max(value("dominant_time_constant", 1.0), 1e-12)
+        updates.update(
+            open_loop_stability={
+                "status": "known",
+                "assessment": "stable",
+                "evidence": "bounded public step converged to a finite plateau",
+                "confidence": 0.95,
+            },
+            nonminimum_phase={
+                "status": "known",
+                "assessment": "nonminimum_phase"
+                if value("inverse_response_severity") > 0.05
+                else "minimum_phase",
+                "evidence": "public signed step inverse-response estimate",
+                "confidence": 0.95,
+            },
+            significant_delay={
+                "status": "known",
+                "assessment": "significant"
+                if value("delay_bound") / tau > 0.15
+                else "not_significant",
+                "evidence": "public step delay-to-time-constant estimate",
+                "confidence": 0.95,
+            },
+            relative_degree={
+                "status": "known",
+                "assessment": "low",
+                "evidence": "public low-order step fit",
+                "confidence": 0.9,
+            },
+        )
+    applicable = {
+        key: value
+        for key, value in updates.items()
+        if ledger.entry(key).status != "not_relevant"
+    }
+    return (
+        ledger.update(applicable, source="public_numerical_analysis")
+        if applicable
+        else ledger
+    )
+
+
 def independent_judge(
     freeze: Mapping[str, Any], packet: Mapping[str, Any]
 ) -> dict[str, Any]:
-    """Recompute public stability/performance gates without LLM or private data."""
+    """The sole current judgment entry point; historical summaries are read-only."""
+    from .judging import judge_packet
 
     if hasattr(freeze, "to_dict"):
         freeze = freeze.to_dict()
     if hasattr(packet, "to_dict"):
         packet = packet.to_dict()
-    if not isinstance(packet, Mapping):
-        raise TypeError("evaluation_packet_object_required")
-    if not isinstance(freeze, Mapping):
-        raise TypeError("controller_freeze_object_required")
-    private_truth_value = packet.get("private_truth_returned", False)
-    if not isinstance(private_truth_value, bool):
-        raise ValueError("private_truth_returned_must_be_boolean")  # noqa: TRY004 - stable API error
-    supplied_freeze = freeze.get("freeze_fingerprint")
-    if supplied_freeze:
-        freeze_copy = deepcopy(dict(freeze))
-        freeze_copy.pop("freeze_fingerprint", None)
-        if fingerprint(freeze_copy) != supplied_freeze:
-            raise ValueError("evaluation_freeze_mismatch")
-    packet_public = deepcopy(dict(packet))
-    packet_public.pop("private_truth_returned", None)
-    if _contains_private_marker(packet_public):
-        raise ValueError("private_truth_not_allowed")
-    if private_truth_value is True:
-        raise ValueError("private_truth_not_allowed")
-    packet_session_id = packet.get("session_id")
-    packet_task_fingerprint = packet.get("task_fingerprint") or packet.get(
-        "task_contract_fingerprint"
-    )
-    packet_freeze_fingerprint = (
-        packet.get("freeze_fingerprint")
-        or packet.get("controller_freeze_fingerprint")
-        or packet.get("evaluation_freeze_fingerprint")
-    )
-    if packet_session_id != freeze.get("session_id"):
-        raise ValueError("evaluation_session_mismatch")
-    if packet_task_fingerprint != freeze.get("task_fingerprint"):
-        raise ValueError("evaluation_task_mismatch")
-    if packet_freeze_fingerprint != freeze.get("freeze_fingerprint"):
-        raise ValueError("evaluation_freeze_mismatch")
-    runtime_contract = freeze.get("runtime_contract")
-    expected_provider = None
-    if isinstance(runtime_contract, Mapping):
-        bindings = runtime_contract.get("provider_bindings")
-        if isinstance(bindings, Mapping) and isinstance(
-            bindings.get("evaluation"), Mapping
-        ):
-            expected_provider = bindings["evaluation"]
-        elif isinstance(runtime_contract.get("provider"), Mapping):
-            expected_provider = runtime_contract["provider"]
-    if isinstance(expected_provider, Mapping) and expected_provider.get("provider_id"):
-        packet_provider = (
-            packet.get("provider_contract")
-            if isinstance(packet.get("provider_contract"), Mapping)
-            else packet
-        )
-        if packet_provider.get("provider_id") != expected_provider.get("provider_id"):
-            raise ValueError("evaluation_provider_mismatch")
-        if packet_provider.get("provider_version") != expected_provider.get(
-            "provider_version"
-        ):
-            raise ValueError("evaluation_provider_mismatch")
-    supplied_evidence = packet.get("evidence_fingerprints") or packet.get(
-        "evidence_fingerprint"
-    )
-    frozen_evidence = {
-        str(item) for item in freeze.get("evidence_fingerprints", ()) or ()
-    }
-    if isinstance(supplied_evidence, str):
-        supplied_evidence = (supplied_evidence,)
-    if (
-        supplied_evidence is not None
-        and {str(item) for item in supplied_evidence} != frozen_evidence
-    ):
-        raise ValueError("evaluation_evidence_binding_mismatch")
-    trials = tuple(packet.get("trials") or ())
-    if not trials:
-        raise ValueError("evaluation_trials_required")
-    if not all(isinstance(item, Mapping) for item in trials):
-        raise TypeError("evaluation_trial_object_required")
-    _validate_evaluation_boolean_fields(trials)
-    supplied_packet = packet.get("packet_fingerprint")
-    if supplied_packet:
-        packet_copy = deepcopy(dict(packet))
-        packet_copy.pop("packet_fingerprint", None)
-        if fingerprint(packet_copy) != supplied_packet:
-            raise ValueError("evaluation_packet_mismatch")
-    judged_trials = tuple(
-        _apply_task_specific_gate(
-            _judge_trial(dict(item), freeze.get("evaluation_contract", {})),
-            freeze.get("evaluation_contract", {}),
-        )
-        for item in trials
-    )
-    stability_failures = [
-        item.get("trial_id", str(index))
-        for index, item in enumerate(judged_trials)
-        if item.get("stable") is not True
-        or item.get("stopped_on_limit") is True
-        or item.get("safety_failure") is True
-        or item.get("hard_failure") is True
-        or item.get("safety_violation") is True
-        or item.get("constraint_violation") is True
-    ]
-    performance_flags = [item.get("performance_pass") is True for item in judged_trials]
-    stable = not stability_failures
-    success_count = sum(performance_flags)
-    success_rate = success_count / len(judged_trials)
-    wilson_lower_bound = _wilson_lower_bound(success_count, len(judged_trials))
-    performance_contract = freeze.get("evaluation_contract", {})
-    minimum_rate = _criterion_float(
-        performance_contract, "perturbed_success_rate_min", "success_rate_min"
-    )
-    rate_passed = minimum_rate is None or wilson_lower_bound >= minimum_rate
-    phase_failures = _phase_failures(judged_trials)
-    passed = stable and not phase_failures and all(performance_flags) and rate_passed
-    packet_provider = (
-        packet.get("provider_contract")
-        if isinstance(packet.get("provider_contract"), Mapping)
-        else packet
-    )
-    trial_scores = [
-        _trial_score(item) for item in judged_trials if _trial_score(item) is not None
-    ]
-    result = {
-        "status": "performance_met" if passed else "performance_not_met",
-        "evaluation_split": packet.get("evaluation_split", "development"),
-        "stability_gate": {"passed": stable, "failed_trials": stability_failures},
-        "performance_gate": {
-            "evaluated_after_stability": stable,
-            "passed": bool(passed),
-            "success_count": success_count,
-            "success_rate": success_rate,
-            "success_rate_min": minimum_rate,
-            "success_rate_passed": rate_passed,
-            "success_rate_basis": "wilson_lower_bound_95",
-            "phase_failures": phase_failures,
-        },
-        "trial_count": len(trials),
-        "success_count": success_count,
-        "success_rate": success_rate,
-        "wilson_lower_bound_95": wilson_lower_bound,
-        "trials": [
-            {
-                "trial_id": item.get("trial_id"),
-                "stable": item.get("stable"),
-                "stopped_on_limit": item.get("stopped_on_limit", False),
-                "stop_reason": item.get("stop_reason"),
-                "performance_pass": item.get("performance_pass"),
-                "metrics": item.get("metrics", {}),
-            }
-            for item in judged_trials
-        ],
-        "failure_reasons": (
-            ["stability_or_stop_failure"]
-            if stability_failures
-            else (
-                phase_failures or ([] if passed else ["performance_threshold_not_met"])
-            )
-        ),
-        "packet_fingerprint": supplied_packet or fingerprint(dict(packet)),
-        "freeze_fingerprint": freeze.get("freeze_fingerprint"),
-        "provider_id": packet_provider.get("provider_id"),
-        "provider_version": packet_provider.get("provider_version"),
-        "judge_version": "cfdc-independent-judge/v1",
-        "private_truth_used": False,
-    }
-    if trial_scores:
-        result["score"] = sum(trial_scores) / len(trial_scores)
-    result["judge_fingerprint"] = fingerprint(result)
-    return result
+    return judge_packet(freeze, packet)
 
 
 def _judge_trial(

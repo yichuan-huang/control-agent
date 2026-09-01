@@ -191,7 +191,7 @@ def _resolved_session(service: WorkflowService):
     )
 
 
-def test_route_freeze_and_independent_judge_are_bound_to_public_evidence(
+def test_current_session_rejects_summary_only_evidence_before_freeze(
     tmp_path,
 ) -> None:
     service = WorkflowService(tmp_path)
@@ -262,86 +262,35 @@ def test_route_freeze_and_independent_judge_are_bound_to_public_evidence(
         session.session_id, action_id="advance", revision=session.revision
     )
     assert session.status == "route_ready"
-    evidence = service.submit_evidence(
-        session.session_id,
-        action_id="evidence-1",
-        revision=session.revision,
-        evidence={
-            "evidence_id": "trace-1",
-            "kind": "experiment",
-            "source": "model",
-            "protocol_fingerprint": "protocol-1",
-            "signal_units": {"time": "s", "output": "unit"},
-        },
-    )
-    frozen = service.freeze_controller(
-        evidence.session_id,
-        action_id="freeze-1",
-        revision=evidence.revision,
-        controller={"family": "PI", "parameters": {"kp": 1.0, "ki": 0.1}},
-        runtime_contract={"command_bounds": [-1.0, 1.0]},
-        evaluation_contract={"success": {"final_error": 0.1}},
-    )
-    assert frozen.status == "controller_ready"
-    result = service.record_evaluation(
-        frozen.session_id,
-        action_id="judge-1",
-        revision=frozen.revision,
-        packet={
-            "session_id": frozen.session_id,
-            "freeze_fingerprint": frozen.controller_freeze["freeze_fingerprint"],
-            "task_fingerprint": frozen.task.fingerprint,
-            "provider_id": "model-provider",
-            "provider_version": "test-v1",
-            "private_truth_returned": False,
-            "trials": [
-                {
-                    "trial_id": "trial-1",
-                    "stable": True,
-                    "stopped_on_limit": False,
-                    "performance_pass": True,
-                }
-            ],
-        },
-    )
-    assert result.status == "performance_met"
-    assert result.evaluation["private_truth_used"] is False
+    with pytest.raises(ValueError, match="public_trace_required_for_v3_task"):
+        service.submit_evidence(
+            session.session_id,
+            action_id="evidence-1",
+            revision=session.revision,
+            evidence={
+                "evidence_id": "trace-1",
+                "kind": "experiment",
+                "source": "model",
+                "protocol_fingerprint": "protocol-1",
+                "signal_units": {"time": "s", "output": "unit"},
+            },
+        )
 
 
-def test_independent_judge_rejects_private_truth_and_freeze_mismatch(tmp_path) -> None:
+def test_summary_only_evidence_cannot_reach_independent_judge(tmp_path) -> None:
     service = WorkflowService(tmp_path)
     session = _resolved_session(service)
-    evidence = service.submit_evidence(
-        session.session_id,
-        action_id="evidence-1",
-        revision=session.revision,
-        evidence={
-            "evidence_id": "trace-1",
-            "source": "model",
-            "kind": "experiment",
-            "protocol_fingerprint": "protocol-1",
-            "units": {"time": "s"},
-        },
-    )
-    frozen = service.freeze_controller(
-        evidence.session_id,
-        action_id="freeze-1",
-        revision=evidence.revision,
-        controller={"family": "PI", "parameters": {"kp": 1.0}},
-        runtime_contract={"command_bounds": [-1.0, 1.0]},
-        evaluation_contract={"success": {}},
-    )
-    with pytest.raises(ValueError, match="private_truth"):
-        service.record_evaluation(
-            frozen.session_id,
-            action_id="judge-private",
-            revision=frozen.revision,
-            packet={
-                "session_id": frozen.session_id,
-                "freeze_fingerprint": frozen.controller_freeze["freeze_fingerprint"],
-                "task_fingerprint": frozen.task.fingerprint,
-                "private_truth_returned": True,
-                "trials": [{"stable": True, "performance_pass": True}],
+    with pytest.raises(ValueError, match="public_trace_required_for_v3_task"):
+        service.submit_evidence(
+            session.session_id,
+            action_id="evidence-1",
+            revision=session.revision,
+            evidence={
+                "evidence_id": "trace-1",
+                "source": "model",
+                "kind": "experiment",
+                "protocol_fingerprint": "protocol-1",
+                "units": {"time": "s"},
             },
         )
 
@@ -570,10 +519,10 @@ def test_bounded_tuning_has_stability_hard_gate_and_fresh_is_not_feedback() -> N
         evaluate,
         baseline_result={"stable": True, "performance_pass": False, "score": 2.0},
     )
-    assert result.status == "completed"
+    assert result.status == "exhausted"
     assert len(result.probes) <= 6
     assert all(repeats == 20 for _params, _split, repeats in calls)
-    assert [split for _params, split, _repeats in calls].count("fresh") >= 1
+    assert [split for _params, split, _repeats in calls].count("fresh") == 0
 
     blocked = run_bounded_tuning(
         {"kp": 1.0},
@@ -585,7 +534,7 @@ def test_bounded_tuning_has_stability_hard_gate_and_fresh_is_not_feedback() -> N
     assert calls[-1][1] != "fresh" or blocked.probes == ()
 
 
-def test_feedback_creates_new_freeze_and_requires_fresh_confirmation(tmp_path) -> None:
+def test_feedback_requires_real_evidence_before_tuning(tmp_path) -> None:
     service = WorkflowService(tmp_path)
     session = _resolved_session(service)
     session = service.confirm_task(
@@ -593,102 +542,19 @@ def test_feedback_creates_new_freeze_and_requires_fresh_confirmation(tmp_path) -
         action_id="feedback-confirm-budget",
         revision=session.revision,
     )
-    evidence = service.submit_evidence(
-        session.session_id,
-        action_id="feedback-evidence",
-        revision=session.revision,
-        evidence={
-            "evidence_id": "trace-feedback",
-            "source": "model",
-            "kind": "experiment",
-            "protocol_fingerprint": "protocol-feedback",
-            "signal_units": {"time": "s", "output": "unit"},
-        },
-    )
-    frozen = service.freeze_controller(
-        evidence.session_id,
-        action_id="feedback-freeze",
-        revision=evidence.revision,
-        controller={"family": "PI", "parameters": {"kp": 1.0}},
-        runtime_contract={"command_bounds": [-1.0, 1.0]},
-        evaluation_contract={"success": {}},
-    )
-    predecessor = frozen.controller_freeze["freeze_fingerprint"]
-    evaluated = service.record_evaluation(
-        frozen.session_id,
-        action_id="feedback-baseline",
-        revision=frozen.revision,
-        packet={
-            "session_id": frozen.session_id,
-            "task_fingerprint": frozen.task.fingerprint,
-            "freeze_fingerprint": predecessor,
-            "trials": [
-                {
-                    "trial_id": "baseline",
-                    "stable": True,
-                    "performance_pass": False,
-                    "metrics": {"score": 1.0},
-                }
-            ],
-        },
-    )
-    assert evaluated.status == "tuning_eligible"
-
-    def evaluate(parameters, split, repeats):
-        del split, repeats
-        return {
-            "stable": True,
-            "performance_pass": False,
-            "score": 1.0 + float(parameters["kp"]),
-        }
-
-    tuned = service.run_tuning(
-        evaluated.session_id,
-        action_id="feedback-tuning",
-        revision=evaluated.revision,
-        contract=TuningContract(
-            parameter_whitelist=("kp",),
-            parameter_domains={"kp": (0.1, 4.0)},
-            budget_confirmed=True,
-            initial_freeze_fingerprint=predecessor,
-            task_fingerprint=evaluated.task.fingerprint,
-        ),
-        evaluate=evaluate,
-    )
-    incumbent = tuned.controller_freeze["freeze_fingerprint"]
-    assert tuned.tuning["accepted"] is True
-    assert tuned.status == "awaiting_confirmation"
-    assert incumbent != predecessor
-    assert tuned.freeze_history[-1]["freeze_fingerprint"] == predecessor
-
-    development_packet = {
-        "session_id": tuned.session_id,
-        "task_fingerprint": tuned.task.fingerprint,
-        "freeze_fingerprint": incumbent,
-        "trials": [
-            {
-                "trial_id": "confirmation",
-                "stable": True,
-                "performance_pass": True,
-            }
-        ],
-    }
-    with pytest.raises(ValueError, match="fresh_confirmation_required_after_tuning"):
-        service.record_evaluation(
-            tuned.session_id,
-            action_id="feedback-stale-development",
-            revision=tuned.revision,
-            packet=development_packet,
+    with pytest.raises(ValueError, match="public_trace_required_for_v3_task"):
+        service.submit_evidence(
+            session.session_id,
+            action_id="feedback-evidence",
+            revision=session.revision,
+            evidence={
+                "evidence_id": "trace-feedback",
+                "source": "model",
+                "kind": "experiment",
+                "protocol_fingerprint": "protocol-feedback",
+                "signal_units": {"time": "s", "output": "unit"},
+            },
         )
-
-    confirmed = service.record_confirmation(
-        tuned.session_id,
-        action_id="feedback-confirmation",
-        revision=tuned.revision,
-        packet=development_packet,
-    )
-    assert confirmed.status == "performance_met"
-    assert confirmed.confirmation["freeze_fingerprint"] == incumbent
 
 
 def test_kernel_agent_context_is_role_scoped_and_has_no_supervisor(tmp_path) -> None:
@@ -790,43 +656,22 @@ def test_handoff_with_missing_public_booleans_is_blocked() -> None:
     assert all(item.startswith("missing_gate:") for item in result["failures"])
 
 
-def test_phase_hard_failure_cannot_advance_to_evaluation(tmp_path) -> None:
+def test_phase_summary_cannot_replace_executed_phase_trace(tmp_path) -> None:
     service = WorkflowService(tmp_path)
     session = _resolved_session(service)
-    evidence = service.submit_evidence(
-        session.session_id,
-        action_id="phase-evidence",
-        revision=session.revision,
-        evidence={
-            "evidence_id": "trace-phase",
-            "source": "model",
-            "kind": "experiment",
-            "protocol_fingerprint": "protocol-phase",
-            "signal_units": {"time": "s"},
-        },
-    )
-    frozen = service.freeze_controller(
-        evidence.session_id,
-        action_id="phase-freeze",
-        revision=evidence.revision,
-        controller={"family": "PI", "parameters": {"kp": 1.0}},
-        runtime_contract={"command_bounds": [-1.0, 1.0]},
-        evaluation_contract={"success": {}},
-    )
-    failed = service.record_phase_result(
-        frozen.session_id,
-        action_id="phase-result",
-        revision=frozen.revision,
-        result={
-            "phase_id": "hold",
-            "entry_condition_met": True,
-            "exit_condition_met": True,
-            "success": True,
-            "hard_failure": True,
-        },
-    )
-    assert failed.status == "capability_gap"
-    assert failed.pending_actions[0]["kind"] == "capability_gap"
+    with pytest.raises(ValueError, match="public_trace_required_for_v3_task"):
+        service.submit_evidence(
+            session.session_id,
+            action_id="phase-evidence",
+            revision=session.revision,
+            evidence={
+                "evidence_id": "trace-phase",
+                "source": "model",
+                "kind": "experiment",
+                "protocol_fingerprint": "protocol-phase",
+                "signal_units": {"time": "s"},
+            },
+        )
 
 
 def test_critic_correction_is_revalidated_before_returning() -> None:
@@ -870,7 +715,7 @@ def test_feature_quality_flag_must_be_boolean(tmp_path) -> None:
         evidence={
             "evidence_id": "trace-quality",
             "source": "model",
-            "kind": "experiment",
+            "kind": "observation",
             "protocol_fingerprint": "protocol-quality",
             "signal_units": {"time": "s"},
         },
@@ -914,7 +759,7 @@ def test_public_saturation_flags_must_be_boolean() -> None:
         _boolean_sequence(["false"])
 
 
-def test_public_confirmation_and_evaluation_flags_are_strict(tmp_path) -> None:
+def test_public_confirmation_and_summary_evaluation_flags_are_strict(tmp_path) -> None:
     with pytest.raises(ValueError, match="budget_confirmed_must_be_boolean"):
         TaskContract.from_user_input(
             {
@@ -927,37 +772,17 @@ def test_public_confirmation_and_evaluation_flags_are_strict(tmp_path) -> None:
 
     service = WorkflowService(tmp_path)
     session = _resolved_session(service)
-    evidence = service.submit_evidence(
-        session.session_id,
-        action_id="strict-evidence",
-        revision=session.revision,
-        evidence={
-            "evidence_id": "trace-strict",
-            "source": "model",
-            "kind": "experiment",
-            "protocol_fingerprint": "protocol-strict",
-            "signal_units": {"time": "s"},
-        },
-    )
-    frozen = service.freeze_controller(
-        evidence.session_id,
-        action_id="strict-freeze",
-        revision=evidence.revision,
-        controller={"family": "PI", "parameters": {"kp": 1.0}},
-        runtime_contract={"command_bounds": [-1.0, 1.0]},
-        evaluation_contract={"success": {}},
-    )
-    with pytest.raises(ValueError, match="evaluation_trial_stable_must_be_boolean"):
-        service.record_evaluation(
-            frozen.session_id,
-            action_id="strict-evaluation",
-            revision=frozen.revision,
-            packet={
-                "session_id": frozen.session_id,
-                "freeze_fingerprint": frozen.controller_freeze["freeze_fingerprint"],
-                "task_fingerprint": frozen.task.fingerprint,
-                "private_truth_returned": False,
-                "trials": [{"stable": "false", "performance_pass": False}],
+    with pytest.raises(ValueError, match="public_trace_required_for_v3_task"):
+        service.submit_evidence(
+            session.session_id,
+            action_id="strict-evidence",
+            revision=session.revision,
+            evidence={
+                "evidence_id": "trace-strict",
+                "source": "model",
+                "kind": "experiment",
+                "protocol_fingerprint": "protocol-strict",
+                "signal_units": {"time": "s"},
             },
         )
 

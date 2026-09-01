@@ -117,6 +117,151 @@ def known_feature_ids() -> frozenset[str]:
     return frozenset(ids)
 
 
+def select_route_from_features(
+    artifact: dict[str, Any],
+    task: dict[str, Any],
+    prior_route: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Select an executable family from released public numerical features."""
+
+    features = artifact.get("features") or {}
+
+    def value(name: str, default: float | None = None) -> float | None:
+        item = features.get(name)
+        if isinstance(item, dict) and isinstance(item.get("value"), (int, float)):
+            return float(item["value"])
+        return default
+
+    family: str | None = None
+    gap: str | None = None
+    measured = tuple(str(item) for item in task.get("measured_signals", ()))
+    controls = tuple(
+        str(item) for item in task.get("control_inputs") or (task.get("control_input"),)
+    )
+    if (
+        len(measured) >= 2
+        and len(controls) >= 2
+        and value("gain_matrix_condition") is not None
+    ):
+        condition = float(value("gain_matrix_condition", float("inf")))
+        inverse = float(value("static_inverse_amplification", float("inf")))
+        cross = float(value("dc_static_cross_ratio", float("inf")))
+        residual = float(value("dynamic_decoupler_fit_residual", float("inf")))
+        if condition > 50.0 or inverse > 20.0:
+            gap = "static_decoupling_capability_gap"
+        elif cross <= 0.2:
+            family = "decentralized_channel_PI"
+        elif (
+            inverse <= 8.0
+            and float(value("inband_static_decoupler_residual", 1.0)) <= 0.35
+        ):
+            family = "static_decoupler_then_PI"
+        elif (
+            residual <= 0.35
+            and float(value("dynamic_inverse_peak_amplification", float("inf"))) <= 12.0
+        ):
+            family = "lag_dynamic_decoupler_then_PI"
+        else:
+            gap = "dynamic_decoupling_capability_gap"
+    elif value("history_dependence_index") is not None:
+        if float(value("history_dependence_index", 1.0)) > 0.03:
+            gap = "history_dependent_static_inverse_gap"
+        elif float(value("static_map_derivative_lower_bound", -1.0)) <= 0.0:
+            gap = "noninvertible_static_map_gap"
+        elif abs(float(value("static_map_cubic_coefficient", 0.0))) > 0.05:
+            family = "partial_inverse_then_PI"
+        elif (
+            max(
+                float(value("positive_deadzone", 0.0)),
+                float(value("negative_deadzone", 0.0)),
+            )
+            > 0.1
+        ):
+            family = "deadzone_right_inverse_then_PI"
+        else:
+            family = "local_PI_without_inverse"
+    elif value("small_amplitude_decay_rate") is not None:
+        small = float(value("small_amplitude_decay_rate", 0.0))
+        quadratic = float(value("quadratic_decay_rate", 0.0))
+        crossing = float(value("zero_decay_crossing_amplitude", 0.0))
+        if small < 0 < quadratic and crossing > 0:
+            family = "self_excitation_energy_guarded_PID"
+        elif float(value("amplitude_dependence_index", 0.0)) > 0.1:
+            family = "scheduled_damping_PID"
+        elif small > 0:
+            family = "local_fixed_PID"
+        else:
+            gap = "nonlinear_decay_qualification_gap"
+    elif value("static_gain") is not None:
+        delay = float(value("delay_bound", 0.0))
+        tau = max(float(value("dominant_time_constant", 1.0)), 1e-12)
+        inverse = float(value("inverse_response_severity", 0.0))
+        residual = float(value("low_order_residual", 0.0))
+        if inverse > 0.05:
+            family = "two_dof_PI"
+        elif residual > 0.25:
+            guard = value("phase_guard_frequency")
+            family = "phase_guarded_2dof_PI" if guard else None
+            gap = None if family else "high_order_phase_evidence_gap"
+        elif delay / tau > 0.15:
+            family = "delay_aware_PI"
+        else:
+            family = "PI"
+    elif prior_route:
+        return dict(prior_route)
+    else:
+        gap = "public_features_do_not_resolve_controller_route"
+
+    profile_by_family = {
+        "PI": "first_order_lag",
+        "delay_aware_PI": "first_order_lag_with_delay",
+        "notch_then_PI": "second_order_oscillator",
+        "two_dof_pid": "second_order_oscillator",
+        "P_integrator": "double_integrator",
+        "PD_integrator": "double_integrator",
+        "lead_lag_series": "double_integrator",
+        "two_dof_PI": "nmp_inverse_response",
+        "cascaded_control": "underactuated_cartpole",
+        "local_PI_without_inverse": "first_order_lag",
+        "partial_inverse_then_PI": "first_order_lag",
+        "deadzone_right_inverse_then_PI": "first_order_lag",
+        "reduced_low_order_PI": "first_order_lag",
+        "phase_guarded_2dof_PI": "generic_unstable_higher_order",
+        "local_fixed_PID": "generic_unstable_higher_order",
+        "scheduled_damping_PID": "generic_unstable_higher_order",
+        "self_excitation_energy_guarded_PID": "generic_unstable_higher_order",
+        "decentralized_channel_PI": "mimo_2x2_coupled",
+        "static_decoupler_then_PI": "mimo_2x2_coupled",
+        "lag_dynamic_decoupler_then_PI": "mimo_2x2_coupled",
+    }
+    contract = controller_contract(family) if family else None
+    required = (
+        list(
+            dict.fromkeys(
+                [
+                    *contract.get("controller_features", ()),
+                    *contract.get("route_guard_features", ()),
+                ]
+            )
+        )
+        if contract
+        else []
+    )
+    profile = profile_by_family.get(family or "", "capability_gap")
+    return {
+        "route_id": f"public-analysis:{family or 'capability_gap'}",
+        "profile_id": profile,
+        "controller_family": family,
+        "controller_contract_id": family,
+        "controller_template_id": family,
+        "feature_ids": required,
+        "implemented": family is not None,
+        "capability_gap": gap,
+        "selection_basis": "versioned public numerical features",
+        "source_feature_artifact_fingerprint": artifact.get("artifact_fingerprint"),
+    }
+
+
 __all__ = [
     "ROUTE_CATALOG_VERSION",
     "canonical_controller_family",
@@ -126,4 +271,5 @@ __all__ = [
     "implemented_controller_families",
     "known_feature_ids",
     "route_catalog",
+    "select_route_from_features",
 ]

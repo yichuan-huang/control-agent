@@ -16,21 +16,21 @@ from itertools import pairwise
 from typing import Any, ClassVar
 
 TASK_CONTRACT_VERSION = "cfdc-task/v1.2"
-EVIDENCE_SESSION_VERSION = "cfdc-session/v2.0"
+EVIDENCE_SESSION_VERSION = "cfdc-session/v3.0"
 READABLE_EVIDENCE_SESSION_VERSIONS = frozenset(
-    {"cfdc-session/v1.0", EVIDENCE_SESSION_VERSION}
+    {"cfdc-session/v1.0", "cfdc-session/v2.0", EVIDENCE_SESSION_VERSION}
 )
 DIAGNOSTIC_LEDGER_VERSION = "cfdc-diagnostics/v2.0"
-FREEZE_VERSION = "cfdc-freeze/v1.0"
-PACKET_VERSION = "cfdc-evaluation-packet/v1.0"
-CONTROLLER_IR_VERSION = "cfdc-controller-ir/v1.0"
-MULTISTAGE_VERSION = "cfdc-multistage/v1.0"
-TUNING_CONTRACT_VERSION = "cfdc-tuning/v1.0"
-PROTOCOL_VERSION = "cfdc-protocol/v1"
+FREEZE_VERSION = "cfdc-freeze/v2.0"
+PACKET_VERSION = "cfdc-evaluation-packet/v2.0"
+CONTROLLER_IR_VERSION = "cfdc-controller-ir/v2.0"
+MULTISTAGE_VERSION = "cfdc-multistage/v2.0"
+TUNING_CONTRACT_VERSION = "cfdc-tuning/v2.0"
+PROTOCOL_VERSION = "cfdc-protocol/v2"
 OPERATOR_HANDOFF_VERSION = "cfdc-operator-handoff/v1"
 UPLOAD_AUDIT_VERSION = "cfdc-upload/v1"
-FEATURE_ARTIFACT_VERSION = "cfdc-features/v1"
-QUALIFICATION_VERSION = "cfdc-qualification/v1"
+FEATURE_ARTIFACT_VERSION = "cfdc-features/v2"
+QUALIFICATION_VERSION = "cfdc-qualification/v2"
 IMPORT_REPORT_VERSION = "cfdc-import/v1"
 P1_1_TASK_SEMANTICS_VERSION = "1.1.0"
 
