@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.1` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.2` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
@@ -29,7 +29,11 @@ uv run python app.py
 
 4. Disable local RAG unless an index has already been built. Create the task, confirm its boundaries, and submit the requested structural diagnosis. A built-in software case then advances through protocol compilation, public evidence, features, controller synthesis, qualification, freeze, and independent evaluation until it needs a user decision or reaches a terminal state.
 
+Before a run, `uv run --locked python main.py --doctor` prints the same non-destructive environment report used by the WebUI. It checks Python, packaged resources, the writable session directory, the public case registry, optional RAG, and (only for loopback addresses) the configured Ollama service/model. The writable-directory check creates and immediately removes one bounded probe file.
+
 Start with a built-in software case. A custom object does not automatically receive a simulation model. Physical or externally operated experiments are never run directly by the page; they continue through an operator bundle, operator confirmation, and protocol-bound data upload.
+
+Built-in authority is granted by a server-side case ID and a fingerprinted `RegisteredCaseBinding`; editing browser JSON cannot select another Provider. To practise the teaching loop, choose a built-in case and click “Create teaching exercise”. The generated ZIP is software-only, consumes the reserved experiment budget, and is not evidence until it is downloaded and re-uploaded through the normal audit gates.
 
 ## Choose a model provider
 
@@ -82,10 +86,11 @@ The Kernel provides the following capabilities through versioned contracts, so e
 
 - `cfdc-protocol/v2` compiles bounded SISO, repeated time-series, staircase, Class IV frequency/amplitude/release, unstable-balance, 2x2 MIMO, and multi-stage protocols. A Provider run recompiles and verifies every binding and fingerprint before execution.
 - Operator handoff writes a card, precheck list, JSON schema, repeat CSV templates, and ZIP. CSV/JSON uploads pass authorization, format, session/protocol, repeat-count, timebase, waveform, safety-limit, and signal-quality gates. Rejected attempts append a receipt. They do not count as valid experiments, but failed attempts and requested excitation time still consume their separate pre-registered budgets.
+- Registered cases also support a teaching-exercise ZIP. It contains a public manifest, protocol-bound CSV traces, and Chinese instructions; generation reserves software-experiment budget but never writes evidence. Re-uploading the ZIP is required and is checked by the same deterministic upload gates. The seven `audit_class_*` cases use independent current-version dynamics and evaluation Providers rather than aliases of the five engineering models.
 - `cfdc-features/v2` derives source-bound intervals and bounded parameter domains for SISO adjacent structures, delay/NMP/integrating/second-order behavior, Step-B nonlinearity, Class IV behavior, local unstable balance, and 2x2 static/dynamic coupling. Missing evidence produces a named feature gap.
 - The packaged route registry exposes 20 executable controller contracts plus explicit capability-gap routes. Controller proposals are restricted `ControllerIR`; deterministic synthesis and `cfdc-qualification/v2` return `offline_qualified`, `diagnostic_trial_only`, or `not_qualified`.
 - Identification and evaluation Providers use separate immutable bindings. The independent `cfdc-independent-judge/v2.0` recomputes channel metrics from complete sampled trajectories and stop events, evaluates hard stability and limits first, then task-specific performance, perturbed repeats, the worst trial, and a 95% Wilson lower bound. Only stable performance gaps may enter bounded tuning; every accepted candidate receives a new freeze and must pass fresh confirmation.
-- `cfdc-session/v3.0` preserves revision checks, idempotent actions, stale-revision rejection, immutable artifact histories, and an append-only event chain.
+- `cfdc-session/v4.0` adds a catalog-derived `RegisteredCaseBinding` and preserves revision checks, idempotent actions, stale-revision rejection, immutable artifact histories, and an append-only event chain.
 
 The workflow exposes three separate readiness gates: legal evidence acquisition, evidence-supported route selection, and controller synthesis. Unknown dimensions block only actions that consume them. Every provider attempt is reserved before execution, so retries, excitation time, valid experiments, and distinct protocols remain separate audit quantities. Old sessions remain readable but immutable; a derived session copies only the task and human priors, never old features, qualification, or performance authority.
 
@@ -132,7 +137,7 @@ uv run python app.py
 
 The Guided Workbench creates Kernel tasks from an explicit structured form. Every task requires a description, at least one measured output, at least one control input, finite input lower and upper bounds, and a positive `state_stop`. Output bounds are optional but must be supplied as a pair. `transition_then_hold` also requires an initial region and target region. `disturbance_recovery_to_hold` also requires a disturbance event, recovery start condition, and hold region. The form also accepts engineering units, performance thresholds, experiment budgets, timing preferences, initial values, and intermediate targets.
 
-At each state the workbench presents one primary next action: confirm the task, answer a diagnostic question, select an experiment Provider, download an operator bundle, record the operator report, upload data, run isolated evaluation, accept bounded tuning, or confirm the result. Protocol waveforms, accepted public traces, feature intervals, qualification checks, full frozen-controller output/reference/input trajectories, repeat confidence, remaining evidence budgets, route-revision reasons, three independent readiness gates, and the nine-stage audit timeline are shown from Kernel artifacts. The page distinguishes insufficient evidence, failed qualification, stable-but-insufficient performance, and final independent confirmation.
+At each state the workbench presents one primary next action: confirm the task, answer a diagnostic question, select an experiment Provider, download an operator bundle or teaching exercise, record the operator report when required, upload data, run isolated evaluation, accept bounded tuning, or confirm the result. The page is organised as three teaching steps—task and boundaries; evidence and controller; evaluation and confirmation—while retaining the nine-stage append-only audit timeline. Registered cases show a learning goal, key terms, evidence boundary, and explicit “cannot prove” notes. Protocol waveforms, accepted public traces, feature intervals, qualification checks, full frozen-controller output/reference/input trajectories, repeat confidence, remaining evidence budgets, and route-revision reasons are shown from Kernel artifacts. The page distinguishes insufficient evidence, failed qualification, stable-but-insufficient performance, and final independent confirmation.
 
 The Expert Contracts tab accepts a full `TaskContract`, loads an existing Kernel session, submits typed action JSON, and validates a downloaded artifact fingerprint. It can export the protocol, operator bundle, upload receipt, feature artifact, Controller IR, qualification, freeze, evaluation, feedback, confirmation, final result, complete session audit, or the full result ZIP.
 
@@ -188,6 +193,12 @@ uv run python main.py --workflow-version kernel \
   --kernel-result-dir ./output/results \
   --kernel-export-bundle
 ```
+
+To use the teaching loop instead of automatic software evidence, add
+`--kernel-evidence-mode exercise_bundle --kernel-prepare-training-exercise`.
+The command stops with an `awaiting_evidence` session; upload the downloaded
+`training_exercise_bundle.zip` later with `--kernel-upload` so the normal gates
+can accept it.
 
 For a physical or externally operated experiment, bind a public Provider contract and compile the handoff after diagnosis and route resolution:
 

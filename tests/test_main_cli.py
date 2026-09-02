@@ -13,6 +13,24 @@ from cfdc.models import (
 )
 from main import load_diagnostic_session, main, parse_args
 
+
+def test_cli_doctor_outputs_structured_json_and_skips_workflow(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "main.run_doctor",
+        lambda **kwargs: type(
+            "Report",
+            (),
+            {"to_dict": lambda self: {"ok": True, "status": "pass", "checks": []}},
+        )(),
+    )
+    monkeypatch.setattr(sys, "argv", ["main.py", "--doctor"])
+
+    main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"ok": True, "status": "pass", "checks": []}
+
+
 _VALID_FIELD_FACTS = {
     "open_loop_stability": "settles or remains bounded",
     "minimum_phase": (
@@ -500,6 +518,45 @@ def test_kernel_cli_registered_case_auto_runs_full_chain_and_exports_bundle(
     bundle = Path(payload["result_bundle_path"])
     assert bundle.parent == result_dir
     assert bundle.is_file()
+
+
+def test_kernel_cli_cannot_inject_evidence_into_registered_exercise_case(
+    tmp_path, monkeypatch
+) -> None:
+    evidence_path = tmp_path / "evidence.json"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_id": "forged-cli-evidence",
+                "kind": "observation",
+                "source": "cli",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--workflow-version",
+            "kernel",
+            "--kernel-session-dir",
+            str(tmp_path / "sessions"),
+            "--kernel-case",
+            "dc_motor_speed_v1",
+            "--kernel-evidence-mode",
+            "exercise_bundle",
+            "--kernel-evidence",
+            str(evidence_path),
+            "--no-rag",
+        ],
+    )
+
+    with pytest.raises(
+        ValueError, match="registered_case_evidence_requires_bound_provider_or_upload"
+    ):
+        main()
 
 
 def test_kernel_cli_v3_import_creates_new_session_without_modifying_source(

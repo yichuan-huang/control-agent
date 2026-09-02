@@ -62,31 +62,24 @@ TRANSITION_VARIANTS: dict[str, dict[str, Any]] = {
 AUDIT_CASES: dict[str, dict[str, Any]] = {
     "audit_class_i_level": {
         "label_cn": "Class I｜液位通道：一阶自调节",
-        "training_case": "dc_motor_speed_v1",
     },
     "audit_class_ii_thermal": {
         "label_cn": "Class II｜温度通道：双滞后与短延迟",
-        "training_case": "tclab_single_heater_v1",
     },
     "audit_class_ii_oscillator": {
         "label_cn": "Class II｜柔性台架：欠阻尼振荡",
-        "training_case": "tclab_single_heater_v1",
     },
     "audit_class_iii_motion": {
         "label_cn": "Class III｜低摩擦平台：积分运动",
-        "training_case": "dc_motor_position_v1",
     },
     "audit_class_iv_nmp": {
         "label_cn": "Class IV｜外部位置：稳定逆响应",
-        "training_case": "quadruple_tank_nmp_v1",
     },
     "audit_class_iv_high_order": {
         "label_cn": "Class IV｜多储能过程：稳定高阶",
-        "training_case": "quadruple_tank_nmp_v1",
     },
     "audit_class_v_mimo": {
         "label_cn": "Class V｜双变量过程：动态耦合",
-        "training_case": "tclab_dual_heater_v1",
     },
 }
 
@@ -97,12 +90,17 @@ def training_catalog() -> dict[str, dict[str, Any]]:
     return json.loads(path.read_text(encoding="utf-8"))["cases"]
 
 
+@lru_cache(maxsize=1)
+def audit_catalog() -> dict[str, dict[str, Any]]:
+    """Return public audit task contracts, never private provider models."""
+
+    path = files("cfdc.kernel").joinpath("resources", "audit_cases.v1.json")
+    return json.loads(path.read_text(encoding="utf-8"))["cases"]
+
+
 def public_training_case(case_id: str) -> dict[str, Any]:
     if case_id in AUDIT_CASES:
-        audit = AUDIT_CASES[case_id]
-        value = deepcopy(training_catalog()[audit["training_case"]])
-        value["label_cn"] = audit["label_cn"]
-        value["base_case_id"] = audit["training_case"]
+        value = deepcopy(audit_catalog()[case_id])
         value["case_kind"] = "audit"
         return value
     if case_id in TRANSITION_VARIANTS:
@@ -144,19 +142,54 @@ def public_case_catalog() -> dict[str, dict[str, Any]]:
             "task": case["task"],
         }
     for case_id, item in AUDIT_CASES.items():
-        case = public_training_case(item["training_case"])
+        case = public_training_case(case_id)
         result[case_id] = {
             "kind": "audit",
             "label": item["label_cn"],
             "task": case["task"],
-            "provider_case_id": item["training_case"],
         }
     return result
+
+
+def case_learning_material(case_id: str | None = None) -> dict[str, Any]:
+    """Return concise, public teaching guidance for the three-step workbench."""
+
+    if case_id:
+        case = public_training_case(str(case_id))
+        task = case.get("task") if isinstance(case.get("task"), dict) else {}
+        goal = (
+            case.get("learning_goal")
+            or case.get("learning_purpose_cn")
+            or task.get("objective")
+            or "从当前任务和公开证据建立可审计的控制结论。"
+        )
+        source_kind = "注册案例绑定的公开软件 Provider"
+    else:
+        goal = "把自定义任务拆成边界、证据、路线和独立评价。"
+        source_kind = "当前协议绑定的外部公开证据"
+    return {
+        "learning_goal": str(goal),
+        "key_terms": [
+            "任务合同",
+            "公开证据",
+            "路线与特征",
+            "控制器冻结",
+            "独立评价",
+        ],
+        "evidence_boundary": f"{source_kind}；不自动代表真实硬件测量。",
+        "cannot_prove": [
+            "物理安全认证",
+            "未测工作区的全局稳定性",
+            "未声明工况之外的控制性能",
+        ],
+    }
 
 
 __all__ = [
     "AUDIT_CASES",
     "TRANSITION_VARIANTS",
+    "audit_catalog",
+    "case_learning_material",
     "public_case_catalog",
     "public_training_case",
     "training_catalog",

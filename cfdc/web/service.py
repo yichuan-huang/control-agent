@@ -12,14 +12,15 @@ from typing import Any
 
 from cfdc.agents import wrap_agent_adapter
 from cfdc.diagnosis import OpenAICompatibleDiagnosticAdapter
-from cfdc.kernel import WorkflowService
+from cfdc.kernel import KernelActionError, WorkflowService
 from cfdc.kernel.agents import KernelAgentCoordinator
-from cfdc.kernel.cases import public_training_case
+from cfdc.kernel.cases import case_learning_material, public_training_case
 from cfdc.kernel.replies import (
     KernelReplyMode,
     build_kernel_input_contract,
     prepare_kernel_reply,
 )
+from cfdc.kernel.session import registered_task_scope_fingerprint
 
 
 class _ReplyPreparation:
@@ -42,6 +43,17 @@ KERNEL_STAGE_LABELS = (
     "评价",
     "调优／确认",
     "结果",
+)
+
+_SAFE_WEB_ERROR_MESSAGES = frozenset(
+    {
+        "响应时间偏好必须大于 0。",
+        "不同实验预算必须是大于等于 1 的整数。",
+        "扰动重复成功率下限必须在 0 到 1 之间。",
+        "请先确认软件试验边界与预算。",
+        "请填写回复内容，明确说明已知信息或“不知道”。",
+        "当前没有待处理动作，请刷新页面。",
+    }
 )
 
 
@@ -180,9 +192,10 @@ _KERNEL_PUBLIC_ACTIONS = frozenset(
         "cancel",
         "replay",
         "confirmation",
-        "set_provider",
+        "revise_diagnostic",
         "compile_protocol",
         "prepare_operator_handoff",
+        "prepare_training_exercise_bundle",
         "record_operator_report",
         "ingest_upload",
         "derive_features",
@@ -422,6 +435,48 @@ def _kernel_action_already_recorded(session, action_id: str) -> bool:
     return any(event.action_id == action_id for event in session.events)
 
 
+def kernel_action_error_payload(
+    exc: Exception, app_state: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
+    """Describe a failed Web action without exposing internals or stale state."""
+
+    session_revision: int | None = None
+    if isinstance(app_state, Mapping):
+        session_id = str(app_state.get("kernel_session_id") or "")
+        session_dir = app_state.get("kernel_session_dir")
+        if session_id and session_dir:
+            try:
+                session_revision = (
+                    WorkflowService(session_dir).read(session_id).revision
+                )
+            except (OSError, ValueError):
+                session_revision = None
+    if isinstance(exc, KernelActionError):
+        result = exc.to_dict()
+        result["revision"] = (
+            session_revision if session_revision is not None else result["revision"]
+        )
+        return result
+    raw_code = str(exc).split(":", 1)[0].strip()
+    code = (
+        raw_code if re.fullmatch(r"[a-z][a-z0-9_]{0,63}", raw_code) else "action_failed"
+    )
+    raw_message = str(exc).strip()
+    message_cn = (
+        raw_message
+        if raw_message in _SAFE_WEB_ERROR_MESSAGES
+        else "操作未完成；请根据当前会话状态检查输入后重试。"
+    )
+    return {
+        "code": code,
+        "message_cn": message_cn,
+        "receipt_saved": False,
+        "revision": session_revision,
+        "next_step": "refresh_and_retry",
+        "trace_id": hashlib.sha256(code.encode("utf-8")).hexdigest()[:16],
+    }
+
+
 def _normalise_kernel_action(action: str) -> str:
     return _KERNEL_ACTION_ALIASES.get(action, action)
 
@@ -435,10 +490,10 @@ def start_kernel_app_run(
     use_rag: bool = True,
     llm_configured: bool = False,
     provider_case_id: str | None = None,
+    evidence_mode: str = "automatic",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Create a Kernel Web task from one explicit public task contract."""
 
-    payload = _validated_web_task(task)
     service = WorkflowService(session_dir or Path("output") / "kernel-sessions")
     resolved_snapshot = rag_snapshot
     if use_rag and rag_snapshot and not rag_index_dir:
@@ -451,20 +506,41 @@ def start_kernel_app_run(
         )
         resolved_snapshot = index.index_snapshot
     rag_active = bool(use_rag and resolved_snapshot)
-    session = service.start(
-        payload,
-        agent_config={
-            "mode": "multi",
-            "rag_requested": bool(use_rag),
-            "rag_enabled": rag_active,
-            "rag_status": (
-                "active" if rag_active else "not_initialized" if use_rag else "disabled"
-            ),
-            "rag_index_dir": str(rag_index_dir) if rag_index_dir else None,
-            "llm_configured": bool(llm_configured),
-        },
-        rag_snapshot=resolved_snapshot,
-    )
+    agent_config = {
+        "mode": "multi",
+        "rag_requested": bool(use_rag),
+        "rag_enabled": rag_active,
+        "rag_status": (
+            "active" if rag_active else "not_initialized" if use_rag else "disabled"
+        ),
+        "rag_index_dir": str(rag_index_dir) if rag_index_dir else None,
+        "llm_configured": bool(llm_configured),
+    }
+    case_id = str(provider_case_id or "").strip()
+    if case_id:
+        from cfdc.kernel.contracts import TaskContract
+
+        registered_task = TaskContract.from_user_input(
+            public_training_case(case_id)["task"]
+        )
+        submitted_task = TaskContract.from_user_input(task)
+        if registered_task_scope_fingerprint(
+            submitted_task
+        ) != registered_task_scope_fingerprint(registered_task):
+            raise ValueError("registered_case_task_contract_mismatch")
+        session = service.start_registered_case(
+            case_id,
+            agent_config=agent_config,
+            rag_snapshot=resolved_snapshot,
+            evidence_mode=evidence_mode,
+        )
+    else:
+        payload = _validated_web_task(task)
+        session = service.start(
+            payload,
+            agent_config=agent_config,
+            rag_snapshot=resolved_snapshot,
+        )
     report = _kernel_report(session)
     return report, {
         "kernel_session_id": session.session_id,
@@ -475,7 +551,6 @@ def start_kernel_app_run(
         "rag_index_dir": str(rag_index_dir) if rag_index_dir else None,
         "rag_snapshot": resolved_snapshot,
         "use_rag": bool(use_rag),
-        "provider_case_id": provider_case_id,
     }
 
 
@@ -488,20 +563,24 @@ def _training_registries(case_id: str):
 def _run_configured_automatic(
     service: WorkflowService,
     session,
-    app_state: Mapping[str, Any],
 ):
-    case_id = str(app_state.get("provider_case_id") or "").strip()
+    binding = session.registered_case_binding
+    if not isinstance(binding, Mapping):
+        return session
+    case_id = str(binding.get("case_id") or "").strip()
     if not case_id:
         return session
-    identification_registry, identification_id, evaluation_registry, evaluation_id = (
-        _training_registries(case_id)
-    )
+    identification_registry, _, evaluation_registry, _ = _training_registries(case_id)
     return service.run_until_blocked(
         session.session_id,
         provider_registry=identification_registry,
-        identification_provider_id=identification_id,
+        identification_provider_id=str(
+            binding["provider_references"]["identification"]["provider_id"]
+        ),
         evaluation_provider_registry=evaluation_registry,
-        evaluation_provider_id=evaluation_id,
+        evaluation_provider_id=str(
+            binding["provider_references"]["evaluation"]["provider_id"]
+        ),
     )
 
 
@@ -577,7 +656,10 @@ def continue_kernel_app_run(
         )
         if not expected_action:
             raise ValueError("当前待处理动作没有可执行入口。")
-        if action != expected_action:
+        diagnostic_revision_allowed = (
+            action == "revise_diagnostic" and expected_action == "answer"
+        )
+        if action != expected_action and not diagnostic_revision_allowed:
             raise ValueError(f"当前待处理动作是 {expected_action}，不能执行 {action}。")
     elif action != "cancel":
         if session.status in {"performance_met", "capability_gap", "cancelled"}:
@@ -592,42 +674,43 @@ def continue_kernel_app_run(
             budgets=raw or None,
         )
     elif action == "answer":
-        if (
-            reply_source_text is not None
-            or "diagnostic_updates" in raw
-            or "diagnosis" in raw
-            or "parameter_candidates" in raw
-            or "parameters" in raw
-        ):
-            diagnostic_payload = raw.get("diagnostic_updates")
-            if diagnostic_payload is None:
-                diagnostic_payload = raw.get("diagnosis")
-            if diagnostic_payload is None:
-                diagnostic_payload = {
-                    key: value
-                    for key, value in raw.items()
-                    if key not in {"parameter_candidates", "parameters"}
+        diagnostic_payload = raw.get("diagnostic_updates")
+        if diagnostic_payload is None:
+            diagnostic_payload = raw.get("diagnosis")
+        if diagnostic_payload is None:
+            diagnostic_payload = {
+                key: value
+                for key, value in raw.items()
+                if key
+                not in {
+                    "parameter_candidates",
+                    "parameters",
+                    "source_text",
+                    "input_mode",
                 }
-            parameter_payload = raw.get("parameter_candidates")
-            if parameter_payload is None:
-                parameter_payload = raw.get("parameters", ())
-            session = service.submit_reply(
-                session_id,
-                action_id=action_id,
-                revision=page_revision,
-                diagnostic_updates=diagnostic_payload,
-                parameter_facts=parameter_payload,
-                source_text=reply_source_text or str(raw.get("source_text") or ""),
-                input_mode=reply_input_mode or str(raw.get("input_mode") or "json"),
-                agent_records=agent_records,
-            )
-        else:
-            session = service.submit_answer(
-                session_id,
-                action_id=action_id,
-                revision=page_revision,
-                answer=raw,
-            )
+            }
+        parameter_payload = raw.get("parameter_candidates")
+        if parameter_payload is None:
+            parameter_payload = raw.get("parameters", ())
+        session = service.submit_reply(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            diagnostic_updates=diagnostic_payload,
+            parameter_facts=parameter_payload,
+            source_text=reply_source_text or str(raw.get("source_text") or ""),
+            input_mode=reply_input_mode or str(raw.get("input_mode") or "json"),
+            agent_records=agent_records,
+        )
+    elif action == "revise_diagnostic":
+        session = service.revise_diagnostic(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            diagnostic_updates=raw.get("diagnostic_updates", raw),
+            source_text=reply_source_text or str(raw.get("source_text") or ""),
+            confirmation=bool(raw.get("confirmation", False)),
+        )
     elif action == "relevance":
         session = service.apply_task_relevance(
             session_id,
@@ -706,13 +789,6 @@ def continue_kernel_app_run(
             revision=page_revision,
             packet=raw,
         )
-    elif action == "set_provider":
-        session = service.set_provider(
-            session_id,
-            action_id=action_id,
-            revision=page_revision,
-            provider=raw,
-        )
     elif action == "compile_protocol":
         session = service.compile_protocol(
             session_id,
@@ -725,6 +801,19 @@ def continue_kernel_app_run(
             session_id,
             action_id=action_id,
             revision=page_revision,
+        )
+    elif action == "prepare_training_exercise_bundle":
+        binding = session.registered_case_binding
+        if not isinstance(binding, Mapping):
+            raise ValueError("当前会话没有注册可执行的软件案例 Provider。")
+        case_id = str(binding.get("case_id") or "")
+        identification_registry, identification_id, _, _ = _training_registries(case_id)
+        session = service.prepare_training_exercise_bundle(
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            provider_registry=identification_registry,
+            provider_id=identification_id,
         )
     elif action == "record_operator_report":
         session = service.record_operator_report(
@@ -768,9 +857,10 @@ def continue_kernel_app_run(
         "run_feedback_iteration",
         "confirm_result",
     }:
-        case_id = str(app_state.get("provider_case_id") or "").strip()
-        if not case_id:
+        binding = session.registered_case_binding
+        if not isinstance(binding, Mapping):
             raise ValueError("当前会话没有注册可执行的软件案例 Provider。")
+        case_id = str(binding.get("case_id") or "")
         (
             identification_registry,
             identification_id,
@@ -810,7 +900,7 @@ def continue_kernel_app_run(
                 provider_registry=evaluation_registry,
                 provider_id=evaluation_id,
             )
-    session = _run_configured_automatic(service, session, app_state)
+    session = _run_configured_automatic(service, session)
     report = _kernel_report(session)
     return report, {
         **dict(app_state),
@@ -824,6 +914,9 @@ def _kernel_report(session) -> dict[str, Any]:
     readiness = session.ledger.readiness()
     pending_actions = _kernel_pending_actions(session)
     projection = WorkflowService.project(session)
+    binding = session.registered_case_binding
+    case_id = str(binding.get("case_id") or "") if isinstance(binding, Mapping) else ""
+    education = case_learning_material(case_id or None)
     return {
         "workflow_version": session.workflow_version,
         "session_id": session.session_id,
@@ -855,11 +948,41 @@ def _kernel_report(session) -> dict[str, Any]:
         "protocols": [dict(item) for item in session.protocols],
         "operator_handoffs": [dict(item) for item in session.operator_handoffs],
         "operator_reports": [dict(item) for item in session.operator_reports],
+        "training_exercise_bundles": [
+            dict(item) for item in session.training_exercise_bundles
+        ],
+        "education": education,
+        "teaching_steps": [
+            {
+                "id": "task_boundary",
+                "title": "1. 任务与边界",
+                "status": "done" if session.task.budget_confirmed else "current",
+            },
+            {
+                "id": "evidence_controller",
+                "title": "2. 证据与控制器",
+                "status": "done"
+                if session.controller_candidate or session.feature_artifact
+                else "current",
+            },
+            {
+                "id": "evaluation_confirmation",
+                "title": "3. 评价与确认",
+                "status": "done"
+                if session.evaluation or session.confirmation
+                else "current",
+            },
+        ],
         "upload_attempts": [dict(item) for item in session.upload_attempts],
         "qualification": dict(session.controller_qualification)
         if session.controller_qualification
         else None,
         "provider_bindings": dict(session.provider_bindings),
+        "registered_case_binding": (
+            dict(session.registered_case_binding)
+            if session.registered_case_binding is not None
+            else None
+        ),
         "import_report": dict(session.import_report) if session.import_report else None,
         "evidence": [dict(item) for item in session.evidence],
         "evaluation_packets": [dict(item) for item in session.evaluation_packets],
@@ -882,11 +1005,7 @@ def start_kernel_case_run(
     **kwargs: Any,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     case = public_training_case(case_id)
-    return start_kernel_app_run(
-        case["task"],
-        provider_case_id=case_id,
-        **kwargs,
-    )
+    return start_kernel_app_run(case["task"], provider_case_id=case_id, **kwargs)
 
 
 def load_kernel_app_run(
@@ -1086,6 +1205,7 @@ def prepare_kernel_reply_for_ui(
         "cancel",
         "replay",
         "prepare_operator_handoff",
+        "prepare_training_exercise_bundle",
         "derive_features",
         "synthesize_controller",
         "qualify_controller",

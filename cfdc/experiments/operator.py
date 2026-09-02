@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -178,6 +179,149 @@ def build_operator_handoff(
     }
 
 
+def build_training_exercise_bundle(
+    *,
+    session_id: str,
+    task: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+    traces: Sequence[Any],
+    provider_id: str,
+    provider_version: str,
+    registered_case_binding_fingerprint: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Package provider-generated traces as a clearly non-physical exercise.
+
+    The ZIP contains only protocol-bound public arrays.  It is deliberately a
+    separate artifact from the operator handoff: downloading it does not add
+    evidence, and re-uploading it still goes through the normal ingestion
+    gates in :mod:`cfdc.evidence.ingestion`.
+    """
+
+    if not traces:
+        raise ValueError("training_exercise_traces_required")
+    if len(traces) != int(protocol["repeats"]):
+        raise ValueError("training_exercise_repeat_count_mismatch")
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    input_names = tuple(str(item) for item in protocol.get("control_inputs", ())) or (
+        "input",
+    )
+    output_names = tuple(str(item) for item in protocol.get("requested_signals", ()))
+    if not output_names:
+        raise ValueError("training_exercise_outputs_required")
+    files_in_manifest: list[dict[str, Any]] = []
+    csv_files: list[Path] = []
+    for index, trace in enumerate(traces, 1):
+        time_values = tuple(float(item) for item in trace.time_s)
+        signals = {
+            str(name): tuple(float(item) for item in values)
+            for name, values in trace.signals.items()
+        }
+        if any(
+            name not in signals and not (name == input_names[0] and "input" in signals)
+            for name in (*input_names, *output_names)
+        ):
+            raise ValueError("training_exercise_trace_channels_mismatch")
+        if input_names[0] not in signals and "input" in signals:
+            signals[input_names[0]] = signals["input"]
+        stream = io.StringIO(newline="")
+        writer = csv.writer(stream)
+        writer.writerow(
+            [
+                "session_id",
+                "protocol_fingerprint",
+                "repeat",
+                "time_s",
+                *input_names,
+                *output_names,
+            ]
+        )
+        for sample_index, time_value in enumerate(time_values):
+            writer.writerow(
+                [
+                    session_id,
+                    protocol["protocol_fingerprint"],
+                    index,
+                    f"{time_value:.12g}",
+                    *(f"{signals[name][sample_index]:.12g}" for name in input_names),
+                    *(f"{signals[name][sample_index]:.12g}" for name in output_names),
+                ]
+            )
+        payload = stream.getvalue().encode("utf-8-sig")
+        relative = Path("data") / f"repeat_{index:02d}.csv"
+        path = output_dir / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        csv_files.append(path)
+        files_in_manifest.append(
+            {
+                "path": relative.as_posix(),
+                "repeat": index,
+                "trace_fingerprint": str(
+                    getattr(trace, "fingerprint", "")
+                    or fingerprint(trace.to_dict(include_fingerprint=False))
+                ),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            }
+        )
+    manifest = {
+        "bundle_version": "cfdc-training-exercise/v1",
+        "session_id": session_id,
+        "task_fingerprint": task.get("task_fingerprint"),
+        "protocol_fingerprint": protocol["protocol_fingerprint"],
+        "registered_case_binding_fingerprint": registered_case_binding_fingerprint,
+        "provider_id": str(provider_id),
+        "provider_version": str(provider_version),
+        "evidence_mode": "exercise_bundle",
+        "source_boundary": "software_provider_exercise_only; not physical evidence",
+        "repeats": len(traces),
+        "files": files_in_manifest,
+        "claims_forbidden": [
+            "physical measurement",
+            "hardware safety certification",
+            "controller approval",
+        ],
+    }
+    instructions = (
+        "# 教学练习包\n\n"
+        "这是绑定到当前软件协议的练习数据，不是物理测量，也不授予硬件控制权限。\n"
+        "请保留 manifest.json 和 data/ 下的全部重复文件；重新上传 ZIP 后，系统仍会执行会话、协议、时间轴、输入波形、停止边界和重复质量校验。\n"
+        "任何修改都会导致绑定校验失败，不会自动修复，也不会消耗有效实验数。\n"
+    )
+    manifest["instructions_sha256"] = hashlib.sha256(
+        instructions.encode("utf-8")
+    ).hexdigest()
+    # The manifest fingerprint covers the instruction digest as well as the
+    # data rows, so a changed teaching note cannot silently become a different
+    # exercise while retaining the same authority binding.
+    manifest.pop("manifest_fingerprint", None)
+    manifest["manifest_fingerprint"] = fingerprint(manifest)
+    manifest_path = output_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    instructions_path = output_dir / "instructions.md"
+    instructions_path.write_text(instructions, encoding="utf-8")
+    bundle = output_dir / "training_exercise_bundle.zip"
+    with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "manifest.json",
+            json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        )
+        archive.writestr("instructions.md", instructions)
+        for path in csv_files:
+            archive.write(path, path.relative_to(output_dir).as_posix())
+    return {
+        "manifest": manifest,
+        "manifest_path": str(manifest_path),
+        "instructions_path": str(instructions_path),
+        "data_paths": [str(path) for path in csv_files],
+        "bundle_path": str(bundle),
+    }
+
+
 def validate_operator_report(
     report: Mapping[str, Any], handoff: Mapping[str, Any]
 ) -> dict[str, Any]:
@@ -207,6 +351,7 @@ def validate_operator_report(
 __all__ = [
     "OPERATOR_DECISIONS",
     "build_operator_handoff",
+    "build_training_exercise_bundle",
     "expected_input_waveforms",
     "expected_waveform",
     "validate_operator_report",

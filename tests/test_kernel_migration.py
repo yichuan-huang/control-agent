@@ -615,11 +615,19 @@ def test_diagnostic_revision_invalidates_stale_route_and_controller_artifacts(
     )
     assert session.route is not None
 
-    revised = service.submit_answer(
+    revised = service.revise_diagnostic(
         session.session_id,
         action_id="diagnostic-revision",
         revision=session.revision,
-        answer={"open_loop_stability": "unstable after the new public observation"},
+        confirmation=True,
+        source_text="unstable after the new public observation",
+        diagnostic_updates={
+            "open_loop_stability": {
+                "status": "known",
+                "assessment": "unstable",
+                "evidence": "unstable after the new public observation",
+            }
+        },
     )
     assert revised.route is None
     assert revised.feature_artifact is None

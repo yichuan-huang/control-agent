@@ -57,7 +57,7 @@ from .replies import (
     prepare_kernel_reply,
 )
 from .routes import RouteCapability, resolve_route, route_capability
-from .session import EvidenceSession, SessionEvent
+from .session import EvidenceSession, RegisteredCaseBinding, SessionEvent
 from .tasks import (
     P1_1_TASK_SEMANTICS_VERSION,
     TASK_SUCCESS_METRICS,
@@ -107,6 +107,7 @@ __all__ = [
     "EvaluationProviderRegistry",
     "EvidenceSession",
     "ExperimentProvider",
+    "KernelActionError",
     "KernelAgentCoordinator",
     "KernelReplyMode",
     "KnowledgeContext",
@@ -115,6 +116,7 @@ __all__ = [
     "PhaseContract",
     "ProviderRegistry",
     "PublicTrace",
+    "RegisteredCaseBinding",
     "RetrievalRequest",
     "RouteCapability",
     "RuleDecision",
@@ -151,11 +153,12 @@ __all__ = [
 
 def __getattr__(name: str):
     """Load the orchestration service lazily to keep core contracts acyclic."""
-    if name in {"WorkflowService", "independent_judge"}:
-        from .service import WorkflowService, independent_judge
+    if name in {"KernelActionError", "WorkflowService", "independent_judge"}:
+        from .service import KernelActionError, WorkflowService, independent_judge
 
         return {
             "WorkflowService": WorkflowService,
             "independent_judge": independent_judge,
+            "KernelActionError": KernelActionError,
         }[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

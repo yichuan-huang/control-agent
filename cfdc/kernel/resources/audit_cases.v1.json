@@ -1,0 +1,96 @@
+{
+  "catalog_version": "cfdc-audit-cases/v1",
+  "cases": {
+    "audit_class_i_level": {
+      "label_cn": "Class I｜液位通道：一阶自调节",
+      "learning_goal": "用重复的有限阶跃辨识局部静态增益和主时间尺度。",
+      "task": {
+        "description": "一个未建模的单输入单输出液位偏差通道。可以在局部范围内改变泵速并测量液位偏差；当前没有可用实验记录。",
+        "objective": "在局部液位范围内保守跟踪小设定变化，限制泵速变化和明显超调。",
+        "measured_signals": ["液位偏差_y"], "control_input": "泵速命令_u", "reference": 0.5,
+        "operating_region": "归一化泵速 -1 至 1；局部液位偏差绝对值不超过 1.5",
+        "input_min": -1.0, "input_max": 1.0, "state_stop": 3.0,
+        "response_time_preference_s": 14.0, "final_abs_error_max": 0.05, "overshoot_max": 0.15, "settling_time_max_s": 14.0, "perturbed_success_rate_min": 0.8,
+        "engineering_units": {"input": {"unit": "normalized_command", "zero": 0.0, "scale": 1.0, "resolution": 0.001}, "outputs": {"液位偏差_y": {"unit": "normalized_level", "zero": 0.0, "scale": 1.0, "resolution": 0.001}}, "acquisition_sample_time_s": 0.05, "max_experiment_duration_s": 120.0}
+      }
+    },
+    "audit_class_ii_thermal": {
+      "label_cn": "Class II｜温度通道：双滞后与短延迟",
+      "learning_goal": "从有限热响应中辨识可重复的阻尼与时间尺度。",
+      "task": {
+        "description": "一个未建模的单输入单输出温度通道。可以在局部范围内改变加热命令并测量温度偏差；当前没有可用实验记录。",
+        "objective": "在当前热负荷附近跟踪小温度设定变化，优先避免超调和执行器长期饱和。",
+        "measured_signals": ["温度偏差_y"], "control_input": "加热命令_u", "reference": 0.55,
+        "operating_region": "归一化加热命令 -1 至 1；局部温度偏差绝对值不超过 1.5",
+        "input_min": -1.0, "input_max": 1.0, "state_stop": 3.0,
+        "response_time_preference_s": 16.0, "final_abs_error_max": 0.055, "overshoot_max": 0.18, "settling_time_max_s": 16.0, "perturbed_success_rate_min": 0.8,
+        "engineering_units": {"input": {"unit": "normalized_command", "zero": 0.0, "scale": 1.0, "resolution": 0.001}, "outputs": {"温度偏差_y": {"unit": "normalized_temperature", "zero": 0.0, "scale": 1.0, "resolution": 0.001}}, "acquisition_sample_time_s": 0.05, "max_experiment_duration_s": 120.0}
+      }
+    },
+    "audit_class_ii_oscillator": {
+      "label_cn": "Class II｜柔性台架：欠阻尼振荡",
+      "learning_goal": "使用受限激励估计可观测振荡的频率与阻尼。",
+      "task": {
+        "description": "一个未建模的单输入单输出柔性定位台架。可以施加局部驱动命令并测量台架位置；当前没有可用实验记录。",
+        "objective": "保守跟踪局部位置设定，利用可观测阻尼限制超调和残余振荡。",
+        "measured_signals": ["台架位置_y"], "control_input": "驱动命令_u", "reference": 0.42,
+        "operating_region": "归一化驱动 -1 至 1；局部台架位置绝对值不超过 1.2",
+        "input_min": -1.0, "input_max": 1.0, "state_stop": 2.5,
+        "response_time_preference_s": 15.0, "final_abs_error_max": 0.06, "overshoot_max": 0.22, "settling_time_max_s": 15.0, "perturbed_success_rate_min": 0.8,
+        "engineering_units": {"input": {"unit": "normalized_command", "zero": 0.0, "scale": 1.0, "resolution": 0.001}, "outputs": {"台架位置_y": {"unit": "normalized_position", "zero": 0.0, "scale": 1.0, "resolution": 0.001}}, "acquisition_sample_time_s": 0.02, "max_experiment_duration_s": 120.0}
+      }
+    },
+    "audit_class_iii_motion": {
+      "label_cn": "Class III｜低摩擦平台：积分运动",
+      "learning_goal": "从位置记录中区分有限静态增益与局部积分运动。",
+      "task": {
+        "description": "一个未建模的单轴低摩擦运动平台。可以施加正负局部力命令并测量外部位置；当前没有可用实验记录。",
+        "objective": "从静止状态跟踪局部位置指令，避免持续振荡、过冲和行程越界。",
+        "measured_signals": ["平台位置_x"], "control_input": "力命令_u", "reference": 0.6,
+        "operating_region": "归一化力命令 -1 至 1；局部位置绝对值不超过 1.5",
+        "input_min": -1.0, "input_max": 1.0, "state_stop": 3.0,
+        "response_time_preference_s": 14.0, "final_abs_error_max": 0.06, "overshoot_max": 0.22, "settling_time_max_s": 14.0, "perturbed_success_rate_min": 0.8,
+        "engineering_units": {"input": {"unit": "normalized_force", "zero": 0.0, "scale": 1.0, "resolution": 0.001}, "outputs": {"平台位置_x": {"unit": "normalized_position", "zero": 0.0, "scale": 1.0, "resolution": 0.001}}, "acquisition_sample_time_s": 0.02, "max_experiment_duration_s": 120.0}
+      }
+    },
+    "audit_class_iv_nmp": {
+      "label_cn": "Class IV｜外部位置：稳定逆响应",
+      "learning_goal": "在仅测量外部输出时识别任务带内的反向响应风险。",
+      "task": {
+        "description": "一个未建模的稳定单输入单输出外部位置通道。可以施加局部命令并测量外部位置；当前没有可用实验记录。",
+        "objective": "在局部行程内保守跟踪位置设定，限制欠调、超调和输入峰值。",
+        "measured_signals": ["外部位置_y"], "control_input": "执行器命令_u", "reference": 0.45,
+        "operating_region": "归一化输入 -1 至 1；外部位置绝对值不超过 1.2",
+        "input_min": -1.0, "input_max": 1.0, "state_stop": 2.5,
+        "response_time_preference_s": 20.0, "final_abs_error_max": 0.065, "overshoot_max": 0.25, "settling_time_max_s": 20.0, "perturbed_success_rate_min": 0.8,
+        "engineering_units": {"input": {"unit": "normalized_command", "zero": 0.0, "scale": 1.0, "resolution": 0.001}, "outputs": {"外部位置_y": {"unit": "normalized_position", "zero": 0.0, "scale": 1.0, "resolution": 0.001}}, "acquisition_sample_time_s": 0.02, "max_experiment_duration_s": 120.0}
+      }
+    },
+    "audit_class_iv_high_order": {
+      "label_cn": "Class IV｜多储能过程：稳定高阶",
+      "learning_goal": "用公开频率与阶跃证据判断低阶近似的任务带边界。",
+      "task": {
+        "description": "一个未建模的稳定单输入单输出多储能过程。可以施加局部命令并测量过程输出；当前没有可用实验记录。",
+        "objective": "在声明任务带内保守跟踪，并在低阶残差与相位证据充分时才允许简化控制。",
+        "measured_signals": ["过程输出_y"], "control_input": "执行器命令_u", "reference": 0.48,
+        "operating_region": "归一化输入 -1 至 1；过程输出绝对值不超过 1.5",
+        "input_min": -1.0, "input_max": 1.0, "state_stop": 3.0,
+        "response_time_preference_s": 22.0, "final_abs_error_max": 0.065, "overshoot_max": 0.2, "settling_time_max_s": 22.0, "perturbed_success_rate_min": 0.8,
+        "engineering_units": {"input": {"unit": "normalized_command", "zero": 0.0, "scale": 1.0, "resolution": 0.001}, "outputs": {"过程输出_y": {"unit": "normalized_process_output", "zero": 0.0, "scale": 1.0, "resolution": 0.001}}, "acquisition_sample_time_s": 0.03, "max_experiment_duration_s": 150.0}
+      }
+    },
+    "audit_class_v_mimo": {
+      "label_cn": "Class V｜双变量过程：动态耦合",
+      "learning_goal": "在独立多回路控制前检查静态配对与任务带内交叉耦合。",
+      "task": {
+        "description": "一个未建模的双输入双输出过程。可以独立改变两路局部执行器命令并同步测量两个输出；当前没有可用实验记录。",
+        "objective": "在局部工作区内独立跟踪两路小设定变化，先验证配对和耦合边界。",
+        "measured_signals": ["输出_y1", "输出_y2"], "control_input": "执行器_u1", "control_inputs": ["执行器_u1", "执行器_u2"], "reference": 0.4,
+        "operating_region": "两路归一化输入均为 -1 至 1；两路输出绝对值均不超过 1.5",
+        "input_min": -1.0, "input_max": 1.0, "state_stop": 3.0,
+        "response_time_preference_s": 18.0, "final_abs_error_max": 0.07, "overshoot_max": 0.22, "settling_time_max_s": 18.0, "perturbed_success_rate_min": 0.8,
+        "engineering_units": {"input": {"unit": "normalized_command", "zero": 0.0, "scale": 1.0, "resolution": 0.001}, "outputs": {"输出_y1": {"unit": "normalized_output", "zero": 0.0, "scale": 1.0, "resolution": 0.001}, "输出_y2": {"unit": "normalized_output", "zero": 0.0, "scale": 1.0, "resolution": 0.001}}, "acquisition_sample_time_s": 0.02, "max_experiment_duration_s": 120.0}
+      }
+    }
+  }
+}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -22,6 +22,307 @@ from .diagnostics import DiagnosticLedger
 from .multistage import MultiStagePlan
 
 TERMINAL_STATES = frozenset({"performance_met", "capability_gap", "cancelled"})
+REGISTERED_CASE_BINDING_VERSION = "cfdc-registered-case-binding/v1"
+REGISTERED_CASE_CATALOG_VERSION = "cfdc-public-cases/v1"
+TRAINING_EXERCISE_LOCAL_FIELDS = frozenset(
+    {
+        "manifest_path",
+        "instructions_path",
+        "data_paths",
+        "bundle_path",
+        "generated_at",
+        "record_fingerprint",
+    }
+)
+_OPERATOR_HANDOFF_LOCAL_FIELDS = frozenset(
+    {
+        "operator_card_path",
+        "precheck_checklist_path",
+        "template_paths",
+        "bundle_path",
+    }
+)
+
+
+def registered_task_scope_fingerprint(task: TaskContract) -> str:
+    """Hash the complete registered task scope except runtime confirmation.
+
+    This deliberately does not inherit ``TaskContract.fingerprint`` because
+    registered provider authority must bind every public task contract field.
+    The budget confirmation bit is the sole runtime exception.
+    """
+
+    value = task.to_dict(include_fingerprint=False)
+    value.pop("budget_confirmed", None)
+    return fingerprint(value)
+
+
+@dataclass(frozen=True)
+class RegisteredCaseBinding:
+    """Immutable authority grant for a public built-in software case."""
+
+    case_id: str
+    case_kind: str
+    catalog_version: str
+    task_scope_fingerprint: str
+    provider_references: Mapping[str, Mapping[str, Any]]
+    evidence_mode: str
+    binding_version: str = REGISTERED_CASE_BINDING_VERSION
+    binding_fingerprint: str = ""
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        case_id: str,
+        case_kind: str,
+        catalog_version: str,
+        task: TaskContract,
+        provider_references: Mapping[str, Mapping[str, Any]],
+        evidence_mode: str = "automatic",
+    ) -> RegisteredCaseBinding:
+        value = {
+            "binding_version": REGISTERED_CASE_BINDING_VERSION,
+            "case_id": str(case_id),
+            "case_kind": str(case_kind),
+            "catalog_version": str(catalog_version),
+            "task_scope_fingerprint": registered_task_scope_fingerprint(task),
+            "provider_references": {
+                str(role): dict(reference)
+                for role, reference in provider_references.items()
+            },
+            "evidence_mode": str(evidence_mode),
+        }
+        return cls(**value, binding_fingerprint=fingerprint(value))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "binding_version": self.binding_version,
+            "case_id": self.case_id,
+            "case_kind": self.case_kind,
+            "catalog_version": self.catalog_version,
+            "task_scope_fingerprint": self.task_scope_fingerprint,
+            "provider_references": {
+                str(role): dict(reference)
+                for role, reference in self.provider_references.items()
+            },
+            "evidence_mode": self.evidence_mode,
+            "binding_fingerprint": self.binding_fingerprint,
+        }
+
+    @classmethod
+    def from_mapping(
+        cls, value: Mapping[str, Any], *, task: TaskContract
+    ) -> RegisteredCaseBinding:
+        raw = dict(value)
+        supplied = str(raw.pop("binding_fingerprint", ""))
+        binding = cls(
+            case_id=str(raw.get("case_id") or ""),
+            case_kind=str(raw.get("case_kind") or ""),
+            catalog_version=str(raw.get("catalog_version") or ""),
+            task_scope_fingerprint=str(raw.get("task_scope_fingerprint") or ""),
+            provider_references={
+                str(role): dict(reference)
+                for role, reference in dict(
+                    raw.get("provider_references") or {}
+                ).items()
+                if isinstance(reference, Mapping)
+            },
+            evidence_mode=str(raw.get("evidence_mode") or ""),
+            binding_version=str(raw.get("binding_version") or ""),
+            binding_fingerprint=supplied,
+        )
+        if binding.binding_version != REGISTERED_CASE_BINDING_VERSION:
+            raise ValueError("registered_case_binding_version_mismatch")
+        if binding.case_kind not in {"training", "audit"}:
+            raise ValueError("registered_case_binding_kind_invalid")
+        if binding.evidence_mode not in {"automatic", "exercise_bundle"}:
+            raise ValueError("registered_case_binding_evidence_mode_invalid")
+        if set(binding.provider_references) != {"identification", "evaluation"}:
+            raise ValueError("registered_case_binding_roles_invalid")
+        public = binding.to_dict()
+        public.pop("binding_fingerprint")
+        if not supplied or fingerprint(public) != supplied:
+            raise ValueError("registered_case_binding_fingerprint_mismatch")
+        if binding.task_scope_fingerprint != registered_task_scope_fingerprint(task):
+            raise ValueError("registered_case_task_scope_mismatch")
+        return binding
+
+
+def _validate_registered_case_authority(
+    binding: RegisteredCaseBinding,
+    *,
+    task: TaskContract,
+    events: tuple[SessionEvent, ...],
+) -> bool:
+    """Re-derive registered authority from the current public catalog.
+
+    A binding's own fingerprint only proves internal consistency.  Provider
+    authority additionally requires it to match the catalog and the original
+    append-only registration event.
+    """
+
+    matching_events = [
+        event for event in events if event.event_type == "registered_case_bound"
+    ]
+    if len(matching_events) != 1:
+        raise ValueError("registered_case_event_mismatch")
+    payload = matching_events[0].payload
+    if (
+        payload.get("case_id") != binding.case_id
+        or payload.get("binding_fingerprint") != binding.binding_fingerprint
+        or payload.get("task_scope_fingerprint") != binding.task_scope_fingerprint
+    ):
+        raise ValueError("registered_case_event_mismatch")
+    if binding.catalog_version != REGISTERED_CASE_CATALOG_VERSION:
+        return False
+
+    from cfdc.sim.training import build_training_provider_registries
+
+    from .cases import public_case_catalog, public_training_case
+
+    catalog = public_case_catalog()
+    if binding.case_id not in catalog:
+        raise ValueError("registered_case_catalog_mismatch")
+    expected_task = TaskContract.from_user_input(
+        public_training_case(binding.case_id)["task"]
+    )
+    if registered_task_scope_fingerprint(task) != registered_task_scope_fingerprint(
+        expected_task
+    ):
+        raise ValueError("registered_case_catalog_mismatch")
+    identification, identification_id, evaluation, evaluation_id = (
+        build_training_provider_registries(binding.case_id)
+    )
+    expected_references: dict[str, dict[str, Any]] = {}
+    for role, registry, provider_id in (
+        ("identification", identification, identification_id),
+        ("evaluation", evaluation, evaluation_id),
+    ):
+        provider = registry.get(provider_id)
+        expected_references[role] = {
+            "provider_id": provider.provider_id,
+            "provider_version": provider.provider_version,
+            "capabilities": sorted(str(item) for item in provider.capabilities),
+            "binding_role": role,
+            "execution_kind": "software",
+        }
+    expected = RegisteredCaseBinding.create(
+        case_id=binding.case_id,
+        case_kind=str(catalog[binding.case_id]["kind"]),
+        catalog_version=REGISTERED_CASE_CATALOG_VERSION,
+        task=expected_task,
+        provider_references=expected_references,
+        evidence_mode=binding.evidence_mode,
+    )
+    if binding.to_dict() != expected.to_dict():
+        raise ValueError("registered_case_catalog_mismatch")
+    return True
+
+
+def _validate_training_exercise_records(
+    records: tuple[Mapping[str, Any], ...], events: tuple[SessionEvent, ...]
+) -> None:
+    """Bind each persisted exercise record to its immutable preparation event."""
+
+    prepared_events = tuple(
+        event
+        for event in events
+        if event.event_type == "training_exercise_bundle_prepared"
+    )
+    if len(records) != len(prepared_events):
+        raise ValueError("training_exercise_bundle_event_mismatch")
+    unmatched_events = list(prepared_events)
+    for record in records:
+        raw_record = dict(record)
+        supplied_record = str(raw_record.pop("record_fingerprint", ""))
+        if not supplied_record or fingerprint(raw_record) != supplied_record:
+            raise ValueError("training_exercise_bundle_fingerprint_mismatch")
+        manifest = {
+            key: value
+            for key, value in record.items()
+            if key not in TRAINING_EXERCISE_LOCAL_FIELDS
+        }
+        supplied_manifest = str(manifest.pop("manifest_fingerprint", ""))
+        if not supplied_manifest or fingerprint(manifest) != supplied_manifest:
+            raise ValueError("training_exercise_bundle_fingerprint_mismatch")
+        matches = [
+            (index, event)
+            for index, event in enumerate(unmatched_events)
+            if event.payload.get("manifest_fingerprint") == supplied_manifest
+            and event.payload.get("protocol_fingerprint")
+            == record.get("protocol_fingerprint")
+            and event.payload.get("bundle_path") == record.get("bundle_path")
+            and event.payload.get("record_fingerprint") == supplied_record
+        ]
+        if not matches:
+            raise ValueError("training_exercise_bundle_event_mismatch")
+        unmatched_events.pop(matches[0][0])
+    if unmatched_events:
+        raise ValueError("training_exercise_bundle_event_mismatch")
+
+
+def _validate_operator_records(
+    handoffs: tuple[Mapping[str, Any], ...],
+    reports: tuple[Mapping[str, Any], ...],
+    events: tuple[SessionEvent, ...],
+) -> None:
+    """Validate persisted operator authorization records against their events."""
+
+    handoff_events = tuple(
+        event for event in events if event.event_type == "operator_handoff_prepared"
+    )
+    if len(handoffs) != len(handoff_events):
+        raise ValueError("operator_handoff_event_mismatch")
+    known_handoffs: set[str] = set()
+    unmatched_handoff_events = list(handoff_events)
+    for handoff in handoffs:
+        card = {
+            key: value
+            for key, value in handoff.items()
+            if key not in _OPERATOR_HANDOFF_LOCAL_FIELDS
+        }
+        supplied = str(card.pop("handoff_fingerprint", ""))
+        if not supplied or fingerprint(card) != supplied:
+            raise ValueError("operator_handoff_fingerprint_mismatch")
+        known_handoffs.add(supplied)
+        matches = [
+            (index, event)
+            for index, event in enumerate(unmatched_handoff_events)
+            if event.payload.get("handoff_fingerprint") == supplied
+            and event.payload.get("protocol_fingerprint")
+            == handoff.get("protocol_fingerprint")
+        ]
+        if not matches:
+            raise ValueError("operator_handoff_event_mismatch")
+        unmatched_handoff_events.pop(matches[0][0])
+    if unmatched_handoff_events:
+        raise ValueError("operator_handoff_event_mismatch")
+
+    report_events = tuple(
+        event for event in events if event.event_type == "operator_report_recorded"
+    )
+    if len(reports) != len(report_events):
+        raise ValueError("operator_report_event_mismatch")
+    unmatched_report_events = list(report_events)
+    for report in reports:
+        raw = dict(report)
+        supplied = str(raw.pop("report_fingerprint", ""))
+        if not supplied or fingerprint(raw) != supplied:
+            raise ValueError("operator_report_fingerprint_mismatch")
+        if report.get("handoff_fingerprint") not in known_handoffs:
+            raise ValueError("operator_report_handoff_mismatch")
+        matches = [
+            (index, event)
+            for index, event in enumerate(unmatched_report_events)
+            if event.payload.get("report_fingerprint") == supplied
+            and event.payload.get("decision") == report.get("decision")
+        ]
+        if not matches:
+            raise ValueError("operator_report_event_mismatch")
+        unmatched_report_events.pop(matches[0][0])
+    if unmatched_report_events:
+        raise ValueError("operator_report_event_mismatch")
 
 
 @dataclass(frozen=True)
@@ -109,6 +410,7 @@ class EvidenceSession:
     active_protocol_fingerprint: str | None = None
     operator_handoffs: tuple[Mapping[str, Any], ...] = ()
     operator_reports: tuple[Mapping[str, Any], ...] = ()
+    training_exercise_bundles: tuple[Mapping[str, Any], ...] = ()
     upload_attempts: tuple[Mapping[str, Any], ...] = ()
     # User supplied model/specification statements remain separate from public
     # measured traces and derived feature artifacts.  They are never treated as
@@ -139,6 +441,7 @@ class EvidenceSession:
     confirmation_history: tuple[Mapping[str, Any], ...] = ()
     provider: Mapping[str, Any] | None = None
     provider_bindings: Mapping[str, Any] = field(default_factory=dict)
+    registered_case_binding: Mapping[str, Any] | None = None
     agent_records: tuple[Mapping[str, Any], ...] = ()
     agent_config: Mapping[str, Any] | None = None
     rag_snapshot: str | None = None
@@ -166,6 +469,9 @@ class EvidenceSession:
             "active_protocol_fingerprint": self.active_protocol_fingerprint,
             "operator_handoffs": [dict(item) for item in self.operator_handoffs],
             "operator_reports": [dict(item) for item in self.operator_reports],
+            "training_exercise_bundles": [
+                dict(item) for item in self.training_exercise_bundles
+            ],
             "upload_attempts": [dict(item) for item in self.upload_attempts],
             "parameter_facts": [dict(item) for item in self.parameter_facts],
             "experiment_failures": [dict(item) for item in self.experiment_failures],
@@ -206,6 +512,11 @@ class EvidenceSession:
             "confirmation_history": [dict(item) for item in self.confirmation_history],
             "provider": dict(self.provider) if self.provider is not None else None,
             "provider_bindings": dict(self.provider_bindings),
+            "registered_case_binding": (
+                dict(self.registered_case_binding)
+                if self.registered_case_binding is not None
+                else None
+            ),
             "agent_records": [dict(item) for item in self.agent_records],
             "agent_config": dict(self.agent_config)
             if self.agent_config is not None
@@ -310,6 +621,9 @@ class EvidenceSession:
             operator_reports=tuple(
                 dict(item) for item in value.get("operator_reports", ())
             ),
+            training_exercise_bundles=tuple(
+                dict(item) for item in value.get("training_exercise_bundles", ())
+            ),
             upload_attempts=tuple(
                 dict(item) for item in value.get("upload_attempts", ())
             ),
@@ -354,6 +668,14 @@ class EvidenceSession:
             ),
             provider=value.get("provider"),
             provider_bindings=dict(value.get("provider_bindings") or {}),
+            registered_case_binding=(
+                RegisteredCaseBinding.from_mapping(
+                    value["registered_case_binding"], task=task
+                ).to_dict()
+                if not historical
+                and isinstance(value.get("registered_case_binding"), Mapping)
+                else None
+            ),
             agent_records=tuple(dict(item) for item in value.get("agent_records", ())),
             agent_config=value.get("agent_config"),
             rag_snapshot=(
@@ -406,6 +728,22 @@ class EvidenceSession:
             raise ValueError("session_revision_does_not_match_event_chain")
         if events and events[-1].revision_after != session.revision:
             raise ValueError("session_revision_does_not_match_event_chain")
+        _validate_training_exercise_records(
+            session.training_exercise_bundles, session.events
+        )
+        _validate_operator_records(
+            session.operator_handoffs, session.operator_reports, session.events
+        )
+        if session.registered_case_binding is not None:
+            authority_available = _validate_registered_case_authority(
+                RegisteredCaseBinding.from_mapping(
+                    session.registered_case_binding, task=session.task
+                ),
+                task=session.task,
+                events=session.events,
+            )
+            if not authority_available:
+                session = replace(session, read_only=True)
         return session
 
     @classmethod

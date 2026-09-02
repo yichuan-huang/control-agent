@@ -9,6 +9,7 @@ from typing import Any
 import gradio as gr
 import plotly.graph_objects as go
 
+from cfdc.doctor import run_doctor
 from cfdc.kernel.cases import public_case_catalog, public_training_case
 from cfdc.web.service import (
     KERNEL_STAGE_LABELS,
@@ -16,6 +17,7 @@ from cfdc.web.service import (
     export_kernel_app_artifact,
     export_kernel_app_bundle,
     import_v3_app_run,
+    kernel_action_error_payload,
     load_kernel_app_run,
     parse_names,
     prepare_kernel_reply_for_ui,
@@ -69,9 +71,51 @@ _WEB_CASE_IDS = {
 }
 
 
+def _kernel_error_message(exc: Exception, state: Any = None) -> str:
+    return json.dumps(
+        kernel_action_error_payload(exc, state if isinstance(state, Mapping) else None),
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
+def _refresh_mutation_error(exc: Exception, state: Any) -> tuple[Any, ...]:
+    """Refresh the browser projection after a failed revisioned action."""
+
+    if isinstance(state, Mapping) and state.get("kernel_session_id"):
+        try:
+            report, refreshed = load_kernel_app_run(
+                str(state["kernel_session_id"]),
+                session_dir=state.get("kernel_session_dir"),
+            )
+        except (OSError, TypeError, ValueError):
+            pass
+        else:
+            gr.Warning(_kernel_error_message(exc, refreshed))
+            return _kernel_outputs(report, refreshed)
+    raise gr.Error(_kernel_error_message(exc, state)) from exc
+
+
 def _resolve_case_id(value: Any) -> str:
     raw = str(value or "").strip()
     return _WEB_CASE_IDS.get(raw, raw)
+
+
+def environment_doctor(
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+    rag_index_dir: str | None = None,
+) -> dict[str, Any]:
+    """Return the same safe environment report exposed by ``--doctor``."""
+
+    return run_doctor(
+        session_dir=None,
+        rag_index_dir=str(rag_index_dir or "").strip() or None,
+        ollama_base_url=str(base_url or "").strip() or None,
+        ollama_model=str(model or "").strip() or None,
+        api_key=api_key,
+    ).to_dict()
 
 
 LICENSE_NOTICE = (
@@ -260,6 +304,13 @@ def _artifact_download(report: Mapping[str, Any]) -> Any:
         and handoffs[-1].get("bundle_path")
     ):
         return gr.update(value=handoffs[-1]["bundle_path"], visible=True)
+    exercises = report.get("training_exercise_bundles") or []
+    if (
+        exercises
+        and isinstance(exercises[-1], Mapping)
+        and exercises[-1].get("bundle_path")
+    ):
+        return gr.update(value=exercises[-1]["bundle_path"], visible=True)
     return gr.update(value=None, visible=False)
 
 
@@ -453,6 +504,7 @@ def _action_label(action: str) -> str:
         "record_operator_report": "提交操作员报告",
         "ingest_upload": "校验并提交实验数据",
         "prepare_operator_handoff": "生成操作员交接包",
+        "prepare_training_exercise_bundle": "生成教学练习包",
         "derive_features": "自动提取控制特征",
         "synthesize_controller": "生成控制器候选",
         "qualify_controller": "执行离线资格审查",
@@ -482,7 +534,26 @@ def _reply_mode_update(input_contract: Mapping[str, Any]) -> dict[str, Any]:
 def _guidance_text(report: Mapping[str, Any]) -> str:
     contract = report.get("input_contract")
     contract = contract if isinstance(contract, Mapping) else {}
-    text = str(contract.get("guidance") or "")
+    education = report.get("education")
+    education = education if isinstance(education, Mapping) else {}
+    teaching_steps = report.get("teaching_steps")
+    text = "### 三步工作台"
+    for step in teaching_steps if isinstance(teaching_steps, list) else ():
+        if isinstance(step, Mapping):
+            text += f"\n- {step.get('title', '步骤')}：{step.get('status', 'current')}"
+    if education:
+        text += f"\n\n### 本案例学习目标\n{education.get('learning_goal', '')}"
+        terms = education.get("key_terms") or []
+        if terms:
+            text += "\n\n关键术语：" + "、".join(str(item) for item in terms)
+        if education.get("evidence_boundary"):
+            text += f"\n\n证据边界：{education['evidence_boundary']}"
+        cannot_prove = education.get("cannot_prove") or []
+        if cannot_prove:
+            text += "\n\n本案例不能证明：\n" + "\n".join(
+                f"- {item}" for item in cannot_prove
+            )
+    text += f"\n\n{contract.get('guidance') or ''}"
     gates = report.get("readiness_gates")
     if isinstance(gates, Mapping):
         text += "\n\n### 三个独立门"
@@ -697,29 +768,44 @@ def _output_bounds_visibility(enabled: bool) -> Any:
     return gr.update(visible=bool(enabled))
 
 
-def _optional_number_interactivity(enabled: bool) -> Any:
-    return gr.update(interactive=bool(enabled))
+def _optional_number_interactivity(
+    enabled: bool, selected_case: str | None = None
+) -> Any:
+    return gr.update(
+        interactive=bool(enabled) and not bool(str(selected_case or "").strip())
+    )
 
 
 def _selected_number_interactivity(
     selected: list[str] | tuple[str, ...] | None,
     field_names: tuple[str, ...],
+    selected_case: str | None = None,
 ) -> tuple[Any, ...]:
     enabled = {str(item) for item in selected or ()}
-    return tuple(gr.update(interactive=name in enabled) for name in field_names)
-
-
-def _success_requirement_interactivity(selected: Any) -> tuple[Any, ...]:
-    return _selected_number_interactivity(
-        selected,
-        tuple(value for _, value in _SUCCESS_REQUIREMENT_CHOICES),
+    registered = bool(str(selected_case or "").strip())
+    return tuple(
+        gr.update(interactive=name in enabled and not registered)
+        for name in field_names
     )
 
 
-def _budget_field_interactivity(selected: Any) -> tuple[Any, ...]:
+def _success_requirement_interactivity(
+    selected: Any, selected_case: str | None = None
+) -> tuple[Any, ...]:
+    return _selected_number_interactivity(
+        selected,
+        tuple(value for _, value in _SUCCESS_REQUIREMENT_CHOICES),
+        selected_case,
+    )
+
+
+def _budget_field_interactivity(
+    selected: Any, selected_case: str | None = None
+) -> tuple[Any, ...]:
     return _selected_number_interactivity(
         selected,
         tuple(value for _, value in _BUDGET_FIELD_CHOICES),
+        selected_case,
     )
 
 
@@ -770,17 +856,21 @@ def run_from_ui(
             "task_type": str(task_type or ""),
             "measured_signals": parse_names(measured_signals),
             "control_inputs": parse_names(control_inputs),
+            "control_input": (parse_names(control_inputs) or [""])[0],
+            "reference": reference if reference_enabled else None,
             "input_min": input_min,
             "input_max": input_max,
             "output_min": output_min if output_bounds_enabled else None,
             "output_max": output_max if output_bounds_enabled else None,
             "state_stop": state_stop,
             "input_units": str(input_unit or "").strip() or None,
+            "signal_units": {},
+            "success_requirements": {},
+            "budgets": {},
+            "response_time_preference_s": (
+                response_time_preference_s if response_time_preference_enabled else None
+            ),
         }
-        if reference_enabled:
-            task["reference"] = reference
-        if response_time_preference_enabled:
-            task["response_time_preference_s"] = response_time_preference_s
         if str(signal_units_json or "").strip():
             units = json.loads(str(signal_units_json))
             if not isinstance(units, Mapping):
@@ -798,8 +888,7 @@ def run_from_ui(
             }.items()
             if key in enabled_requirements
         }
-        if requirements:
-            task["success_requirements"] = requirements
+        task["success_requirements"] = requirements
         enabled_budgets = {str(item) for item in budget_fields or ()}
         budgets = {
             key: value
@@ -809,8 +898,7 @@ def run_from_ui(
             }.items()
             if key in enabled_budgets
         }
-        if budgets:
-            task["budgets"] = budgets
+        task["budgets"] = budgets
         if task_type == "transition_then_hold":
             intermediate = [
                 float(item.strip())
@@ -824,24 +912,99 @@ def run_from_ui(
                 goal_region=str(goal_region or "").strip(),
                 intermediate_targets=intermediate,
             )
-            if initial_output_value_enabled:
-                task["initial_output_value"] = initial_output_value
+            task["initial_output_value"] = (
+                initial_output_value if initial_output_value_enabled else None
+            )
         elif task_type == "disturbance_recovery_to_hold":
             task.update(
                 disturbance_event=str(disturbance_event or "").strip(),
                 recovery_start_condition=str(recovery_start_condition or "").strip(),
                 disturbance_hold_region=str(disturbance_hold_region or "").strip(),
             )
+        case_id = _resolve_case_id(provider_case_id) or None
+        start_kwargs = {
+            "rag_index_dir": str(rag_index_dir or "").strip() or None,
+            "use_rag": bool(rag_enabled),
+            "llm_configured": bool(base_url and model and api_key),
+        }
+        # A selected public case is an authority grant by case ID only.  The
+        # editable form is presentation state and must not be able to change
+        # the server-side task that receives built-in provider authority.
+        if case_id:
+            canonical_task = public_training_case(case_id)["task"]
+            submitted_task = {
+                **canonical_task,
+                **{
+                    key: task[key]
+                    for key in (
+                        "description",
+                        "task_type",
+                        "measured_signals",
+                        "control_input",
+                        "control_inputs",
+                        "reference",
+                        "input_min",
+                        "input_max",
+                        "output_min",
+                        "output_max",
+                        "state_stop",
+                        "initial_region",
+                        "initial_output_value",
+                        "goal_region",
+                        "intermediate_targets",
+                        "disturbance_event",
+                        "recovery_start_condition",
+                        "disturbance_hold_region",
+                        "signal_units",
+                        "input_units",
+                        "success_requirements",
+                        "budgets",
+                        "response_time_preference_s",
+                    )
+                    if key in task
+                    and not (
+                        key in {"signal_units", "input_units"}
+                        and task[key] in ({}, None, "")
+                    )
+                },
+            }
+            report, state = start_kernel_app_run(
+                submitted_task,
+                provider_case_id=case_id,
+                **start_kwargs,
+            )
+        else:
+            report, state = start_kernel_app_run(task, **start_kwargs)
+        return _kernel_outputs(report, state)
+    except Exception as exc:
+        raise gr.Error(_kernel_error_message(exc)) from exc
+
+
+def start_training_exercise_from_ui(
+    provider_case_id: str | None,
+    base_url: str | None,
+    model: str | None,
+    api_key: str | None,
+    rag_enabled: bool,
+    rag_index_dir: str | None,
+) -> tuple[Any, ...]:
+    """Start a registered case in explicit teaching-exercise mode."""
+
+    try:
+        case_id = _resolve_case_id(provider_case_id)
+        if not case_id:
+            raise ValueError("请选择一个内置案例后再生成教学练习包。")
         report, state = start_kernel_app_run(
-            task,
+            public_training_case(case_id)["task"],
+            provider_case_id=case_id,
+            evidence_mode="exercise_bundle",
             rag_index_dir=str(rag_index_dir or "").strip() or None,
             use_rag=bool(rag_enabled),
             llm_configured=bool(base_url and model and api_key),
-            provider_case_id=_resolve_case_id(provider_case_id) or None,
         )
         return _kernel_outputs(report, state)
     except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+        raise gr.Error(_kernel_error_message(exc)) from exc
 
 
 def submit_measurement_from_ui(
@@ -892,8 +1055,8 @@ def submit_measurement_from_ui(
             agent_records=prepared.get("agent_records", ()),
         )
         return _kernel_outputs(report, next_state)
-    except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - UI boundary normalizes all action errors
+        return _refresh_mutation_error(exc, state)
 
 
 def submit_guided_action_from_ui(
@@ -950,8 +1113,8 @@ def submit_guided_action_from_ui(
             payload=payload,
         )
         return _kernel_outputs(report, next_state)
-    except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - UI boundary normalizes all action errors
+        return _refresh_mutation_error(exc, state)
 
 
 def load_case_into_form(case_id: str) -> tuple[Any, ...]:
@@ -1030,16 +1193,16 @@ def load_case_into_form(case_id: str) -> tuple[Any, ...]:
     response_time_enabled = task.get("response_time_preference_s") is not None
     initial_output_enabled = task.get("initial_output_value") is not None
 
-    def optional_update(value: Any, enabled: bool) -> Any:
-        return gr.update(value=value, interactive=enabled)
+    def optional_value(value: Any, enabled: bool) -> Any:
+        return value if enabled else None
 
-    return (
+    values = (
         task.get("description", ""),
         task.get("task_type", "local_setpoint_hold"),
         ", ".join(task.get("measured_signals", ())),
         ", ".join(task.get("control_inputs") or [task.get("control_input", "")]),
         reference_enabled,
-        optional_update(task.get("reference"), reference_enabled),
+        optional_value(task.get("reference"), reference_enabled),
         task.get("input_min"),
         task.get("input_max"),
         bool(task.get("output_min") is not None),
@@ -1054,40 +1217,52 @@ def load_case_into_form(case_id: str) -> tuple[Any, ...]:
         json.dumps(signal_units, ensure_ascii=False) if signal_units else "",
         input_unit_value,
         selected_requirements,
-        optional_update(
+        optional_value(
             requirements.get("final_abs_error_max"),
             "final_abs_error_max" in selected_requirements,
         ),
-        optional_update(
+        optional_value(
             requirements.get("overshoot_max"),
             "overshoot_max" in selected_requirements,
         ),
-        optional_update(
+        optional_value(
             requirements.get("settling_time_max_s"),
             "settling_time_max_s" in selected_requirements,
         ),
-        optional_update(
+        optional_value(
             requirements.get("perturbed_success_rate_min", 0.8),
             "perturbed_success_rate_min" in selected_requirements,
         ),
-        optional_update(
+        optional_value(
             requirements.get("hold_duration_min_s"),
             "hold_duration_min_s" in selected_requirements,
         ),
         response_time_enabled,
-        optional_update(task.get("response_time_preference_s"), response_time_enabled),
+        optional_value(task.get("response_time_preference_s"), response_time_enabled),
         selected_budgets,
-        optional_update(
+        optional_value(
             budgets.get("distinct_experiments"),
             "distinct_experiments" in selected_budgets,
         ),
-        optional_update(
+        optional_value(
             budgets.get("cumulative_excitation_time_s"),
             "cumulative_excitation_time_s" in selected_budgets,
         ),
         initial_output_enabled,
-        optional_update(task.get("initial_output_value"), initial_output_enabled),
+        optional_value(task.get("initial_output_value"), initial_output_enabled),
         ", ".join(str(item) for item in task.get("intermediate_targets", ()) or ()),
+    )
+    return tuple(gr.update(value=value, interactive=False) for value in values)
+
+
+def convert_case_to_custom(*values: Any) -> tuple[Any, ...]:
+    """Clear a registered case without discarding its visible task contract."""
+
+    if not values:
+        return ()
+    return (
+        gr.update(value="", interactive=True),
+        *(gr.update(value=value, interactive=True) for value in values[1:]),
     )
 
 
@@ -1116,7 +1291,7 @@ def expert_start_from_json(task_json: str, session_dir: str) -> tuple[Any, ...]:
         )
         return _kernel_outputs(report, state)
     except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+        raise gr.Error(_kernel_error_message(exc)) from exc
 
 
 def expert_load_session(session_id: str, session_dir: str) -> tuple[Any, ...]:
@@ -1127,7 +1302,7 @@ def expert_load_session(session_id: str, session_dir: str) -> tuple[Any, ...]:
         )
         return _kernel_outputs(report, state)
     except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+        raise gr.Error(_kernel_error_message(exc)) from exc
 
 
 def expert_import_v3(source: Any, session_dir: str) -> tuple[Any, ...]:
@@ -1141,7 +1316,7 @@ def expert_import_v3(source: Any, session_dir: str) -> tuple[Any, ...]:
         )
         return _kernel_outputs(report, state)
     except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+        raise gr.Error(_kernel_error_message(exc)) from exc
 
 
 def expert_submit_action(state: Any, action: str, payload_json: str) -> tuple[Any, ...]:
@@ -1155,8 +1330,8 @@ def expert_submit_action(state: Any, action: str, payload_json: str) -> tuple[An
             payload=payload,
         )
         return _kernel_outputs(report, next_state)
-    except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - UI boundary normalizes all action errors
+        return _refresh_mutation_error(exc, state)
 
 
 def expert_validate_artifact(payload_json: str) -> dict[str, Any]:
@@ -1166,21 +1341,21 @@ def expert_validate_artifact(payload_json: str) -> dict[str, Any]:
             raise TypeError("Artifact JSON 必须是对象。")
         return validate_kernel_artifact(payload)
     except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+        raise gr.Error(_kernel_error_message(exc)) from exc
 
 
 def expert_export_bundle(state: Any) -> str:
     try:
         return export_kernel_app_bundle(state)
     except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+        raise gr.Error(_kernel_error_message(exc, state)) from exc
 
 
 def export_artifact_from_ui(state: Any, artifact_kind: str) -> str:
     try:
         return export_kernel_app_artifact(state, artifact_kind)
     except Exception as exc:
-        raise gr.Error(str(exc)) from exc
+        raise gr.Error(_kernel_error_message(exc, state)) from exc
 
 
 def reset_ui() -> tuple[Any, ...]:
@@ -1278,6 +1453,12 @@ def build_app() -> gr.Blocks:
                         for web_case_id, case_id in _WEB_CASE_IDS.items()
                     ],
                     value="",
+                )
+                convert_case_button = gr.Button("转为自定义任务", size="sm")
+                training_exercise_button = gr.Button(
+                    "创建教学练习任务",
+                    size="sm",
+                    variant="secondary",
                 )
                 task_type = gr.Radio(
                     label="任务类型",
@@ -1431,6 +1612,9 @@ def build_app() -> gr.Blocks:
                         label="本地 RAG 索引目录（可选）",
                         placeholder="例如 ./rag-index",
                     )
+                    with gr.Row():
+                        doctor_button = gr.Button("环境自检", variant="secondary")
+                        doctor_result = gr.JSON(label="环境自检结果", visible=True)
                 with gr.Row():
                     base_run_button = gr.Button("创建基础任务", visible=False)
                     run_button = gr.Button(
@@ -1490,7 +1674,7 @@ def build_app() -> gr.Blocks:
                 with gr.Group(visible=False) as upload_action_fields:
                     upload_files = gr.File(
                         label="协议绑定实验数据",
-                        file_types=[".csv", ".json"],
+                        file_types=[".csv", ".json", ".zip"],
                         file_count="multiple",
                     )
                     stopped_on_limit = gr.Checkbox(
@@ -1579,6 +1763,7 @@ def build_app() -> gr.Blocks:
                             choices=[
                                 ("实验协议", "protocol"),
                                 ("操作员交接包", "operator_bundle"),
+                                ("教学练习包", "training_exercise_bundle"),
                                 ("上传回执", "upload_receipt"),
                                 ("自动特征", "features"),
                                 ("Controller IR", "controller_ir"),
@@ -1618,10 +1803,11 @@ def build_app() -> gr.Blocks:
                                     {
                                         "confirm_task",
                                         "answer",
+                                        "revise_diagnostic",
                                         "advance",
-                                        "set_provider",
                                         "compile_protocol",
                                         "prepare_operator_handoff",
+                                        "prepare_training_exercise_bundle",
                                         "record_operator_report",
                                         "ingest_upload",
                                         "derive_features",
@@ -1731,7 +1917,14 @@ def build_app() -> gr.Blocks:
             intermediate_targets,
         ]
         form_components = [*base_form_components, *extended_form_components]
-        provider_case_id.change(
+        conversion_form_components = [
+            *base_form_components,
+            *extended_form_components[1:],
+        ]
+        # React only to a user's case selection.  Programmatic updates from
+        # the "转为自定义任务" action must preserve the visible contract
+        # instead of firing the empty-case reset handler again.
+        provider_case_id.input(
             load_case_into_form,
             inputs=[provider_case_id],
             outputs=[
@@ -1771,15 +1964,21 @@ def build_app() -> gr.Blocks:
             ],
             api_visibility="private",
         )
+        convert_case_button.click(
+            convert_case_to_custom,
+            inputs=[provider_case_id, *conversion_form_components],
+            outputs=[provider_case_id, *conversion_form_components],
+            **_MUTATION_OPTIONS,
+        )
         reference_enabled.change(
             _optional_number_interactivity,
-            inputs=[reference_enabled],
+            inputs=[reference_enabled, provider_case_id],
             outputs=[reference],
             api_visibility="private",
         )
         success_requirement_fields.change(
             _success_requirement_interactivity,
-            inputs=[success_requirement_fields],
+            inputs=[success_requirement_fields, provider_case_id],
             outputs=[
                 final_abs_error_max,
                 overshoot_max,
@@ -1791,19 +1990,19 @@ def build_app() -> gr.Blocks:
         )
         response_time_preference_enabled.change(
             _optional_number_interactivity,
-            inputs=[response_time_preference_enabled],
+            inputs=[response_time_preference_enabled, provider_case_id],
             outputs=[response_time_preference_s],
             api_visibility="private",
         )
         budget_fields.change(
             _budget_field_interactivity,
-            inputs=[budget_fields],
+            inputs=[budget_fields, provider_case_id],
             outputs=[distinct_experiments, cumulative_excitation_time_s],
             api_visibility="private",
         )
         initial_output_value_enabled.change(
             _optional_number_interactivity,
-            inputs=[initial_output_value_enabled],
+            inputs=[initial_output_value_enabled, provider_case_id],
             outputs=[initial_output_value],
             api_visibility="private",
         )
@@ -1828,6 +2027,19 @@ def build_app() -> gr.Blocks:
         run_button.click(
             run_from_ui,
             inputs=form_components,
+            outputs=output_components,
+            **_MUTATION_OPTIONS,
+        )
+        training_exercise_button.click(
+            start_training_exercise_from_ui,
+            inputs=[
+                provider_case_id,
+                base_url,
+                model,
+                api_key,
+                rag_enabled,
+                rag_index_dir,
+            ],
             outputs=output_components,
             **_MUTATION_OPTIONS,
         )
@@ -1911,6 +2123,12 @@ def build_app() -> gr.Blocks:
             outputs=[selected_artifact_download],
             **_MUTATION_OPTIONS,
         )
+        doctor_button.click(
+            environment_doctor,
+            inputs=[base_url, model, api_key, rag_index_dir],
+            outputs=[doctor_result],
+            api_visibility="private",
+        )
         clear_button.click(
             reset_task_form,
             outputs=[
@@ -1927,11 +2145,13 @@ def build_app() -> gr.Blocks:
 __all__ = [
     "CSS",
     "build_app",
+    "environment_doctor",
     "expert_validate_artifact",
     "export_artifact_from_ui",
     "reset_task_form",
     "reset_ui",
     "run_from_ui",
+    "start_training_exercise_from_ui",
     "submit_guided_action_from_ui",
     "submit_measurement_from_ui",
 ]

@@ -21,6 +21,7 @@ from cfdc.kernel import (
     ControllerFreeze,
     ControllerIR,
     EvaluationPacket,
+    EvidenceSession,
     TaskContract,
     WorkflowService,
     build_migration_manifest,
@@ -112,10 +113,8 @@ def test_case_catalog_has_five_training_six_transition_and_seven_audit_cases() -
     assert len(TRANSITION_VARIANTS) == 6
     assert len(AUDIT_CASES) == 7
     assert len(catalog) == 18
-    assert (
-        public_training_case("audit_class_v_mimo")["base_case_id"]
-        == "tclab_dual_heater_v1"
-    )
+    assert "base_case_id" not in public_training_case("audit_class_v_mimo")
+    assert public_case_catalog()["audit_class_v_mimo"]["kind"] == "audit"
     mimo_task = public_training_case("tclab_dual_heater_v1")["task"]
     assert len(mimo_task["control_inputs"]) == 2
 
@@ -527,7 +526,7 @@ def test_session_v1_is_read_only_and_can_fork_without_old_authority(
         )
     child = service.fork_session(loaded.session_id)
     assert child.session_id != loaded.session_id
-    assert child.session_version == "cfdc-session/v3.0"
+    assert child.session_version == "cfdc-session/v4.0"
     assert child.evidence == ()
     assert child.controller_qualification is None
     assert child.evaluation is None
@@ -756,3 +755,177 @@ def test_physical_upload_receipt_and_operator_bundle_are_exportable(
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert validate_kernel_artifact(receipt)["artifact_kind"] == "upload_receipt"
     assert service.export_artifact(session.session_id, "operator_bundle").is_file()
+
+
+def test_diagnostic_revision_cannot_reuse_old_operator_authorization(
+    tmp_path: Path,
+) -> None:
+    service = WorkflowService(tmp_path / "physical-revision")
+    session = _resolved_case(service, "tclab_dual_heater_v1", mimo=True)
+    provider = {
+        "provider_id": "physical-provider",
+        "provider_version": "v1",
+        "capabilities": ["class_v_mimo_summary"],
+        "execution_kind": "physical",
+        "binding_role": "identification",
+    }
+    session = service.set_provider(
+        session.session_id,
+        action_id="physical-provider",
+        revision=session.revision,
+        provider=provider,
+    )
+    session = service.compile_protocol(
+        session.session_id,
+        action_id="physical-protocol",
+        revision=session.revision,
+    )
+    session = service.prepare_operator_handoff(
+        session.session_id,
+        action_id="physical-handoff",
+        revision=session.revision,
+    )
+    handoff = session.operator_handoffs[-1]
+    session = service.record_operator_report(
+        session.session_id,
+        action_id="physical-report",
+        revision=session.revision,
+        report={
+            "decision": "accepted",
+            "prechecks_completed": handoff["prechecks"],
+        },
+    )
+    session = service.revise_diagnostic(
+        session.session_id,
+        action_id="revise-diagnostic",
+        revision=session.revision,
+        confirmation=True,
+        source_text="新的公开记录表明不确定性较大。",
+        diagnostic_updates={
+            "uncertainty_variation": {
+                "status": "known",
+                "assessment": "large",
+                "evidence": "不确定性较大",
+            }
+        },
+    )
+    session = service.advance(
+        session.session_id,
+        action_id="revised-route",
+        revision=session.revision,
+    )
+    session = service.compile_protocol(
+        session.session_id,
+        action_id="revised-protocol",
+        revision=session.revision,
+    )
+    upload = tmp_path / "revised-upload.json"
+    _write_upload(upload, session.protocols[-1], session_id=session.session_id)
+
+    rejected = service.ingest_upload(
+        session.session_id,
+        action_id="revised-upload",
+        revision=session.revision,
+        paths=[upload],
+    )
+
+    assert rejected.evidence == ()
+    assert rejected.upload_attempts[-1]["status"] == "rejected"
+    assert rejected.upload_attempts[-1]["failed_gate"] == "operator_authorization"
+
+
+def test_latest_operator_refusal_supersedes_earlier_acceptance(tmp_path: Path) -> None:
+    service = WorkflowService(tmp_path / "operator-refusal")
+    session = _resolved_case(service, "tclab_dual_heater_v1", mimo=True)
+    provider = {
+        "provider_id": "physical-provider",
+        "provider_version": "v1",
+        "capabilities": ["class_v_mimo_summary"],
+        "execution_kind": "physical",
+        "binding_role": "identification",
+    }
+    session = service.set_provider(
+        session.session_id,
+        action_id="physical-provider",
+        revision=session.revision,
+        provider=provider,
+    )
+    session = service.compile_protocol(
+        session.session_id,
+        action_id="physical-protocol",
+        revision=session.revision,
+    )
+    session = service.prepare_operator_handoff(
+        session.session_id,
+        action_id="physical-handoff",
+        revision=session.revision,
+    )
+    handoff = session.operator_handoffs[-1]
+    session = service.record_operator_report(
+        session.session_id,
+        action_id="accepted-report",
+        revision=session.revision,
+        report={
+            "decision": "accepted",
+            "prechecks_completed": handoff["prechecks"],
+        },
+    )
+    session = service.record_operator_report(
+        session.session_id,
+        action_id="refused-report",
+        revision=session.revision,
+        report={"decision": "refused", "note": "stop requested"},
+    )
+    upload = tmp_path / "refused-upload.json"
+    _write_upload(upload, session.protocols[-1], session_id=session.session_id)
+
+    rejected = service.ingest_upload(
+        session.session_id,
+        action_id="upload-after-refusal",
+        revision=session.revision,
+        paths=[upload],
+    )
+
+    assert rejected.evidence == ()
+    assert rejected.upload_attempts[-1]["failed_gate"] == "operator_authorization"
+
+
+def test_persisted_operator_report_decision_tampering_is_rejected(
+    tmp_path: Path,
+) -> None:
+    service = WorkflowService(tmp_path / "operator-report-tamper")
+    session = _resolved_case(service, "tclab_dual_heater_v1", mimo=True)
+    provider = {
+        "provider_id": "physical-provider",
+        "provider_version": "v1",
+        "capabilities": ["class_v_mimo_summary"],
+        "execution_kind": "physical",
+        "binding_role": "identification",
+    }
+    session = service.set_provider(
+        session.session_id,
+        action_id="physical-provider",
+        revision=session.revision,
+        provider=provider,
+    )
+    session = service.compile_protocol(
+        session.session_id,
+        action_id="physical-protocol",
+        revision=session.revision,
+    )
+    session = service.prepare_operator_handoff(
+        session.session_id,
+        action_id="physical-handoff",
+        revision=session.revision,
+    )
+    session = service.record_operator_report(
+        session.session_id,
+        action_id="refused-report",
+        revision=session.revision,
+        report={"decision": "refused", "note": "stop requested"},
+    )
+    payload = session.to_dict()
+    payload["operator_reports"][-1]["decision"] = "accepted"
+
+    with pytest.raises(ValueError, match="operator_report_fingerprint_mismatch"):
+        EvidenceSession.from_dict(payload)

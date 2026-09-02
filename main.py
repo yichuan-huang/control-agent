@@ -17,9 +17,10 @@ from cfdc.diagnosis import (
     start_diagnostic_session,
     validate_guided_adapter_capabilities,
 )
+from cfdc.doctor import run_doctor
 from cfdc.evidence import plant_id_for_description
 from cfdc.kernel import WorkflowService
-from cfdc.kernel.cases import public_case_catalog, public_training_case
+from cfdc.kernel.cases import public_case_catalog
 from cfdc.models import (
     CFDCRunReport,
     ClosedLoopValidationSpec,
@@ -152,6 +153,11 @@ def _uses_builtin_experiment_inputs(args: argparse.Namespace) -> bool:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the independent CFDC framework.")
     parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Run non-destructive environment checks and print structured JSON.",
+    )
+    parser.add_argument(
         "--description", type=str, help="Plain-language system description."
     )
     parser.add_argument(
@@ -187,6 +193,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=sorted(public_case_catalog()),
         default=None,
         help="Start or resume with a registered engineering/audit case and its software providers.",
+    )
+    parser.add_argument(
+        "--kernel-evidence-mode",
+        choices=["automatic", "exercise_bundle"],
+        default="automatic",
+        help="Evidence mode for a newly started registered case.",
     )
     parser.add_argument(
         "--kernel-import-v3",
@@ -263,6 +275,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--kernel-prepare-operator-handoff",
         action="store_true",
         help="Write the operator card, templates, schema, checklist, and ZIP bundle.",
+    )
+    parser.add_argument(
+        "--kernel-prepare-training-exercise",
+        action="store_true",
+        help="Generate a protocol-bound software teaching exercise ZIP without ingesting evidence.",
     )
     parser.add_argument(
         "--kernel-operator-report",
@@ -693,17 +710,7 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
     elif args.kernel_session:
         session = service.read(args.kernel_session)
     else:
-        if args.kernel_case:
-            payload = public_training_case(args.kernel_case)["task"]
-            payload = {
-                **payload,
-                "workspace": {
-                    **dict(payload.get("workspace") or {}),
-                    "source": "cli_registered_case",
-                    "provider_case_id": args.kernel_case,
-                },
-            }
-        else:
+        if not args.kernel_case:
             if not args.description:
                 raise SystemExit(
                     "--workflow-version kernel requires --description or --kernel-case for a new task"
@@ -739,25 +746,35 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
         elif rag_requested and rag_snapshot:
             raise SystemExit("--rag-snapshot requires --rag-index for a kernel task")
         rag_active = bool(rag_requested and rag_snapshot)
-        session = service.start(
-            payload,
-            agent_config={
-                "mode": args.agent_mode or "multi",
-                "rag_requested": rag_requested,
-                "rag_enabled": rag_active,
-                "rag_status": (
-                    "active"
-                    if rag_active
-                    else "not_initialized"
-                    if rag_requested
-                    else "disabled"
-                ),
-                "rag_index_dir": str(args.rag_index)
-                if args.rag_index is not None
-                else None,
-                "llm_configured": bool(args.use_llm),
-            },
-            rag_snapshot=rag_snapshot,
+        agent_config = {
+            "mode": args.agent_mode or "multi",
+            "rag_requested": rag_requested,
+            "rag_enabled": rag_active,
+            "rag_status": (
+                "active"
+                if rag_active
+                else "not_initialized"
+                if rag_requested
+                else "disabled"
+            ),
+            "rag_index_dir": str(args.rag_index)
+            if args.rag_index is not None
+            else None,
+            "llm_configured": bool(args.use_llm),
+        }
+        session = (
+            service.start_registered_case(
+                args.kernel_case,
+                agent_config=agent_config,
+                rag_snapshot=rag_snapshot,
+                evidence_mode=args.kernel_evidence_mode,
+            )
+            if args.kernel_case
+            else service.start(
+                payload,
+                agent_config=agent_config,
+                rag_snapshot=rag_snapshot,
+            )
         )
     if args.confirm_kernel_budget:
         session = service.confirm_task(
@@ -837,9 +854,16 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
             revision=session.revision,
             provider=provider,
         )
-    configured_case_id = args.kernel_case or str(
-        session.task.workspace.get("provider_case_id") or ""
+    registered = session.registered_case_binding
+    configured_case_id = (
+        str(registered.get("case_id") or "") if isinstance(registered, dict) else ""
     )
+    if (
+        args.kernel_case
+        and configured_case_id
+        and args.kernel_case != configured_case_id
+    ):
+        raise SystemExit("--kernel-case does not match the registered session case")
     training_context = _training_context(configured_case_id)
     provider_actions_requested = any(
         (
@@ -851,7 +875,11 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
             args.kernel_confirm_result,
         )
     )
-    if training_context is not None and provider_actions_requested:
+    if (
+        training_context is not None
+        and provider_actions_requested
+        and session.registered_case_binding is None
+    ):
         session = _bind_training_providers(
             service,
             session,
@@ -882,6 +910,25 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
             session.session_id,
             action_id=f"{action_id}:operator-handoff",
             revision=session.revision,
+            output_dir=output_dir,
+        )
+    if args.kernel_prepare_training_exercise:
+        if training_context is None:
+            raise SystemExit(
+                "--kernel-prepare-training-exercise requires --kernel-case"
+            )
+        identification_registry, identification_id, _, _ = training_context
+        output_dir = (
+            args.kernel_result_dir / f"{session.session_id}.exercise"
+            if args.kernel_result_dir is not None
+            else None
+        )
+        session = service.prepare_training_exercise_bundle(
+            session.session_id,
+            action_id=f"{action_id}:training-exercise",
+            revision=session.revision,
+            provider_registry=identification_registry,
+            provider_id=identification_id,
             output_dir=output_dir,
         )
     if args.kernel_operator_report is not None:
@@ -1083,6 +1130,19 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
 def main() -> None:
     args = parse_args()
     safety_bounds = parse_safety_bounds(args.safety_bound)
+    if args.doctor:
+        report = run_doctor(
+            session_dir=args.kernel_session_dir,
+            rag_index_dir=args.rag_index,
+            ollama_base_url=args.llm_base_url,
+            ollama_model=args.llm_model,
+            api_key=args.llm_api_key,
+        )
+        payload = report.to_dict()
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        if not bool(payload.get("ok")):
+            raise SystemExit(1)
+        return
     if (
         args.workflow_version == "kernel"
         or args.task_type is not None
@@ -1100,6 +1160,7 @@ def main() -> None:
         or args.kernel_compile_protocol
         or args.kernel_protocol_request is not None
         or args.kernel_prepare_operator_handoff
+        or args.kernel_prepare_training_exercise
         or args.kernel_operator_report is not None
         or bool(args.kernel_upload)
         or args.kernel_upload_stopped_on_limit

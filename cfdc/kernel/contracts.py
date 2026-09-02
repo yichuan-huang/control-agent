@@ -16,9 +16,14 @@ from itertools import pairwise
 from typing import Any, ClassVar
 
 TASK_CONTRACT_VERSION = "cfdc-task/v1.2"
-EVIDENCE_SESSION_VERSION = "cfdc-session/v3.0"
+EVIDENCE_SESSION_VERSION = "cfdc-session/v4.0"
 READABLE_EVIDENCE_SESSION_VERSIONS = frozenset(
-    {"cfdc-session/v1.0", "cfdc-session/v2.0", EVIDENCE_SESSION_VERSION}
+    {
+        "cfdc-session/v1.0",
+        "cfdc-session/v2.0",
+        "cfdc-session/v3.0",
+        EVIDENCE_SESSION_VERSION,
+    }
 )
 DIAGNOSTIC_LEDGER_VERSION = "cfdc-diagnostics/v2.0"
 FREEZE_VERSION = "cfdc-freeze/v2.0"
@@ -388,10 +393,35 @@ class TaskContract:
                 if output_max is None:
                     output_max = output_abs_max
         workspace = dict(raw.get("workspace") or {})
-        if isinstance(simulation_limits, Mapping) and any(
-            value is not None for value in simulation_limits.values()
-        ):
-            workspace.setdefault("simulation_limits", dict(simulation_limits))
+        # ``simulation_limits`` is a compatibility spelling for the scalar
+        # task bounds above.  Keep only genuinely additional legacy metadata;
+        # never retain a mirror that would make an equivalent task serialize
+        # differently on its next round trip.
+        canonical_limits = {
+            "input_min": input_min,
+            "input_max": input_max,
+            "state_stop": state_stop,
+        }
+        candidate_limits = simulation_limits
+        if not isinstance(candidate_limits, Mapping):
+            candidate_limits = workspace.get("simulation_limits")
+        if isinstance(candidate_limits, Mapping):
+            normalized_limits = {
+                str(key): value
+                for key, value in candidate_limits.items()
+                if value is not None
+            }
+            if not (
+                set(normalized_limits) <= set(canonical_limits)
+                and all(
+                    normalized_limits.get(key) == value
+                    for key, value in canonical_limits.items()
+                    if key in normalized_limits
+                )
+            ):
+                workspace["simulation_limits"] = dict(normalized_limits)
+            else:
+                workspace.pop("simulation_limits", None)
         if isinstance(engineering_units, Mapping) and engineering_units:
             workspace.setdefault("engineering_units", dict(engineering_units))
         if (

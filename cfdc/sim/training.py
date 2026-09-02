@@ -77,8 +77,6 @@ _CAPABILITIES = frozenset(
 def _base_case_id(case_id: str) -> str:
     if case_id in TRANSITION_VARIANTS:
         return str(TRANSITION_VARIANTS[case_id]["base"])
-    if case_id in AUDIT_CASES:
-        return str(AUDIT_CASES[case_id]["training_case"])
     return case_id
 
 
@@ -316,6 +314,12 @@ def build_training_provider_registries(
 ) -> tuple[ProviderRegistry, str, EvaluationProviderRegistry, str]:
     """Build separate identification and evaluation registries for one case."""
 
+    if case_id in AUDIT_CASES:
+        # Audit dynamics live behind their own provider boundary.  Keep this
+        # factory as the one registration entry point used by Kernel bindings.
+        from cfdc.sim.audit import build_audit_provider_registries
+
+        return build_audit_provider_registries(case_id)
     identification = PhysicalTrainingProvider(case_id)
     evaluation = PhysicalTrainingEvaluationProvider(case_id)
     identification_registry = ProviderRegistry()

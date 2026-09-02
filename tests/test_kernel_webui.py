@@ -10,6 +10,7 @@ import pytest
 from cfdc.kernel import WorkflowService
 from cfdc.kernel import replies as kernel_replies
 from cfdc.kernel.agents import KernelAgentCoordinator
+from cfdc.kernel.cases import public_training_case
 from cfdc.kernel.replies import (
     KernelReplyMode,
     build_kernel_input_contract,
@@ -244,8 +245,9 @@ def test_empty_page_actions_are_reloaded_from_kernel_session(tmp_path):
     del report
     state = {**state, "pending_actions": []}
 
-    with pytest.raises(gr.Error, match="确认软件试验边界"):
-        submit_measurement_from_ui(state, "", False, "", "", "")
+    refreshed = submit_measurement_from_ui(state, "", False, "", "", "")
+    assert refreshed[0]["kernel_revision"] == state["kernel_revision"]
+    assert refreshed[0]["pending_actions"][0]["action"] == "confirm_task"
 
 
 def test_kernel_page_revision_and_action_id_are_stable_and_payload_cannot_override(
@@ -312,8 +314,8 @@ def test_webui_rejects_non_kernel_report():
 def test_kernel_confirmation_button_does_not_require_empty_json(tmp_path):
     _, state = _kernel_inputs(tmp_path)
 
-    with pytest.raises(gr.Error, match="确认软件试验边界"):
-        submit_measurement_from_ui(state, "", False, "", "", "")
+    rejected = submit_measurement_from_ui(state, "", False, "", "", "")
+    assert rejected[0]["kernel_revision"] == state["kernel_revision"]
 
     ui_outputs = submit_measurement_from_ui(
         state,
@@ -331,8 +333,10 @@ def test_empty_kernel_reply_is_rejected_before_llm_configuration(tmp_path):
     _, state = _kernel_inputs(tmp_path)
     _, state = continue_kernel_app_run(state, action="confirm_task", payload={})
 
-    with pytest.raises(gr.Error, match="填写回复内容"):
-        submit_measurement_from_ui(state, "", False, "", "", "", "natural_language")
+    rejected = submit_measurement_from_ui(
+        state, "", False, "", "", "", "natural_language"
+    )
+    assert rejected[0]["kernel_revision"] == state["kernel_revision"]
 
 
 def test_kernel_reply_contract_allows_natural_language_diagnosis(tmp_path):
@@ -597,11 +601,18 @@ def test_live_ollama_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
         use_rag=False,
         llm_configured=True,
     )
-    state = {**state, "provider_case_id": None}
-    report, state = continue_kernel_app_run(
-        state,
-        action="confirm_task",
-        payload={},
+    # Registered cases now retain their Provider authority in the persisted
+    # Kernel binding; do not use stale browser state to disable it.  Confirm
+    # the software boundary directly so this smoke can exercise the LLM
+    # diagnosis step before the configured automatic Provider path runs.
+    service = WorkflowService(tmp_path)
+    service.confirm_task(
+        report["session_id"],
+        action_id="live-confirm",
+        revision=report["revision"],
+    )
+    report, state = web_service.load_kernel_app_run(
+        report["session_id"], session_dir=tmp_path
     )
     assert report["status"] == "diagnostic"
     source_text = (
@@ -618,7 +629,7 @@ def test_live_ollama_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
         api_key=api_key,
     )
     report, state = continue_kernel_app_run(
-        {**state, "provider_case_id": "dc_motor_speed_v1"},
+        state,
         action="answer",
         payload=prepared["payload"],
         request_identity={
@@ -938,8 +949,8 @@ def test_budget_exhaustion_cannot_be_reinterpreted_as_confirmation(tmp_path):
         ],
     }
 
-    with pytest.raises(gr.Error, match="没有可用的 WebUI 入口|待处理动作"):
-        submit_measurement_from_ui(exhausted, "", True, "", "", "")
+    rejected = submit_measurement_from_ui(exhausted, "", True, "", "", "")
+    assert rejected[0]["kernel_revision"] == state["kernel_revision"]
 
 
 def test_projection_adds_confirmation_for_stored_intake_without_mutating_file(tmp_path):
@@ -986,8 +997,8 @@ def test_old_intake_confirmation_can_use_the_projected_web_action(tmp_path):
         ],
     }
 
-    with pytest.raises(gr.Error, match="确认软件试验边界"):
-        submit_measurement_from_ui(state, "", False, "", "", "")
+    rejected = submit_measurement_from_ui(state, "", False, "", "", "")
+    assert rejected[0]["kernel_revision"] == session.revision
 
     result = submit_measurement_from_ui(state, "", True, "", "", "")
     assert result[0]["pending_actions"][0]["action"] == "submit_answer"
@@ -1147,18 +1158,19 @@ def test_builtin_case_enables_only_explicit_optional_fields():
     loaded = web_ui.load_case_into_form("case-01")
 
     assert len(loaded) == 33
-    assert loaded[4] is True
+    assert loaded[4]["value"] is True
+    assert loaded[4]["interactive"] is False
     assert loaded[5]["value"] == 20.0
-    assert set(loaded[19]) == {
+    assert set(loaded[19]["value"]) == {
         "final_abs_error_max",
         "overshoot_max",
         "settling_time_max_s",
         "perturbed_success_rate_min",
     }
     assert loaded[23]["value"] == 0.8
-    assert loaded[25] is True
+    assert loaded[25]["value"] is True
     assert loaded[26]["value"] == 2.0
-    assert loaded[27] == []
+    assert loaded[27]["value"] == []
     assert loaded[28]["value"] is None
     assert loaded[29]["value"] is None
 
@@ -1408,8 +1420,7 @@ async def test_visible_gradio_flow_reaches_kernel_result_with_ollama_shaped_repl
         _fn_index(app, "run_from_ui", input_count=39),
         _run_inputs(
             description=(
-                "一台实验室直流电机工作在空载附近。我可以改变电枢电压并记录转轴角速度，"
-                "目标是让转速达到小幅目标并保持。"
+                public_training_case("dc_motor_speed_v1")["task"]["description"]
             ),
             measured_signals="转轴角速度_rad_s",
             control_inputs="电枢电压_V",

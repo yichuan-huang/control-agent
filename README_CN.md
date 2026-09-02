@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.1` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.2` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
@@ -29,7 +29,11 @@ uv run python app.py
 
 4. 没有建立本地 RAG 索引时关闭“启用本地 RAG”。创建任务并确认边界后，按页面提示提交结构诊断。内置软件案例会自动推进协议、公开取证、特征、控制器、资格审查、冻结和独立评价，直到需要用户决定或到达终态。
 
+每次运行前可执行 `uv run --locked python main.py --doctor`。它与 WebUI 的“环境自检”共用同一非破坏性服务，检查 Python、资源目录、可写会话目录、公开案例注册表、可选 RAG，以及（仅对 loopback 地址）本地 Ollama 服务和模型。会话目录检查会创建并立即删除一个受限探针文件。
+
 首次使用建议先选择内置软件案例。自定义对象不会自动获得仿真模型；实体或外部实验也不会由页面直接执行，而是通过 operator bundle、操作员确认和协议绑定的数据上传继续。
+
+内置权限只由服务端案例 ID 和带 fingerprint 的 `RegisteredCaseBinding` 授予，修改浏览器 JSON 不能替换 Provider。要练习教学闭环，请选择内置案例并点击“创建教学练习任务”。生成的 ZIP 只用于软件练习，会消耗预留的软件实验预算，但在下载并重新上传、通过正常审计门之前不会写入 evidence。
 
 ## 选择模型服务商
 
@@ -82,10 +86,11 @@ Kernel 通过版本化合同提供以下能力，使实验、证据、控制器�
 
 - `cfdc-protocol/v2` 支持有界 SISO、重复时序、阶梯实验、Class IV 频率／幅值／release、局部不稳定平衡、2x2 MIMO 和多阶段协议。Provider 执行前会重新编译并核对全部绑定和 fingerprint。
 - Operator handoff 会生成操作卡、预检查清单、JSON schema、重复 CSV 模板和 ZIP。CSV/JSON 上传必须依次通过操作员授权、格式、会话／协议、重复次数、时间轴、输入波形、安全边界和信号质量八道门。拒绝的尝试只追加失败回执，不计入有效实验次数；但失败尝试和已请求的激励时间仍分别消耗预注册预算。
+- 注册案例还支持教学练习包：ZIP 固定包含公开 manifest、协议绑定 CSV 和中文说明。生成时只预留软件实验预算，不写入 evidence；下载后重新上传仍必须通过同一套确定性审计门。七个 `audit_class_*` 案例使用现版独立动力学和评价 Provider，不再是五个工程模型的别名。
 - `cfdc-features/v2` 自动生成带来源和区间的 SISO 相邻结构、时延／NMP／积分／二阶、Step-B 非线性、Class IV、局部不稳定平衡和 2x2 静态／动态耦合特征，同时生成有界参数域。证据不足时返回明确 feature gap。
 - 包内路线注册表提供 20 个可执行控制器合同，并保留明确的 capability-gap 路线。Controller proposal 必须是受限 `ControllerIR`；确定性合成和 `cfdc-qualification/v2` 只返回 `offline_qualified`、`diagnostic_trial_only` 或 `not_qualified`。
 - Identification Provider 与 Evaluation Provider 使用两个独立且不可混淆的绑定。独立 `cfdc-independent-judge/v2.0` 从完整逐采样轨迹和停止事件重新计算逐通道指标，先判断硬稳定性与边界，再判断任务性能、扰动重复、最差试次和 95% Wilson 下界。只有稳定但性能不足才允许有界调优；接受的候选会创建新 freeze，并且必须通过 fresh confirmation。
-- `cfdc-session/v3.0` 保留 revision、幂等 action、stale revision 拒绝、不可覆盖的 artifact 历史和只追加事件链。
+- `cfdc-session/v4.0` 增加从案例目录重算的 `RegisteredCaseBinding`，并保留 revision、幂等 action、stale revision 拒绝、不可覆盖的 artifact 历史和只追加事件链。
 
 工作流公开三个彼此独立的就绪门：合法取证、证据支持的路线选择、控制器综合。未知维度只阻塞实际消费它的动作。每次 Provider 调用都在执行前预留预算，因此重试次数、激励时间、有效实验数和不同协议数会分别审计。旧会话可以读取但不能修改；派生会话只复制任务和人工先验，不继承旧特征、资格或性能授权。
 
@@ -132,7 +137,7 @@ uv run python app.py
 
 “引导工作台”通过显式结构化表单创建 Kernel 任务。所有任务都必须填写任务描述、至少一个观测输出、至少一个控制输入、有限的输入上下界，以及正数 `state_stop`。输出上下界可选，但必须成对填写。`transition_then_hold` 还必须填写初始区域和目标区域；`disturbance_recovery_to_hold` 还必须填写扰动事件、恢复起点条件和恢复后保持区域。表单也支持工程单位、性能阈值、实验预算、时间偏好、初始数值和 intermediate targets。
 
-页面在每个状态只突出一个主要操作：确认任务、回答诊断问题、选择实验 Provider、下载 operator bundle、提交操作员报告、上传数据、启动隔离评价、接受有界调优或确认结果。协议波形、已接受公开 trace、特征区间、资格检查、冻结控制器的完整输出／参考／输入轨迹、重复试次置信度、剩余取证预算、路线修正原因、三个独立就绪门和九阶段审计时间线都直接来自 Kernel artifact。页面明确区分“证据不足”“未通过资格”“稳定但性能不足”和“最终独立确认达标”。
+页面在每个状态只突出一个主要操作：确认任务、回答诊断问题、选择实验 Provider、下载 operator bundle 或教学练习包、需要时提交操作员报告、上传数据、启动隔离评价、接受有界调优或确认结果。页面整理为三个教学步骤——任务与边界、证据与控制器、评价与确认——同时保留九阶段只追加审计时间线。注册案例展示学习目标、关键术语、证据边界和“本案例不能证明什么”。协议波形、已接受公开 trace、特征区间、资格检查、冻结控制器的完整输出／参考／输入轨迹、重复试次置信度、剩余取证预算和路线修正原因都直接来自 Kernel artifact。页面明确区分“证据不足”“未通过资格”“稳定但性能不足”和“最终独立确认达标”。
 
 “专家合同”页可以提交完整 `TaskContract`、加载 Kernel session、执行 typed action JSON，并校验下载 artifact 的 fingerprint。可单独导出协议、operator bundle、上传回执、特征、Controller IR、qualification、freeze、evaluation、feedback、confirmation、最终结果和完整会话审计，也可导出完整结果 ZIP。
 
@@ -188,6 +193,11 @@ uv run python main.py --workflow-version kernel \
   --kernel-result-dir ./output/results \
   --kernel-export-bundle
 ```
+
+如需教学练习而非自动写入软件 evidence，可增加
+`--kernel-evidence-mode exercise_bundle --kernel-prepare-training-exercise`。
+命令会停在 `awaiting_evidence`；把下载的
+`training_exercise_bundle.zip` 通过后续 `--kernel-upload` 重新提交，系统才会执行正常审计门。
 
 对于实体或外部操作实验，在诊断和路线解析后绑定公开 Provider 合同，再生成 handoff：
 

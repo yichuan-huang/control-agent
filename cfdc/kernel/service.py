@@ -5,13 +5,15 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import shutil
+import tempfile
 import zipfile
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime
 from itertools import pairwise
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -23,8 +25,12 @@ from cfdc.controllers.kernel_synthesis import (
 from cfdc.controllers.qualification import (
     qualify_controller as run_controller_qualification,
 )
-from cfdc.evidence.ingestion import inspect_upload
-from cfdc.experiments.operator import build_operator_handoff, validate_operator_report
+from cfdc.evidence.ingestion import UploadGateError, inspect_upload
+from cfdc.experiments.operator import (
+    build_operator_handoff,
+    build_training_exercise_bundle,
+    validate_operator_report,
+)
 from cfdc.experiments.protocols import (
     compile_protocol as compile_experiment_protocol,
 )
@@ -40,9 +46,11 @@ from .contracts import (
     DIAGNOSTIC_IDS,
     EVIDENCE_SESSION_VERSION,
     PACKET_VERSION,
+    UPLOAD_AUDIT_VERSION,
     ControllerFreeze,
     TaskContract,
     fingerprint,
+    utc_now,
 )
 from .controllers import (
     ControllerIR,
@@ -61,10 +69,55 @@ from .providers import (
 )
 from .route_catalog import known_feature_ids, select_route_from_features
 from .routes import resolve_route
-from .session import TERMINAL_STATES, EvidenceSession, SessionEvent
+from .session import (
+    REGISTERED_CASE_CATALOG_VERSION,
+    TERMINAL_STATES,
+    TRAINING_EXERCISE_LOCAL_FIELDS,
+    EvidenceSession,
+    RegisteredCaseBinding,
+    SessionEvent,
+)
 from .tuning import TuningContract, run_bounded_tuning
 
 _SESSION_SAVE_LOCK = RLock()
+
+
+class KernelActionError(ValueError):
+    """Safe, structured error for an action that did not mutate a session."""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        message_cn: str,
+        revision: int | None = None,
+        receipt_saved: bool = False,
+        next_step: str | None = None,
+    ) -> None:
+        super().__init__(code)
+        self.code = code
+        self.message_cn = message_cn
+        self.revision = revision
+        self.receipt_saved = receipt_saved
+        self.next_step = next_step
+        self.trace_id = fingerprint(
+            {
+                "code": code,
+                "revision": revision,
+                "receipt_saved": receipt_saved,
+                "next_step": next_step,
+            }
+        )[:16]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "message_cn": self.message_cn,
+            "receipt_saved": self.receipt_saved,
+            "revision": self.revision,
+            "next_step": self.next_step,
+            "trace_id": self.trace_id,
+        }
 
 
 class WorkflowService:
@@ -144,6 +197,88 @@ class WorkflowService:
         """Named public alias used by embedding applications and adapters."""
 
         return self.start(payload, agent_config=agent_config, rag_snapshot=rag_snapshot)
+
+    def start_registered_case(
+        self,
+        case_id: str,
+        *,
+        agent_config: Mapping[str, Any] | None = None,
+        rag_snapshot: str | None = None,
+        evidence_mode: str = "automatic",
+    ) -> EvidenceSession:
+        """Start one server-selected public case with immutable provider scope."""
+
+        from cfdc.sim.training import build_training_provider_registries
+
+        from .cases import public_case_catalog, public_training_case
+
+        catalog = public_case_catalog()
+        resolved_case_id = str(case_id or "").strip()
+        if resolved_case_id not in catalog:
+            raise ValueError(f"unknown_registered_case: {resolved_case_id}")
+        if evidence_mode not in {"automatic", "exercise_bundle"}:
+            raise ValueError("registered_case_evidence_mode_invalid")
+        case = public_training_case(resolved_case_id)
+        task = TaskContract.from_user_input(case["task"])
+        identification, identification_id, evaluation, evaluation_id = (
+            build_training_provider_registries(resolved_case_id)
+        )
+        providers: dict[str, dict[str, Any]] = {}
+        for role, registry, provider_id in (
+            ("identification", identification, identification_id),
+            ("evaluation", evaluation, evaluation_id),
+        ):
+            provider = registry.get(provider_id)
+            providers[role] = {
+                "provider_id": provider.provider_id,
+                "provider_version": provider.provider_version,
+                "capabilities": sorted(str(item) for item in provider.capabilities),
+                "binding_role": role,
+                "execution_kind": "software",
+            }
+        binding = RegisteredCaseBinding.create(
+            case_id=resolved_case_id,
+            case_kind=str(catalog[resolved_case_id]["kind"]),
+            catalog_version=REGISTERED_CASE_CATALOG_VERSION,
+            task=task,
+            provider_references=providers,
+            evidence_mode=evidence_mode,
+        ).to_dict()
+        scope = binding["task_scope_fingerprint"]
+        scoped_providers = {
+            role: {
+                **reference,
+                "task_scope_fingerprint": scope,
+                "registered_case_binding_fingerprint": binding["binding_fingerprint"],
+            }
+            for role, reference in providers.items()
+        }
+        session = self.start(
+            task,
+            agent_config=agent_config,
+            rag_snapshot=rag_snapshot,
+        )
+        # Startup is the only point at which a public registered binding may
+        # introduce software provider authority.  Event fingerprints cover
+        # payloads, so record the authority grant as a separate append-only
+        # event rather than changing the existing task_started event.
+        seeded = self._replace(
+            session,
+            provider=deepcopy(scoped_providers["identification"]),
+            provider_bindings=deepcopy(scoped_providers),
+            registered_case_binding=binding,
+        )
+        seeded = self._append(
+            seeded,
+            "registered_case_bound",
+            "registered-case-binding",
+            {
+                "case_id": resolved_case_id,
+                "binding_fingerprint": binding["binding_fingerprint"],
+                "task_scope_fingerprint": scope,
+            },
+        )
+        return self._save(seeded)
 
     @staticmethod
     def project(session: EvidenceSession) -> dict[str, Any]:
@@ -312,6 +447,7 @@ class WorkflowService:
                 elif assessment in {"nonminimum_phase", "nonminimum", "否", "no"}:
                     update["assessment"] = "nonminimum_phase"
             updates[key] = update
+        _validate_diagnostic_update_conflicts(session, updates)
         ledger = session.ledger.update(updates, source="human_operator")
         status = "awaiting_evidence"
         readiness = ledger.readiness()
@@ -333,21 +469,91 @@ class WorkflowService:
         # after that revision; the historical evidence remains available, but
         # all route-dependent artifacts must be regenerated deterministically.
         if _has_route_dependents(session):
-            updated = self._replace(
-                updated,
-                route=None,
-                feature_artifact=None,
-                controller_candidate=None,
-                phase_plan=None,
-                phase_results=(),
-                provider=None,
-            )
+            updated = self._invalidate_route_dependents(updated)
         return self._save(
             self._append(
                 updated,
                 "diagnostic_answered",
                 action_id,
                 {"dimensions": sorted(updates)},
+            )
+        )
+
+    def revise_diagnostic(
+        self,
+        session_id: str,
+        *,
+        action_id: str,
+        revision: int,
+        diagnostic_updates: Mapping[str, Any],
+        source_text: str,
+        confirmation: bool,
+    ) -> EvidenceSession:
+        """Audit an explicit correction without silently rewriting history."""
+
+        session = self.read(session_id)
+        if self._event_for_action(session, action_id) is not None:
+            return session
+        self._check_mutable(session, revision)
+        self._check_not_frozen(session)
+        if not confirmation:
+            raise ValueError("diagnostic_revision_confirmation_required")
+        source = str(source_text or "")
+        if not source.strip():
+            raise ValueError("kernel_reply_source_text_required")
+        if not isinstance(diagnostic_updates, Mapping) or not diagnostic_updates:
+            raise ValueError("diagnostic_revision_required")
+        updates: dict[str, dict[str, Any]] = {}
+        superseded: dict[str, dict[str, Any]] = {}
+        for raw_key, raw_value in diagnostic_updates.items():
+            key = _canonical_dimension(str(raw_key))
+            if key not in DIAGNOSTIC_IDS:
+                raise ValueError(f"unknown_diagnostic_id: {raw_key}")
+            previous = session.ledger.entry(key)
+            if previous.status != "known":
+                raise ValueError(f"diagnostic_revision_requires_known_fact: {key}")
+            value = _answer_to_update(raw_value)
+            if str(value.get("status") or "known") != "known":
+                raise ValueError("diagnostic_revision_requires_known_fact")
+            excerpts = _reply_evidence_excerpts(value)
+            if not excerpts or not all(
+                _contains_verbatim_text(source, item) for item in excerpts
+            ):
+                raise ValueError(
+                    f"diagnostic evidence for {key} is not in the user reply"
+                )
+            if str(previous.assessment or "").strip().casefold() == str(
+                value.get("assessment") or ""
+            ).strip().casefold() and previous.value == value.get("value"):
+                raise ValueError(f"diagnostic_revision_no_change: {key}")
+            value["status"] = "known"
+            value["evidence"] = excerpts[0]
+            updates[key] = value
+            superseded[key] = previous.to_dict()
+        ledger = session.ledger.update(updates, source="human_operator_revision")
+        readiness = ledger.readiness()
+        pending = (
+            ({"kind": "route", "action": "advance"},)
+            if readiness.status == "ready"
+            else ({"kind": "diagnostic", "action": "submit_answer"},)
+        )
+        updated = self._replace(
+            session,
+            ledger=ledger,
+            status="awaiting_evidence",
+            pending_actions=pending,
+        )
+        updated = self._invalidate_route_dependents(updated)
+        return self._save(
+            self._append(
+                updated,
+                "diagnostic_revised",
+                action_id,
+                {
+                    "dimensions": sorted(updates),
+                    "superseded": superseded,
+                    "source_text": source,
+                },
             )
         )
 
@@ -414,41 +620,13 @@ class WorkflowService:
                 raise ValueError(
                     f"diagnostic evidence for {key} is not in the user reply"
                 )
-            previous = session.ledger.entry(key)
-            if previous.status == "known":
-                if status == "unknown":
-                    raise ValueError(
-                        f"diagnostic_conflict_requires_clarification: {key}"
-                    )
-                previous_assessment = str(previous.assessment or "").strip().casefold()
-                current_assessment = (
-                    str(value.get("assessment") or "").strip().casefold()
-                )
-                if (
-                    previous_assessment
-                    and current_assessment
-                    and previous_assessment != current_assessment
-                ):
-                    raise ValueError(
-                        f"diagnostic_conflict_requires_clarification: {key}"
-                    )
-                if (
-                    previous.value is not None
-                    and value.get("value") is not None
-                    and previous.value != value.get("value")
-                ):
-                    raise ValueError(
-                        f"diagnostic_conflict_requires_clarification: {key}"
-                    )
-                if previous_assessment and not current_assessment:
-                    value["assessment"] = previous.assessment
-                if previous.value is not None and value.get("value") is None:
-                    value["value"] = previous.value
             value["status"] = status
             value["evidence"] = evidence_values[0]
             if len(evidence_values) > 1:
                 value["evidence_excerpts"] = evidence_values
             updates[key] = value
+
+        _validate_diagnostic_update_conflicts(session, updates)
 
         normalized_parameters = _validate_reply_parameter_facts(parameter_facts, source)
         existing_by_id = {
@@ -488,15 +666,7 @@ class WorkflowService:
             pending_actions=pending,
         )
         if updates and _has_route_dependents(session):
-            updated = self._replace(
-                updated,
-                route=None,
-                feature_artifact=None,
-                controller_candidate=None,
-                phase_plan=None,
-                phase_results=(),
-                provider=None,
-            )
+            updated = self._invalidate_route_dependents(updated)
         records = _sanitize_reply_agent_records(agent_records)
         if records:
             updated = self._replace(
@@ -533,15 +703,7 @@ class WorkflowService:
         )
         updated = self._replace(session, ledger=ledger, status="awaiting_evidence")
         if _has_route_dependents(session):
-            updated = self._replace(
-                updated,
-                route=None,
-                feature_artifact=None,
-                controller_candidate=None,
-                phase_plan=None,
-                phase_results=(),
-                provider=None,
-            )
+            updated = self._invalidate_route_dependents(updated)
         return self._save(
             self._append(
                 updated,
@@ -560,6 +722,27 @@ class WorkflowService:
         evidence: Mapping[str, Any],
     ) -> EvidenceSession:
         session = self.read(session_id)
+        if session.registered_case_binding is not None:
+            raise ValueError(
+                "registered_case_evidence_requires_bound_provider_or_upload"
+            )
+        return self._record_public_evidence(
+            session,
+            action_id=action_id,
+            revision=revision,
+            evidence=evidence,
+        )
+
+    def _record_public_evidence(
+        self,
+        session: EvidenceSession,
+        *,
+        action_id: str,
+        revision: int,
+        evidence: Mapping[str, Any],
+    ) -> EvidenceSession:
+        """Append validated evidence after its trusted acquisition boundary."""
+
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
@@ -772,8 +955,8 @@ class WorkflowService:
             # Each trace is an auditable event; only the first receives the
             # caller's action id so a repeated request cannot rerun the provider.
             event_action = action_id if index == 0 else f"{action_id}:{index}"
-            current = self.submit_evidence(
-                current.session_id,
+            current = self._record_public_evidence(
+                current,
                 action_id=event_action,
                 revision=current.revision,
                 evidence=evidence,
@@ -966,14 +1149,15 @@ class WorkflowService:
             raise ValueError("route_not_resolved")
         if session.route.get("capability_gap"):
             raise ValueError(f"route_capability_gap: {session.route['capability_gap']}")
-        if not session.evidence:
+        active_evidence = _active_evidence(session)
+        if not active_evidence:
             raise ValueError("public_evidence_required_before_features")
         if not isinstance(features, Mapping) or not features:
             raise ValueError("features_required")
         if _contains_private_marker(features):
             raise ValueError("private_feature_not_allowed")
         normalized: dict[str, Any] = {}
-        evidence_ids = {str(item.get("evidence_id")) for item in session.evidence}
+        evidence_ids = {str(item.get("evidence_id")) for item in active_evidence}
         for feature_id, raw in features.items():
             key = str(feature_id).strip()
             if not key:
@@ -1037,7 +1221,7 @@ class WorkflowService:
             "missing_feature_ids": missing,
             "quality": quality_value,
             "evidence_fingerprints": [
-                str(item.get("fingerprint")) for item in session.evidence
+                str(item.get("fingerprint")) for item in active_evidence
             ],
             "artifact_fingerprint": fingerprint(
                 {"features": normalized, "quality": quality_value}
@@ -1158,6 +1342,8 @@ class WorkflowService:
             return session
         self._check_mutable(session, revision)
         self._check_not_frozen(session)
+        if session.registered_case_binding is not None:
+            raise ValueError("registered_case_provider_binding_immutable")
         if (
             not isinstance(provider, Mapping)
             or not provider.get("provider_id")
@@ -1216,6 +1402,7 @@ class WorkflowService:
         provider = session.provider_bindings.get("identification") or session.provider
         if not isinstance(provider, Mapping):
             raise TypeError("identification_provider_required")
+        _validate_registered_provider_binding(session, "identification", provider)
         protocol = compile_experiment_protocol(
             session.task,
             session.route,
@@ -1224,13 +1411,25 @@ class WorkflowService:
             phase=phase,
         ).to_dict()
         software_provider = str(provider.get("execution_kind") or "") == "software"
+        exercise_mode = bool(
+            isinstance(session.registered_case_binding, Mapping)
+            and session.registered_case_binding.get("evidence_mode")
+            == "exercise_bundle"
+        )
         updated = self._replace(
             session,
             protocols=(*session.protocols, protocol),
             active_protocol_fingerprint=protocol["protocol_fingerprint"],
             status="protocol_ready",
             pending_actions=(
-                ({"kind": "provider_run", "action": "run_provider"},)
+                (
+                    {
+                        "kind": "training_exercise",
+                        "action": "prepare_training_exercise_bundle",
+                    },
+                )
+                if software_provider and exercise_mode
+                else ({"kind": "provider_run", "action": "run_provider"},)
                 if software_provider
                 else (
                     {"kind": "operator_handoff", "action": "prepare_operator_handoff"},
@@ -1277,6 +1476,7 @@ class WorkflowService:
         binding = session.provider_bindings.get("identification") or session.provider
         if not isinstance(binding, Mapping):
             raise TypeError("identification_provider_required")
+        _validate_registered_provider_binding(session, "identification", binding)
         selected_id = str(provider_id or binding.get("provider_id") or "")
         if selected_id != str(binding.get("provider_id") or ""):
             raise ValueError("identification_provider_binding_mismatch")
@@ -1386,13 +1586,213 @@ class WorkflowService:
                 provider_version=provider.provider_version,
                 operation=protocol["operation"],
             )
-            current = self.submit_evidence(
-                session_id,
+            current = self._record_public_evidence(
+                current,
                 action_id=action_id if index == 0 else f"{action_id}:{index}",
                 revision=current.revision,
                 evidence=evidence,
             )
         return current
+
+    def prepare_training_exercise_bundle(
+        self,
+        session_id: str,
+        *,
+        action_id: str,
+        revision: int,
+        provider_registry: ProviderRegistry,
+        provider_id: str | None = None,
+        output_dir: Path | None = None,
+    ) -> EvidenceSession:
+        """Generate a software exercise ZIP without automatically ingesting it."""
+
+        session = self.read(session_id)
+        if self._event_for_action(session, action_id) is not None:
+            return session
+        self._check_mutable(session, revision)
+        self._check_not_frozen(session)
+        self._check_elapsed_budget(session)
+        if not session.task.budget_confirmed:
+            raise ValueError("task_boundary_confirmation_required")
+        binding = session.registered_case_binding
+        if (
+            not isinstance(binding, Mapping)
+            or binding.get("evidence_mode") != "exercise_bundle"
+        ):
+            raise ValueError("training_exercise_bundle_requires_registered_case")
+        if (
+            session.route is None
+            or not session.protocols
+            or not session.active_protocol_fingerprint
+        ):
+            raise ValueError("route_and_compiled_protocol_required")
+        provider_binding = (
+            session.provider_bindings.get("identification") or session.provider
+        )
+        if not isinstance(provider_binding, Mapping):
+            raise TypeError("identification_provider_required")
+        _validate_registered_provider_binding(
+            session, "identification", provider_binding
+        )
+        selected_id = str(provider_id or provider_binding.get("provider_id") or "")
+        if selected_id != str(provider_binding.get("provider_id") or ""):
+            raise ValueError("identification_provider_binding_mismatch")
+        provider = provider_registry.get(selected_id)
+        if str(provider.provider_version) != str(
+            provider_binding.get("provider_version") or ""
+        ):
+            raise ValueError("identification_provider_version_mismatch")
+        if session.training_exercise_bundles and any(
+            item.get("protocol_fingerprint") == session.active_protocol_fingerprint
+            for item in session.training_exercise_bundles
+            if isinstance(item, Mapping)
+        ):
+            raise ValueError("training_exercise_bundle_already_generated")
+        protocol = next(
+            item
+            for item in reversed(session.protocols)
+            if item.get("protocol_fingerprint") == session.active_protocol_fingerprint
+        )
+        verified = verify_protocol(
+            protocol,
+            task=session.task,
+            route=session.route,
+            provider=provider_binding,
+        ).to_dict()
+        if verified["protocol_fingerprint"] != session.active_protocol_fingerprint:
+            raise ValueError("active_protocol_fingerprint_mismatch")
+        if fingerprint(
+            sorted(str(item) for item in provider.capabilities)
+        ) != protocol.get("provider_capabilities_fingerprint"):
+            raise ValueError("provider_capabilities_changed_after_protocol_compile")
+        budget = _action_budget(session)
+        try:
+            budget.reserve(
+                str(protocol["operation"]),
+                protocol_fingerprint=str(protocol["protocol_fingerprint"]),
+                excitation_time_s=float(
+                    protocol["derived_limits"]["cumulative_excitation_time_s"]
+                ),
+            )
+        except ValueError as exc:
+            updated = self._replace(
+                session,
+                status="capability_gap",
+                pending_actions=({"kind": "budget", "reason": str(exc)},),
+            )
+            return self._save(
+                self._append(
+                    updated,
+                    "experiment_budget_exhausted",
+                    action_id,
+                    {
+                        "reason": str(exc),
+                        "protocol_fingerprint": protocol["protocol_fingerprint"],
+                    },
+                )
+            )
+        reserved = self._save(
+            self._append(
+                session,
+                "experiment_attempt_reserved",
+                f"{action_id}:reservation",
+                {
+                    "requested_action_id": action_id,
+                    "operation": protocol["operation"],
+                    "protocol_fingerprint": protocol["protocol_fingerprint"],
+                    "excitation_time_s": protocol["derived_limits"][
+                        "cumulative_excitation_time_s"
+                    ],
+                    "evidence_mode": "exercise_bundle",
+                },
+            )
+        )
+        try:
+            result = provider.execute(verified, task=reserved.task.to_dict())
+            traces = (result,) if isinstance(result, PublicTrace) else tuple(result)
+            if not traces or not all(isinstance(item, PublicTrace) for item in traces):
+                raise ValueError("experiment_provider_must_return_public_trace")
+            if len(traces) != int(protocol["repeats"]):
+                raise ValueError("provider_repeat_count_mismatch")
+            if any(
+                item.protocol_fingerprint != protocol["protocol_fingerprint"]
+                for item in traces
+            ):
+                raise ValueError("provider_trace_protocol_binding_mismatch")
+            if len({item.trial_id for item in traces}) != len(traces):
+                raise ValueError("provider_trial_id_duplicate")
+        except Exception as exc:
+            failure = {
+                "operation": protocol["operation"],
+                "provider_id": provider.provider_id,
+                "provider_version": provider.provider_version,
+                "error_type": type(exc).__name__,
+                "protocol_fingerprint": protocol["protocol_fingerprint"],
+                "evidence_mode": "exercise_bundle",
+            }
+            updated = self._replace(
+                reserved,
+                experiment_failures=(*session.experiment_failures, failure),
+                status="awaiting_evidence",
+                pending_actions=(
+                    {
+                        "kind": "training_exercise",
+                        "action": "prepare_training_exercise_bundle",
+                        "reason": "provider_failed",
+                    },
+                ),
+            )
+            self._save(self._append(updated, "provider_run_failed", action_id, failure))
+            raise
+        artifact_dir = (
+            Path(output_dir)
+            if output_dir is not None
+            else self.root
+            / f"{session.session_id}.artifacts"
+            / protocol["protocol_fingerprint"][:12]
+        )
+        result = build_training_exercise_bundle(
+            session_id=session.session_id,
+            task=session.task.to_dict(),
+            protocol=protocol,
+            traces=traces,
+            provider_id=provider.provider_id,
+            provider_version=provider.provider_version,
+            registered_case_binding_fingerprint=str(binding["binding_fingerprint"]),
+            output_dir=artifact_dir,
+        )
+        manifest = dict(result["manifest"])
+        record = {
+            **manifest,
+            "manifest_path": result["manifest_path"],
+            "instructions_path": result["instructions_path"],
+            "data_paths": result["data_paths"],
+            "bundle_path": result["bundle_path"],
+            "generated_at": utc_now(),
+        }
+        record["record_fingerprint"] = fingerprint(record)
+        updated = self._replace(
+            reserved,
+            training_exercise_bundles=(
+                *session.training_exercise_bundles,
+                record,
+            ),
+            status="awaiting_evidence",
+            pending_actions=({"kind": "upload", "action": "ingest_upload"},),
+        )
+        return self._save(
+            self._append(
+                updated,
+                "training_exercise_bundle_prepared",
+                action_id,
+                {
+                    "manifest_fingerprint": manifest["manifest_fingerprint"],
+                    "protocol_fingerprint": protocol["protocol_fingerprint"],
+                    "bundle_path": result["bundle_path"],
+                    "record_fingerprint": record["record_fingerprint"],
+                },
+            )
+        )
 
     def prepare_operator_handoff(
         self,
@@ -1406,6 +1806,12 @@ class WorkflowService:
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
+        if (
+            isinstance(session.registered_case_binding, Mapping)
+            and session.registered_case_binding.get("evidence_mode")
+            == "exercise_bundle"
+        ):
+            raise ValueError("exercise_bundle_requires_training_action")
         if not session.protocols or not session.active_protocol_fingerprint:
             raise ValueError("compiled_protocol_required")
         protocol = next(
@@ -1508,6 +1914,237 @@ class WorkflowService:
             )
         )
 
+    def _extract_training_exercise_bundle(
+        self,
+        bundle_path: Path,
+        *,
+        session: EvidenceSession,
+        protocol: Mapping[str, Any],
+        binding: Mapping[str, Any],
+        destination: Path,
+    ) -> tuple[dict[str, Any], tuple[Path, ...]]:
+        """Validate and safely extract a generated exercise ZIP."""
+
+        source = Path(bundle_path)
+        if not source.is_file() or not zipfile.is_zipfile(source):
+            raise UploadGateError("file_format", "教学练习包不是有效 ZIP 文件。")
+        try:
+            with zipfile.ZipFile(source) as archive:
+                infos = archive.infolist()
+                if (
+                    len(infos) > 64
+                    or sum(max(0, int(item.file_size)) for item in infos) > 50_000_000
+                ):
+                    raise UploadGateError("file_format", "教学练习包大小超过允许范围。")
+                names: dict[str, zipfile.ZipInfo] = {}
+                normalized_names: set[str] = set()
+                for info in infos:
+                    name = str(info.filename).replace("\\", "/")
+                    parsed = PurePosixPath(name)
+                    if (
+                        not name
+                        or "\x00" in name
+                        or parsed.is_absolute()
+                        or ".." in parsed.parts
+                        or name in names
+                        or name.casefold() in normalized_names
+                        or name.startswith("/")
+                        or parsed.as_posix() != name
+                    ):
+                        raise UploadGateError(
+                            "file_format", "教学练习包包含不安全路径。"
+                        )
+                    # Reject symlink entries before any bytes are written.
+                    mode = (int(info.external_attr) >> 16) & 0o170000
+                    if mode == 0o120000:
+                        raise UploadGateError("file_format", "教学练习包包含链接文件。")
+                    names[name] = info
+                    normalized_names.add(name.casefold())
+                if "manifest.json" not in names or "instructions.md" not in names:
+                    raise UploadGateError(
+                        "session_binding", "教学练习包缺少 manifest 或操作说明。"
+                    )
+                try:
+                    manifest = json.loads(
+                        archive.read(names["manifest.json"]).decode("utf-8")
+                    )
+                except (UnicodeError, json.JSONDecodeError) as exc:
+                    raise UploadGateError(
+                        "session_binding", "教学练习包 manifest 无法读取。"
+                    ) from exc
+                if not isinstance(manifest, Mapping):
+                    raise UploadGateError(
+                        "session_binding", "教学练习包 manifest 格式错误。"
+                    )
+                manifest = dict(manifest)
+                supplied = str(manifest.pop("manifest_fingerprint", ""))
+                if not supplied or fingerprint(manifest) != supplied:
+                    raise UploadGateError(
+                        "session_binding", "教学练习包 fingerprint 不匹配。"
+                    )
+                generated_records = [
+                    item
+                    for item in session.training_exercise_bundles
+                    if isinstance(item, Mapping)
+                    and item.get("protocol_fingerprint")
+                    == protocol.get("protocol_fingerprint")
+                ]
+                if len(generated_records) != 1:
+                    raise UploadGateError(
+                        "session_binding", "当前协议没有唯一的教学练习包生成记录。"
+                    )
+                recorded_manifest = {
+                    key: value
+                    for key, value in generated_records[0].items()
+                    if key not in TRAINING_EXERCISE_LOCAL_FIELDS
+                }
+                uploaded_manifest = {
+                    **manifest,
+                    "manifest_fingerprint": supplied,
+                }
+                if uploaded_manifest != recorded_manifest:
+                    raise UploadGateError(
+                        "session_binding", "教学练习包与 Kernel 生成记录不一致。"
+                    )
+                expected_provider = (
+                    session.provider_bindings.get("identification")
+                    or session.provider
+                    or {}
+                )
+                expected = {
+                    "bundle_version": "cfdc-training-exercise/v1",
+                    "session_id": session.session_id,
+                    "task_fingerprint": session.task.fingerprint,
+                    "protocol_fingerprint": protocol["protocol_fingerprint"],
+                    "registered_case_binding_fingerprint": binding.get(
+                        "binding_fingerprint"
+                    ),
+                    "provider_id": expected_provider.get("provider_id"),
+                    "provider_version": expected_provider.get("provider_version"),
+                    "evidence_mode": "exercise_bundle",
+                }
+                if any(manifest.get(key) != value for key, value in expected.items()):
+                    raise UploadGateError(
+                        "session_binding", "教学练习包与当前会话或协议不匹配。"
+                    )
+                instructions = archive.read(names["instructions.md"])
+                if hashlib.sha256(instructions).hexdigest() != str(
+                    manifest.get("instructions_sha256") or ""
+                ):
+                    raise UploadGateError(
+                        "session_binding", "教学练习包操作说明 fingerprint 不匹配。"
+                    )
+                file_rows = manifest.get("files")
+                if not isinstance(file_rows, list) or len(file_rows) != int(
+                    protocol["repeats"]
+                ):
+                    raise UploadGateError(
+                        "repeat_count", "教学练习包重复次数与协议不匹配。"
+                    )
+                extracted: list[Path] = []
+                declared: set[str] = set()
+                for row in file_rows:
+                    if not isinstance(row, Mapping):
+                        raise UploadGateError(
+                            "file_format", "教学练习包文件清单格式错误。"
+                        )
+                    relative = str(row.get("path") or "")
+                    parsed = PurePosixPath(relative)
+                    if (
+                        not relative
+                        or "\x00" in relative
+                        or parsed.is_absolute()
+                        or ".." in parsed.parts
+                        or relative in declared
+                        or relative not in names
+                        or parsed.as_posix() != relative
+                        or not relative.startswith("data/")
+                        or not relative.casefold().endswith(".csv")
+                    ):
+                        raise UploadGateError("file_format", "教学练习包数据路径无效。")
+                    declared.add(relative)
+                    payload = archive.read(names[relative])
+                    if hashlib.sha256(payload).hexdigest() != str(
+                        row.get("sha256") or ""
+                    ):
+                        raise UploadGateError(
+                            "session_binding", "教学练习包数据 fingerprint 不匹配。"
+                        )
+                    target = destination / parsed.as_posix()
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(payload)
+                    extracted.append(target)
+                if declared != {
+                    str(row.get("path"))
+                    for row in file_rows
+                    if isinstance(row, Mapping)
+                }:
+                    raise UploadGateError("file_format", "教学练习包文件清单重复。")
+                allowed_names = {"manifest.json", "instructions.md", *declared}
+                if set(names) != allowed_names:
+                    raise UploadGateError("file_format", "教学练习包包含未声明的文件。")
+        except zipfile.BadZipFile as exc:
+            raise UploadGateError(
+                "file_format", "教学练习包不是有效 ZIP 文件。"
+            ) from exc
+        return {**manifest, "manifest_fingerprint": supplied}, tuple(extracted)
+
+    @staticmethod
+    def _exercise_upload_failure(
+        paths: list[Path],
+        *,
+        session_id: str,
+        protocol: Mapping[str, Any],
+        gate: str,
+        message: str,
+    ) -> dict[str, Any]:
+        """Create a bounded failure receipt without reading untrusted ZIP content."""
+
+        receipts = []
+        for path in paths:
+            try:
+                stat = Path(path).stat()
+                size = int(stat.st_size)
+            except OSError:
+                size = 0
+            receipts.append({"name": Path(path).name, "size_bytes": size})
+        gates = [
+            {
+                "id": gate_id,
+                "label": gate_id,
+                "status": "failed" if gate_id == gate else "not_reached",
+                "details": message if gate_id == gate else "",
+                "redo": "请修正后重新上传当前会话的教学练习包。",
+            }
+            for gate_id in (
+                "operator_authorization",
+                "file_format",
+                "session_binding",
+                "repeat_count",
+                "timebase",
+                "input_waveform",
+                "safety_limits",
+                "signal_quality",
+            )
+        ]
+        audit = {
+            "upload_version": UPLOAD_AUDIT_VERSION,
+            "status": "rejected",
+            "session_id": session_id,
+            "protocol_fingerprint": protocol.get("protocol_fingerprint"),
+            "recorded_at": utc_now(),
+            "file_receipts": receipts,
+            "raw_files_persisted": False,
+            "gates": gates,
+            "failed_gate": gate,
+            "message": message,
+            "metrics": {},
+            "trace_fingerprints": [],
+            "evidence_mode": "exercise_bundle",
+        }
+        audit["upload_fingerprint"] = fingerprint(audit)
+        return {"audit": audit, "traces": []}
+
     def ingest_upload(
         self,
         session_id: str,
@@ -1529,15 +2166,88 @@ class WorkflowService:
             for item in reversed(session.protocols)
             if item.get("protocol_fingerprint") == session.active_protocol_fingerprint
         )
-        report = session.operator_reports[-1] if session.operator_reports else None
-        result = inspect_upload(
-            [Path(item) for item in paths],
-            session_id=session.session_id,
-            protocol=protocol,
-            operator_report=report,
-            stopped_on_limit=stopped_on_limit,
+        upload_paths = [Path(item) for item in paths]
+        binding = session.registered_case_binding
+        exercise_mode = bool(
+            isinstance(binding, Mapping)
+            and binding.get("evidence_mode") == "exercise_bundle"
         )
+        temporary_dir: Path | None = None
+        exercise_manifest: dict[str, Any] | None = None
+        try:
+            if exercise_mode:
+                if (
+                    len(upload_paths) != 1
+                    or upload_paths[0].suffix.casefold() != ".zip"
+                ):
+                    raise UploadGateError(
+                        "file_format", "教学练习模式必须重新上传生成的 ZIP 包。"
+                    )
+                temporary_dir = Path(
+                    tempfile.mkdtemp(
+                        prefix=f"{session.session_id}-exercise-", dir=self.root
+                    )
+                )
+                exercise_manifest, upload_paths_tuple = (
+                    self._extract_training_exercise_bundle(
+                        upload_paths[0],
+                        session=session,
+                        protocol=protocol,
+                        binding=binding,
+                        destination=temporary_dir,
+                    )
+                )
+                upload_paths = list(upload_paths_tuple)
+                report = {
+                    "decision": "accepted",
+                    "prechecks_completed": ["software_exercise_bundle"],
+                    "handoff_fingerprint": exercise_manifest["manifest_fingerprint"],
+                }
+            else:
+                report = _active_operator_report(session, protocol)
+            result = inspect_upload(
+                upload_paths,
+                session_id=session.session_id,
+                protocol=protocol,
+                operator_report=report,
+                stopped_on_limit=stopped_on_limit,
+            )
+        except UploadGateError as exc:
+            result = self._exercise_upload_failure(
+                [Path(item) for item in paths],
+                session_id=session.session_id,
+                protocol=protocol,
+                gate=exc.gate_id,
+                message=str(exc),
+            )
+        except (KeyError, OSError, RuntimeError, UnicodeError):
+            # ZIP readers can raise implementation errors for encrypted or
+            # truncated members.  Treat those as a bounded format rejection;
+            # never leak the exception or leave a partially extracted file.
+            result = self._exercise_upload_failure(
+                [Path(item) for item in paths],
+                session_id=session.session_id,
+                protocol=protocol,
+                gate="file_format",
+                message="教学练习包无法安全读取，请重新生成并上传。",
+            )
+        finally:
+            if temporary_dir is not None:
+                shutil.rmtree(temporary_dir, ignore_errors=True)
         audit = result["audit"]
+        if exercise_mode:
+            audit = {
+                **audit,
+                "evidence_mode": "exercise_bundle",
+                **(
+                    {"manifest_fingerprint": exercise_manifest["manifest_fingerprint"]}
+                    if exercise_manifest is not None
+                    else {}
+                ),
+            }
+            audit.pop("upload_fingerprint", None)
+            audit["upload_fingerprint"] = fingerprint(audit)
+            result = {**result, "audit": audit}
         if audit["status"] != "accepted":
             updated = self._replace(
                 session,
@@ -1574,6 +2284,8 @@ class WorkflowService:
             payload["source"] = "user_upload"
             payload["operation"] = protocol["operation"]
             payload["provider_id"] = (session.provider or {}).get("provider_id")
+            if exercise_mode:
+                payload["evidence_mode"] = "exercise_bundle"
             new_evidence.append(_validate_public_evidence(payload))
         updated = self._replace(
             session,
@@ -1604,9 +2316,10 @@ class WorkflowService:
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
-        if session.route is None or not session.evidence:
+        active_evidence = _active_evidence(session)
+        if session.route is None or not active_evidence:
             raise ValueError("route_and_public_evidence_required")
-        artifact = derive_feature_artifact(session.evidence, session.route).to_dict()
+        artifact = derive_feature_artifact(active_evidence, session.route).to_dict()
         revised_route = select_route_from_features(
             artifact, session.task.to_dict(), prior_route=dict(session.route)
         )
@@ -1668,8 +2381,24 @@ class WorkflowService:
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
-        if session.route is None or session.feature_artifact is None:
-            raise ValueError("route_and_features_required")
+        pending = session.pending_actions[0] if session.pending_actions else {}
+        feature = session.feature_artifact
+        if (
+            session.status != "controller_pending"
+            or not isinstance(pending, Mapping)
+            or pending.get("action") != "synthesize_controller"
+            or session.route is None
+            or feature is None
+            or bool(session.route.get("capability_gap"))
+            or bool(feature.get("missing_feature_ids"))
+            or not bool((feature.get("quality") or {}).get("passed", False))
+        ):
+            raise KernelActionError(
+                "controller_synthesis_not_ready",
+                message_cn="控制器生成尚未满足前置条件；请先完成高质量特征取证。",
+                revision=session.revision,
+                next_step="derive_features_or_submit_evidence",
+            )
         ir, synthesis_audit = synthesize_registered_controller(
             session.task.to_dict(),
             session.route,
@@ -2042,7 +2771,8 @@ class WorkflowService:
             raise ValueError("route_not_resolved")
         if session.route.get("capability_gap"):
             raise ValueError(f"route_capability_gap: {session.route['capability_gap']}")
-        if not session.evidence:
+        active_evidence = _active_evidence(session)
+        if not active_evidence:
             raise ValueError("public_evidence_required_before_freeze")
         if controller is None and isinstance(session.controller_candidate, Mapping):
             candidate_value = session.controller_candidate.get("ir")
@@ -2113,7 +2843,9 @@ class WorkflowService:
         if not controller or runtime_contract is None or not evaluation_contract:
             raise ValueError("freeze_contract_incomplete")
         strict_contract = session.session_version == EVIDENCE_SESSION_VERSION
-        if strict_contract and session.provider is None:
+        if strict_contract and not isinstance(
+            session.provider_bindings.get("identification"), Mapping
+        ):
             raise ValueError("provider_required_before_freeze")
         if strict_contract and session.controller_candidate is None:
             raise ValueError("controller_ir_required_before_freeze")
@@ -2126,10 +2858,12 @@ class WorkflowService:
                 raise ValueError("features_quality_failed_before_freeze")
         if strict_contract and not any(
             item.get("kind") == "experiment" and isinstance(item.get("trace"), Mapping)
-            for item in session.evidence
+            for item in active_evidence
         ):
             raise ValueError("public_trace_required_before_freeze")
-        if session.controller_candidate is not None and session.provider is None:
+        if session.controller_candidate is not None and not isinstance(
+            session.provider_bindings.get("identification"), Mapping
+        ):
             raise ValueError("provider_required_before_freeze")
         if session.protocols:
             qualification = session.controller_qualification
@@ -2140,6 +2874,8 @@ class WorkflowService:
                 raise ValueError(
                     "offline_controller_qualification_required_before_freeze"
                 )
+            if not _qualification_matches_active_artifacts(session, qualification):
+                raise ValueError("controller_qualification_binding_mismatch")
             if not isinstance(session.provider_bindings.get("evaluation"), Mapping):
                 raise ValueError("evaluation_provider_required_before_freeze")
         if any(
@@ -2311,7 +3047,7 @@ class WorkflowService:
             task_fingerprint=session.task.fingerprint,
             controller=deepcopy(dict(controller)),
             evidence_fingerprints=tuple(
-                str(item["fingerprint"]) for item in session.evidence
+                str(item["fingerprint"]) for item in active_evidence
             ),
             runtime_contract=deepcopy(runtime_value),
             evaluation_contract=evaluation_value,
@@ -2357,6 +3093,7 @@ class WorkflowService:
         binding = session.provider_bindings.get("evaluation")
         if not isinstance(binding, Mapping):
             raise TypeError("evaluation_provider_required")
+        _validate_registered_provider_binding(session, "evaluation", binding)
         selected_id = str(provider_id or binding.get("provider_id") or "")
         if selected_id != str(binding.get("provider_id") or ""):
             raise ValueError("evaluation_provider_binding_mismatch")
@@ -2704,6 +3441,7 @@ class WorkflowService:
         binding = session.provider_bindings.get("evaluation")
         if not isinstance(binding, Mapping):
             raise TypeError("evaluation_provider_required")
+        _validate_registered_provider_binding(session, "evaluation", binding)
         selected_id = str(provider_id or binding.get("provider_id") or "")
         if selected_id != str(binding.get("provider_id") or ""):
             raise ValueError("evaluation_provider_binding_mismatch")
@@ -2951,16 +3689,37 @@ class WorkflowService:
                     revision=session.revision,
                 )
                 continue
-            if not session.evidence:
+            if not _active_evidence(session):
                 if provider_registry is None:
                     return session
-                session = self.run_provider(
-                    session_id,
-                    action_id=f"{action_id}:provider-run",
-                    revision=session.revision,
-                    provider_registry=provider_registry,
-                    provider_id=identification_provider_id,
+                exercise_mode = bool(
+                    isinstance(session.registered_case_binding, Mapping)
+                    and session.registered_case_binding.get("evidence_mode")
+                    == "exercise_bundle"
                 )
+                if exercise_mode:
+                    if any(
+                        item.get("protocol_fingerprint")
+                        == session.active_protocol_fingerprint
+                        for item in session.training_exercise_bundles
+                        if isinstance(item, Mapping)
+                    ):
+                        return session
+                    session = self.prepare_training_exercise_bundle(
+                        session_id,
+                        action_id=f"{action_id}:exercise-bundle",
+                        revision=session.revision,
+                        provider_registry=provider_registry,
+                        provider_id=identification_provider_id,
+                    )
+                else:
+                    session = self.run_provider(
+                        session_id,
+                        action_id=f"{action_id}:provider-run",
+                        revision=session.revision,
+                        provider_registry=provider_registry,
+                        provider_id=identification_provider_id,
+                    )
                 continue
             if session.feature_artifact is None:
                 session = self.derive_features(
@@ -2972,6 +3731,13 @@ class WorkflowService:
             if session.feature_artifact.get("missing_feature_ids"):
                 return session
             if session.controller_candidate is None:
+                pending = session.pending_actions[0] if session.pending_actions else {}
+                if (
+                    session.status != "controller_pending"
+                    or not isinstance(pending, Mapping)
+                    or pending.get("action") != "synthesize_controller"
+                ):
+                    return session
                 session = self.synthesize_controller(
                     session_id,
                     action_id=f"{action_id}:controller",
@@ -3148,6 +3914,11 @@ class WorkflowService:
         kind = str(artifact_kind).strip()
         values: dict[str, Any] = {
             "protocol": session.protocols[-1] if session.protocols else None,
+            "training_exercise_bundle": (
+                session.training_exercise_bundles[-1]
+                if session.training_exercise_bundles
+                else None
+            ),
             "upload_receipt": session.upload_attempts[-1]
             if session.upload_attempts
             else None,
@@ -3205,6 +3976,14 @@ class WorkflowService:
             if not bundle_path or not Path(bundle_path).is_file():
                 raise ValueError("operator_bundle_not_available")
             return Path(bundle_path)
+        if kind == "training_exercise_bundle":
+            record = values["training_exercise_bundle"]
+            bundle_path = (
+                record.get("bundle_path") if isinstance(record, Mapping) else None
+            )
+            if not bundle_path or not Path(bundle_path).is_file():
+                raise ValueError("training_exercise_bundle_not_available")
+            return Path(bundle_path)
         if kind not in values:
             raise ValueError(f"unknown_artifact_kind: {kind}")
         value = values[kind]
@@ -3248,6 +4027,7 @@ class WorkflowService:
             "protocols.json": list(session.protocols),
             "operator_handoffs.json": list(session.operator_handoffs),
             "operator_reports.json": list(session.operator_reports),
+            "training_exercise_bundles.json": list(session.training_exercise_bundles),
             "upload_attempts.json": list(session.upload_attempts),
             "public_evidence.json": list(session.evidence),
             "feature_history.json": list(session.feature_history),
@@ -3633,6 +4413,26 @@ class WorkflowService:
         values.pop("_path", None)
         return EvidenceSession(**values)
 
+    @classmethod
+    def _invalidate_route_dependents(cls, session: EvidenceSession) -> EvidenceSession:
+        """Invalidate active derivations while retaining immutable histories."""
+
+        return cls._replace(
+            session,
+            route=None,
+            active_protocol_fingerprint=None,
+            feature_artifact=None,
+            controller_candidate=None,
+            controller_qualification=None,
+            phase_plan=None,
+            phase_results=(),
+            controller_freeze=None,
+            evaluation=None,
+            tuning=None,
+            confirmation=None,
+            provider=None,
+        )
+
     @staticmethod
     def _append(
         session: EvidenceSession,
@@ -3713,6 +4513,59 @@ def _canonical_dimension(value: str) -> str:
     return aliases.get(value.strip(), value.strip())
 
 
+def _validate_diagnostic_update_conflicts(
+    session: EvidenceSession, updates: Mapping[str, Mapping[str, Any]]
+) -> None:
+    """Apply the same no-silent-overwrite rule to every answer boundary."""
+
+    for key, value in updates.items():
+        previous = session.ledger.entry(key)
+        if previous.status != "known":
+            continue
+        status = str(value.get("status") or "known")
+        if status != "known":
+            raise ValueError(f"diagnostic_conflict_requires_clarification: {key}")
+        previous_assessment = str(previous.assessment or "").strip().casefold()
+        current_assessment = str(value.get("assessment") or "").strip().casefold()
+        if (
+            previous_assessment
+            and current_assessment
+            and previous_assessment != current_assessment
+        ):
+            raise ValueError(f"diagnostic_conflict_requires_clarification: {key}")
+        if (
+            previous.value is not None
+            and value.get("value") is not None
+            and previous.value != value.get("value")
+        ):
+            raise ValueError(f"diagnostic_conflict_requires_clarification: {key}")
+        if previous_assessment and not current_assessment:
+            value["assessment"] = previous.assessment
+        if previous.value is not None and value.get("value") is None:
+            value["value"] = previous.value
+
+
+def _validate_registered_provider_binding(
+    session: EvidenceSession, role: str, binding: Mapping[str, Any]
+) -> None:
+    """Verify a registered case's authority on every provider execution."""
+
+    registered = session.registered_case_binding
+    if registered is None:
+        return
+    parsed = RegisteredCaseBinding.from_mapping(registered, task=session.task)
+    expected = parsed.provider_references[role]
+    if (
+        binding.get("provider_id") != expected.get("provider_id")
+        or binding.get("provider_version") != expected.get("provider_version")
+        or binding.get("binding_role") != role
+        or binding.get("task_scope_fingerprint") != parsed.task_scope_fingerprint
+        or binding.get("registered_case_binding_fingerprint")
+        != parsed.binding_fingerprint
+    ):
+        raise ValueError("registered_case_provider_binding_mismatch")
+
+
 def _evidence_duration(value: Mapping[str, Any]) -> float:
     trace = value.get("trace") if isinstance(value, Mapping) else None
     if not isinstance(trace, Mapping):
@@ -3743,16 +4596,126 @@ def _execution_started(session: EvidenceSession) -> bool:
 def _has_route_dependents(session: EvidenceSession) -> bool:
     """Return whether a new diagnostic answer must invalidate route artifacts."""
 
-    return any(
-        value is not None
-        for value in (
-            session.route,
-            session.feature_artifact,
-            session.controller_candidate,
-            session.phase_plan,
-            session.provider,
+    return (
+        any(
+            value is not None
+            for value in (
+                session.route,
+                session.feature_artifact,
+                session.controller_candidate,
+                session.controller_qualification,
+                session.controller_freeze,
+                session.evaluation,
+                session.tuning,
+                session.confirmation,
+                session.phase_plan,
+                session.provider,
+            )
         )
-    ) or bool(session.phase_results)
+        or bool(session.phase_results)
+        or session.active_protocol_fingerprint is not None
+    )
+
+
+def _active_evidence(session: EvidenceSession) -> tuple[Mapping[str, Any], ...]:
+    """Return evidence bound to the active protocol, preserving old history."""
+
+    protocol_fingerprint = session.active_protocol_fingerprint
+    if not protocol_fingerprint:
+        return () if session.protocols else session.evidence
+    return tuple(
+        item
+        for item in session.evidence
+        if item.get("protocol_fingerprint") == protocol_fingerprint
+    )
+
+
+def _qualification_matches_active_artifacts(
+    session: EvidenceSession, qualification: Mapping[str, Any]
+) -> bool:
+    """Bind a qualification receipt to the exact active synthesis inputs."""
+
+    if (
+        session.controller_candidate is None
+        or session.feature_artifact is None
+        or session.route is None
+        or session.active_protocol_fingerprint is None
+    ):
+        return False
+    candidate = session.controller_candidate.get("ir")
+    if not isinstance(candidate, Mapping):
+        return False
+    return bool(
+        qualification.get("controller_fingerprint")
+        == ControllerIR.from_mapping(candidate).fingerprint
+        and qualification.get("feature_artifact_fingerprint")
+        == session.feature_artifact.get("artifact_fingerprint")
+        and qualification.get("protocol_fingerprint")
+        == session.active_protocol_fingerprint
+        and qualification.get("route_id") == session.route.get("route_id")
+    )
+
+
+def _active_operator_report(
+    session: EvidenceSession, protocol: Mapping[str, Any]
+) -> Mapping[str, Any] | None:
+    """Return an accepted report created after the latest diagnostic change."""
+
+    barrier_types = {
+        "diagnostic_answered",
+        "diagnostic_revised",
+        "diagnostic_relevance_applied",
+        "user_reply_recorded",
+    }
+    barrier = max(
+        (
+            index
+            for index, event in enumerate(session.events)
+            if event.event_type in barrier_types
+        ),
+        default=-1,
+    )
+    active_protocol = str(protocol.get("protocol_fingerprint") or "")
+    handoff_events = [
+        (index, event)
+        for index, event in enumerate(session.events)
+        if index > barrier
+        and event.event_type == "operator_handoff_prepared"
+        and event.payload.get("protocol_fingerprint") == active_protocol
+    ]
+    if not handoff_events:
+        return None
+    handoff_index, handoff_event = handoff_events[-1]
+    handoff_fingerprint = str(handoff_event.payload.get("handoff_fingerprint") or "")
+    if not handoff_fingerprint or not any(
+        item.get("protocol_fingerprint") == active_protocol
+        and item.get("handoff_fingerprint") == handoff_fingerprint
+        for item in session.operator_handoffs
+    ):
+        return None
+    report_events = [
+        event
+        for index, event in enumerate(session.events)
+        if index > handoff_index and event.event_type == "operator_report_recorded"
+    ]
+    if not report_events:
+        return None
+    latest_report_fingerprint = report_events[-1].payload.get("report_fingerprint")
+    report = next(
+        (
+            item
+            for item in reversed(session.operator_reports)
+            if item.get("report_fingerprint") == latest_report_fingerprint
+        ),
+        None,
+    )
+    if (
+        report is None
+        or report.get("handoff_fingerprint") != handoff_fingerprint
+        or report.get("decision") != "accepted"
+    ):
+        return None
+    return report
 
 
 def _controller_with_parameters(
