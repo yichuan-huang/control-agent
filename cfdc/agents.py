@@ -39,10 +39,17 @@ class RetrievalSnippet:
     content_hash: str | None = None
     artifact_type: str | None = None
     artifact_id: str | None = None
+    artifact_group_id: str | None = None
     source_kind: str | None = None
+    language: str | None = None
+    authority: str | None = None
+    artifact_version: str | None = None
     canonical_class: str | None = None
+    canonical_classes: tuple[str, ...] = ()
     profile_id: str | None = None
+    profile_ids: tuple[str, ...] = ()
     rule_id: str | None = None
+    citation_refs: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -228,8 +235,20 @@ def _source_reference_payload(
                 else {}
             ),
             **(
+                {"artifact_group_id": item.artifact_group_id}
+                if item.artifact_group_id is not None
+                else {}
+            ),
+            **(
                 {"source_kind": item.source_kind}
                 if item.source_kind is not None
+                else {}
+            ),
+            **({"language": item.language} if item.language is not None else {}),
+            **({"authority": item.authority} if item.authority is not None else {}),
+            **(
+                {"artifact_version": item.artifact_version}
+                if item.artifact_version is not None
                 else {}
             ),
             **(
@@ -238,7 +257,18 @@ def _source_reference_payload(
                 else {}
             ),
             **({"profile_id": item.profile_id} if item.profile_id is not None else {}),
+            **(
+                {"canonical_classes": list(item.canonical_classes)}
+                if item.canonical_classes
+                else {}
+            ),
+            **({"profile_ids": list(item.profile_ids)} if item.profile_ids else {}),
             **({"rule_id": item.rule_id} if item.rule_id is not None else {}),
+            **(
+                {"citation_refs": [dict(value) for value in item.citation_refs]}
+                if item.citation_refs
+                else {}
+            ),
         }
         for item in retrieval
     )
@@ -867,25 +897,60 @@ class CompositeAgentAdapter:
                     if isinstance(row, Mapping)
                     else getattr(row, "artifact_id", None)
                 ),
+                artifact_group_id=(
+                    row.get("artifact_group_id")
+                    if isinstance(row, Mapping)
+                    else getattr(row, "artifact_group_id", None)
+                ),
                 source_kind=(
                     row.get("source_kind")
                     if isinstance(row, Mapping)
                     else getattr(row, "source_kind", None)
+                ),
+                language=(
+                    row.get("language")
+                    if isinstance(row, Mapping)
+                    else getattr(row, "language", None)
+                ),
+                authority=(
+                    row.get("authority")
+                    if isinstance(row, Mapping)
+                    else getattr(row, "authority", None)
+                ),
+                artifact_version=(
+                    row.get("artifact_version")
+                    if isinstance(row, Mapping)
+                    else getattr(row, "artifact_version", None)
                 ),
                 canonical_class=(
                     row.get("canonical_class")
                     if isinstance(row, Mapping)
                     else getattr(row, "canonical_class", None)
                 ),
+                canonical_classes=tuple(
+                    row.get("canonical_classes", ())
+                    if isinstance(row, Mapping)
+                    else getattr(row, "canonical_classes", ())
+                ),
                 profile_id=(
                     row.get("profile_id")
                     if isinstance(row, Mapping)
                     else getattr(row, "profile_id", None)
                 ),
+                profile_ids=tuple(
+                    row.get("profile_ids", ())
+                    if isinstance(row, Mapping)
+                    else getattr(row, "profile_ids", ())
+                ),
                 rule_id=(
                     row.get("rule_id")
                     if isinstance(row, Mapping)
                     else getattr(row, "rule_id", None)
+                ),
+                citation_refs=tuple(
+                    row.get("citation_refs", ())
+                    if isinstance(row, Mapping)
+                    else getattr(row, "citation_refs", ())
                 ),
             )
             for row in rows
@@ -926,8 +991,20 @@ class CompositeAgentAdapter:
                     else {}
                 ),
                 **(
+                    {"artifact_group_id": item.artifact_group_id}
+                    if item.artifact_group_id is not None
+                    else {}
+                ),
+                **(
                     {"source_kind": item.source_kind}
                     if item.source_kind is not None
+                    else {}
+                ),
+                **({"language": item.language} if item.language is not None else {}),
+                **({"authority": item.authority} if item.authority is not None else {}),
+                **(
+                    {"artifact_version": item.artifact_version}
+                    if item.artifact_version is not None
                     else {}
                 ),
                 **(
@@ -940,7 +1017,18 @@ class CompositeAgentAdapter:
                     if item.profile_id is not None
                     else {}
                 ),
+                **(
+                    {"canonical_classes": list(item.canonical_classes)}
+                    if item.canonical_classes
+                    else {}
+                ),
+                **({"profile_ids": list(item.profile_ids)} if item.profile_ids else {}),
                 **({"rule_id": item.rule_id} if item.rule_id is not None else {}),
+                **(
+                    {"citation_refs": [dict(value) for value in item.citation_refs]}
+                    if item.citation_refs
+                    else {}
+                ),
             }
             for item in retrieval
         ]

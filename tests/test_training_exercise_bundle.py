@@ -387,8 +387,6 @@ def test_web_can_start_explicit_exercise_case_without_editable_contract(
         web_ui, "_kernel_outputs", lambda report, state: (report, state)
     )
 
-    report, state = web_ui.start_training_exercise_from_ui(
-        "case-01", "", "", "", False, str(tmp_path)
-    )
+    report, state = web_ui.start_training_exercise_from_ui("case-01", "", "", "", False)
     assert report["status"] == "intake"
     assert state["kernel_session_id"] == "x"

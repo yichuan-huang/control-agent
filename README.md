@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.2` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.3` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
@@ -13,7 +13,7 @@ You can use a local model through Ollama or a hosted service such as DeepSeek AP
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
-uv sync
+uv sync --extra rag
 uv run python -m compileall -q cfdc tests main.py app.py
 ```
 
@@ -25,9 +25,11 @@ uv run python -m compileall -q cfdc tests main.py app.py
 uv run python app.py
 ```
 
+The launcher first builds or validates the managed `output/rag-index` snapshot and loads the packaged multilingual E5 encoder. CFDC does not set a model cache directory, so Hugging Face uses its standard per-user cache (normally `~/.cache/huggingface/hub`). Gradio starts listening only after that preflight succeeds. The first launch can therefore take longer while the model and vectors are prepared; later launches reuse the immutable snapshot, and the first task does not pay the indexing cost. If preflight fails, the process exits without starting the WebUI and prints an actionable dependency, model-cache, or directory-permission message.
+
 3. Open `http://127.0.0.1:7860`. For natural-language replies, fill in Base URL, Model, and API Key using your chosen provider from the table below. Choose a built-in case such as “01 | DC motor speed” in the Guided Workbench.
 
-4. Disable local RAG unless an index has already been built. Create the task, confirm its boundaries, and submit the requested structural diagnosis. A built-in software case then advances through protocol compilation, public evidence, features, controller synthesis, qualification, freeze, and independent evaluation until it needs a user decision or reaches a terminal state.
+4. “Enable the built-in RAG knowledge base” is selected by default. It controls whether the current task uses the already prepared snapshot; it does not build an index during task creation. Create the task, confirm its boundaries, and submit the requested structural diagnosis. A built-in software case then advances through protocol compilation, public evidence, features, controller synthesis, qualification, freeze, and independent evaluation until it needs a user decision or reaches a terminal state.
 
 Before a run, `uv run --locked python main.py --doctor` prints the same non-destructive environment report used by the WebUI. It checks Python, packaged resources, the writable session directory, the public case registry, optional RAG, and (only for loopback addresses) the configured Ollama service/model. The writable-directory check creates and immediately removes one bounded probe file.
 
@@ -74,11 +76,11 @@ The registered software task types are:
 - `transition_then_hold`
 - `disturbance_recovery_to_hold`
 
-Other objectives fail closed. Local RAG is optional and, when enabled, is pinned to one validated index snapshot for the session.
+Other objectives fail closed. The WebUI prepares local RAG before launch; its use remains optional per task and, when enabled, is pinned to one validated index snapshot for the session.
 
 The runtime defines four role boundaries: Diagnosis, Modeling, Controller, and Critic. The current Web natural-language path calls Diagnosis to extract the eight diagnostic dimensions, Modeling to extract allow-listed parameter facts, and Critic to review their normalized candidate with at most one correction. The Controller role remains available for constrained explanations and proposal interfaces; the guided automatic path uses deterministic controller synthesis. The Python Kernel is the only authority for state transitions, numerical work, route selection, safety gates, and claims. If an Agent call fails, that user reply is not committed to business state and the page returns an explicit error; previously recorded Kernel artifacts are not replaced by model output.
 
-RAG is an optional local reference layer. An enabled session pins one index snapshot after validating its schema, Registry fingerprint, and file checksums. The current Web `user_reply` extraction deliberately receives no retrieved snippets so reference material cannot be mistaken for user facts. Retrieval remains available to other explicit role operations and extension entry points. “RAG enabled” therefore means that a validated snapshot is loaded and pinned, not that every Agent call performs retrieval.
+RAG is an optional local reference layer for each task. Before the WebUI launches, the server builds or reuses `output/rag-index`, validates its schema, Registry fingerprint, packaged knowledge-pack version, calibrated retrieval settings, and file checksums, then loads and warms the encoder. An enabled session pins that exact snapshot. The current Web `user_reply` extraction deliberately receives no retrieved snippets so reference material cannot be mistaken for user facts. Retrieval remains available to other explicit role operations and extension entry points. “RAG enabled” therefore means that the prepared snapshot is pinned for the task, not that every Agent call performs retrieval.
 
 ## Core capabilities
 
@@ -119,12 +121,41 @@ git diff --check
 
 `uv` reads the pinned Python version from `.python-version`, creates `.venv`, and installs the project and development tools. No environment activation is needed when commands use `uv run`.
 
-To build and inspect a local RAG index, place Markdown or PDF references under `references`. The index also includes the versioned built-in Registry knowledge:
+New indexes include two packaged sources by default: the authoritative, generated Registry artifacts and a versioned advisory knowledge pack with English and Chinese versions of twelve control-concept cards. The language variants share stable artifact-group identities and semantic versions while retaining separate content hashes and provenance. The pack has a central JSON manifest and schema, validity metadata, citation records, and 192 frozen evaluation cases: the original English/Chinese sets, one exposed regression set, and a replacement challenge holdout. Its text can explain registered choices but cannot change routes, numerical results, qualification, or authorization. New builds use immutable `cfdc-rag/v3` snapshots; valid `v2` and earlier-policy `v3` snapshots remain readable and are never rewritten in place.
+
+To add local Markdown or PDF references, place them under `references`. Metadata-free legacy documents remain globally visible to structured scope filtering. Use `--knowledge-pack` for another validated pack, `--no-curated` to omit the packaged cards, or `--relevance-threshold` to record an explicit threshold in the new snapshot:
 
 ```bash
 uv sync --extra rag
 uv run python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
 uv run python -m cfdc.rag inspect --index-dir ./rag-index
+uv run python -m cfdc.rag query --index-dir ./rag-index \
+  --role critic --operation check --stage review \
+  --language auto \
+  --query "Why is uncertain right-half-plane zero cancellation unsafe?"
+uv run python -m cfdc.rag eval --index-dir ./rag-index \
+  --bundled --split holdout --assert-acceptance
+```
+
+`--language` accepts `auto`, `en`, or `zh`. Automatic selection checks only the query summary for Han characters; explicit selection overrides it. Registry references are returned only when the summary contains an exact artifact, profile, or rule ID; structured class/profile fields remain scope filters and never become semantic query text. Advisory retrieval searches the preferred language first, can project a qualifying bilingual group to its requested language, returns at most two distinct curated concept groups, and leaves additional slots available to external documents. `rag eval --bundled` reports each gate dataset and the combined metrics; `--suite en`, `--suite zh`, or `--suite challenge` selects one, and `--assert-acceptance` exits nonzero on failure. Local source directories and generated indexes are not repository artifacts. The `user_reply` path never receives RAG references, and every other Agent reference is labeled as untrusted advisory material with its selected language, group, snapshot, citations, and provenance in the audit record.
+
+Operational history is a separate offline index and is never mixed into RAG or injected into Agent prompts. Its JSON schema accepts equipment manuals, feature artifacts, controller freezes, qualification reports, performance baselines, adaptation episodes, degradation events, rollback reports, and maintenance records. Import verifies payload, configuration, and operating-region hashes as well as validity and same-identity supersedes relationships; only summaries and provenance enter the immutable snapshot. A query must exactly match plant, configuration, and operating-region fingerprints before validity, record-type, lexical, or dense ranking is applied. There is no cross-identity fallback, automatic session scan, write-back, monitoring, or hardware authorization.
+
+Build, inspect, and query a local history index with the independent CLI. The source file must conform to the packaged schema; generated `operational-history` data is ignored by Git:
+
+```bash
+uv run python -m cfdc.history index \
+  --source ./operational-history/records.json \
+  --index-dir ./operational-history/index
+uv run python -m cfdc.history inspect \
+  --index-dir ./operational-history/index
+uv run python -m cfdc.history query \
+  --index-dir ./operational-history/index \
+  --plant-id plant-a \
+  --configuration-fingerprint 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+  --operating-region-fingerprint fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210 \
+  --record-type rollback_report \
+  --as-of 2026-09-03T00:00:00Z
 ```
 
 ## Web interface
@@ -135,13 +166,15 @@ Start the application and open `http://127.0.0.1:7860`:
 uv run python app.py
 ```
 
+This command requires the `rag` extra shown in Quick start. The managed index contains only Registry artifacts and the packaged English/Chinese knowledge cards. `CFDC_RAG_INDEX_DIR` may override its server-side storage location for deployment, but no index path or document upload is exposed in the WebUI.
+
 The Guided Workbench creates Kernel tasks from an explicit structured form. Every task requires a description, at least one measured output, at least one control input, finite input lower and upper bounds, and a positive `state_stop`. Output bounds are optional but must be supplied as a pair. `transition_then_hold` also requires an initial region and target region. `disturbance_recovery_to_hold` also requires a disturbance event, recovery start condition, and hold region. The form also accepts engineering units, performance thresholds, experiment budgets, timing preferences, initial values, and intermediate targets.
 
 At each state the workbench presents one primary next action: confirm the task, answer a diagnostic question, select an experiment Provider, download an operator bundle or teaching exercise, record the operator report when required, upload data, run isolated evaluation, accept bounded tuning, or confirm the result. The page is organised as three teaching steps—task and boundaries; evidence and controller; evaluation and confirmation—while retaining the nine-stage append-only audit timeline. Registered cases show a learning goal, key terms, evidence boundary, and explicit “cannot prove” notes. Protocol waveforms, accepted public traces, feature intervals, qualification checks, full frozen-controller output/reference/input trajectories, repeat confidence, remaining evidence budgets, and route-revision reasons are shown from Kernel artifacts. The page distinguishes insufficient evidence, failed qualification, stable-but-insufficient performance, and final independent confirmation.
 
 The Expert Contracts tab accepts a full `TaskContract`, loads an existing Kernel session, submits typed action JSON, and validates a downloaded artifact fingerprint. It can export the protocol, operator bundle, upload receipt, feature artifact, Controller IR, qualification, freeze, evaluation, feedback, confirmation, final result, complete session audit, or the full result ZIP.
 
-Web Agent orchestration is always `multi`. The page has no workflow-version selector and no Agent-mode selector. Provider configuration, the RAG switch, and the local index directory remain available. Advanced JSON remains available because it is the Kernel's typed public evidence and action interface.
+Web Agent orchestration is always `multi`. The page has no workflow-version selector and no Agent-mode selector. Provider configuration and the default-on built-in RAG switch remain available; the local index directory is server-managed and is not a browser input. Advanced JSON remains available because it is the Kernel's typed public evidence and action interface.
 
 The reply selector has the fixed values `natural_language` and `json`. The current Kernel input contract decides whether both can be selected, JSON is mandatory, or the selector is hidden for an action that takes no input. Confirmation, continue, replay, and terminal actions therefore cannot leave an invalid Radio value in Gradio state.
 

@@ -4,6 +4,7 @@ import html
 import json
 import os
 from collections.abc import Mapping
+from functools import partial, update_wrapper
 from typing import Any
 
 import gradio as gr
@@ -11,6 +12,7 @@ import plotly.graph_objects as go
 
 from cfdc.doctor import run_doctor
 from cfdc.kernel.cases import public_case_catalog, public_training_case
+from cfdc.web.rag_startup import PreparedRAGIndex
 from cfdc.web.service import (
     KERNEL_STAGE_LABELS,
     continue_kernel_app_run,
@@ -101,17 +103,40 @@ def _resolve_case_id(value: Any) -> str:
     return _WEB_CASE_IDS.get(raw, raw)
 
 
+def _bind_prepared_rag(callback, prepared_rag: PreparedRAGIndex | None):
+    bound = partial(callback, prepared_rag=prepared_rag)
+    update_wrapper(bound, callback)
+    return bound
+
+
+def _rag_start_options(
+    enabled: bool, prepared_rag: PreparedRAGIndex | None
+) -> dict[str, Any]:
+    if not enabled:
+        return {"rag_index_dir": None, "rag_snapshot": None, "use_rag": False}
+    if prepared_rag is None:
+        raise ValueError("内置 RAG 尚未在 WebUI 启动前准备完成。")
+    return {
+        "rag_index_dir": str(prepared_rag.index_dir),
+        "rag_snapshot": prepared_rag.snapshot,
+        "use_rag": True,
+    }
+
+
 def environment_doctor(
     base_url: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
-    rag_index_dir: str | None = None,
+    *,
+    prepared_rag: PreparedRAGIndex | None = None,
 ) -> dict[str, Any]:
     """Return the same safe environment report exposed by ``--doctor``."""
 
     return run_doctor(
         session_dir=None,
-        rag_index_dir=str(rag_index_dir or "").strip() or None,
+        rag_index_dir=(
+            str(prepared_rag.index_dir) if prepared_rag is not None else None
+        ),
         ollama_base_url=str(base_url or "").strip() or None,
         ollama_model=str(model or "").strip() or None,
         api_key=api_key,
@@ -625,7 +650,7 @@ def _timeline_text(report: Mapping[str, Any]) -> str:
             else "关闭"
         )
         lines.append(
-            f"- 编排：`multi`；本地 RAG：{rag}；快照："
+            f"- 编排：`multi`；内置 RAG：{rag}；快照："
             f"`{report.get('rag_snapshot') or '未固定索引快照'}`"
         )
     records = report.get("agent_records") or []
@@ -831,7 +856,6 @@ def run_from_ui(
     model,
     api_key,
     rag_enabled,
-    rag_index_dir,
     provider_case_id=None,
     signal_units_json="",
     input_unit="",
@@ -849,6 +873,8 @@ def run_from_ui(
     initial_output_value_enabled=False,
     initial_output_value=None,
     intermediate_targets="",
+    *,
+    prepared_rag: PreparedRAGIndex | None = None,
 ):
     try:
         task: dict[str, Any] = {
@@ -923,8 +949,7 @@ def run_from_ui(
             )
         case_id = _resolve_case_id(provider_case_id) or None
         start_kwargs = {
-            "rag_index_dir": str(rag_index_dir or "").strip() or None,
-            "use_rag": bool(rag_enabled),
+            **_rag_start_options(bool(rag_enabled), prepared_rag),
             "llm_configured": bool(base_url and model and api_key),
         }
         # A selected public case is an authority grant by case ID only.  The
@@ -986,7 +1011,8 @@ def start_training_exercise_from_ui(
     model: str | None,
     api_key: str | None,
     rag_enabled: bool,
-    rag_index_dir: str | None,
+    *,
+    prepared_rag: PreparedRAGIndex | None = None,
 ) -> tuple[Any, ...]:
     """Start a registered case in explicit teaching-exercise mode."""
 
@@ -998,8 +1024,7 @@ def start_training_exercise_from_ui(
             public_training_case(case_id)["task"],
             provider_case_id=case_id,
             evidence_mode="exercise_bundle",
-            rag_index_dir=str(rag_index_dir or "").strip() or None,
-            use_rag=bool(rag_enabled),
+            **_rag_start_options(bool(rag_enabled), prepared_rag),
             llm_configured=bool(base_url and model and api_key),
         )
         return _kernel_outputs(report, state)
@@ -1416,7 +1441,6 @@ def reset_task_form() -> tuple[Any, ...]:
         "",
         "",
         "",
-        "",
         [],
         gr.update(value=None, interactive=False),
         gr.update(value=None, interactive=False),
@@ -1437,7 +1461,10 @@ def reset_task_form() -> tuple[Any, ...]:
     )
 
 
-def build_app() -> gr.Blocks:
+def build_app(*, prepared_rag: PreparedRAGIndex | None = None) -> gr.Blocks:
+    run_handler = _bind_prepared_rag(run_from_ui, prepared_rag)
+    training_handler = _bind_prepared_rag(start_training_exercise_from_ui, prepared_rag)
+    doctor_handler = _bind_prepared_rag(environment_doctor, prepared_rag)
     with gr.Blocks(title="CFDC Control Studio") as demo:
         app_state = gr.State({})
         gr.Markdown("# CFDC Control Studio", elem_id="app-title")
@@ -1607,10 +1634,10 @@ def build_app() -> gr.Blocks:
                         placeholder="provider-model",
                     )
                     api_key = gr.Textbox(label="API Key", value="", type="password")
-                    rag_enabled = gr.Checkbox(label="启用本地 RAG", value=True)
-                    rag_index_dir = gr.Textbox(
-                        label="本地 RAG 索引目录（可选）",
-                        placeholder="例如 ./rag-index",
+                    rag_enabled = gr.Checkbox(
+                        label="启用 RAG 内置知识库",
+                        value=True,
+                        info="索引已在 WebUI 启动前准备；此选项控制当前任务是否使用它。",
                     )
                     with gr.Row():
                         doctor_button = gr.Button("环境自检", variant="secondary")
@@ -1895,7 +1922,6 @@ def build_app() -> gr.Blocks:
             model,
             api_key,
             rag_enabled,
-            rag_index_dir,
         ]
         extended_form_components = [
             provider_case_id,
@@ -2019,26 +2045,25 @@ def build_app() -> gr.Blocks:
             api_visibility="private",
         )
         base_run_button.click(
-            run_from_ui,
+            run_handler,
             inputs=base_form_components,
             outputs=output_components,
             **_MUTATION_OPTIONS,
         )
         run_button.click(
-            run_from_ui,
+            run_handler,
             inputs=form_components,
             outputs=output_components,
             **_MUTATION_OPTIONS,
         )
         training_exercise_button.click(
-            start_training_exercise_from_ui,
+            training_handler,
             inputs=[
                 provider_case_id,
                 base_url,
                 model,
                 api_key,
                 rag_enabled,
-                rag_index_dir,
             ],
             outputs=output_components,
             **_MUTATION_OPTIONS,
@@ -2124,8 +2149,8 @@ def build_app() -> gr.Blocks:
             **_MUTATION_OPTIONS,
         )
         doctor_button.click(
-            environment_doctor,
-            inputs=[base_url, model, api_key, rag_index_dir],
+            doctor_handler,
+            inputs=[base_url, model, api_key],
             outputs=[doctor_result],
             api_visibility="private",
         )

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -90,6 +91,25 @@ class RetrievalRequest:
     missing_fields: tuple[str, ...] = ()
     summary: str = ""
     stage: str | None = None
+    language: str = "auto"
+
+    def __post_init__(self) -> None:
+        if self.language not in {"auto", "en", "zh"}:
+            raise ValueError("retrieval language must be auto, en, or zh")
+
+    def preferred_language(self) -> str:
+        """Resolve the requested language from the user-supplied summary only."""
+
+        if self.language != "auto":
+            return self.language
+        return self.inferred_language()
+
+    def inferred_language(self) -> str:
+        """Detect Han text without consulting role, route, or retrieved content."""
+
+        return (
+            "zh" if re.search(r"[\u3400-\u4dbf\u4e00-\u9fff]", self.summary) else "en"
+        )
 
     def query_text(self) -> str:
         parts = [self.role, self.operation]
@@ -113,6 +133,7 @@ class RetrievalRequest:
             "missing_fields": list(self.missing_fields),
             "summary": self.summary,
             "stage": self.stage,
+            "language": self.language,
         }
 
 

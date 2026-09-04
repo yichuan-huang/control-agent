@@ -17,6 +17,7 @@ import uuid
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,20 +30,73 @@ from cfdc.knowledge import (
     canonical_knowledge_documents,
     registry_fingerprint,
 )
+from cfdc.rag.knowledge_pack import KnowledgePack, load_knowledge_pack
 
-RAG_SCHEMA_VERSION = "cfdc-rag/v2"
-RETRIEVAL_POLICY_VERSION = "cfdc-retrieval/v1"
+RAG_SCHEMA_VERSION = "cfdc-rag/v3"
+SUPPORTED_RAG_SCHEMA_VERSIONS = {"cfdc-rag/v2", RAG_SCHEMA_VERSION}
+RETRIEVAL_POLICY_VERSION = "cfdc-retrieval/v2"
 DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
-DEFAULT_EMBEDDING_REVISION = "main"
+DEFAULT_EMBEDDING_REVISION = "614241f622f53c4eeff9890bdc4f31cfecc418b3"
 MAX_CHUNK_TOKENS = 350
 CHUNK_OVERLAP_TOKENS = 50
 MAX_RESULTS = 4
 MAX_RESULTS_PER_DOCUMENT = 2
+MAX_CURATED_GROUP_RESULTS = 2
 MAX_REFERENCE_TOKENS = 1400
 DENSE_CANDIDATES = 12
 LEXICAL_CANDIDATES = 12
 RRF_K = 60
 DEFAULT_RELEVANCE_THRESHOLD = 0.20
+LEXICAL_CORROBORATION_WEIGHT = 0.04
+EXPLICIT_LANGUAGE_THRESHOLD_MARGIN = 0.02
+SEMANTIC_QUERY_FIELDS = ("missing_fields", "summary")
+REGISTRY_CANDIDATE_POLICY = "summary_exact_id_only"
+CURATED_QUERY_INTENT_POLICY = "control_context_v1"
+PREFERRED_LANGUAGE_GROUP_PROJECTION = True
+SCENARIO_RESCUE_DENSE_MARGIN = 0.04
+SCENARIO_RESCUE_MIN_LEXICAL_COVERAGE = 0.40
+
+_NON_CONTROL_INTENT_PATTERNS = (
+    r"\bprogramming languages?\b|\bstatic types?\b|\bdynamic types?\b",
+    r"\bmvc\b|\bweb (?:application|app)\b",
+    r"\blinear algebra\b|\bdeterminants?\b",
+    r"\bfile ?systems?\b|\bdirectory (?:path|tree)\b",
+    r"\bignore (?:all )?(?:previous|prior) instructions?\b",
+    r"\bapi keys?\b|\breveal (?:the )?secrets?\b|\bread local files?\b",
+    r"\bupload (?:the )?(?:saved )?secrets?\b",
+    r"\balphabeti[sz]e\b|\bfile ?names?\b",
+    r"编程语言|静态类型|动态类型|网页应用|线性代数|行列式|文件系统",
+    r"忽略.{0,12}(?:要求|指令)|API 密钥|本地文件|上传.{0,8}秘密",
+    r"按字母顺序|排成一行|文件名|不做系统分析|不需要控制解释",
+)
+
+_CONTROL_CONTEXT_PATTERNS = (
+    r"\bcontrol(?:led|ler)?\b|\bplant\b|\bprocess\b|\bdynamics?\b",
+    r"\bopen[-_ ]?loop\b|\bclosed[-_ ]?loop\b|\bresponses?\b",
+    r"\bsteps?\b|\bpulses?\b|\bactuators?\b|\bsensors?\b|\bfeedback\b",
+    r"\boperating (?:point|region)\b|\btime constants?\b|\bdead time\b",
+    r"\bfrequenc(?:y|ies)\b|\bdamping\b|\bpoles?\b|\bzeros?\b|\bgains?\b",
+    r"\binputs?\b|\boutputs?\b|\bstate[- ]space\b|\bcontrollab\w*\b",
+    r"\bobservab\w*\b|\bnonlinear\w*\b|\bhysteresis\b|\bdead zones?\b",
+    r"\buncertaint\w*\b|\bsaturat\w*\b|\bslew\b|\bhover\b|\bthrust\b",
+    r"\bmimo\b|\bpairing\b|\bdecoupl\w*\b|\brollback\b|\bsimulation\b",
+    r"\bexperiments?\b|\bmeasurements?\b|\btraces?\b|\bsamples?\b",
+    r"\bexcitation\b|\bconfidence intervals?\b|\brepeatab\w*\b",
+    r"\bself[- ]regulat\w*\b|\bmarginal integrat\w*\b|\brelative degree\b",
+    r"\bsensing\b|\bactuation\b|\bfopdt\b",
+    r"\bhardware\b|\bfirst_order_lag\b|\bsignificant_delay\b",
+    r"\bminimum_phase_inverse_response\b|\bfopdt_step_extraction\b",
+    r"\bfree_decay_damping\b|\bpulse_signed_gain\b|\bhover_balance_input\b",
+    r"\bmimo_pairing\b|\bstructural_feasibility\b|\bopen_loop_stability\b",
+    r"\bnonlinearity_local_validity\b|\buncertainty_data_quality\b",
+    r"\bcontroller_qualification_boundaries\b",
+    r"系统|对象|过程|动态|开环|闭环|响应|阶跃|脉冲|执行器|传感器|反馈",
+    r"工作点|工作区|时间常数|纯时延|频率|阻尼|极点|零点|增益|输入|输出",
+    r"状态空间|可控|可观|非线性|迟滞|死区|不确定|饱和|变化率|悬停|推力",
+    r"耦合|配对|解耦|回滚|仿真|硬件",
+    r"试验|实验|测量|曲线|样本|激励|置信区间|重复性",
+    r"相对阶|弱驱动|传感不足|自稳|积分漂移",
+)
 
 _ENCODER_CACHE: dict[tuple[str, str], Any] = {}
 
@@ -97,10 +151,21 @@ class SearchResult:
     score: float = 0.0
     artifact_type: str | None = None
     artifact_id: str | None = None
+    artifact_group_id: str | None = None
     source_kind: str | None = None
+    language: str = "und"
+    authority: str | None = None
+    artifact_version: str | None = None
     canonical_class: str | None = None
+    canonical_classes: tuple[str, ...] = ()
     profile_id: str | None = None
+    profile_ids: tuple[str, ...] = ()
     rule_id: str | None = None
+    roles: tuple[str, ...] = ()
+    stages: tuple[str, ...] = ()
+    valid_from: str | None = None
+    valid_until: str | None = None
+    citation_refs: tuple[dict[str, Any], ...] = ()
     source_aliases: tuple[dict[str, Any], ...] = ()
     dense_score: float | None = None
     lexical_score: float | None = None
@@ -123,10 +188,21 @@ class SearchResult:
             "score": self.score,
             "artifact_type": self.artifact_type,
             "artifact_id": self.artifact_id,
+            "artifact_group_id": self.artifact_group_id,
             "source_kind": self.source_kind,
+            "language": self.language,
+            "authority": self.authority,
+            "artifact_version": self.artifact_version,
             "canonical_class": self.canonical_class,
+            "canonical_classes": list(self.canonical_classes),
             "profile_id": self.profile_id,
+            "profile_ids": list(self.profile_ids),
             "rule_id": self.rule_id,
+            "roles": list(self.roles),
+            "stages": list(self.stages),
+            "valid_from": self.valid_from,
+            "valid_until": self.valid_until,
+            "citation_refs": [dict(item) for item in self.citation_refs],
             "source_aliases": [dict(item) for item in self.source_aliases],
             "dense_score": self.dense_score,
             "lexical_score": self.lexical_score,
@@ -141,18 +217,67 @@ class _SourceRecord:
     text: str
     artifact_type: str = "external_document"
     artifact_id: str | None = None
+    artifact_group_id: str | None = None
     source_kind: str = "external"
+    language: str = "und"
+    authority: str | None = None
+    artifact_version: str | None = None
     role: tuple[str, ...] = ()
     stage: tuple[str, ...] = ()
     canonical_class: str | None = None
+    canonical_classes: tuple[str, ...] = ()
     profile_id: str | None = None
+    profile_ids: tuple[str, ...] = ()
     rule_id: str | None = None
+    citation_refs: tuple[dict[str, Any], ...] = ()
+    valid_from: str | None = None
+    valid_until: str | None = None
     char_start: int | None = None
     char_end: int | None = None
 
 
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def retrieval_policy_settings(
+    relevance_threshold: float,
+    threshold_calibration: str,
+) -> dict[str, Any]:
+    """Return the complete immutable retrieval policy stored in a snapshot."""
+
+    return {
+        "semantic_query_fields": list(SEMANTIC_QUERY_FIELDS),
+        "registry_candidate_policy": REGISTRY_CANDIDATE_POLICY,
+        "curated_query_intent_policy": CURATED_QUERY_INTENT_POLICY,
+        "preferred_language_group_projection": (PREFERRED_LANGUAGE_GROUP_PROJECTION),
+        "scenario_rescue_dense_margin": SCENARIO_RESCUE_DENSE_MARGIN,
+        "scenario_rescue_min_lexical_coverage": (SCENARIO_RESCUE_MIN_LEXICAL_COVERAGE),
+        "max_curated_group_results": MAX_CURATED_GROUP_RESULTS,
+        "dense_candidates": DENSE_CANDIDATES,
+        "lexical_candidates": LEXICAL_CANDIDATES,
+        "rrf_k": RRF_K,
+        "max_results": MAX_RESULTS,
+        "max_results_per_document": MAX_RESULTS_PER_DOCUMENT,
+        "max_reference_tokens": MAX_REFERENCE_TOKENS,
+        "relevance_threshold": float(relevance_threshold),
+        "lexical_corroboration_weight": LEXICAL_CORROBORATION_WEIGHT,
+        "explicit_language_threshold_margin": EXPLICIT_LANGUAGE_THRESHOLD_MARGIN,
+        "threshold_calibration": str(threshold_calibration),
+    }
+
+
+def retrieval_policy_fingerprint(policy: dict[str, Any]) -> str:
+    """Hash a retrieval policy so startup can reject stale v3 snapshots."""
+
+    return _hash(
+        json.dumps(
+            policy,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
 
 
 def _hash_bytes(path: Path) -> str:
@@ -399,6 +524,7 @@ def _read_sources(
     include_builtin: bool,
     *,
     tokenizer: Any | None = None,
+    knowledge_pack: KnowledgePack | None = None,
 ) -> list[_SourceRecord]:
     records: list[_SourceRecord] = []
     if include_builtin:
@@ -421,6 +547,64 @@ def _read_sources(
                             canonical_class=artifact.canonical_class,
                             profile_id=artifact.profile_id,
                             rule_id=artifact.rule_id,
+                            char_start=start + local_start,
+                            char_end=start + local_end,
+                        )
+                    )
+
+    if knowledge_pack is not None:
+        titles_by_group: defaultdict[str, list[str]] = defaultdict(list)
+        for artifact in knowledge_pack.artifacts:
+            if artifact.title not in titles_by_group[artifact.artifact_group_id]:
+                titles_by_group[artifact.artifact_group_id].append(artifact.title)
+        for artifact in knowledge_pack.artifacts:
+            citations = tuple(
+                dict(knowledge_pack.sources[source_id])
+                for source_id in artifact.source_refs
+            )
+            for section, start, end in _markdown_segments(artifact.text):
+                for chunk, local_start, local_end in _text_chunks_with_offsets(
+                    artifact.text[start:end], tokenizer=tokenizer
+                ):
+                    section_name = section or artifact.title
+                    contextual_chunk = (
+                        f"Knowledge card: {artifact.title}\n"
+                        f"Artifact group: {artifact.artifact_group_id}\n"
+                        f"Section: {section_name}\n"
+                        "Bilingual group titles: "
+                        f"{' | '.join(titles_by_group[artifact.artifact_group_id])}"
+                        f"\n\n{chunk}"
+                    )
+                    records.append(
+                        _SourceRecord(
+                            source_path=f"curated/{artifact.relative_path}",
+                            section=section_name,
+                            page=None,
+                            text=contextual_chunk,
+                            artifact_type="knowledge_card",
+                            artifact_id=artifact.artifact_id,
+                            artifact_group_id=artifact.artifact_group_id,
+                            source_kind="curated_pack",
+                            language=artifact.language,
+                            authority=artifact.authority,
+                            artifact_version=artifact.version,
+                            role=artifact.roles,
+                            stage=artifact.stages,
+                            canonical_class=(
+                                artifact.canonical_classes[0]
+                                if len(artifact.canonical_classes) == 1
+                                else None
+                            ),
+                            canonical_classes=artifact.canonical_classes,
+                            profile_id=(
+                                artifact.profile_ids[0]
+                                if len(artifact.profile_ids) == 1
+                                else None
+                            ),
+                            profile_ids=artifact.profile_ids,
+                            citation_refs=citations,
+                            valid_from=artifact.valid_from,
+                            valid_until=artifact.valid_until,
                             char_start=start + local_start,
                             char_end=start + local_end,
                         )
@@ -534,8 +718,9 @@ class SentenceTransformerEncoder:
         }
         if local_files_only:
             kwargs["local_files_only"] = True
-        # Runtime loading is intentionally local-only.  A missing cached model
-        # is an explicit infrastructure error instead of an implicit download.
+        # Deliberately leave ``cache_folder`` unset so Hugging Face owns the
+        # cache location and uses its standard per-user cache.  Callers that
+        # require an already-downloaded model set ``local_files_only``.
         self.model = SentenceTransformer(model_name, **kwargs)
         self.tokenizer = getattr(self.model, "tokenizer", None)
 
@@ -601,16 +786,54 @@ def _row_roles(row: dict[str, Any], key: str) -> tuple[str, ...]:
 
 
 def _fts_query(query: str) -> str:
-    terms = re.findall(r"[\u4e00-\u9fff]|[A-Za-z0-9_]+", query.casefold())
+    terms = [
+        term
+        for term in re.findall(
+            r"[\u3400-\u4dbf\u4e00-\u9fff]+|[A-Za-z0-9_]+", query.casefold()
+        )
+        if not re.fullmatch(r"[\u3400-\u4dbf\u4e00-\u9fff]", term)
+    ]
     return " OR ".join(f'"{term.replace(chr(34), "")}"' for term in terms[:64])
 
 
+def _lexical_terms(text: str) -> set[str]:
+    terms: set[str] = set()
+    for token in re.findall(
+        r"[\u3400-\u4dbf\u4e00-\u9fff]+|[A-Za-z0-9_]+", text.casefold()
+    ):
+        if re.fullmatch(r"[\u3400-\u4dbf\u4e00-\u9fff]+", token):
+            terms.update(token[index : index + 2] for index in range(len(token) - 1))
+        else:
+            terms.add(token)
+    return terms
+
+
 def _python_lexical_score(query: str, text: str) -> float:
-    query_terms = set(re.findall(r"[\u4e00-\u9fff]|[A-Za-z0-9_]+", query.casefold()))
-    text_terms = set(re.findall(r"[\u4e00-\u9fff]|[A-Za-z0-9_]+", text.casefold()))
+    query_terms = _lexical_terms(query)
+    text_terms = _lexical_terms(text)
     if not query_terms:
         return 0.0
     return len(query_terms & text_terms) / len(query_terms)
+
+
+def _semantic_query_text(request: RetrievalRequest) -> str:
+    """Keep scope controls out of the text sent to the retrieval encoder."""
+
+    return " ".join(
+        str(value)
+        for value in (
+            *request.missing_fields,
+            request.summary,
+        )
+        if value
+    )
+
+
+def _has_control_retrieval_intent(query: str) -> bool:
+    normalized = query.casefold()
+    if any(re.search(pattern, normalized) for pattern in _NON_CONTROL_INTENT_PATTERNS):
+        return False
+    return any(re.search(pattern, normalized) for pattern in _CONTROL_CONTEXT_PATTERNS)
 
 
 class RAGIndex:
@@ -625,7 +848,7 @@ class RAGIndex:
             )
         try:
             self.manifest = json.loads(self._manifest_path.read_text(encoding="utf-8"))
-            if self.manifest.get("schema_version") != RAG_SCHEMA_VERSION:
+            if self.manifest.get("schema_version") not in SUPPORTED_RAG_SCHEMA_VERSIONS:
                 raise ValueError(
                     "unsupported RAG index schema version; rebuild explicitly"
                 )
@@ -637,6 +860,17 @@ class RAGIndex:
                 raise ValueError(
                     "RAG index Registry fingerprint is incompatible; rebuild explicitly"
                 )
+            policy_fingerprint = self.manifest.get("retrieval_policy_fingerprint")
+            if policy_fingerprint is not None:
+                policy = self.manifest.get("retrieval_policy")
+                if (
+                    not isinstance(policy, dict)
+                    or not isinstance(policy_fingerprint, str)
+                    or retrieval_policy_fingerprint(policy) != policy_fingerprint
+                ):
+                    raise ValueError(
+                        "RAG retrieval policy fingerprint does not match its manifest"
+                    )
             expected_vectors_checksum = self.manifest.get("vector_checksum")
             expected_metadata_checksum = self.manifest.get("metadata_checksum")
             if (
@@ -737,24 +971,29 @@ class RAGIndex:
         stage = str(request.stage).casefold() if request.stage else None
         allowed: list[int] = []
         for index, row in enumerate(self._rows):
-            if row.get("source_kind") == "external":
-                allowed.append(index)
-                continue
             roles = {item.casefold() for item in _row_roles(row, "roles_json")}
             stages = {item.casefold() for item in _row_roles(row, "stages_json")}
             if roles and role and role not in roles:
                 continue
             if stage and stages and stage not in stages and "all" not in stages:
                 continue
-            if request.canonical_class and row.get("canonical_class") not in {
-                None,
-                request.canonical_class,
-            }:
+            canonical_classes = set(_row_roles(row, "canonical_classes_json"))
+            if row.get("canonical_class"):
+                canonical_classes.add(str(row["canonical_class"]))
+            if (
+                request.canonical_class
+                and canonical_classes
+                and request.canonical_class not in canonical_classes
+            ):
                 continue
-            if request.profile_id and row.get("profile_id") not in {
-                None,
-                request.profile_id,
-            }:
+            profile_ids = set(_row_roles(row, "profile_ids_json"))
+            if row.get("profile_id"):
+                profile_ids.add(str(row["profile_id"]))
+            if (
+                request.profile_id
+                and profile_ids
+                and request.profile_id not in profile_ids
+            ):
                 continue
             allowed.append(index)
         return allowed
@@ -779,9 +1018,15 @@ class RAGIndex:
                     index = int(row_id) - 1
                     if index in allowed:
                         # SQLite's BM25 values are only meaningful for ranking
-                        # within one query.  Store a bounded rank score so the
-                        # independent relevance threshold is meaningful.
-                        candidates.append((index, 1.0 / (len(candidates) + 1)))
+                        # within one query. Use bounded lexical coverage for
+                        # the independent relevance gate; reciprocal rank
+                        # would let a single common token score as 1.0.
+                        coverage = _python_lexical_score(
+                            query, str(self._rows[index]["text"])
+                        )
+                        if coverage <= 0.0:
+                            continue
+                        candidates.append((index, coverage))
                         if len(candidates) >= LEXICAL_CANDIDATES:
                             break
             except sqlite3.Error as exc:
@@ -815,6 +1060,17 @@ class RAGIndex:
                     aliases = tuple(item for item in decoded if isinstance(item, dict))
             except json.JSONDecodeError:
                 aliases = ()
+        citation_refs: tuple[dict[str, Any], ...] = ()
+        raw_citations = row.get("citation_refs_json")
+        if isinstance(raw_citations, str):
+            try:
+                decoded = json.loads(raw_citations)
+                if isinstance(decoded, list):
+                    citation_refs = tuple(
+                        item for item in decoded if isinstance(item, dict)
+                    )
+            except json.JSONDecodeError:
+                citation_refs = ()
         return SearchResult(
             text=str(row["text"]),
             source_path=str(row["source_path"]),
@@ -825,10 +1081,21 @@ class RAGIndex:
             score=float(score),
             artifact_type=row.get("artifact_type"),
             artifact_id=row.get("artifact_id"),
+            artifact_group_id=row.get("artifact_group_id"),
             source_kind=row.get("source_kind"),
+            language=str(row.get("language") or "und"),
+            authority=row.get("authority"),
+            artifact_version=row.get("artifact_version"),
             canonical_class=row.get("canonical_class"),
+            canonical_classes=_row_roles(row, "canonical_classes_json"),
             profile_id=row.get("profile_id"),
+            profile_ids=_row_roles(row, "profile_ids_json"),
             rule_id=row.get("rule_id"),
+            roles=_row_roles(row, "roles_json"),
+            stages=_row_roles(row, "stages_json"),
+            valid_from=row.get("valid_from"),
+            valid_until=row.get("valid_until"),
+            citation_refs=citation_refs,
             source_aliases=aliases,
             dense_score=dense_score,
             lexical_score=lexical_score,
@@ -842,7 +1109,7 @@ class RAGIndex:
         limit = min(max(int(limit), 0), MAX_RESULTS)
         if not limit:
             return []
-        query = request.query_text().strip()
+        query = _semantic_query_text(request).strip()
         if not query:
             return []
         cache_key = _hash(
@@ -856,6 +1123,7 @@ class RAGIndex:
                     "stage": request.stage,
                     "missing": request.missing_fields,
                     "summary": request.summary,
+                    "language": request.language,
                     "limit": limit,
                 },
                 ensure_ascii=False,
@@ -866,8 +1134,8 @@ class RAGIndex:
         if cached is not None:
             self._query_cache.move_to_end(cache_key)
             return list(cached)
-        allowed = set(self._allowed_rows(request))
-        if not allowed:
+        scope_allowed = set(self._allowed_rows(request))
+        if not scope_allowed:
             return []
         if self.encoder is None:
             raise ValueError(
@@ -885,31 +1153,15 @@ class RAGIndex:
             out=np.zeros(len(norms), dtype=float),
             where=norms != 0,
         )
-        dense_order = sorted(
-            ((index, float(scores[index])) for index in allowed),
-            key=lambda item: (-item[1], self._rows[item[0]]["source_id"]),
-        )[:DENSE_CANDIDATES]
-        dense_rank = {
-            index: rank for rank, (index, _score) in enumerate(dense_order, 1)
-        }
-        dense_scores = {index: score for index, score in dense_order}
-        lexical_order = self._lexical_candidates(query, allowed)
-        lexical_rank = {
-            index: rank for rank, (index, _score) in enumerate(lexical_order, 1)
-        }
-        lexical_scores = {index: score for index, score in lexical_order}
         exact_ids = {
-            token for token in re.findall(r"[A-Za-z0-9_.-]+", query.casefold()) if token
+            token
+            for token in re.findall(r"[A-Za-z0-9_.-]+", str(request.summary).casefold())
+            if token
         }
-        candidates: list[tuple[int, float]] = []
-        threshold = float(
-            self.manifest.get("retrieval_policy", {}).get(
-                "relevance_threshold", DEFAULT_RELEVANCE_THRESHOLD
-            )
-        )
-        for index in set(dense_rank) | set(lexical_rank):
+
+        def row_is_exact(index: int) -> bool:
             row = self._rows[index]
-            exact = any(
+            return any(
                 token in exact_ids
                 for token in (
                     str(row.get("artifact_id") or "").casefold(),
@@ -918,56 +1170,242 @@ class RAGIndex:
                 )
                 if token
             )
-            relevance = max(
-                dense_scores.get(index, -1.0),
-                lexical_scores.get(index, 0.0),
-            )
-            if not exact and relevance < threshold:
-                continue
-            rrf = 0.0
-            if index in dense_rank:
-                rrf += 1.0 / (RRF_K + dense_rank[index])
-            if index in lexical_rank:
-                rrf += 1.0 / (RRF_K + lexical_rank[index])
-            # A canonical rule/profile/feature ID is a deterministic lookup
-            # key.  Keep exact ID hits ahead of approximate dense/lexical
-            # matches so a query such as ``first_order_lag`` cannot be crowded
-            # out by semantically broad mechanism-card text.
-            candidates.append((index, rrf, exact))
-        candidates.sort(
-            key=lambda item: (
-                -int(item[2]),
-                -item[1],
-                self._rows[item[0]]["source_id"],
+
+        threshold = float(
+            self.manifest.get("retrieval_policy", {}).get(
+                "relevance_threshold", DEFAULT_RELEVANCE_THRESHOLD
             )
         )
+
+        def ranked_candidates(
+            allowed: set[int],
+        ) -> list[tuple[int, float, bool, float | None, float | None]]:
+            if not allowed:
+                return []
+            dense_order = sorted(
+                ((index, float(scores[index])) for index in allowed),
+                key=lambda item: (-item[1], self._rows[item[0]]["source_id"]),
+            )[:DENSE_CANDIDATES]
+            dense_rank = {
+                index: rank for rank, (index, _score) in enumerate(dense_order, 1)
+            }
+            dense_scores = {index: score for index, score in dense_order}
+            lexical_order = self._lexical_candidates(query, allowed)
+            lexical_rank = {
+                index: rank for rank, (index, _score) in enumerate(lexical_order, 1)
+            }
+            lexical_scores = {index: score for index, score in lexical_order}
+            candidates: list[tuple[int, float, bool, float | None, float | None]] = []
+            for index in set(dense_rank) | set(lexical_rank):
+                row = self._rows[index]
+                exact = row_is_exact(index)
+                if (
+                    not exact
+                    and row.get("source_kind") == "curated_pack"
+                    and (
+                        request.language == "auto"
+                        or request.language == request.inferred_language()
+                    )
+                    and _python_lexical_score(query, str(row["text"])) <= 0.0
+                ):
+                    continue
+                dense_relevance = dense_scores.get(index, -1.0)
+                lexical_relevance = lexical_scores.get(index, 0.0)
+                lexical_coverage = _python_lexical_score(query, str(row["text"]))
+                relevance = max(
+                    dense_relevance,
+                    lexical_relevance,
+                    min(
+                        1.0,
+                        dense_relevance
+                        + LEXICAL_CORROBORATION_WEIGHT * lexical_coverage,
+                    ),
+                )
+                row_language = str(row.get("language") or "und")
+                explicit_cross_language = (
+                    request.language in {"en", "zh"}
+                    and request.language != request.inferred_language()
+                    and row_language == request.language
+                )
+                effective_threshold = threshold - (
+                    EXPLICIT_LANGUAGE_THRESHOLD_MARGIN
+                    if explicit_cross_language
+                    else 0.0
+                )
+                scenario_rescue = (
+                    row.get("source_kind") == "curated_pack"
+                    and dense_relevance
+                    >= effective_threshold - SCENARIO_RESCUE_DENSE_MARGIN
+                    and lexical_coverage >= SCENARIO_RESCUE_MIN_LEXICAL_COVERAGE
+                )
+                if (
+                    not exact
+                    and relevance < effective_threshold
+                    and not scenario_rescue
+                ):
+                    continue
+                rrf = 0.0
+                if index in dense_rank:
+                    rrf += 1.0 / (RRF_K + dense_rank[index])
+                if index in lexical_rank:
+                    rrf += 1.0 / (RRF_K + lexical_rank[index])
+                # A canonical rule/profile/feature ID is a deterministic lookup
+                # key. Keep exact ID hits ahead of approximate matches.
+                candidates.append(
+                    (
+                        index,
+                        rrf,
+                        exact,
+                        dense_scores.get(index),
+                        lexical_scores.get(index),
+                    )
+                )
+            return sorted(
+                candidates,
+                key=lambda item: (
+                    -int(item[2]),
+                    -item[1],
+                    self._rows[item[0]]["source_id"],
+                ),
+            )
+
+        registry_exact_allowed = {
+            index
+            for index in scope_allowed
+            if self._rows[index].get("source_kind") == "builtin_registry"
+            and row_is_exact(index)
+        }
+        advisory_allowed = {
+            index
+            for index in scope_allowed
+            if self._rows[index].get("source_kind") != "builtin_registry"
+            and (
+                self._rows[index].get("source_kind") != "curated_pack"
+                or _has_control_retrieval_intent(query)
+            )
+        }
+        preferred_language = request.preferred_language()
+        primary_allowed = {
+            index
+            for index in advisory_allowed
+            if str(self._rows[index].get("language") or "und")
+            in {preferred_language, "und"}
+        }
+        fallback_allowed = advisory_allowed - primary_allowed
+        registry_candidates = ranked_candidates(registry_exact_allowed)
+        primary_candidates = ranked_candidates(primary_allowed)
+        fallback_candidates = ranked_candidates(fallback_allowed)
+        qualified_primary_curated_groups = {
+            str(self._rows[index].get("artifact_group_id"))
+            for index, _rrf, _exact, _dense, _lexical in primary_candidates
+            if self._rows[index].get("source_kind") == "curated_pack"
+            and self._rows[index].get("artifact_group_id")
+        }
+        preferred_curated_rows: defaultdict[str, list[int]] = defaultdict(list)
+        for index in primary_allowed:
+            row = self._rows[index]
+            if row.get("source_kind") == "curated_pack" and row.get(
+                "artifact_group_id"
+            ):
+                preferred_curated_rows[str(row["artifact_group_id"])].append(index)
+        candidate_passes = (
+            registry_candidates,
+            primary_candidates,
+            fallback_candidates,
+        )
         selected: list[SearchResult] = []
+        selected_identities: set[str] = set()
+        selected_token_counts: dict[str, int] = {}
+        curated_group_count = 0
         per_document: defaultdict[str, int] = defaultdict(int)
         token_budget = MAX_REFERENCE_TOKENS
         max_per_document = (
             MAX_RESULTS if request.operation == "search" else MAX_RESULTS_PER_DOCUMENT
         )
-        for index, rrf, _exact in candidates:
-            row = self._rows[index]
-            document_key = str(row.get("source_path") or row["source_id"])
-            if per_document[document_key] >= max_per_document:
-                continue
-            token_count = len(
-                _model_token_spans(str(row["text"]), self._tokenizer)
-                or _fallback_token_spans(str(row["text"]))
-            )
-            if token_count > token_budget:
-                continue
-            selected.append(
-                self._result(
-                    index,
-                    score=rrf,
-                    dense_score=dense_scores.get(index),
-                    lexical_score=lexical_scores.get(index),
+        for pass_index, candidates in enumerate(candidate_passes):
+            for index, rrf, _exact, dense_score, lexical_score in candidates:
+                row = self._rows[index]
+                if (
+                    pass_index == len(candidate_passes) - 1
+                    and row.get("source_kind") == "curated_pack"
+                    and row.get("artifact_group_id")
+                    and str(row["artifact_group_id"])
+                    not in qualified_primary_curated_groups
+                    and str(row["artifact_group_id"]) in preferred_curated_rows
+                ):
+                    index = max(
+                        preferred_curated_rows[str(row["artifact_group_id"])],
+                        key=lambda candidate: (
+                            float(scores[candidate]),
+                            str(self._rows[candidate]["source_id"]),
+                        ),
+                    )
+                    row = self._rows[index]
+                    dense_score = float(scores[index])
+                    projected_lexical = _python_lexical_score(query, str(row["text"]))
+                    lexical_score = projected_lexical or None
+                identity = str(
+                    row.get("artifact_group_id")
+                    or row.get("artifact_id")
+                    or row["source_id"]
                 )
-            )
-            per_document[document_key] += 1
-            token_budget -= token_count
+                if identity in selected_identities:
+                    continue
+                is_curated = row.get("source_kind") == "curated_pack"
+                if (
+                    pass_index == len(candidate_passes) - 1
+                    and is_curated
+                    and identity in qualified_primary_curated_groups
+                ):
+                    continue
+                if is_curated and curated_group_count >= MAX_CURATED_GROUP_RESULTS:
+                    replaceable = [
+                        result
+                        for result in selected
+                        if result.source_kind == "curated_pack"
+                    ]
+                    weakest = min(replaceable, key=lambda result: result.score)
+                    if (
+                        pass_index != len(candidate_passes) - 1
+                        or len(selected) >= limit
+                        or rrf <= weakest.score
+                    ):
+                        continue
+                    weakest_identity = str(
+                        weakest.artifact_group_id
+                        or weakest.artifact_id
+                        or weakest.source_id
+                    )
+                    selected.remove(weakest)
+                    selected_identities.remove(weakest_identity)
+                    token_budget += selected_token_counts.pop(weakest_identity)
+                    per_document[weakest.source_path] -= 1
+                    curated_group_count -= 1
+                document_key = str(row.get("source_path") or row["source_id"])
+                if per_document[document_key] >= max_per_document:
+                    continue
+                token_count = len(
+                    _model_token_spans(str(row["text"]), self._tokenizer)
+                    or _fallback_token_spans(str(row["text"]))
+                )
+                if token_count > token_budget:
+                    continue
+                selected.append(
+                    self._result(
+                        index,
+                        score=rrf,
+                        dense_score=dense_score,
+                        lexical_score=lexical_score,
+                    )
+                )
+                per_document[document_key] += 1
+                selected_identities.add(identity)
+                selected_token_counts[identity] = token_count
+                if is_curated:
+                    curated_group_count += 1
+                token_budget -= token_count
+                if len(selected) >= limit:
+                    break
             if len(selected) >= limit:
                 break
         self._query_cache[cache_key] = tuple(selected)
@@ -1035,6 +1473,48 @@ def calibrate_relevance_threshold(
     return best_threshold
 
 
+def _result_leaks_scope(result: SearchResult, request: RetrievalRequest) -> bool:
+    role = str(request.role).casefold()
+    roles = {value.casefold() for value in result.roles}
+    if roles and role not in {"", "all", "legacy"} and role not in roles:
+        return True
+    stage = str(request.stage).casefold() if request.stage else None
+    stages = {value.casefold() for value in result.stages}
+    if stage and stages and stage not in stages and "all" not in stages:
+        return True
+    canonical_classes = set(result.canonical_classes)
+    if result.canonical_class:
+        canonical_classes.add(result.canonical_class)
+    if (
+        request.canonical_class
+        and canonical_classes
+        and request.canonical_class not in canonical_classes
+    ):
+        return True
+    profile_ids = set(result.profile_ids)
+    if result.profile_id:
+        profile_ids.add(result.profile_id)
+    return bool(
+        request.profile_id and profile_ids and request.profile_id not in profile_ids
+    )
+
+
+def _result_is_stale(result: SearchResult, *, as_of: date) -> bool:
+    try:
+        valid_from = (
+            date.fromisoformat(result.valid_from) if result.valid_from else None
+        )
+        valid_until = (
+            date.fromisoformat(result.valid_until) if result.valid_until else None
+        )
+    except ValueError:
+        return True
+    return bool(
+        (valid_from is not None and valid_from > as_of)
+        or (valid_until is not None and valid_until < as_of)
+    )
+
+
 def evaluate_retrieval(
     index: RAGIndex,
     cases: Iterable[dict[str, Any]],
@@ -1043,21 +1523,32 @@ def evaluate_retrieval(
 ) -> dict[str, Any]:
     """Evaluate a fixed retrieval snapshot against a labeled JSON case set.
 
-    A case contains the fields accepted by :class:`RetrievalRequest` and a
-    ``relevant_source_ids`` array. This helper performs no LLM calls and never
-    mutates the index or its threshold. A ``split`` filter reports a
-    development set separately from a holdout set.
+    Positive cases identify stable ``relevant_artifact_group_ids`` (preferred)
+    or legacy ``relevant_source_ids``.  Negative cases set ``expected_empty``.
+    This helper performs no LLM calls and never mutates the index or threshold.
     """
 
     rows = list(cases)
     if split is not None:
         rows = [item for item in rows if str(item.get("split", "")) == split]
     evaluated = 0
+    positive_cases = 0
+    negative_cases = 0
     recall_hits = 0
     reciprocal_rank = 0.0
     returned = 0
     irrelevant = 0
     duplicate = 0
+    group_duplicate = 0
+    negative_false_positive = 0
+    provenance_checked = 0
+    provenance_resolved = 0
+    scope_leakage = 0
+    stale_results = 0
+    preferred_language_cases = 0
+    preferred_language_hits = 0
+    override_cases = 0
+    override_errors = 0
     details: list[dict[str, Any]] = []
     request_fields = {
         "role",
@@ -1067,14 +1558,24 @@ def evaluate_retrieval(
         "missing_fields",
         "summary",
         "stage",
+        "language",
     }
     for case in rows:
-        relevant = {
+        relevant_sources = {
             str(value)
             for value in case.get("relevant_source_ids", case.get("relevant_ids", []))
             if value
         }
-        if not relevant:
+        relevant_groups = {
+            str(value) for value in case.get("relevant_artifact_group_ids", []) if value
+        }
+        acceptable_groups = {
+            str(value)
+            for value in case.get("acceptable_artifact_group_ids", [])
+            if value
+        }
+        expected_empty = bool(case.get("expected_empty", False))
+        if not relevant_sources and not relevant_groups and not expected_empty:
             continue
         request = RetrievalRequest(
             **{
@@ -1085,23 +1586,85 @@ def evaluate_retrieval(
         )
         results = index.retrieve(request, limit=MAX_RESULTS)
         source_ids = [result.source_id for result in results]
-        evaluated += 1
-        returned += len(source_ids)
-        irrelevant += sum(source_id not in relevant for source_id in source_ids)
-        duplicate += len(source_ids) - len(set(source_ids))
-        ranks = [
-            rank
-            for rank, source_id in enumerate(source_ids, 1)
-            if source_id in relevant
+        group_ids = [
+            result.artifact_group_id or result.artifact_id or result.source_id
+            for result in results
         ]
+        evaluated += 1
+        explicit_group_ids = [
+            result.artifact_group_id for result in results if result.artifact_group_id
+        ]
+        group_duplicate += len(explicit_group_ids) - len(set(explicit_group_ids))
+        for result in results:
+            provenance_checked += 1
+            scope_leakage += int(_result_leaks_scope(result, request))
+            stale_results += int(
+                _result_is_stale(result, as_of=datetime.now(UTC).date())
+            )
+            citations_resolve = result.source_kind != "curated_pack" or bool(
+                result.citation_refs
+                and all(
+                    item.get("source_id") and item.get("url") and item.get("license")
+                    for item in result.citation_refs
+                )
+            )
+            if result.source_id and result.content_hash and citations_resolve:
+                provenance_resolved += 1
+        returned += len(source_ids)
+        duplicate += len(source_ids) - len(set(source_ids))
+        if expected_empty:
+            negative_cases += 1
+            negative_false_positive += int(bool(results))
+            irrelevant += len(results)
+            details.append(
+                {
+                    "query": request.query_text(),
+                    "expected_empty": True,
+                    "returned_source_ids": source_ids,
+                    "returned_artifact_group_ids": group_ids,
+                    "reciprocal_rank": 0.0,
+                }
+            )
+            continue
+
+        positive_cases += 1
+        if relevant_groups:
+            result_keys = group_ids
+            relevant = relevant_groups
+            acceptable = relevant_groups | acceptable_groups
+        else:
+            result_keys = source_ids
+            relevant = relevant_sources
+            acceptable = relevant_sources
+        irrelevant += sum(value not in acceptable for value in result_keys)
+        ranks = [rank for rank, value in enumerate(result_keys, 1) if value in relevant]
         if ranks:
             recall_hits += 1
             reciprocal_rank += 1.0 / ranks[0]
+        expected_language = str(
+            case.get("expected_language") or request.preferred_language()
+        )
+        language_match = any(
+            result.artifact_group_id in relevant_groups
+            and result.language == expected_language
+            for result in results
+        )
+        if relevant_groups and not bool(case.get("allow_cross_language_fallback")):
+            preferred_language_cases += 1
+            preferred_language_hits += int(language_match)
+            if request.language in {"en", "zh"}:
+                override_cases += 1
+                override_errors += int(not language_match)
         details.append(
             {
                 "query": request.query_text(),
-                "relevant_source_ids": sorted(relevant),
+                "relevant_source_ids": sorted(relevant_sources),
+                "relevant_artifact_group_ids": sorted(relevant_groups),
+                "acceptable_artifact_group_ids": sorted(acceptable_groups),
                 "returned_source_ids": source_ids,
+                "returned_artifact_group_ids": group_ids,
+                "returned_languages": [result.language for result in results],
+                "expected_language": expected_language,
                 "reciprocal_rank": 1.0 / ranks[0] if ranks else 0.0,
             }
         )
@@ -1109,10 +1672,40 @@ def evaluate_retrieval(
         "snapshot": index.index_snapshot,
         "split": split,
         "cases": evaluated,
-        "recall_at_4": recall_hits / evaluated if evaluated else 0.0,
-        "mrr": reciprocal_rank / evaluated if evaluated else 0.0,
+        "positive_cases": positive_cases,
+        "negative_cases": negative_cases,
+        "recall_at_4": recall_hits / positive_cases if positive_cases else 0.0,
+        "mrr": reciprocal_rank / positive_cases if positive_cases else 0.0,
         "irrelevant_result_rate": irrelevant / returned if returned else 0.0,
         "duplicate_rate": duplicate / returned if returned else 0.0,
+        "artifact_group_recall_at_4": (
+            recall_hits / positive_cases if positive_cases else 0.0
+        ),
+        "artifact_group_mrr": (
+            reciprocal_rank / positive_cases if positive_cases else 0.0
+        ),
+        "negative_query_false_positive_rate": (
+            negative_false_positive / negative_cases if negative_cases else 0.0
+        ),
+        "artifact_group_duplicate_rate": (
+            group_duplicate / returned if returned else 0.0
+        ),
+        "bilingual_group_duplicate_rate": (
+            group_duplicate / returned if returned else 0.0
+        ),
+        "preferred_language_hit_rate": (
+            preferred_language_hits / preferred_language_cases
+            if preferred_language_cases
+            else 1.0
+        ),
+        "override_error_rate": (
+            override_errors / override_cases if override_cases else 0.0
+        ),
+        "provenance_resolution_rate": (
+            provenance_resolved / provenance_checked if provenance_checked else 1.0
+        ),
+        "scope_leakage_rate": scope_leakage / returned if returned else 0.0,
+        "stale_result_rate": stale_results / returned if returned else 0.0,
         "details": details,
     }
 
@@ -1133,18 +1726,52 @@ def build_index(
     *,
     encoder=None,
     include_builtin: bool = True,
+    include_curated: bool = True,
+    knowledge_pack_dir: str | Path | None = None,
+    relevance_threshold: float | None = None,
 ):
     source = Path(source_dir) if source_dir is not None else None
     index_root = Path(index_dir)
     if source is not None and not source.is_dir():
         raise FileNotFoundError(f"source directory not found: {source}")
+    if not include_curated and knowledge_pack_dir is not None:
+        raise ValueError("knowledge_pack_dir requires include_curated=True")
+    explicit_threshold = (
+        float(relevance_threshold) if relevance_threshold is not None else None
+    )
+    if explicit_threshold is not None and (
+        not np.isfinite(explicit_threshold) or not 0.0 <= explicit_threshold <= 1.0
+    ):
+        raise ValueError("relevance_threshold must be finite and between zero and one")
     index_root.mkdir(parents=True, exist_ok=True)
     if encoder is None:
         encoder = SentenceTransformerEncoder()
+    knowledge_pack = (
+        load_knowledge_pack(knowledge_pack_dir) if include_curated else None
+    )
+    if explicit_threshold is not None:
+        threshold = explicit_threshold
+        threshold_calibration = "explicit"
+    elif knowledge_pack is not None and (
+        _encoder_name(encoder) == knowledge_pack.evaluation_metadata["embedding_model"]
+        and _encoder_version(encoder)
+        == knowledge_pack.evaluation_metadata["embedding_revision"]
+    ):
+        threshold = float(knowledge_pack.evaluation_metadata["relevance_threshold"])
+        threshold_calibration = "bundled-pack-dev"
+    elif knowledge_pack is not None:
+        threshold = DEFAULT_RELEVANCE_THRESHOLD
+        threshold_calibration = (
+            "default; bundled pack calibration is incompatible with encoder"
+        )
+    else:
+        threshold = DEFAULT_RELEVANCE_THRESHOLD
+        threshold_calibration = "default"
     records = _read_sources(
         source,
         include_builtin,
         tokenizer=_tokenizer_for_encoder(encoder),
+        knowledge_pack=knowledge_pack,
     )
     if not records:
         raise ValueError("no indexable Markdown/PDF or builtin sources found")
@@ -1191,8 +1818,11 @@ def build_index(
                 "id INTEGER PRIMARY KEY, text TEXT NOT NULL, source_path TEXT NOT NULL, "
                 "source_id TEXT NOT NULL UNIQUE, content_hash TEXT NOT NULL, section TEXT, page INTEGER, "
                 "artifact_type TEXT NOT NULL, artifact_id TEXT, source_kind TEXT NOT NULL, "
+                "artifact_group_id TEXT, language TEXT NOT NULL, authority TEXT, artifact_version TEXT, "
                 "roles_json TEXT NOT NULL, stages_json TEXT NOT NULL, canonical_class TEXT, "
-                "profile_id TEXT, rule_id TEXT, char_start INTEGER, char_end INTEGER, source_aliases TEXT NOT NULL)"
+                "canonical_classes_json TEXT NOT NULL, profile_id TEXT, profile_ids_json TEXT NOT NULL, "
+                "rule_id TEXT, citation_refs_json TEXT NOT NULL, valid_from TEXT, valid_until TEXT, "
+                "char_start INTEGER, char_end INTEGER, source_aliases TEXT NOT NULL)"
             )
             for index, record in enumerate(unique):
                 content_hash = _hash(record.text)
@@ -1213,8 +1843,10 @@ def build_index(
                 )
                 conn.execute(
                     "INSERT INTO chunks(id,text,source_path,source_id,content_hash,section,page,"
-                    "artifact_type,artifact_id,source_kind,roles_json,stages_json,canonical_class,"
-                    "profile_id,rule_id,char_start,char_end,source_aliases) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "artifact_type,artifact_id,source_kind,artifact_group_id,language,authority,artifact_version,"
+                    "roles_json,stages_json,canonical_class,canonical_classes_json,profile_id,profile_ids_json,"
+                    "rule_id,citation_refs_json,valid_from,valid_until,char_start,char_end,source_aliases) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         index,
                         record.text,
@@ -1226,11 +1858,20 @@ def build_index(
                         record.artifact_type,
                         record.artifact_id,
                         record.source_kind,
+                        record.artifact_group_id,
+                        record.language,
+                        record.authority,
+                        record.artifact_version,
                         json.dumps(record.role, ensure_ascii=False),
                         json.dumps(record.stage, ensure_ascii=False),
                         record.canonical_class,
+                        json.dumps(record.canonical_classes, ensure_ascii=False),
                         record.profile_id,
+                        json.dumps(record.profile_ids, ensure_ascii=False),
                         record.rule_id,
+                        json.dumps(record.citation_refs, ensure_ascii=False),
+                        record.valid_from,
+                        record.valid_until,
                         record.char_start,
                         record.char_end,
                         source_aliases,
@@ -1254,6 +1895,8 @@ def build_index(
                         "hash": _hash(record.text),
                         "artifact_type": record.artifact_type,
                         "artifact_id": record.artifact_id,
+                        "artifact_group_id": record.artifact_group_id,
+                        "language": record.language,
                     }
                     for record in sorted(
                         records,
@@ -1304,13 +1947,24 @@ def build_index(
                         )
                     )
                 ),
-                "kind": "builtin",
+                "kind": next(
+                    record.source_kind
+                    for record in records
+                    if record.source_path == path
+                ),
             }
             for path in builtin_paths
+        )
+        retrieval_policy = retrieval_policy_settings(
+            threshold,
+            threshold_calibration,
         )
         manifest = {
             "schema_version": RAG_SCHEMA_VERSION,
             "retrieval_policy_version": RETRIEVAL_POLICY_VERSION,
+            "retrieval_policy_fingerprint": retrieval_policy_fingerprint(
+                retrieval_policy
+            ),
             "embedding_model": _encoder_name(encoder),
             "embedding_model_revision": _encoder_version(encoder),
             "tokenizer_revision": _tokenizer_version(encoder),
@@ -1321,22 +1975,43 @@ def build_index(
                 "pdf_page_boundary": True,
                 "tokenizer_offsets": _tokenizer_for_encoder(encoder) is not None,
             },
-            "retrieval_policy": {
-                "dense_candidates": DENSE_CANDIDATES,
-                "lexical_candidates": LEXICAL_CANDIDATES,
-                "rrf_k": RRF_K,
-                "max_results": MAX_RESULTS,
-                "max_results_per_document": MAX_RESULTS_PER_DOCUMENT,
-                "max_reference_tokens": MAX_REFERENCE_TOKENS,
-                "relevance_threshold": DEFAULT_RELEVANCE_THRESHOLD,
-                "threshold_calibration": "default; run rag eval to replace",
-            },
+            "retrieval_policy": retrieval_policy,
             "registry_version": REGISTRY_VERSION,
             "registry_fingerprint": registry_fingerprint(),
             "source_count": len({item.source_path for item in records}),
             "source_files": source_files,
             "chunk_count": len(unique),
             "source_version": source_version,
+            "knowledge_pack": (
+                {
+                    "pack_id": knowledge_pack.pack_id,
+                    "version": knowledge_pack.version,
+                    "authority": knowledge_pack.authority,
+                    "excluded_artifact_ids": list(knowledge_pack.excluded_artifact_ids),
+                    "evaluation": {
+                        "datasets": [
+                            {
+                                "dataset": knowledge_pack.evaluation_metadata[
+                                    "dataset"
+                                ],
+                                "sha256": knowledge_pack.evaluation_metadata["sha256"],
+                            },
+                            *[
+                                {
+                                    "dataset": item["dataset"],
+                                    "sha256": item["sha256"],
+                                }
+                                for item in knowledge_pack.evaluation_metadata.get(
+                                    "additional_datasets", []
+                                )
+                            ],
+                        ],
+                        "cases": len(knowledge_pack.evaluation["cases"]),
+                    },
+                }
+                if knowledge_pack is not None
+                else None
+            ),
             "metadata_checksum": metadata_checksum,
             "vector_checksum": vector_checksum,
         }

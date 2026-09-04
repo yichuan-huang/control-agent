@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yichuan-huang/control-agent/schemas/cfdc-operational-history-source-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "records"],
+  "properties": {
+    "schema_version": {"const": "cfdc-operational-history-source/v1"},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "record_id", "record_type", "record_version", "schema_version",
+          "plant_id", "configuration", "configuration_fingerprint",
+          "operating_region", "operating_region_fingerprint", "captured_at",
+          "valid_from", "valid_until", "supersedes", "source_refs",
+          "session_refs", "payload", "payload_sha256", "summary"
+        ],
+        "properties": {
+          "record_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]+$"},
+          "record_type": {"enum": ["equipment_manual", "feature_artifact", "controller_freeze", "qualification_report", "performance_baseline", "adaptation_episode", "degradation_event", "rollback_report", "maintenance_record"]},
+          "record_version": {"type": "string", "minLength": 1},
+          "schema_version": {"const": "cfdc-operational-history-record/v1"},
+          "plant_id": {"type": "string", "minLength": 1},
+          "configuration": {"type": "object"},
+          "configuration_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "operating_region": {"type": "object", "required": ["description"], "properties": {"description": {"type": "string", "minLength": 1}}},
+          "operating_region_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "captured_at": {"type": "string", "format": "date-time"},
+          "valid_from": {"type": "string", "format": "date-time"},
+          "valid_until": {"type": ["string", "null"], "format": "date-time"},
+          "supersedes": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "source_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "session_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "payload": {},
+          "payload_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "summary": {"type": "string", "minLength": 1, "maxLength": 4000}
+        }
+      }
+    }
+  }
+}

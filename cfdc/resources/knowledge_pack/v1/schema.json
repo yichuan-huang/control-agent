@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yichuan-huang/control-agent/schemas/cfdc-knowledge-pack-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pack_id", "version", "authority", "sources", "artifacts", "evaluation"],
+  "properties": {
+    "schema_version": {"const": "cfdc-knowledge-pack/v1"},
+    "pack_id": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "authority": {"const": "advisory"},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "title", "source_type", "authors", "year", "url", "license", "redistribution", "version"],
+        "properties": {
+          "source_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$"},
+          "title": {"type": "string", "minLength": 1},
+          "source_type": {"enum": ["repository_contract", "open_book", "author_material", "university_course"]},
+          "authors": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "year": {"type": "integer", "minimum": 1900, "maximum": 2100},
+          "url": {"type": "string", "format": "uri"},
+          "license": {"type": "string", "minLength": 1},
+          "redistribution": {"enum": ["allowed", "metadata_only"]},
+          "version": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dataset", "sha256", "cases", "dev_cases", "holdout_cases", "embedding_model", "embedding_revision", "calibration_split", "relevance_threshold", "acceptance"],
+      "properties": {
+        "dataset": {"type": "string", "pattern": "^[^/].*\\.json$"},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "additional_datasets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["dataset", "sha256", "cases", "dev_cases", "holdout_cases"],
+            "properties": {
+              "dataset": {"type": "string", "pattern": "^[^/].*\\.json$"},
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "cases": {"type": "integer", "minimum": 1},
+              "dev_cases": {"type": "integer", "minimum": 0},
+              "holdout_cases": {"type": "integer", "minimum": 0},
+              "dataset_id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+              "purpose": {"enum": ["quality_gate", "regression"]}
+            }
+          }
+        },
+        "cases": {"type": "integer", "minimum": 1},
+        "dev_cases": {"type": "integer", "minimum": 1},
+        "holdout_cases": {"type": "integer", "minimum": 1},
+        "embedding_model": {"type": "string", "minLength": 1},
+        "embedding_revision": {"type": "string", "minLength": 1},
+        "calibration_split": {"const": "dev"},
+        "relevance_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+        "acceptance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["artifact_group_recall_at_4_min", "artifact_group_mrr_min", "irrelevant_result_rate_max", "negative_query_false_positive_rate_max", "artifact_group_duplicate_rate_max", "provenance_resolution_rate_min", "preferred_language_hit_rate_min", "bilingual_group_duplicate_rate_max", "override_error_rate_max"],
+          "properties": {
+            "artifact_group_recall_at_4_min": {"type": "number", "minimum": 0, "maximum": 1},
+            "artifact_group_mrr_min": {"type": "number", "minimum": 0, "maximum": 1},
+            "irrelevant_result_rate_max": {"type": "number", "minimum": 0, "maximum": 1},
+            "negative_query_false_positive_rate_max": {"type": "number", "minimum": 0, "maximum": 1},
+            "artifact_group_duplicate_rate_max": {"type": "number", "minimum": 0, "maximum": 1},
+            "provenance_resolution_rate_min": {"type": "number", "minimum": 0, "maximum": 1},
+            "preferred_language_hit_rate_min": {"type": "number", "minimum": 0, "maximum": 1},
+            "bilingual_group_duplicate_rate_max": {"type": "number", "minimum": 0, "maximum": 1},
+            "override_error_rate_max": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["artifact_id", "artifact_group_id", "title", "path", "language", "authority", "version", "status", "roles", "stages", "canonical_classes", "profile_ids", "sha256", "source_refs", "valid_from", "valid_until", "supersedes"],
+        "properties": {
+          "artifact_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$"},
+          "artifact_group_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$"},
+          "title": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "pattern": "^[^/].*\\.md$"},
+          "language": {"enum": ["en", "zh", "und"]},
+          "authority": {"const": "advisory"},
+          "version": {"type": "string", "minLength": 1},
+          "status": {"enum": ["active", "retired"]},
+          "roles": {"type": "array", "items": {"enum": ["diagnosis", "modeling", "controller", "critic"]}, "uniqueItems": true},
+          "stages": {"type": "array", "items": {"enum": ["diagnosis", "model", "profile", "controller", "review", "all"]}, "uniqueItems": true},
+          "canonical_classes": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "profile_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "source_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "valid_from": {"type": "string", "format": "date"},
+          "valid_until": {"type": ["string", "null"], "format": "date"},
+          "supersedes": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+        }
+      }
+    }
+  }
+}

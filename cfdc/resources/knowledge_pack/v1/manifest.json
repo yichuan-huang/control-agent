@@ -1,0 +1,293 @@
+{
+  "schema_version": "cfdc-knowledge-pack/v1",
+  "pack_id": "cfdc-control-foundations",
+  "version": "1.3.0",
+  "authority": "advisory",
+  "evaluation": {
+    "dataset": "eval/retrieval_en.json",
+    "sha256": "9234cb879e2d1c5d63564271643897938cc4ca6ed845fa3cac6630583b0769d4",
+    "additional_datasets": [
+      {
+        "dataset": "eval/retrieval_zh.json",
+        "sha256": "894a11eda54c56ab48f6de404413250b4c2137f93eaa7bf545f57b377c5f62ee",
+        "cases": 48,
+        "dev_cases": 24,
+        "holdout_cases": 24,
+        "dataset_id": "zh",
+        "purpose": "quality_gate"
+      },
+      {
+        "dataset": "eval/retrieval_challenge.json",
+        "sha256": "e2372e43bf6256b1f2bf7b2c02067bcc6873df728780327d7895eb9c0d8c304b",
+        "cases": 48,
+        "dev_cases": 48,
+        "holdout_cases": 0,
+        "dataset_id": "challenge_regression",
+        "purpose": "regression"
+      },
+      {
+        "dataset": "eval/retrieval_challenge_replacement.json",
+        "sha256": "9facb332cb6bbeeabc1d71bc71a8965b02190c64ade324cd9abc455cfbeb66af",
+        "cases": 48,
+        "dev_cases": 0,
+        "holdout_cases": 48,
+        "dataset_id": "challenge",
+        "purpose": "quality_gate"
+      }
+    ],
+    "cases": 48,
+    "dev_cases": 24,
+    "holdout_cases": 24,
+    "embedding_model": "intfloat/multilingual-e5-small",
+    "embedding_revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "calibration_split": "dev",
+    "relevance_threshold": 0.845,
+    "acceptance": {
+      "artifact_group_recall_at_4_min": 0.9,
+      "artifact_group_mrr_min": 0.8,
+      "irrelevant_result_rate_max": 0.25,
+      "negative_query_false_positive_rate_max": 0.05,
+      "artifact_group_duplicate_rate_max": 0.0,
+      "provenance_resolution_rate_min": 1.0,
+      "preferred_language_hit_rate_min": 0.9,
+      "bilingual_group_duplicate_rate_max": 0.0,
+      "override_error_rate_max": 0.0
+    }
+  },
+  "sources": [
+    {
+      "source_id": "repo-knowledge-registry-v1",
+      "title": "CFDC typed knowledge registry",
+      "source_type": "repository_contract",
+      "authors": ["CFDC maintainers"],
+      "year": 2026,
+      "url": "https://github.com/yichuan-huang/control-agent/blob/main/cfdc/knowledge/registry.py",
+      "license": "AGPL-3.0-only",
+      "redistribution": "allowed",
+      "version": "cfdc-knowledge/v1"
+    },
+    {
+      "source_id": "repo-mechanism-cards-v0.4",
+      "title": "CFDC control mechanism card catalog",
+      "source_type": "repository_contract",
+      "authors": ["CFDC maintainers"],
+      "year": 2026,
+      "url": "https://github.com/yichuan-huang/control-agent/blob/main/cfdc/diagnosis/control_mechanism_card_catalog.json",
+      "license": "AGPL-3.0-only",
+      "redistribution": "allowed",
+      "version": "v0.4-mechanism-cards"
+    },
+    {
+      "source_id": "repo-kernel-boundaries-v0.3.2",
+      "title": "CFDC Kernel authority and safety contracts",
+      "source_type": "repository_contract",
+      "authors": ["CFDC maintainers"],
+      "year": 2026,
+      "url": "https://github.com/yichuan-huang/control-agent",
+      "license": "AGPL-3.0-only",
+      "redistribution": "allowed",
+      "version": "0.3.2"
+    },
+    {
+      "source_id": "caltech-feedback-systems-2008",
+      "title": "Feedback Systems: An Introduction for Scientists and Engineers",
+      "source_type": "open_book",
+      "authors": ["Karl Johan Astrom", "Richard M. Murray"],
+      "year": 2008,
+      "url": "https://authors.library.caltech.edu/records/yzs24-xsx88",
+      "license": "Source terms apply; citation metadata only",
+      "redistribution": "metadata_only",
+      "version": "public-2008"
+    },
+    {
+      "source_id": "ntnu-simc-2003",
+      "title": "Simple analytic rules for model reduction and PID controller tuning",
+      "source_type": "author_material",
+      "authors": ["Sigurd Skogestad"],
+      "year": 2003,
+      "url": "https://skoge.folk.ntnu.no/publications/2003/tuningPID/README.html",
+      "license": "Source terms apply; citation metadata only",
+      "redistribution": "metadata_only",
+      "version": "author-page"
+    },
+    {
+      "source_id": "umich-ctms-pendulum",
+      "title": "Control Tutorials for MATLAB and Simulink: pendulum activity",
+      "source_type": "university_course",
+      "authors": ["University of Michigan CTMS"],
+      "year": 2026,
+      "url": "https://ctms.engin.umich.edu/CTMS/index.php?aux=Activities_Pendulum",
+      "license": "Source terms apply; citation metadata only",
+      "redistribution": "metadata_only",
+      "version": "accessed-2026-09-03"
+    },
+    {
+      "source_id": "mit-underactuated-2024",
+      "title": "Underactuated Robotics",
+      "source_type": "university_course",
+      "authors": ["Russ Tedrake"],
+      "year": 2024,
+      "url": "https://underactuated.mit.edu/",
+      "license": "Source terms apply; citation metadata only",
+      "redistribution": "metadata_only",
+      "version": "2024-course-notes"
+    },
+    {
+      "source_id": "eth-control-systems-2017",
+      "title": "ETH Zurich Control Systems I",
+      "source_type": "university_course",
+      "authors": ["ETH Zurich Automatic Control Laboratory"],
+      "year": 2017,
+      "url": "https://old.control.ee.ethz.ch/lectures/9.html",
+      "license": "Source terms apply; citation metadata only",
+      "redistribution": "metadata_only",
+      "version": "fall-2017"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "open_loop_stability.en", "artifact_group_id": "open_loop_stability", "title": "Open-loop stability and operating-point evidence", "path": "cards/en/open_loop_stability.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "critic"], "stages": ["diagnosis", "model", "review"],
+      "canonical_classes": ["class_i_first_order_lag", "class_iii_double_or_pure_integrator", "class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["first_order_lag", "double_integrator", "generic_unstable_higher_order"],
+      "sha256": "c9ea0505a5b515bb48e9c5e3496c637686ba1a6b88c78dac5c2932f3c6d3e7ce", "source_refs": ["caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "minimum_phase_inverse_response.en", "artifact_group_id": "minimum_phase_inverse_response", "title": "Minimum phase, inverse response, and unsafe zero cancellation", "path": "cards/en/minimum_phase_inverse_response.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["nmp_inverse_response"],
+      "sha256": "247783938b9943896c50170ffd4f7c3ee76ffd169a821a72e0bf9801b77c9613", "source_refs": ["caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "significant_delay.en", "artifact_group_id": "significant_delay", "title": "Significant delay and relative delay", "path": "cards/en/significant_delay.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_i_first_order_lag"], "profile_ids": ["first_order_lag_with_delay"],
+      "sha256": "532d8dc7338e704ae66d489ec58f0fa90097d5e5be296ca115d1c3468cd664f0", "source_refs": ["ntnu-simc-2003", "caltech-feedback-systems-2008", "repo-knowledge-registry-v1"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "structural_feasibility.en", "artifact_group_id": "structural_feasibility", "title": "Relative degree, controllability, observability, and sensing adequacy", "path": "cards/en/structural_feasibility.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "critic"], "stages": ["diagnosis", "model", "review"],
+      "canonical_classes": ["class_iv_higher_order_unstable_nonlinear_or_nmp", "class_v_multivariable_significant_coupling"], "profile_ids": ["generic_unstable_higher_order", "underactuated_cartpole", "mimo_2x2_coupled"],
+      "sha256": "e48e8622005a49a6b1454f7872ae14d1de944c6484a8276fcd50307d9d4718a4", "source_refs": ["caltech-feedback-systems-2008", "eth-control-systems-2017", "repo-knowledge-registry-v1"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "nonlinearity_local_validity.en", "artifact_group_id": "nonlinearity_local_validity", "title": "Static and dynamic nonlinearity with local validity", "path": "cards/en/nonlinearity_local_validity.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["generic_unstable_higher_order", "underactuated_cartpole", "vtol_cascaded"],
+      "sha256": "71e16ca80dbbf98ff9b7cd43511b43af826620c1434fbb0f3ebb6c7945bed1eb", "source_refs": ["caltech-feedback-systems-2008", "mit-underactuated-2024", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "uncertainty_data_quality.en", "artifact_group_id": "uncertainty_data_quality", "title": "Uncertainty magnitude, repeatability, and data quality", "path": "cards/en/uncertainty_data_quality.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["all"],
+      "canonical_classes": [], "profile_ids": [],
+      "sha256": "900b8680779b6a04868ac414e78d02d09010e52d4eb40b840f8150f3a512f360", "source_refs": ["caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-kernel-boundaries-v0.3.2"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "fopdt_step_extraction.en", "artifact_group_id": "fopdt_step_extraction", "title": "FOPDT step response and extraction of K, tau, and theta", "path": "cards/en/fopdt_step_extraction.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_i_first_order_lag"], "profile_ids": ["first_order_lag", "first_order_lag_with_delay"],
+      "sha256": "46ffc7815ab85fcc8a1fa423e5bebb35c15a88c60a97911e732277f069cac6f5", "source_refs": ["ntnu-simc-2003", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "free_decay_damping.en", "artifact_group_id": "free_decay_damping", "title": "Free decay, logarithmic decrement, and damping ratio", "path": "cards/en/free_decay_damping.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_ii_second_order_oscillator", "class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["second_order_oscillator", "generic_unstable_higher_order", "underactuated_cartpole"],
+      "sha256": "9d8f07bc97d94f3d3768326da78377c292a8f012aed08c39f90df7816c4fc346", "source_refs": ["umich-ctms-pendulum", "caltech-feedback-systems-2008", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "pulse_signed_gain.en", "artifact_group_id": "pulse_signed_gain", "title": "Pulse-based signed input gain and sign ambiguity", "path": "cards/en/pulse_signed_gain.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_ii_second_order_oscillator", "class_iii_double_or_pure_integrator", "class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["second_order_oscillator", "double_integrator", "vtol_cascaded"],
+      "sha256": "9668ed1ccfece8098880e17bd9f3d69c04a289f330ce28102057e732a485e2a3", "source_refs": ["caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "hover_balance_input.en", "artifact_group_id": "hover_balance_input", "title": "Hover or balance input and local thrust evidence", "path": "cards/en/hover_balance_input.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["vtol_cascaded"],
+      "sha256": "0d894de6da0f425a54b0b675ac5875983c4609ee8d32f440bb98d2e5b26ffc38", "source_refs": ["mit-underactuated-2024", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "mimo_pairing.en", "artifact_group_id": "mimo_pairing", "title": "MIMO coupling, local gain matrices, pairing, and decoupling", "path": "cards/en/mimo_pairing.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_v_multivariable_significant_coupling"], "profile_ids": ["mimo_2x2_coupled"],
+      "sha256": "7ad64456d486f6a91e2e23120192569043d78e983647cff46ea18f6aa5fc22b1", "source_refs": ["eth-control-systems-2017", "caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "controller_qualification_boundaries.en", "artifact_group_id": "controller_qualification_boundaries", "title": "Controller qualification, bounded changes, rollback, and authority", "path": "cards/en/controller_qualification_boundaries.md", "language": "en", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["controller", "critic"], "stages": ["controller", "review"],
+      "canonical_classes": [], "profile_ids": ["first_order_lag", "first_order_lag_with_delay", "second_order_oscillator", "double_integrator", "nmp_inverse_response", "generic_unstable_higher_order", "underactuated_cartpole", "vtol_cascaded", "mimo_2x2_coupled"],
+      "sha256": "324b76254f7180a48ff734151d3d7194611958d2c9e87abcfcee7209ee68f121", "source_refs": ["repo-knowledge-registry-v1", "repo-kernel-boundaries-v0.3.2", "ntnu-simc-2003", "caltech-feedback-systems-2008"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "open_loop_stability.zh", "artifact_group_id": "open_loop_stability", "title": "开环稳定性与工作点证据", "path": "cards/zh/open_loop_stability.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "critic"], "stages": ["diagnosis", "model", "review"],
+      "canonical_classes": ["class_i_first_order_lag", "class_iii_double_or_pure_integrator", "class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["first_order_lag", "double_integrator", "generic_unstable_higher_order"],
+      "sha256": "03a1b5b18fdffef6701df0fc55f671377f52521b8041b39e18f17252d2d0b388", "source_refs": ["caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "minimum_phase_inverse_response.zh", "artifact_group_id": "minimum_phase_inverse_response", "title": "最小相位、逆响应与不安全零点消除", "path": "cards/zh/minimum_phase_inverse_response.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["nmp_inverse_response"],
+      "sha256": "28f8a41ef05381fef696e76f1cb7c2c18d9a1b8ea5eef95a9ed2b9a933707b84", "source_refs": ["caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "significant_delay.zh", "artifact_group_id": "significant_delay", "title": "显著时延与相对时延", "path": "cards/zh/significant_delay.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_i_first_order_lag"], "profile_ids": ["first_order_lag_with_delay"],
+      "sha256": "4417939ef2ee2a8bd3e0ffd515429a54057e14e1d519352f6b866bf490ec6976", "source_refs": ["ntnu-simc-2003", "caltech-feedback-systems-2008", "repo-knowledge-registry-v1"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "structural_feasibility.zh", "artifact_group_id": "structural_feasibility", "title": "相对阶、可控性、可观性与传感驱动充分性", "path": "cards/zh/structural_feasibility.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "critic"], "stages": ["diagnosis", "model", "review"],
+      "canonical_classes": ["class_iv_higher_order_unstable_nonlinear_or_nmp", "class_v_multivariable_significant_coupling"], "profile_ids": ["generic_unstable_higher_order", "underactuated_cartpole", "mimo_2x2_coupled"],
+      "sha256": "f25c144e54502a92b013cad12dadce6f7eb7ec758f5bf0f15c4a941e1f10734c", "source_refs": ["caltech-feedback-systems-2008", "eth-control-systems-2017", "repo-knowledge-registry-v1"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "nonlinearity_local_validity.zh", "artifact_group_id": "nonlinearity_local_validity", "title": "静态与动态非线性及局部有效范围", "path": "cards/zh/nonlinearity_local_validity.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["generic_unstable_higher_order", "underactuated_cartpole", "vtol_cascaded"],
+      "sha256": "a7c5050038c1e33a6f469293ef00f7bf563bd418efe63311fba887193fcc3032", "source_refs": ["caltech-feedback-systems-2008", "mit-underactuated-2024", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "uncertainty_data_quality.zh", "artifact_group_id": "uncertainty_data_quality", "title": "不确定性量级、重复性与数据质量", "path": "cards/zh/uncertainty_data_quality.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["all"],
+      "canonical_classes": [], "profile_ids": [],
+      "sha256": "a08ab69b915f5e3e514d42431db2030a10b48e5b4880836fd48b846d8218cf0b", "source_refs": ["caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-kernel-boundaries-v0.3.2"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "fopdt_step_extraction.zh", "artifact_group_id": "fopdt_step_extraction", "title": "FOPDT 阶跃响应与 K、tau、theta 提取", "path": "cards/zh/fopdt_step_extraction.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_i_first_order_lag"], "profile_ids": ["first_order_lag", "first_order_lag_with_delay"],
+      "sha256": "c05c0aaf09a3ed5cb0ab9ed4f59291c588dbabdd9cbe65a9229b19c289564b5c", "source_refs": ["ntnu-simc-2003", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "free_decay_damping.zh", "artifact_group_id": "free_decay_damping", "title": "自由衰减、对数减量与阻尼比", "path": "cards/zh/free_decay_damping.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_ii_second_order_oscillator", "class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["second_order_oscillator", "generic_unstable_higher_order", "underactuated_cartpole"],
+      "sha256": "f00245187f2e4946f3d9a6b061f614469e107ea03f50b2bbc25f0e9d3b5a31a7", "source_refs": ["umich-ctms-pendulum", "caltech-feedback-systems-2008", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "pulse_signed_gain.zh", "artifact_group_id": "pulse_signed_gain", "title": "脉冲带符号输入增益与符号歧义", "path": "cards/zh/pulse_signed_gain.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_ii_second_order_oscillator", "class_iii_double_or_pure_integrator", "class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["second_order_oscillator", "double_integrator", "vtol_cascaded"],
+      "sha256": "4183635e2e8504e2936e695bf4d7d96a010f4e2e4ff2509caa91042cbf27e4fe", "source_refs": ["caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "hover_balance_input.zh", "artifact_group_id": "hover_balance_input", "title": "悬停或平衡输入与局部推力证据", "path": "cards/zh/hover_balance_input.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_iv_higher_order_unstable_nonlinear_or_nmp"], "profile_ids": ["vtol_cascaded"],
+      "sha256": "07ffe8c3aecc5609c0457813f68026d1b5bb411f451a35eb8f7672301d8bde99", "source_refs": ["mit-underactuated-2024", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "mimo_pairing.zh", "artifact_group_id": "mimo_pairing", "title": "MIMO 耦合、局部增益矩阵、配对与解耦", "path": "cards/zh/mimo_pairing.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["diagnosis", "modeling", "controller", "critic"], "stages": ["diagnosis", "model", "controller", "review"],
+      "canonical_classes": ["class_v_multivariable_significant_coupling"], "profile_ids": ["mimo_2x2_coupled"],
+      "sha256": "be359c33ac182e497038647120bf8682335e4029b449ec07e424d8cb287798f9", "source_refs": ["eth-control-systems-2017", "caltech-feedback-systems-2008", "repo-knowledge-registry-v1", "repo-mechanism-cards-v0.4"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    },
+    {
+      "artifact_id": "controller_qualification_boundaries.zh", "artifact_group_id": "controller_qualification_boundaries", "title": "控制器资格审查、有界增益变化、回滚与权限边界", "path": "cards/zh/controller_qualification_boundaries.md", "language": "zh", "authority": "advisory", "version": "1.0.0", "status": "active",
+      "roles": ["controller", "critic"], "stages": ["controller", "review"],
+      "canonical_classes": [], "profile_ids": ["first_order_lag", "first_order_lag_with_delay", "second_order_oscillator", "double_integrator", "nmp_inverse_response", "generic_unstable_higher_order", "underactuated_cartpole", "vtol_cascaded", "mimo_2x2_coupled"],
+      "sha256": "44fdf00af7449003bd54e1c7b958f7ee3c89eead635658209e0c4f764390eff3", "source_refs": ["repo-knowledge-registry-v1", "repo-kernel-boundaries-v0.3.2", "ntnu-simc-2003", "caltech-feedback-systems-2008"], "valid_from": "2026-09-03", "valid_until": null, "supersedes": []
+    }
+  ]
+}

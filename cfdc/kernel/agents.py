@@ -99,6 +99,11 @@ class KernelAgentCoordinator:
         }
         if task_payload:
             current["task_payload"] = dict(task_payload)
+        user_reply_path = operation == "user_reply" or (
+            operation == "review"
+            and role_value == AgentRole.CRITIC.value
+            and str((task_payload or {}).get("operation") or "") == "user_reply"
+        )
         # Keep role context narrow and never pass private provider state.
         if (
             operation == "review"
@@ -156,12 +161,8 @@ class KernelAgentCoordinator:
             summary=session.task.description[:800],
             stage=operation,
         )
-        snippets = [] if operation == "user_reply" else self._retrieve(request)
-        required = (
-            ()
-            if operation == "user_reply"
-            else self._required_rules(session, role_value)
-        )
+        snippets = [] if user_reply_path else self._retrieve(request)
+        required = () if user_reply_path else self._required_rules(session, role_value)
         return {
             "role": role_value,
             "operation": operation,
@@ -299,10 +300,17 @@ class KernelAgentCoordinator:
                     content_hash=getter("content_hash"),
                     artifact_type=getter("artifact_type"),
                     artifact_id=getter("artifact_id"),
+                    artifact_group_id=getter("artifact_group_id"),
                     source_kind=getter("source_kind"),
+                    language=getter("language"),
+                    authority=getter("authority"),
+                    artifact_version=getter("artifact_version"),
                     canonical_class=getter("canonical_class"),
+                    canonical_classes=tuple(getter("canonical_classes", ()) or ()),
                     profile_id=getter("profile_id"),
+                    profile_ids=tuple(getter("profile_ids", ()) or ()),
                     rule_id=getter("rule_id"),
+                    citation_refs=tuple(getter("citation_refs", ()) or ()),
                 )
             )
         return snippets

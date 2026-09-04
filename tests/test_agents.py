@@ -70,6 +70,42 @@ def test_role_context_keeps_system_description_immutable_and_isolates_rag_feedba
     assert request.role is AgentRole.DIAGNOSIS
 
 
+def test_agent_audit_preserves_curated_reference_metadata():
+    runtime = AgentRuntime(completion=ScriptedCompletion([{"answer": "ok"}]))
+    citation = {
+        "source_id": "caltech-feedback-systems-2008",
+        "url": "https://authors.library.caltech.edu/records/yzs24-xsx88",
+        "license": "Source terms apply; citation metadata only",
+    }
+
+    record = runtime.execute(
+        AgentRole.CRITIC,
+        description=SystemDescription(text="A process has inverse response."),
+        stage="review",
+        request={"task": "review"},
+        retrieval=[
+            RetrievalSnippet(
+                source_id="source-1",
+                content="Advisory reference.",
+                artifact_id="minimum_phase_inverse_response.en",
+                artifact_group_id="minimum_phase_inverse_response",
+                language="en",
+                authority="advisory",
+                artifact_version="1.0.0",
+                citation_refs=(citation,),
+            )
+        ],
+    )
+
+    assert record.source_refs[0]["artifact_group_id"] == (
+        "minimum_phase_inverse_response"
+    )
+    assert record.source_refs[0]["language"] == "en"
+    assert record.source_refs[0]["authority"] == "advisory"
+    assert record.source_refs[0]["artifact_version"] == "1.0.0"
+    assert record.source_refs[0]["citation_refs"] == [citation]
+
+
 def test_composite_adapter_revises_once_then_submits_only_after_critic_passes():
     description = SystemDescription(text="A heater.")
     completion = ScriptedCompletion(

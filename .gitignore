@@ -81,6 +81,12 @@ archive/
 # Keep canonical paper copies outside git unless intentionally added.
 *.pdf
 
+# Local RAG sources, immutable generated indexes, and operational history.
+/references/
+/knowledge-sources/
+/rag-index/
+/operational-history/
+
 # Local documentation and package manifest are not published.
 docs/
 MANIFEST.in

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cfdc-control"
-version = "0.3.2"
+version = "0.3.3"
 description = "Independent Core-Feature-Driven Control framework"
 authors = [{ name = "Yichuan Huang" }]
 license = "AGPL-3.0-only"
@@ -41,7 +41,16 @@ exclude = ["archive*"]
 python-preference = "only-managed"
 
 [tool.setuptools.package-data]
-cfdc = ["diagnosis/*.json", "lab/resources/*.json", "kernel/resources/*.json"]
+cfdc = [
+  "diagnosis/*.json",
+  "lab/resources/*.json",
+  "kernel/resources/*.json",
+  "history/resources/*.json",
+  "resources/knowledge_pack/v1/*.json",
+  "resources/knowledge_pack/v1/cards/en/*.md",
+  "resources/knowledge_pack/v1/cards/zh/*.md",
+  "resources/knowledge_pack/v1/eval/*.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.2` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.3` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
@@ -13,7 +13,7 @@
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
-uv sync
+uv sync --extra rag
 uv run python -m compileall -q cfdc tests main.py app.py
 ```
 
@@ -25,9 +25,11 @@ uv run python -m compileall -q cfdc tests main.py app.py
 uv run python app.py
 ```
 
+启动器会先构建或校验服务端管理的 `output/rag-index` snapshot，并加载随包指定的 multilingual E5 encoder。CFDC 不指定模型缓存目录，因此 Hugging Face 使用当前用户的默认缓存（通常是 `~/.cache/huggingface/hub`）。全部通过后 Gradio 才开始监听端口。首次启动可能需要下载模型并生成向量，因此等待时间会较长；之后会复用不可变 snapshot，创建第一个任务时不再承担索引构建开销。预检失败时进程直接退出，不启动 WebUI，并在终端显示依赖、模型缓存或目录权限方面的明确修复提示。
+
 3. 打开 `http://127.0.0.1:7860`。使用自然语言回复时，按照下表中你选择的服务商填写 Base URL、Model 和 API Key。在“引导工作台”选择一个内置案例，例如“01｜直流电机转速”。
 
-4. 没有建立本地 RAG 索引时关闭“启用本地 RAG”。创建任务并确认边界后，按页面提示提交结构诊断。内置软件案例会自动推进协议、公开取证、特征、控制器、资格审查、冻结和独立评价，直到需要用户决定或到达终态。
+4. “启用 RAG 内置知识库”默认勾选。它只控制当前任务是否使用启动前已准备好的 snapshot，不会在创建任务时构建索引。创建任务并确认边界后，按页面提示提交结构诊断。内置软件案例会自动推进协议、公开取证、特征、控制器、资格审查、冻结和独立评价，直到需要用户决定或到达终态。
 
 每次运行前可执行 `uv run --locked python main.py --doctor`。它与 WebUI 的“环境自检”共用同一非破坏性服务，检查 Python、资源目录、可写会话目录、公开案例注册表、可选 RAG，以及（仅对 loopback 地址）本地 Ollama 服务和模型。会话目录检查会创建并立即删除一个受限探针文件。
 
@@ -74,11 +76,11 @@ Kernel 使用带 revision 的 `TaskContract`、只追加事件、确定性 actio
 - `transition_then_hold`
 - `disturbance_recovery_to_hold`
 
-其他目标会明确拒绝。本地 RAG 可选；启用后，每个会话固定使用一个已校验的索引快照。
+其他目标会明确拒绝。WebUI 会在启动前准备本地 RAG；每个任务仍可选择是否使用，启用后会话固定使用一个已校验的索引快照。
 
 运行时定义 Diagnosis、Modeling、Controller 和 Critic 四个角色边界。当前 Web 自然语言回复实际调用 Diagnosis 提取八维诊断、Modeling 提取白名单参数，再由 Critic 审查合并后的类型化 candidate，并最多允许一次修正。Controller 角色保留给受约束的解释或 proposal 接口；Web 自动主线的控制器由确定性合成器生成。Python Kernel 是状态迁移、数值计算、路线选择、安全门和最终主张的唯一权威。Agent 调用失败时，本次用户回复不会写入业务状态，页面会返回明确错误；已经记录的 Kernel artifact 不会被模型输出覆盖。
 
-RAG 是可选的本地参考层。索引启用时，会话固定使用一个经过 schema、Registry fingerprint 和文件 checksum 校验的快照。当前 Web 的 `user_reply` 提取操作有意不注入检索片段，避免参考资料被误当成用户事实；RAG 用于其他显式的角色操作和扩展入口。页面显示“RAG 已启用”表示索引已加载并固定，不表示每一次 Agent 调用都执行了检索。
+RAG 是按任务选择的本地参考层。WebUI 启动前，服务端会构建或复用 `output/rag-index`，校验 schema、Registry fingerprint、知识包版本、已校准检索参数和文件 checksum，并加载、预热 encoder。启用 RAG 的会话会固定使用该精确 snapshot。当前 Web 的 `user_reply` 提取操作有意不注入检索片段，避免参考资料被误当成用户事实；RAG 用于其他显式的角色操作和扩展入口。页面显示“RAG 已启用”表示准备好的 snapshot 已绑定到该任务，不表示每一次 Agent 调用都执行了检索。
 
 ## 核心能力
 
@@ -119,12 +121,41 @@ git diff --check
 
 `uv` 会读取 `.python-version` 中固定的 Python 版本，创建 `.venv`，并安装项目及开发工具。使用 `uv run` 时不需要手动激活环境。
 
-需要本地 RAG 时，可以建立并检查索引。`references` 目录可包含 Markdown 或 PDF；索引还会包含版本化的内置 Registry 知识：
+新建索引默认包含两类随包资源：由 Registry 生成的权威 artifact，以及 12 个控制概念组的中英文版本化 advisory 知识卡。同组语言版本共享稳定 group identity 和语义版本，但保留各自的内容哈希与 provenance。知识包采用中央 JSON manifest 与 schema，记录有效期、引用元数据和 192 条冻结评估案例：原英文/中文集合、一个已曝光的 regression 集，以及 replacement challenge holdout。卡片只能解释已注册选择，不能改变路线、数值结果、资格审查或授权。新索引使用不可变 `cfdc-rag/v3` snapshot；合法 `v2` 和旧策略 `v3` snapshot 仍可只读加载，系统不会原地重写。
+
+如需加入本地 Markdown 或 PDF，可放在 `references` 目录。没有 metadata 的旧文档仍按“全 scope 可见”的兼容语义进入统一过滤。`--knowledge-pack` 可指定另一份通过校验的知识包，`--no-curated` 可排除随包卡片，`--relevance-threshold` 可把显式阈值固化到新 snapshot：
 
 ```bash
 uv sync --extra rag
 uv run python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
 uv run python -m cfdc.rag inspect --index-dir ./rag-index
+uv run python -m cfdc.rag query --index-dir ./rag-index \
+  --role critic --operation check --stage review \
+  --language auto \
+  --query "为什么不能消除不确定的右半平面零点？"
+uv run python -m cfdc.rag eval --index-dir ./rag-index \
+  --bundled --split holdout --assert-acceptance
+```
+
+`--language` 支持 `auto`、`en` 和 `zh`。自动模式只检查查询 summary 是否含汉字；显式选项覆盖自动判断。只有 summary 正文直接包含 artifact、profile 或 rule ID 时才返回 Registry reference；结构化 class/profile 字段只用于 scope 过滤，不会拼入语义查询。Advisory 检索先查首选语言，合格的双语 group 可投影为指定语言；每次最多返回两个不同的内置知识卡概念组，其余槽位仍可由外部文档补充。`rag eval --bundled` 会分别报告各门禁数据集和 combined 指标；可用 `--suite en`、`--suite zh` 或 `--suite challenge` 选择单个集合，`--assert-acceptance` 在失败时非零退出。本地来源目录和生成索引都不属于仓库 artifact。`user_reply` 路径永远不会收到 RAG reference；其他 Agent reference 均以不可信 advisory material 标记，并在审计中记录实际语言、group、snapshot、citation 与 provenance。
+
+运行历史使用独立的离线索引，不与 RAG 混合，也不会注入 Agent prompt。其 JSON schema 支持设备手册、FeatureArtifact、ControllerFreeze、资格报告、性能基线、适应 episode、退化事件、回滚报告和维护记录。导入时会校验 payload、配置和工作区哈希，以及有效期和同身份 supersedes 关系；不可变 snapshot 只保存摘要与 provenance。查询必须先精确匹配 plant、configuration 和 operating-region fingerprint，之后才应用有效期、记录类型、lexical 或 dense 排序。系统不会跨身份 fallback，也不会自动扫描 session、写回、监控或授予硬件权限。
+
+可通过独立 CLI 构建、检查和查询本地历史索引。源文件必须符合随包 schema；生成的 `operational-history` 数据会被 Git 忽略：
+
+```bash
+uv run python -m cfdc.history index \
+  --source ./operational-history/records.json \
+  --index-dir ./operational-history/index
+uv run python -m cfdc.history inspect \
+  --index-dir ./operational-history/index
+uv run python -m cfdc.history query \
+  --index-dir ./operational-history/index \
+  --plant-id plant-a \
+  --configuration-fingerprint 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+  --operating-region-fingerprint fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210 \
+  --record-type rollback_report \
+  --as-of 2026-09-03T00:00:00Z
 ```
 
 ## Web 界面
@@ -135,13 +166,15 @@ uv run python -m cfdc.rag inspect --index-dir ./rag-index
 uv run python app.py
 ```
 
+该命令需要按“快速开始”安装 `rag` extra。服务端管理的索引只包含 Registry artifact 和随包发布的中英文知识卡。部署者可以通过 `CFDC_RAG_INDEX_DIR` 覆盖服务端存储位置，但 WebUI 不再暴露索引路径或文档上传入口。
+
 “引导工作台”通过显式结构化表单创建 Kernel 任务。所有任务都必须填写任务描述、至少一个观测输出、至少一个控制输入、有限的输入上下界，以及正数 `state_stop`。输出上下界可选，但必须成对填写。`transition_then_hold` 还必须填写初始区域和目标区域；`disturbance_recovery_to_hold` 还必须填写扰动事件、恢复起点条件和恢复后保持区域。表单也支持工程单位、性能阈值、实验预算、时间偏好、初始数值和 intermediate targets。
 
 页面在每个状态只突出一个主要操作：确认任务、回答诊断问题、选择实验 Provider、下载 operator bundle 或教学练习包、需要时提交操作员报告、上传数据、启动隔离评价、接受有界调优或确认结果。页面整理为三个教学步骤——任务与边界、证据与控制器、评价与确认——同时保留九阶段只追加审计时间线。注册案例展示学习目标、关键术语、证据边界和“本案例不能证明什么”。协议波形、已接受公开 trace、特征区间、资格检查、冻结控制器的完整输出／参考／输入轨迹、重复试次置信度、剩余取证预算和路线修正原因都直接来自 Kernel artifact。页面明确区分“证据不足”“未通过资格”“稳定但性能不足”和“最终独立确认达标”。
 
 “专家合同”页可以提交完整 `TaskContract`、加载 Kernel session、执行 typed action JSON，并校验下载 artifact 的 fingerprint。可单独导出协议、operator bundle、上传回执、特征、Controller IR、qualification、freeze、evaluation、feedback、confirmation、最终结果和完整会话审计，也可导出完整结果 ZIP。
 
-Web Agent 编排固定为 `multi`。页面没有工作流版本和 Agent 模式控件；Provider 配置、RAG 开关和本地索引目录继续保留。高级 JSON 也继续保留，因为它属于 Kernel 的类型化公开证据与动作接口。
+Web Agent 编排固定为 `multi`。页面没有工作流版本和 Agent 模式控件；Provider 配置和默认开启的内置 RAG 开关继续保留，本地索引目录由服务端管理，不属于浏览器输入。高级 JSON 也继续保留，因为它属于 Kernel 的类型化公开证据与动作接口。
 
 回复方式始终使用固定选项 `natural_language` 和 `json`。当前 Kernel 输入契约决定两种方式是否都能选择、是否必须使用 JSON，或在无输入动作时隐藏控件。确认、继续、重算和终态不会再让 Gradio Radio 保存非法值。
 

@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import replace
+from types import SimpleNamespace
 
 import gradio as gr
+import numpy as np
 import pytest
 
 from cfdc.kernel import WorkflowService
@@ -32,6 +34,21 @@ from cfdc.web.ui import (
     _summary_html,
     submit_measurement_from_ui,
 )
+
+
+class _WebRAGEncoder:
+    model_name = "intfloat/multilingual-e5-small"
+    model_revision = "614241f622f53c4eeff9890bdc4f31cfecc418b3"
+
+    def encode(self, texts, *, is_query=False):
+        del is_query
+        if isinstance(texts, str):
+            texts = [texts]
+        vocabulary = ("stability", "delay", "damping", "mimo", "qualification")
+        return np.asarray(
+            [[text.casefold().count(word) for word in vocabulary] for text in texts],
+            dtype=float,
+        )
 
 
 def test_webui_shows_real_evaluation_curve_and_readiness_budget() -> None:
@@ -1035,7 +1052,6 @@ _RUN_INPUT_NAMES = (
     "model",
     "api_key",
     "rag_enabled",
-    "rag_index_dir",
     "provider_case_id",
     "signal_units_json",
     "input_unit",
@@ -1079,7 +1095,6 @@ def _run_inputs(**overrides):
         "model": "",
         "api_key": "",
         "rag_enabled": False,
-        "rag_index_dir": "",
         "provider_case_id": None,
         "signal_units_json": "",
         "input_unit": "",
@@ -1225,6 +1240,86 @@ def test_kernel_webui_component_tree_contains_no_compatibility_controls():
     assert "高级 JSON" in rendered
 
 
+def test_kernel_webui_defaults_to_builtin_rag_without_exposing_an_index_path():
+    app = web_ui.build_app(
+        prepared_rag=SimpleNamespace(
+            index_dir="output/rag-index",
+            snapshot="snapshot-ready",
+        )
+    )
+    components = app.config["components"]
+
+    rag_checkbox = next(
+        component
+        for component in components
+        if component.get("props", {}).get("label") == "启用 RAG 内置知识库"
+    )
+    assert rag_checkbox["props"]["value"] is True
+    assert all(
+        component.get("props", {}).get("label") != "本地 RAG 索引目录（可选）"
+        for component in components
+    )
+    assert web_ui.reset_task_form()[20] is True
+
+
+@pytest.mark.anyio
+async def test_kernel_gradio_pins_the_server_prepared_rag_snapshot(
+    tmp_path, monkeypatch
+):
+    from gradio.blocks import SessionState
+
+    from cfdc.rag import build_index
+
+    index = build_index(None, tmp_path / "rag", encoder=_WebRAGEncoder())
+    prepared = SimpleNamespace(
+        index_dir=index.snapshot.parent,
+        snapshot=index.index_snapshot,
+    )
+    original_start = web_service.start_kernel_app_run
+
+    def start_in_tmp(task, **kwargs):
+        kwargs["session_dir"] = tmp_path / "sessions"
+        return original_start(task, **kwargs)
+
+    monkeypatch.setattr(web_ui, "start_kernel_app_run", start_in_tmp)
+    app = web_ui.build_app(prepared_rag=prepared)
+    session_state = SessionState(app)
+
+    run_index = _fn_index(app, "run_from_ui", input_count=38)
+    run_result = await app.process_api(
+        run_index,
+        _run_inputs(rag_enabled=True),
+        state=session_state,
+        session_hash="kernel-prepared-rag",
+        simple_format=True,
+        explicit_call=True,
+    )
+
+    report = run_result["data"][15].root
+    state = session_state[app.fns[run_index].outputs[0]._id]
+    assert report["agent_config"]["rag_enabled"] is True
+    assert report["rag_snapshot"] == prepared.snapshot
+    assert state["rag_snapshot"] == prepared.snapshot
+    assert state["rag_index_dir"] == str(prepared.index_dir)
+
+    disabled_session_state = SessionState(app)
+    disabled_result = await app.process_api(
+        run_index,
+        _run_inputs(rag_enabled=False),
+        state=disabled_session_state,
+        session_hash="kernel-prepared-rag-disabled",
+        simple_format=True,
+        explicit_call=True,
+    )
+
+    disabled_report = disabled_result["data"][15].root
+    disabled_state = disabled_session_state[app.fns[run_index].outputs[0]._id]
+    assert disabled_report["agent_config"]["rag_enabled"] is False
+    assert disabled_report["rag_snapshot"] is None
+    assert disabled_state["rag_snapshot"] is None
+    assert disabled_state["rag_index_dir"] is None
+
+
 @pytest.mark.anyio
 async def test_kernel_gradio_process_api_accepts_stale_json_on_confirmation(
     tmp_path, monkeypatch
@@ -1241,7 +1336,7 @@ async def test_kernel_gradio_process_api_accepts_stale_json_on_confirmation(
 
     session_state = SessionState(app)
     run_result = await app.process_api(
-        _fn_index(app, "run_from_ui", input_count=39),
+        _fn_index(app, "run_from_ui", input_count=38),
         _run_inputs(),
         state=session_state,
         session_hash="kernel-process-api",
@@ -1322,7 +1417,7 @@ async def test_kernel_gradio_process_api_natural_language_reply_chain(
 
     session_state = SessionState(app)
     run_result = await app.process_api(
-        _fn_index(app, "run_from_ui", input_count=39),
+        _fn_index(app, "run_from_ui", input_count=38),
         _run_inputs(),
         state=session_state,
         session_hash="kernel-process-api-reply",
@@ -1417,7 +1512,7 @@ async def test_visible_gradio_flow_reaches_kernel_result_with_ollama_shaped_repl
 
     session_state = SessionState(app)
     run_result = await app.process_api(
-        _fn_index(app, "run_from_ui", input_count=39),
+        _fn_index(app, "run_from_ui", input_count=38),
         _run_inputs(
             description=(
                 public_training_case("dc_motor_speed_v1")["task"]["description"]
