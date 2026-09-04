@@ -390,10 +390,21 @@ def _validated_web_task(task: Mapping[str, Any]) -> dict[str, Any]:
 
 def _kernel_pending_actions(session) -> tuple[dict[str, Any], ...]:
     normalized: list[dict[str, Any]] = []
+    evaluation_provider = session.provider_bindings.get("evaluation")
+    registered_software_confirmation = (
+        isinstance(session.registered_case_binding, Mapping)
+        and isinstance(evaluation_provider, Mapping)
+        and str(evaluation_provider.get("execution_kind") or "") == "software"
+    )
     for item in session.pending_actions or ():
         value = dict(item)
-        if str(value.get("action") or "") in {"run_experiment", "retry"}:
+        action = str(value.get("action") or "")
+        if action in {"run_experiment", "retry"}:
             value.setdefault("ui_action", "evidence")
+        elif action == "record_fresh_confirmation" and (
+            registered_software_confirmation
+        ):
+            value["ui_action"] = "confirm_result"
         normalized.append(value)
     if normalized:
         return tuple(normalized)

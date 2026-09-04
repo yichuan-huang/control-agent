@@ -173,6 +173,97 @@ def test_reply_mode_updates_keep_static_component_choices(
     assert "choices" not in update
 
 
+def test_manual_fresh_confirmation_keeps_json_input_contract(tmp_path):
+    service = WorkflowService(tmp_path)
+    session = service.start(
+        {
+            "description": "Hold a measured output near its reference.",
+            "task_type": "local_setpoint_hold",
+            "measured_signals": ["output"],
+            "control_input": "input",
+            "input_min": -1,
+            "input_max": 1,
+            "state_stop": 2,
+        }
+    )
+    staged = replace(
+        session,
+        status="awaiting_confirmation",
+        tuning={"accepted": True},
+        pending_actions=(
+            {"kind": "confirmation", "action": "record_fresh_confirmation"},
+        ),
+    )
+
+    pending = web_service._kernel_pending_actions(staged)
+    contract = build_kernel_input_contract(staged, pending_actions=pending)
+    update = _reply_mode_update(contract)
+
+    assert pending == ({"kind": "confirmation", "action": "record_fresh_confirmation"},)
+    assert contract["action"] == "confirmation"
+    assert contract["allowed_modes"] == ["json"]
+    assert update["visible"] is True
+    assert update["value"] == "json"
+    assert update["interactive"] is False
+
+
+def test_registered_single_heater_fresh_confirmation_uses_provider_button(tmp_path):
+    report, state = start_kernel_case_run(
+        "tclab_single_heater_v1",
+        session_dir=tmp_path,
+        use_rag=False,
+    )
+    report, state = continue_kernel_app_run(
+        state,
+        action="confirm_task",
+        payload={},
+    )
+    assert report["status"] == "tuning_eligible"
+
+    report, state = continue_kernel_app_run(
+        state,
+        action="run_feedback_iteration",
+        payload={},
+    )
+
+    assert report["status"] == "awaiting_confirmation"
+    assert report["tuning"]["status"] == "selected"
+    assert report["tuning"]["accepted"] is True
+    assert report["pending_actions"] == [
+        {
+            "kind": "confirmation",
+            "action": "record_fresh_confirmation",
+            "ui_action": "confirm_result",
+        }
+    ]
+    assert report["input_contract"]["action"] == "confirm_result"
+    assert report["input_contract"]["allowed_modes"] == []
+    ui_outputs = _kernel_outputs(report, state)
+    assert ui_outputs[16]["visible"] is False
+    assert ui_outputs[17]["visible"] is False
+    assert ui_outputs[18]["visible"] is True
+    assert ui_outputs[18]["value"] == "执行全新确认"
+
+    persisted = WorkflowService(tmp_path).read(state["kernel_session_id"])
+    assert persisted.pending_actions == (
+        {"kind": "confirmation", "action": "record_fresh_confirmation"},
+    )
+
+    report, _ = continue_kernel_app_run(
+        state,
+        action="confirm_result",
+        payload={},
+    )
+
+    assert report["status"] == "performance_met"
+    assert report["pending_actions"] == []
+    assert report["confirmation"]["status"] == "performance_met"
+    assert report["evaluation_packets"][-1]["evaluation_split"] == (
+        "fresh_confirmation"
+    )
+    assert report["evaluation_replays"][-1]["matches_previous"] is True
+
+
 @pytest.mark.parametrize(
     ("task_type", "extra"),
     [
