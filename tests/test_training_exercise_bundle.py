@@ -7,13 +7,14 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from web_api_helpers import api_client, create
 
 from cfdc.kernel import EvidenceSession, evidence_from_trace
 from cfdc.kernel.contracts import fingerprint
 from cfdc.kernel.service import WorkflowService
 from cfdc.kernel.session import TRAINING_EXERCISE_LOCAL_FIELDS
 from cfdc.sim.training import build_training_provider_registries
-from cfdc.web import ui as web_ui
+from cfdc.web.drafts import case_draft
 
 
 def _diagnostics() -> dict[str, dict[str, object]]:
@@ -361,32 +362,17 @@ def test_exercise_mode_auto_stops_after_bundle_generation(tmp_path: Path) -> Non
 
 
 def test_web_can_start_explicit_exercise_case_without_editable_contract(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(
-        web_ui,
-        "start_kernel_app_run",
-        lambda *args, **kwargs: (
-            {
-                "workflow_version": "cfdc-v6-kernel/v1",
-                "status": "intake",
-                "revision": 0,
-                "session_id": "x",
-                "task": {},
-                "diagnostic": {"entries": [], "readiness": {}},
-                "pending_actions": [],
-                "input_contract": {},
-                "stages": [],
-                "education": {},
-                "teaching_steps": [],
-            },
-            {"kernel_session_id": "x", "kernel_revision": 0},
-        ),
-    )
-    monkeypatch.setattr(
-        web_ui, "_kernel_outputs", lambda report, state: (report, state)
-    )
-
-    report, state = web_ui.start_training_exercise_from_ui("case-01", "", "", "", False)
-    assert report["status"] == "intake"
-    assert state["kernel_session_id"] == "x"
+    with api_client(tmp_path) as client:
+        task_id = create(
+            client,
+            draft=case_draft("dc_motor_speed_v1"),
+            case_id="dc_motor_speed_v1",
+            evidence_mode="exercise_bundle",
+        )
+        report, _ = client.app.state.cache.get(task_id)
+        assert report["status"] == "awaiting_evidence"
+        assert report["training_exercise_bundles"]
+        assert not report["evidence"]
+        assert report["registered_case_binding"]["evidence_mode"] == "exercise_bundle"

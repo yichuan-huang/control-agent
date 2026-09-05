@@ -76,6 +76,7 @@ simulation_report*.json
 # Archive is kept locally for historical reference only.
 # The active CFDC runtime must not import or depend on these files.
 archive/
+/cfdc/web/gradio_archive/
 
 # Local PDFs and large research scratch files.
 # Keep canonical paper copies outside git unless intentionally added.

@@ -1466,8 +1466,8 @@ def wrap_agent_adapter(
 ) -> Any:
     """Construct the deterministic multi-agent coordinator around an adapter.
 
-    The import and model loading are lazy so ``single`` mode and installations
-    without the optional RAG dependencies never import Sentence Transformers.
+    The import and model loading are lazy so ``single`` mode and flows
+    that do not use RAG never load Sentence Transformers.
     """
 
     import os

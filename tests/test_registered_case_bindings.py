@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 
 import pytest
+from web_api_helpers import action, api_client
 
 from cfdc.kernel import EvidenceSession, WorkflowService
 from cfdc.kernel.cases import public_training_case
@@ -11,7 +12,8 @@ from cfdc.kernel.contracts import TaskContract, fingerprint
 from cfdc.kernel.replies import _ACTION_ALIASES, build_kernel_input_contract
 from cfdc.kernel.session import registered_task_scope_fingerprint
 from cfdc.sim.training import build_training_provider_registries
-from cfdc.web import ui as web_ui
+from cfdc.web import readmodels
+from cfdc.web.drafts import DraftValidationError, case_draft, task_from_draft
 from cfdc.web.service import (
     continue_kernel_app_run,
     kernel_action_error_payload,
@@ -117,16 +119,20 @@ def test_registered_scope_changes_for_every_non_budget_task_fact() -> None:
     ) == registered_task_scope_fingerprint(confirmed)
 
 
-def test_case_form_locks_contract_and_convert_to_custom_preserves_values() -> None:
-    locked = web_ui.load_case_into_form("case-01")
-    assert all(
-        isinstance(value, dict) and value.get("interactive") is False
-        for value in locked
+def test_case_form_locks_contract_and_convert_to_custom_preserves_values():
+    draft = case_draft("dc_motor_speed_v1")
+    locked = task_from_draft(draft, case_id="dc_motor_speed_v1")
+    assert (
+        locked["description"]
+        == public_training_case("dc_motor_speed_v1")["task"]["description"]
     )
-
-    unlocked = web_ui.convert_case_to_custom("case-01", *locked)
-    assert unlocked[0]["value"] == ""
-    assert all(value.get("interactive") is True for value in unlocked)
+    altered = {**draft, "description": "My independent task"}
+    with pytest.raises(DraftValidationError):
+        task_from_draft(altered, case_id="dc_motor_speed_v1")
+    custom = task_from_draft(altered)
+    assert custom["description"] == "My independent task"
+    for key in ("input_min", "input_max", "state_stop", "reference"):
+        assert custom[key] == locked[key]
 
 
 def test_web_reply_contract_has_no_public_set_provider_action(tmp_path) -> None:
@@ -159,7 +165,8 @@ def test_registered_projection_contains_three_step_learning_boundary(tmp_path) -
     assert len(report["teaching_steps"]) == 3
     assert report["education"]["learning_goal"]
     assert report["education"]["cannot_prove"]
-    assert "证据边界" in web_ui._guidance_text(report)
+    assert readmodels.node_page(report, "education", "/cannot_prove").total
+    assert len(readmodels.node_page(report, "teaching_steps").items) == 3
 
 
 def test_web_error_projection_does_not_echo_unrecognised_exception_text() -> None:
@@ -192,13 +199,12 @@ def test_failed_mutation_refreshes_the_returned_web_state(
     current = service.confirm_task(
         session.session_id, action_id="other-tab", revision=session.revision
     )
-    warnings: list[str] = []
-    monkeypatch.setattr(web_ui.gr, "Warning", warnings.append)
-
-    outputs = web_ui._refresh_mutation_error(ValueError("stale_revision"), state)
-
-    assert outputs[0]["kernel_revision"] == current.revision
-    assert f'"revision": {current.revision}' in warnings[0]
+    with api_client(tmp_path) as client:
+        response = action(client, state, "confirm_task", confirmed=True)
+        assert response.status_code == 409
+        assert response.json()["error"]["latest_revision"] == current.revision
+        refreshed = client.get(f"/api/v1/tasks/{session.session_id}").json()
+        assert refreshed["revision"] == current.revision
 
 
 def test_registered_case_binding_is_persisted_and_scope_survives_budget_confirmation(

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -162,60 +161,110 @@ def test_preflight_sanitizes_pack_validation_failure(tmp_path: Path, monkeypatch
     assert "private-local-path" not in str(caught.value)
 
 
-def test_app_prepares_rag_before_building_and_launching_webui(monkeypatch):
+def test_app_launches_same_origin_api_with_explicit_local_defaults(monkeypatch):
     import app
 
-    events: list[str] = []
-    prepared = SimpleNamespace(index_dir=Path("output/rag-index"), snapshot="snap")
-
-    class FakeDemo:
-        def queue(self, *, default_concurrency_limit):
-            assert default_concurrency_limit == 2
-            events.append("queue")
-            return self
-
-        def launch(self, **kwargs):
-            assert kwargs["server_name"] == "127.0.0.1"
-            assert kwargs["server_port"] == 7860
-            events.append("launch")
-
-    def prepare():
-        events.append("prepare")
-        return prepared
-
-    def build(*, prepared_rag):
-        assert prepared_rag is prepared
-        events.append("build")
-        return FakeDemo()
-
-    monkeypatch.setattr(app, "prepare_builtin_rag_index", prepare)
-    monkeypatch.setattr(app, "build_app", build)
-
+    calls = []
+    monkeypatch.setattr(
+        app.uvicorn,
+        "run",
+        lambda application, **kwargs: calls.append((application, kwargs)),
+    )
     assert app.main([]) == 0
-    assert events == ["prepare", "build", "queue", "launch"]
+    assert calls[0][1] == {
+        "host": "127.0.0.1",
+        "port": 7860,
+        "workers": 1,
+        "access_log": False,
+    }
+    assert calls[0][0].state.rag.status().status == "error"
 
 
-def test_app_does_not_create_or_launch_webui_when_rag_preflight_fails(
-    monkeypatch, capsys
+def test_http_shell_and_config_remain_available_while_rag_prepares_or_fails(
+    tmp_path, monkeypatch
 ):
-    import app
-    from cfdc.web.rag_startup import BuiltinRAGStartupError
+    from threading import Event
+    from time import monotonic, sleep
+    from uuid import uuid4
 
-    built = False
+    from fastapi.testclient import TestClient
 
-    def fail_prepare():
-        raise BuiltinRAGStartupError(
-            "内置 RAG 依赖未安装；请执行 uv sync --locked --extra rag。"
-        )
+    from cfdc.web import runtime
+    from cfdc.web.api import create_app
+    from cfdc.web.drafts import case_draft
 
-    def build(*, prepared_rag):
-        nonlocal built
-        built = True
-        return prepared_rag
+    started, release = Event(), Event()
 
-    monkeypatch.setattr(app, "prepare_builtin_rag_index", fail_prepare)
-    monkeypatch.setattr(app, "build_app", build)
+    def prepare(*args):
+        started.set()
+        assert release.wait(10)
+        raise runtime.BuiltinRAGStartupError("private dependency detail")
 
-    assert app.main([]) == 1
-    assert built is False
-    assert "uv sync --locked --extra rag" in capsys.readouterr().err
+    monkeypatch.setattr(runtime, "prepare_builtin_rag_index", prepare)
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / "index.html").write_text(
+        "<html><body>CFDC application shell</body></html>"
+    )
+    application = create_app(
+        session_dir=tmp_path / "sessions",
+        runtime_dir=tmp_path / "web",
+        frontend_dir=frontend,
+    )
+    with TestClient(application, base_url="http://127.0.0.1:7860") as client:
+        assert started.wait(5)
+        try:
+            for expected in ("preparing", "error"):
+                config = client.get("/api/v1/config")
+                assert config.status_code == 200
+                assert config.json()["rag"]["status"] == expected
+                assert "private dependency detail" not in config.text
+                assert client.get("/").status_code == 200
+                response = client.post(
+                    "/api/v1/tasks",
+                    json={
+                        "request_id": str(uuid4()),
+                        "draft": case_draft("dc_motor_speed_v1"),
+                        "confirmed": True,
+                        "use_rag": True,
+                    },
+                )
+                assert response.status_code == 409
+                assert response.json()["error"]["code"] == "rag_not_ready"
+                assert not list((tmp_path / "sessions").glob("*.json"))
+                release.set()
+                deadline = monotonic() + 5
+                while application.state.rag.status().status == "preparing":
+                    assert monotonic() < deadline
+                    sleep(0.01)
+        finally:
+            release.set()
+
+
+@pytest.mark.parametrize(
+    ("failure", "hint"),
+    [
+        (ModuleNotFoundError("private missing module"), "uv sync --locked"),
+        (PermissionError("private path"), "目录权限"),
+    ],
+)
+def test_rag_runtime_reports_safe_recovery_for_classified_failure(
+    tmp_path, monkeypatch, failure, hint
+):
+    from time import monotonic, sleep
+
+    from cfdc.web import rag_startup, runtime
+
+    def prepare(*args):
+        raise rag_startup._safe_startup_error(failure, phase="build")
+
+    monkeypatch.setattr(runtime, "prepare_builtin_rag_index", prepare)
+    rag = runtime.RAGRuntime(tmp_path / "index")
+    rag.start()
+    deadline = monotonic() + 5
+    while rag.status().status == "preparing":
+        assert monotonic() < deadline
+        sleep(0.01)
+    assert hint in rag.status().message
+    assert "private" not in rag.status().message
+    assert rag.options(False) == {"use_rag": False}

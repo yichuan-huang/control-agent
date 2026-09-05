@@ -4,25 +4,29 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cfdc-control"
-version = "0.3.3"
+version = "0.3.4"
 description = "Independent Core-Feature-Driven Control framework"
 authors = [{ name = "Yichuan Huang" }]
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
-  "gradio>=6.0,<7",
+  "fastapi>=0.115,<1",
   "jsonschema>=4.20",
   "numpy>=2.0",
   "openai>=1.0",
   "pandas>=2.2",
   "pydantic>=2.0",
+  "pypdf>=5.0",
+  "python-multipart>=0.0.18,<1",
   "plotly>=5.24,<7",
   "scipy>=1.14",
+  "sentence-transformers>=3.0",
+  "uvicorn>=0.34,<1",
 ]
 
 [project.optional-dependencies]
-rag = ["pypdf>=5.0", "sentence-transformers>=3.0"]
+rag = []  # Compatibility alias; knowledge-base dependencies are installed by default.
 
 [project.urls]
 Repository = "https://github.com/yichuan-huang/control-agent"
@@ -35,7 +39,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["cfdc*"]
-exclude = ["archive*"]
+exclude = ["archive*", "cfdc.web.frontend*", "cfdc.web.gradio_archive*"]
 
 [tool.uv]
 python-preference = "only-managed"
@@ -52,12 +56,17 @@ cfdc = [
   "resources/knowledge_pack/v1/eval/*.json",
 ]
 
+[tool.setuptools.exclude-package-data]
+"cfdc.web" = ["frontend/*", "frontend/**/*", "gradio_archive/*", "gradio_archive/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+norecursedirs = ["cfdc/web/gradio_archive", "node_modules"]
 
 [tool.ruff]
 target-version = "py311"
+extend-exclude = ["cfdc/web/gradio_archive", "cfdc/web/frontend/node_modules", "cfdc/web/frontend/dist"]
 
 [tool.ruff.lint]
 # These input-validation boundaries intentionally expose malformed payloads as

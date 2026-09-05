@@ -1,4 +1,4 @@
-"""Prepare the packaged advisory RAG index before the WebUI starts."""
+"""Prepare the packaged advisory RAG index in the WebUI's background worker."""
 
 from __future__ import annotations
 
@@ -23,7 +23,23 @@ _WARMUP_QUERY = "control-system knowledge readiness"
 
 
 class BuiltinRAGStartupError(RuntimeError):
-    """A safe, user-facing failure raised before Gradio is launched."""
+    """A classified startup failure with a bounded public recovery message."""
+
+    def __init__(self, message: str, *, reason: str = "unknown") -> None:
+        super().__init__(message)
+        self.reason = reason
+
+    @property
+    def public_message(self) -> str:
+        messages = {
+            "dependencies": "内置知识库依赖缺失；请执行 uv sync --locked 恢复依赖后重新启动。",
+            "permissions": "内置知识库索引目录不可写；请检查索引目录权限后重新启动。",
+            "model": "内置知识库编码模型无法加载；请检查网络或本地 Hugging Face 缓存后重新启动。",
+            "index": "内置知识库索引构建失败；请检查模型缓存和索引目录，环境自检可帮助定位。",
+            "package": "内置知识包校验失败；请恢复当前版本的知识包文件后重新启动。",
+            "unknown": "内置知识库准备失败；请检查依赖、网络、模型缓存和索引目录，环境自检可帮助定位。",
+        }
+        return messages.get(self.reason, messages["unknown"])
 
 
 @dataclass(frozen=True)
@@ -106,20 +122,22 @@ def _is_current_builtin_snapshot(manifest: dict[str, Any], pack: Any) -> bool:
 
 
 def _safe_startup_error(exc: Exception, *, phase: str) -> BuiltinRAGStartupError:
-    if isinstance(exc, (ModuleNotFoundError, ImportError)):
+    if isinstance(exc, ImportError) or isinstance(exc.__cause__, ImportError):
         return BuiltinRAGStartupError(
-            "内置 RAG 依赖未安装；请执行 uv sync --locked --extra rag。"
+            "内置 RAG 依赖未安装；请执行 uv sync --locked。", reason="dependencies"
         )
     if isinstance(exc, PermissionError):
         return BuiltinRAGStartupError(
-            "内置 RAG 索引目录不可写；请检查 output/rag-index 的目录权限。"
+            "内置 RAG 索引目录不可写；请检查 output/rag-index 的目录权限。",
+            reason="permissions",
         )
     if phase == "warmup":
         return BuiltinRAGStartupError(
-            "内置 RAG 编码模型无法加载；请检查网络或本地 Hugging Face 缓存。"
+            "内置 RAG 编码模型无法加载；请检查网络或本地 Hugging Face 缓存。",
+            reason="model",
         )
     return BuiltinRAGStartupError(
-        "内置 RAG 索引构建失败；请检查 rag 依赖、模型缓存和索引目录。"
+        "内置 RAG 索引构建失败；请检查依赖、模型缓存和索引目录。", reason="index"
     )
 
 
@@ -145,7 +163,7 @@ def prepare_builtin_rag_index(
         pack = load_knowledge_pack()
     except Exception as exc:
         raise BuiltinRAGStartupError(
-            "内置 RAG 知识包校验失败；请重新安装当前版本后重试。"
+            "内置 RAG 知识包校验失败；请重新安装当前版本后重试。", reason="package"
         ) from exc
     existing = None
     try:

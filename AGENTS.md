@@ -21,6 +21,7 @@ git diff --check
 ```
 
 - Fix failures before proceeding. Do not weaken assertions, add unjustified skips, disable CI jobs, or relax lint rules just to obtain a passing result.
+- For frontend changes and releases, use the existing npm lockfile and Node.js 22. Run `npm ci`, `npm run format:check`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npx playwright install chromium`, and `npm run test:e2e` from `cfdc/web/frontend`. The default Playwright configuration starts the production frontend and real API on port 7867 with disposable data, without RAG preparation or model calls. Keep these checks aligned with the frontend CI job and require it to pass for the published SHA.
 - Report existing optional skips separately from failures. A skipped test is not evidence that its behavior works.
 - Tests and production code must work from the committed repository without local documentation, historical archives, private datasets, or uncommitted fixtures. Use committed fixtures or temporary synthetic data where needed.
 

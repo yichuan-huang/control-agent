@@ -650,7 +650,7 @@ def _read_sources(
             from pypdf import PdfReader
         except ImportError as exc:
             raise ValueError(
-                "PDF indexing requires the optional 'rag' dependency (pypdf)"
+                "PDF indexing requires pypdf; restore dependencies with `uv sync --locked`"
             ) from exc
         try:
             reader = PdfReader(str(path), strict=False)
@@ -706,8 +706,8 @@ class SentenceTransformerEncoder:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise ValueError(
-                "local RAG indexing/search requires the optional 'rag' dependencies; "
-                "run `uv sync --extra rag`"
+                "local RAG indexing/search dependencies are missing; "
+                "run `uv sync --locked`"
             ) from exc
         self.model_name = model_name
         self.model_revision = revision or DEFAULT_EMBEDDING_REVISION

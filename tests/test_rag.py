@@ -83,7 +83,6 @@ def test_markdown_long_paragraphs_are_bounded_and_heading_paths_are_retained(tmp
 
 
 def test_pdf_page_provenance(tmp_path):
-    pytest.importorskip("pypdf")
     from pypdf import PdfWriter
 
     source = tmp_path / "sources"

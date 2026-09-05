@@ -2,34 +2,38 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.3` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.4` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
 You can use a local model through Ollama or a hosted service such as DeepSeek API or OpenAI API. Choose the provider and model that suit your needs; Ollama is not required. Models interpret natural-language replies, while the Kernel decides routes, experiments, controllers, numerical evaluation, and final claims.
 
-1. With Git and `uv` installed, download the project, install its dependencies, and check the Python files:
+1. Install Git, `uv`, and [Node.js with npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm). npm normally ships with Node.js. Node.js 20.19+ or 22.12+ is required. Then download the project, install its dependencies, check the Python files, verify Node and npm, and perform the first-time frontend install and build:
 
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
-uv sync --extra rag
-uv run python -m compileall -q cfdc tests main.py app.py
+uv sync --locked
+uv run --locked python -m compileall -q -x '(^|/)(frontend|gradio_archive)(/|$)' cfdc tests main.py app.py
+node --version
+npm --version
+npm --prefix cfdc/web/frontend ci
+npm --prefix cfdc/web/frontend run build
 ```
 
 `uv` reads the Python version from `.python-version` and manages `.venv`. Commands using `uv run` do not require manual environment activation.
 
-2. Start the WebUI:
+2. After that first-time `npm ci` and build, daily use requires only this command to start the WebUI:
 
 ```bash
 uv run python app.py
 ```
 
-The launcher first builds or validates the managed `output/rag-index` snapshot and loads the packaged multilingual E5 encoder. CFDC does not set a model cache directory, so Hugging Face uses its standard per-user cache (normally `~/.cache/huggingface/hub`). Gradio starts listening only after that preflight succeeds. The first launch can therefore take longer while the model and vectors are prepared; later launches reuse the immutable snapshot, and the first task does not pay the indexing cost. If preflight fails, the process exits without starting the WebUI and prints an actionable dependency, model-cache, or directory-permission message.
+The default entry is React + FastAPI, served from the same origin at `127.0.0.1:7860`. RAG dependencies are installed by default. RAG prepares in the background while the shell and settings remain available; the first encoder download may take time. Tasks requesting RAG cannot start while it is preparing or unavailable, and the UI reports the error. Disabling RAG changes only the binding for a future task; existing task snapshots remain immutable. Hugging Face uses its standard per-user model cache.
 
 3. Open `http://127.0.0.1:7860`. For natural-language replies, fill in Base URL, Model, and API Key using your chosen provider from the table below. Choose a built-in case such as “01 | DC motor speed” in the Guided Workbench.
 
-4. “Enable the built-in RAG knowledge base” is selected by default. It controls whether the current task uses the already prepared snapshot; it does not build an index during task creation. Create the task, confirm its boundaries, and submit the requested structural diagnosis. A built-in software case then advances through protocol compilation, public evidence, features, controller synthesis, qualification, freeze, and independent evaluation until it needs a user decision or reaches a terminal state.
+4. Follow the four guided steps: task and goal, measurements and inputs, constraints and preferences, then review the summary and confirm the software trial boundary. Registered case contracts are locked; converting to a custom task preserves form values and removes the case execution binding. Default-on RAG pins the server-prepared snapshot. The workspace follows the Kernel’s current next action until a user decision or terminal state.
 
 Before a run, `uv run --locked python main.py --doctor` prints the same non-destructive environment report used by the WebUI. It checks Python, packaged resources, the writable session directory, the public case registry, optional RAG, and (only for loopback addresses) the configured Ollama service/model. The writable-directory check creates and immediately removes one bounded probe file.
 
@@ -76,11 +80,11 @@ The registered software task types are:
 - `transition_then_hold`
 - `disturbance_recovery_to_hold`
 
-Other objectives fail closed. The WebUI prepares local RAG before launch; its use remains optional per task and, when enabled, is pinned to one validated index snapshot for the session.
+Other objectives fail closed. RAG use remains optional per task and, when enabled, is pinned to one validated index snapshot after background preparation succeeds.
 
 The runtime defines four role boundaries: Diagnosis, Modeling, Controller, and Critic. The current Web natural-language path calls Diagnosis to extract the eight diagnostic dimensions, Modeling to extract allow-listed parameter facts, and Critic to review their normalized candidate with at most one correction. The Controller role remains available for constrained explanations and proposal interfaces; the guided automatic path uses deterministic controller synthesis. The Python Kernel is the only authority for state transitions, numerical work, route selection, safety gates, and claims. If an Agent call fails, that user reply is not committed to business state and the page returns an explicit error; previously recorded Kernel artifacts are not replaced by model output.
 
-RAG is an optional local reference layer for each task. Before the WebUI launches, the server builds or reuses `output/rag-index`, validates its schema, Registry fingerprint, packaged knowledge-pack version, calibrated retrieval settings, and file checksums, then loads and warms the encoder. An enabled session pins that exact snapshot. The current Web `user_reply` extraction deliberately receives no retrieved snippets so reference material cannot be mistaken for user facts. Retrieval remains available to other explicit role operations and extension entry points. “RAG enabled” therefore means that the prepared snapshot is pinned for the task, not that every Agent call performs retrieval.
+RAG is an optional local reference layer for each task. While the WebUI is available, the server builds or reuses `output/rag-index`, validates its schema, Registry fingerprint, packaged knowledge-pack version, calibrated retrieval settings, and file checksums, then loads and warms the encoder. An enabled session pins that exact snapshot. The current Web `user_reply` extraction deliberately receives no retrieved snippets so reference material cannot be mistaken for user facts. Retrieval remains available to other explicit role operations and extension entry points. “RAG enabled” therefore means that the prepared snapshot is pinned for the task, not that every Agent call performs retrieval.
 
 ## Core capabilities
 
@@ -106,16 +110,34 @@ The executable capability catalog distinguishes registration from end-to-end val
 
 ## Development checks and optional RAG
 
+Frontend local checks and development:
+
+```bash
+npm --prefix cfdc/web/frontend ci
+npm --prefix cfdc/web/frontend run typecheck
+npm --prefix cfdc/web/frontend run lint
+npm --prefix cfdc/web/frontend run format:check
+npm --prefix cfdc/web/frontend test
+npm --prefix cfdc/web/frontend run build
+cd cfdc/web/frontend && npx playwright install chromium && cd ../../..
+npm --prefix cfdc/web/frontend run test:e2e
+npm --prefix cfdc/web/frontend run dev
+```
+
+Playwright starts the built UI and a real FastAPI service on `127.0.0.1:7867` with temporary data and no model calls. Set `CFDC_E2E_URL` to test an already running service. CI runs these frontend checks with Node 22 alongside Python 3.11–3.13 checks. For Vite development, run FastAPI in another terminal; Vite runs at `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:7860`.
+
 From the project directory, run the automated tests and Python checks:
 
 ```bash
 uv lock --check
 uv sync --locked
+uv run --locked ruff format .
 uv run --locked ruff format --check .
 uv run --locked ruff check .
 uv run --locked pytest -q
 uv run --locked python main.py --benchmark > /tmp/cfdc-benchmark.json
 uv run --locked python main.py --validate-demo
+uv run --locked python scripts/benchmark_web_api.py
 git diff --check
 ```
 
@@ -126,14 +148,13 @@ New indexes include two packaged sources by default: the authoritative, generate
 To add local Markdown or PDF references, place them under `references`. Metadata-free legacy documents remain globally visible to structured scope filtering. Use `--knowledge-pack` for another validated pack, `--no-curated` to omit the packaged cards, or `--relevance-threshold` to record an explicit threshold in the new snapshot:
 
 ```bash
-uv sync --extra rag
-uv run python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
-uv run python -m cfdc.rag inspect --index-dir ./rag-index
-uv run python -m cfdc.rag query --index-dir ./rag-index \
+uv run --locked python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
+uv run --locked python -m cfdc.rag inspect --index-dir ./rag-index
+uv run --locked python -m cfdc.rag query --index-dir ./rag-index \
   --role critic --operation check --stage review \
   --language auto \
   --query "Why is uncertain right-half-plane zero cancellation unsafe?"
-uv run python -m cfdc.rag eval --index-dir ./rag-index \
+uv run --locked python -m cfdc.rag eval --index-dir ./rag-index \
   --bundled --split holdout --assert-acceptance
 ```
 
@@ -158,6 +179,8 @@ uv run python -m cfdc.history query \
   --as-of 2026-09-03T00:00:00Z
 ```
 
+The historical Gradio application is available in the [v0.3.3 source](https://github.com/yichuan-huang/control-agent/tree/v0.3.3). The current release runs independently of historical checkouts.
+
 ## Web interface
 
 Start the application and open `http://127.0.0.1:7860`:
@@ -166,21 +189,23 @@ Start the application and open `http://127.0.0.1:7860`:
 uv run python app.py
 ```
 
-This command requires the `rag` extra shown in Quick start. The managed index contains only Registry artifacts and the packaged English/Chinese knowledge cards. `CFDC_RAG_INDEX_DIR` may override its server-side storage location for deployment, but no index path or document upload is exposed in the WebUI.
+In Settings, enter Base URL, Model, and API Key, then choose **测试当前配置** (Test current configuration). Requests use the current form values without a separate save or environment-variable setup. A successful probe confirms service connectivity and model availability, not full inference compatibility. **高级设置** (Advanced settings) contains the optional startup-environment import for address and model; it always preserves the in-memory key.
+
+The built-in knowledge base dependencies are installed by default. The managed index contains only Registry artifacts and packaged English/Chinese knowledge cards. `CFDC_RAG_INDEX_DIR` may override server-side storage; browser inputs cannot choose an index path.
 
 The Guided Workbench creates Kernel tasks from an explicit structured form. Every task requires a description, at least one measured output, at least one control input, finite input lower and upper bounds, and a positive `state_stop`. Output bounds are optional but must be supplied as a pair. `transition_then_hold` also requires an initial region and target region. `disturbance_recovery_to_hold` also requires a disturbance event, recovery start condition, and hold region. The form also accepts engineering units, performance thresholds, experiment budgets, timing preferences, initial values, and intermediate targets.
 
-At each state the workbench presents one primary next action: confirm the task, answer a diagnostic question, select an experiment Provider, download an operator bundle or teaching exercise, record the operator report when required, upload data, run isolated evaluation, accept bounded tuning, or confirm the result. The page is organised as three teaching steps—task and boundaries; evidence and controller; evaluation and confirmation—while retaining the nine-stage append-only audit timeline. Registered cases show a learning goal, key terms, evidence boundary, and explicit “cannot prove” notes. Protocol waveforms, accepted public traces, feature intervals, qualification checks, full frozen-controller output/reference/input trajectories, repeat confidence, remaining evidence budgets, and route-revision reasons are shown from Kernel artifacts. The page distinguishes insufficient evidence, failed qualification, stable-but-insufficient performance, and final independent confirmation.
+The workspace presents one primary next action at each state: diagnostic reply, evidence handoff or upload, bounded tuning, and fresh result confirmation. It retains the nine-stage append-only audit timeline. Registered cases show learning goals and evidence boundaries. Protocol previews, recorded trajectories, metrics, confidence, and readiness come from Kernel artifacts. Full JSON trees, audit records, and selectable curves load on demand in expert and result views; display sampling never changes numerical evaluation or replay.
 
 The Expert Contracts tab accepts a full `TaskContract`, loads an existing Kernel session, submits typed action JSON, and validates a downloaded artifact fingerprint. It can export the protocol, operator bundle, upload receipt, feature artifact, Controller IR, qualification, freeze, evaluation, feedback, confirmation, final result, complete session audit, or the full result ZIP.
 
 Web Agent orchestration is always `multi`. The page has no workflow-version selector and no Agent-mode selector. Provider configuration and the default-on built-in RAG switch remain available; the local index directory is server-managed and is not a browser input. Advanced JSON remains available because it is the Kernel's typed public evidence and action interface.
 
-The reply selector has the fixed values `natural_language` and `json`. The current Kernel input contract decides whether both can be selected, JSON is mandatory, or the selector is hidden for an action that takes no input. Confirmation, continue, replay, and terminal actions therefore cannot leave an invalid Radio value in Gradio state.
+The Kernel input contract determines whether natural language, typed JSON, or a button without input is appropriate. Every mutation checks the session revision and request identity. Reloading reconnects to its recorded operation; an interrupted operation is reported without automatic replay. Retrying is an explicit user action.
 
 The WebUI does not load or run legacy sessions, does not expose the `single` baseline, and does not fall back to a compatibility workflow. A missing, unknown, or non-Kernel Web state is rejected with an explicit error. Use the CLI procedure below for legacy sessions.
 
-Provider credentials are read from the current form values. API keys are not stored in Gradio state, Kernel sessions, audit JSON, logs, hashes, or exports.
+Unfinished drafts persist in this browser tab’s `sessionStorage`. Provider credentials remain in volatile memory and must be entered again after reload; API keys are excluded from drafts, Kernel sessions, audit JSON, logs, hashes, and exports. The history import API accepts only `request_id` and an uploaded `file_id`. Imported public facts require fresh boundary confirmation and never inherit registered case execution authority or RAG bindings.
 
 The built-in selector contains 18 public cases:
 

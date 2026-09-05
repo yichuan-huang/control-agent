@@ -934,6 +934,8 @@ def _kernel_report(session) -> dict[str, Any]:
         "session_id": session.session_id,
         "status": session.status,
         "revision": session.revision,
+        "read_only": session.read_only,
+        "active_protocol_fingerprint": session.active_protocol_fingerprint,
         "task": session.task.to_dict(),
         "parameter_facts": [dict(item) for item in session.parameter_facts],
         "diagnostic": {

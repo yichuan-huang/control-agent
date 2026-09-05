@@ -1,1 +1,1 @@
-"""Web application service, presentation, and Gradio UI modules."""
+"""FastAPI services and presentation for the React Web application."""

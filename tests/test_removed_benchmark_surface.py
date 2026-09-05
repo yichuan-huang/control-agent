@@ -74,6 +74,10 @@ def test_production_code_does_not_reference_removed_assets() -> None:
         "run_mimo_demo_validation",
     )
     for path in (REPOSITORY_ROOT / "cfdc").rglob("*.py"):
+        if path.is_relative_to(
+            REPOSITORY_ROOT / "cfdc/web/frontend"
+        ) or path.is_relative_to(REPOSITORY_ROOT / "cfdc/web/gradio_archive"):
+            continue
         text = path.read_text(encoding="utf-8")
         for marker in forbidden:
             assert marker not in text, f"{path} still contains {marker}"

@@ -21,9 +21,10 @@ def test_project_uses_uv_managed_python_and_dev_dependency_group():
     assert "test" not in metadata["project"].get("optional-dependencies", {})
 
 
-def test_uv_lock_is_the_only_dependency_lockfile():
+def test_python_uses_uv_lock_and_frontend_has_its_own_npm_lock():
     assert (ROOT / "uv.lock").is_file()
     assert not (ROOT / "requirements.txt").exists()
+    assert (ROOT / "cfdc/web/frontend/package-lock.json").is_file()
 
 
 def test_docs_and_ci_publish_only_uv_workflow():
@@ -54,8 +55,25 @@ def test_docs_and_ci_publish_only_uv_workflow():
 def test_readmes_install_and_check_before_web_start_and_cli():
     for path in [ROOT / "README.md", ROOT / "README_CN.md"]:
         text = path.read_text(encoding="utf-8")
-        compile_check = text.index("uv run python -m compileall -q cfdc tests")
+        sync = text.index("uv sync --locked")
+        compile_check = text.index(
+            "uv run --locked python -m compileall -q -x "
+            "'(^|/)(frontend|gradio_archive)(/|$)' cfdc tests main.py app.py"
+        )
+        node_check = text.index("node --version")
+        npm_check = text.index("npm --version")
+        frontend_install = text.index("npm --prefix cfdc/web/frontend ci")
+        frontend_build = text.index("npm --prefix cfdc/web/frontend run build")
         web_start = text.index("uv run python app.py")
         cli_usage = text.index("uv run python main.py --use-llm")
 
-        assert compile_check < web_start < cli_usage
+        assert (
+            sync
+            < compile_check
+            < node_check
+            < npm_check
+            < frontend_install
+            < frontend_build
+            < web_start
+            < cli_usage
+        )

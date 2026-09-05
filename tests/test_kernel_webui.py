@@ -4,35 +4,35 @@ import json
 import os
 from dataclasses import replace
 from types import SimpleNamespace
+from uuid import uuid4
 
-import gradio as gr
 import numpy as np
 import pytest
+from web_api_helpers import action, api_client, create, finish
 
 from cfdc.kernel import WorkflowService
 from cfdc.kernel import replies as kernel_replies
 from cfdc.kernel.agents import KernelAgentCoordinator
-from cfdc.kernel.cases import public_training_case
 from cfdc.kernel.replies import (
     KernelReplyMode,
     build_kernel_input_contract,
     prepare_kernel_reply,
 )
+from cfdc.web import readmodels
 from cfdc.web import service as web_service
-from cfdc.web import ui as web_ui
+from cfdc.web.drafts import (
+    TASK_TYPES,
+    DraftValidationError,
+    case_draft,
+    empty_draft,
+    task_from_draft,
+)
+from cfdc.web.presentation import project_workspace
 from cfdc.web.service import (
     continue_kernel_app_run,
     prepare_kernel_reply_for_ui,
     start_kernel_app_run,
     start_kernel_case_run,
-)
-from cfdc.web.ui import (
-    _evaluation_figure,
-    _guidance_text,
-    _kernel_outputs,
-    _reply_mode_update,
-    _summary_html,
-    submit_measurement_from_ui,
 )
 
 
@@ -55,6 +55,7 @@ def test_webui_shows_real_evaluation_curve_and_readiness_budget() -> None:
     report = {
         "evaluation_packets": [
             {
+                "evaluation_split": "development",
                 "trials": [
                     {
                         "trajectory": {
@@ -64,7 +65,7 @@ def test_webui_shows_real_evaluation_curve_and_readiness_budget() -> None:
                             "control_inputs": {"u": [1.0, 0.0]},
                         }
                     }
-                ]
+                ],
             }
         ],
         "readiness_gates": {
@@ -87,17 +88,39 @@ def test_webui_shows_real_evaluation_curve_and_readiness_budget() -> None:
         "input_contract": {"guidance": "继续取证。"},
         "route": {"selection_reason": "maximin public evidence"},
     }
-    figure = _evaluation_figure(report)
-    assert [trace.name for trace in figure.data] == [
-        "output · y",
-        "reference · y",
-        "control · u",
-    ]
-    guidance = _guidance_text(report)
-    assert "三个独立门" in guidance
-    assert "candidate_set_not_resolved" in guidance
-    assert "剩余协议：2 / 4" in guidance
-    assert "maximin public evidence" in guidance
+    curve = readmodels.curve_view(report, "0:0", "y")
+    assert [line.name for line in curve.output] == ["y", "目标值"]
+    assert curve.control[0].name == "u"
+    assert curve.output[0].y == [0.0, 1.0]
+    assert curve.control[0].y == [1.0, 0.0]
+    gates = readmodels.node_page(report, "readiness_gates")
+    assert {item.key for item in gates.items} == {
+        "evidence_acquisition",
+        "route_selection",
+        "controller_synthesis",
+    }
+    assert (
+        readmodels.node_page(
+            report, "readiness_gates", "/route_selection/blockers/0"
+        ).text
+        == "candidate_set_not_resolved"
+    )
+    assert (
+        readmodels.node_page(
+            report, "information_budget", "/distinct_protocols_remaining"
+        ).value
+        == 2
+    )
+    assert (
+        readmodels.node_page(
+            report, "information_budget", "/distinct_protocols_limit"
+        ).value
+        == 4
+    )
+    assert (
+        readmodels.node_page(report, "route", "/selection_reason").text
+        == "maximin public evidence"
+    )
 
 
 def test_webui_explains_tuning_exhaustion_as_a_terminal_capability_gap() -> None:
@@ -114,11 +137,14 @@ def test_webui_explains_tuning_exhaustion_as_a_terminal_capability_gap() -> None
         "input_contract": {"disabled_reason": "会话已终止：capability_gap"},
     }
 
-    assert "有界调优已耗尽，未找到严格改善候选" in _summary_html(report)
-    guidance = _guidance_text(report)
-    assert "能力缺口" in guidance
-    assert "没有候选达到预注册的严格改善门槛" in guidance
-    assert "no_strict_development_improvement" in guidance
+    workspace = project_workspace(report)
+    assert workspace["actionable"] is False
+    assert workspace["result_visible"] is True
+    assert "未" in workspace["explanation"]
+    assert (
+        readmodels.node_page(report, "tuning", "/reason").text
+        == "no_strict_development_improvement"
+    )
 
 
 def _kernel_inputs(tmp_path):
@@ -145,32 +171,18 @@ def test_kernel_start_exposes_explicit_budget_confirmation(tmp_path):
     assert report["status"] == "intake"
     assert state["pending_actions"]
     assert state["pending_actions"][0]["action"] == "confirm_task"
-    ui_outputs = _kernel_outputs(report, state)
-    assert ui_outputs[18]["visible"] is True
-    assert "确认" in ui_outputs[18]["value"]
-    assert ui_outputs[19]["visible"] is True
-    assert ui_outputs[17]["value"] == "natural_language"
-    assert "choices" not in ui_outputs[17]
+    view = readmodels.summary(report)
+    assert view.workspace.action == "confirm_task"
+    assert view.workspace.actionable
+    assert "确认" in view.workspace.action_title
 
 
 @pytest.mark.parametrize(
-    ("allowed_modes", "visible", "value", "interactive"),
-    [
-        ([], False, "natural_language", False),
-        (["natural_language"], True, "natural_language", False),
-        (["json"], True, "json", False),
-        (["natural_language", "json"], True, "natural_language", True),
-    ],
+    "allowed_modes", [[], ["natural_language"], ["json"], ["natural_language", "json"]]
 )
-def test_reply_mode_updates_keep_static_component_choices(
-    allowed_modes, visible, value, interactive
-):
-    update = _reply_mode_update({"allowed_modes": allowed_modes})
-
-    assert update["visible"] is visible
-    assert update["value"] == value
-    assert update["interactive"] is interactive
-    assert "choices" not in update
+def test_reply_modes_are_explicit_in_semantic_contract(allowed_modes):
+    view = readmodels.summary({"input_contract": {"allowed_modes": allowed_modes}})
+    assert view.input_contract["allowed_modes"] == allowed_modes
 
 
 def test_manual_fresh_confirmation_keeps_json_input_contract(tmp_path):
@@ -197,14 +209,13 @@ def test_manual_fresh_confirmation_keeps_json_input_contract(tmp_path):
 
     pending = web_service._kernel_pending_actions(staged)
     contract = build_kernel_input_contract(staged, pending_actions=pending)
-    update = _reply_mode_update(contract)
 
     assert pending == ({"kind": "confirmation", "action": "record_fresh_confirmation"},)
     assert contract["action"] == "confirmation"
     assert contract["allowed_modes"] == ["json"]
-    assert update["visible"] is True
-    assert update["value"] == "json"
-    assert update["interactive"] is False
+    assert readmodels.summary({"input_contract": contract}).input_contract[
+        "allowed_modes"
+    ] == ["json"]
 
 
 def test_registered_single_heater_fresh_confirmation_uses_provider_button(tmp_path):
@@ -238,11 +249,10 @@ def test_registered_single_heater_fresh_confirmation_uses_provider_button(tmp_pa
     ]
     assert report["input_contract"]["action"] == "confirm_result"
     assert report["input_contract"]["allowed_modes"] == []
-    ui_outputs = _kernel_outputs(report, state)
-    assert ui_outputs[16]["visible"] is False
-    assert ui_outputs[17]["visible"] is False
-    assert ui_outputs[18]["visible"] is True
-    assert ui_outputs[18]["value"] == "执行全新确认"
+    view = readmodels.summary(report)
+    assert view.input_contract["allowed_modes"] == []
+    assert view.workspace.action == "confirm_result"
+    assert view.workspace.actionable
 
     persisted = WorkflowService(tmp_path).read(state["kernel_session_id"])
     assert persisted.pending_actions == (
@@ -331,7 +341,7 @@ def test_web_task_contract_rejects_missing_or_invalid_boundaries(
 
 
 def test_kernel_feature_and_controller_columns_use_their_own_artifacts(tmp_path):
-    report, state = _kernel_inputs(tmp_path)
+    report, _ = _kernel_inputs(tmp_path)
     report["features"] = {
         "features": {"static_gain": {"value": 2.0, "unit": "unit/unit"}},
         "quality": {"status": "pass"},
@@ -341,21 +351,19 @@ def test_kernel_feature_and_controller_columns_use_their_own_artifacts(tmp_path)
         "validation": {"eligible": True},
     }
 
-    ui_outputs = _kernel_outputs(report, state)
-
-    assert any(row[0] == "static_gain" for row in ui_outputs[10])
-    assert any(row[0] == "family" for row in ui_outputs[11])
-    assert all(row[0] != "validation" for row in ui_outputs[10])
+    features = readmodels.node_page(report, "features", "/features")
+    controller = readmodels.node_page(report, "controller", "/ir")
+    assert "static_gain" in {item.key for item in features.items}
+    assert "family" in {item.key for item in controller.items}
+    assert "validation" not in {item.key for item in features.items}
 
 
 def test_empty_page_actions_are_reloaded_from_kernel_session(tmp_path):
-    report, state = _kernel_inputs(tmp_path)
-    del report
-    state = {**state, "pending_actions": []}
-
-    refreshed = submit_measurement_from_ui(state, "", False, "", "", "")
-    assert refreshed[0]["kernel_revision"] == state["kernel_revision"]
-    assert refreshed[0]["pending_actions"][0]["action"] == "confirm_task"
+    _, state = _kernel_inputs(tmp_path)
+    with api_client(tmp_path) as client:
+        refreshed = client.get(f"/api/v1/tasks/{state['kernel_session_id']}").json()
+    assert refreshed["revision"] == state["kernel_revision"]
+    assert refreshed["pending_actions"][0]["action"] == "confirm_task"
 
 
 def test_kernel_page_revision_and_action_id_are_stable_and_payload_cannot_override(
@@ -400,7 +408,6 @@ def test_kernel_tuning_action_maps_to_the_public_web_entry(tmp_path) -> None:
     assert web_service._normalise_kernel_action("run_tuning") == (
         "run_feedback_iteration"
     )
-    assert web_ui._ACTION_ALIASES["run_tuning"] == "run_feedback_iteration"
     service = WorkflowService(tmp_path)
     session = service.read(_kernel_inputs(tmp_path)[1]["kernel_session_id"])
     session = replace(
@@ -414,37 +421,53 @@ def test_kernel_tuning_action_maps_to_the_public_web_entry(tmp_path) -> None:
     assert contract["allowed_modes"] == []
 
 
-def test_webui_rejects_non_kernel_report():
-    with pytest.raises(ValueError, match="只接受 CFDC Kernel"):
-        _kernel_outputs({"workflow_version": "unknown/v9"}, {})
+def test_webui_rejects_non_kernel_report(tmp_path):
+    with api_client(tmp_path) as client:
+        response = client.post(
+            "/api/v1/artifacts/validate",
+            json={"payload": {"workflow_version": "unknown/v9"}},
+        )
+        assert response.status_code == 422
 
 
 def test_kernel_confirmation_button_does_not_require_empty_json(tmp_path):
     _, state = _kernel_inputs(tmp_path)
+    with api_client(tmp_path) as client:
+        rejected = finish(
+            client, action(client, state, "confirm_task", confirmed=False)
+        )
+        assert rejected["status"] == "failed"
+        assert (
+            WorkflowService(tmp_path).read(state["kernel_session_id"]).revision
+            == state["kernel_revision"]
+        )
+        accepted = finish(
+            client,
+            action(
+                client,
+                state,
+                "confirm_task",
+                confirmed=True,
+                mode="json",
+                text="stale editor text",
+            ),
+        )
+        assert accepted["status"] == "completed"
+        view = client.get(f"/api/v1/tasks/{state['kernel_session_id']}").json()
+    assert view["status"] == "diagnostic"
+    assert view["pending_actions"][0]["action"] == "submit_answer"
 
-    rejected = submit_measurement_from_ui(state, "", False, "", "", "")
-    assert rejected[0]["kernel_revision"] == state["kernel_revision"]
 
-    ui_outputs = submit_measurement_from_ui(
-        state,
-        "",
-        True,
-        "",
-        "",
-        "",
-    )
-    assert "diagnostic" in ui_outputs[1]
-    assert ui_outputs[0]["pending_actions"][0]["action"] == "submit_answer"
-
-
-def test_empty_kernel_reply_is_rejected_before_llm_configuration(tmp_path):
+def test_empty_kernel_reply_does_not_mutate_without_llm_configuration(tmp_path):
     _, state = _kernel_inputs(tmp_path)
     _, state = continue_kernel_app_run(state, action="confirm_task", payload={})
-
-    rejected = submit_measurement_from_ui(
-        state, "", False, "", "", "", "natural_language"
+    with api_client(tmp_path) as client:
+        rejected = finish(client, action(client, state, "answer", text=""))
+    assert rejected["status"] == "failed"
+    assert (
+        WorkflowService(tmp_path).read(state["kernel_session_id"]).revision
+        == state["kernel_revision"]
     )
-    assert rejected[0]["kernel_revision"] == state["kernel_revision"]
 
 
 def test_kernel_reply_contract_allows_natural_language_diagnosis(tmp_path):
@@ -980,18 +1003,33 @@ def test_kernel_webui_natural_language_reply_reaches_agents_and_kernel(
     monkeypatch.setattr(
         web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter()
     )
-    outputs = submit_measurement_from_ui(
-        state,
-        "系统稳定，静态增益为2 degC/kW。",
-        False,
-        "https://provider.example/v1",
-        "test-model",
-        "test-key",
-        "natural_language",
-    )
-    assert outputs[0]["kernel_revision"] == 3
-    assert outputs[15]["parameter_facts"][0]["fact_id"] == "static_gain"
-    assert outputs[16]["visible"] is True
+    with api_client(tmp_path) as client:
+        body = {
+            "request_id": str(uuid4()),
+            "expected_revision": state["kernel_revision"],
+            "action": "answer",
+            "input": {
+                "text": "系统稳定，静态增益为2 degC/kW。",
+                "mode": "natural_language",
+            },
+            "credentials": {
+                "base_url": "https://provider.example/v1",
+                "model": "test-model",
+                "api_key": "test-key",
+            },
+        }
+        operation = finish(
+            client,
+            client.post(
+                f"/api/v1/tasks/{state['kernel_session_id']}/actions", json=body
+            ),
+        )
+        assert operation["status"] == "completed", operation
+        view = client.get(f"/api/v1/tasks/{state['kernel_session_id']}").json()
+        report, _ = client.app.state.cache.get(state["kernel_session_id"])
+    assert view["revision"] == 3
+    assert report["parameter_facts"][0]["fact_id"] == "static_gain"
+    assert view["input_contract"]["allowed_modes"]
 
 
 def test_kernel_webui_duplicate_reply_reuses_committed_action_without_llm(
@@ -1024,41 +1062,44 @@ def test_kernel_webui_duplicate_reply_reuses_committed_action_without_llm(
     monkeypatch.setattr(
         web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter()
     )
-    text = "系统稳定。"
-    first = submit_measurement_from_ui(
-        state,
-        text,
-        False,
-        "https://provider.example/v1",
-        "test-model",
-        "test-key",
-        "natural_language",
-    )
-    second = submit_measurement_from_ui(
-        state,
-        text,
-        False,
-        "https://provider.example/v1",
-        "test-model",
-        "test-key",
-        "natural_language",
-    )
-
-    assert first[0]["kernel_revision"] == second[0]["kernel_revision"] == 3
+    with api_client(tmp_path) as client:
+        body = {
+            "request_id": str(uuid4()),
+            "expected_revision": state["kernel_revision"],
+            "action": "answer",
+            "input": {"text": "系统稳定。", "mode": "natural_language"},
+            "credentials": {
+                "base_url": "https://provider.example/v1",
+                "model": "test-model",
+                "api_key": "test-key",
+            },
+        }
+        path = f"/api/v1/tasks/{state['kernel_session_id']}/actions"
+        first = finish(client, client.post(path, json=body))
+        second = finish(client, client.post(path, json=body))
+        assert first["status"] == second["status"] == "completed"
+        assert first["operation_id"] == second["operation_id"]
+        assert (
+            client.get(f"/api/v1/tasks/{state['kernel_session_id']}").json()["revision"]
+            == 3
+        )
     assert calls == ["diagnosis", "modeling", "critic"]
 
 
 def test_budget_exhaustion_cannot_be_reinterpreted_as_confirmation(tmp_path):
     _, state = _kernel_inputs(tmp_path)
-    exhausted = {
-        **state,
-        "pending_actions": [
-            {"kind": "budget", "reason": "experiment_budget_exhausted"}
-        ],
-    }
-
-    rejected = submit_measurement_from_ui(exhausted, "", True, "", "", "")
-    assert rejected[0]["kernel_revision"] == state["kernel_revision"]
+    service = WorkflowService(tmp_path)
+    session = service.read(state["kernel_session_id"])
+    exhausted = replace(
+        session,
+        status="capability_gap",
+        pending_actions=({"kind": "budget", "reason": "experiment_budget_exhausted"},),
+    )
+    exhausted.save(tmp_path / f"{session.session_id}.json")
+    with api_client(tmp_path) as client:
+        rejected = action(client, state, "confirm_task", confirmed=True)
+        assert rejected.status_code == 409
+    assert service.read(session.session_id).revision == session.revision
 
 
 def test_projection_adds_confirmation_for_stored_intake_without_mutating_file(tmp_path):
@@ -1105,107 +1146,16 @@ def test_old_intake_confirmation_can_use_the_projected_web_action(tmp_path):
         ],
     }
 
-    rejected = submit_measurement_from_ui(state, "", False, "", "", "")
-    assert rejected[0]["kernel_revision"] == session.revision
-
-    result = submit_measurement_from_ui(state, "", True, "", "", "")
-    assert result[0]["pending_actions"][0]["action"] == "submit_answer"
-
-
-def _fn_index(app, name, *, input_count=None):
-    return next(
-        index
-        for index, function in app.fns.items()
-        if function.name == name
-        and (input_count is None or len(function.inputs) == input_count)
-    )
-
-
-_RUN_INPUT_NAMES = (
-    "description",
-    "task_type",
-    "measured_signals",
-    "control_inputs",
-    "reference_enabled",
-    "reference",
-    "input_min",
-    "input_max",
-    "output_bounds_enabled",
-    "output_min",
-    "output_max",
-    "state_stop",
-    "initial_region",
-    "goal_region",
-    "disturbance_event",
-    "recovery_start_condition",
-    "disturbance_hold_region",
-    "base_url",
-    "model",
-    "api_key",
-    "rag_enabled",
-    "provider_case_id",
-    "signal_units_json",
-    "input_unit",
-    "success_requirement_fields",
-    "final_abs_error_max",
-    "overshoot_max",
-    "settling_time_max_s",
-    "perturbed_success_rate_min",
-    "hold_duration_min_s",
-    "response_time_preference_enabled",
-    "response_time_preference_s",
-    "budget_fields",
-    "distinct_experiments",
-    "cumulative_excitation_time_s",
-    "initial_output_value_enabled",
-    "initial_output_value",
-    "intermediate_targets",
-)
-
-
-def _run_inputs(**overrides):
-    values = {
-        "description": "保持加热器温度",
-        "task_type": "local_setpoint_hold",
-        "measured_signals": "temperature",
-        "control_inputs": "heater",
-        "reference_enabled": False,
-        "reference": 0,
-        "input_min": -1,
-        "input_max": 1,
-        "output_bounds_enabled": False,
-        "output_min": 0,
-        "output_max": 0,
-        "state_stop": 12,
-        "initial_region": "",
-        "goal_region": "",
-        "disturbance_event": "",
-        "recovery_start_condition": "",
-        "disturbance_hold_region": "",
-        "base_url": "",
-        "model": "",
-        "api_key": "",
-        "rag_enabled": False,
-        "provider_case_id": None,
-        "signal_units_json": "",
-        "input_unit": "",
-        "success_requirement_fields": [],
-        "final_abs_error_max": 0,
-        "overshoot_max": 0,
-        "settling_time_max_s": 0,
-        "perturbed_success_rate_min": 0.8,
-        "hold_duration_min_s": 0,
-        "response_time_preference_enabled": False,
-        "response_time_preference_s": 0,
-        "budget_fields": [],
-        "distinct_experiments": 0,
-        "cumulative_excitation_time_s": 0,
-        "initial_output_value_enabled": False,
-        "initial_output_value": 0,
-        "intermediate_targets": "",
-    }
-    values.update(overrides)
-    return [values[name] for name in _RUN_INPUT_NAMES]
+    with api_client(tmp_path) as client:
+        rejected = finish(
+            client, action(client, state, "confirm_task", confirmed=False)
+        )
+        assert rejected["status"] == "failed"
+        assert service.read(session.session_id).revision == session.revision
+        accepted = finish(client, action(client, state, "confirm_task", confirmed=True))
+        assert accepted["status"] == "completed"
+        result = client.get(f"/api/v1/tasks/{session.session_id}").json()
+    assert result["pending_actions"][0]["action"] == "submit_answer"
 
 
 def test_optional_agent_envelopes_are_bounded_and_canonicalized():
@@ -1261,213 +1211,155 @@ def test_optional_agent_envelopes_are_bounded_and_canonicalized():
 
 
 def test_builtin_case_enables_only_explicit_optional_fields():
-    loaded = web_ui.load_case_into_form("case-01")
-
-    assert len(loaded) == 33
-    assert loaded[4]["value"] is True
-    assert loaded[4]["interactive"] is False
-    assert loaded[5]["value"] == 20.0
-    assert set(loaded[19]["value"]) == {
+    loaded = case_draft("dc_motor_speed_v1")
+    assert loaded["reference_enabled"] is True
+    assert loaded["reference"] == 20.0
+    assert set(loaded["success_requirement_fields"]) == {
         "final_abs_error_max",
         "overshoot_max",
         "settling_time_max_s",
         "perturbed_success_rate_min",
     }
-    assert loaded[23]["value"] == 0.8
-    assert loaded[25]["value"] is True
-    assert loaded[26]["value"] == 2.0
-    assert loaded[27]["value"] == []
-    assert loaded[28]["value"] is None
-    assert loaded[29]["value"] is None
+    assert loaded["perturbed_success_rate_min"] == 0.8
+    assert loaded["response_time_preference_enabled"] is True
+    assert loaded["response_time_preference_s"] == 2.0
+    assert loaded["budget_fields"] == []
+    assert loaded["distinct_experiments"] is None
+    assert loaded["cumulative_excitation_time_s"] is None
 
 
 @pytest.mark.parametrize(
-    ("overrides", "message"),
+    ("overrides", "field"),
     [
         (
-            {
-                "response_time_preference_enabled": True,
-                "response_time_preference_s": 0,
-            },
-            "响应时间偏好必须大于 0",
+            {"response_time_preference_enabled": True, "response_time_preference_s": 0},
+            "response_time_preference_s",
         ),
         (
-            {
-                "budget_fields": ["distinct_experiments"],
-                "distinct_experiments": 1.5,
-            },
-            "不同实验预算必须是大于等于 1 的整数",
+            {"budget_fields": ["distinct_experiments"], "distinct_experiments": 1.5},
+            "distinct_experiments",
         ),
         (
             {
                 "success_requirement_fields": ["perturbed_success_rate_min"],
                 "perturbed_success_rate_min": 1.2,
             },
-            "扰动重复成功率下限必须在 0 到 1 之间",
+            "perturbed_success_rate_min",
         ),
     ],
 )
-def test_enabled_optional_fields_have_friendly_web_validation(overrides, message):
-    with pytest.raises(gr.Error, match=message):
-        web_ui.run_from_ui(*_run_inputs(**overrides))
+def test_enabled_optional_fields_have_friendly_web_validation(overrides, field):
+    with pytest.raises(DraftValidationError) as error:
+        task_from_draft({**_draft(), **overrides})
+    assert field in error.value.errors
+    assert error.value.errors[field]
 
 
-def test_kernel_webui_component_tree_contains_no_compatibility_controls():
-    rendered = json.dumps(web_ui.build_app().config, ensure_ascii=False, default=str)
-
-    for forbidden in (
-        "工作流版本",
-        "Agent 模式",
-        "single",
-        "legacy",
-        "linked-tuning-panel",
-        "迁移版",
-        "旧版",
-        "第五步",
-    ):
-        assert forbidden not in rendered
-    assert "local_setpoint_hold" in rendered
-    assert "disturbance_recovery_to_hold" in rendered
-    assert "高级 JSON" in rendered
+def _draft():
+    return {
+        **empty_draft(),
+        "description": "保持加热器温度",
+        "outputs": [["temperature", "degC"]],
+        "inputs": [["heater"]],
+        "input_unit": "kW",
+        "input_min": -1,
+        "input_max": 1,
+        "state_stop": 12,
+    }
 
 
-def test_kernel_webui_defaults_to_builtin_rag_without_exposing_an_index_path():
-    app = web_ui.build_app(
-        prepared_rag=SimpleNamespace(
-            index_dir="output/rag-index",
-            snapshot="snapshot-ready",
+def test_kernel_api_contains_no_compatibility_controls(tmp_path):
+    with api_client(tmp_path) as client:
+        response = client.post(
+            "/api/v1/tasks",
+            json={
+                "request_id": str(uuid4()),
+                "draft": _draft(),
+                "confirmed": True,
+                "use_rag": False,
+                "agent_mode": "single",
+            },
         )
-    )
-    components = app.config["components"]
-
-    rag_checkbox = next(
-        component
-        for component in components
-        if component.get("props", {}).get("label") == "启用 RAG 内置知识库"
-    )
-    assert rag_checkbox["props"]["value"] is True
-    assert all(
-        component.get("props", {}).get("label") != "本地 RAG 索引目录（可选）"
-        for component in components
-    )
-    assert web_ui.reset_task_form()[20] is True
+        assert response.status_code == 422
+        schema = client.get("/openapi.json").json()
+        assert (
+            "agent_mode"
+            not in schema["components"]["schemas"]["CreateRequest"]["properties"]
+        )
+        assert set(dict(TASK_TYPES).values()) == {
+            "local_setpoint_hold",
+            "transition_then_hold",
+            "disturbance_recovery_to_hold",
+        }
 
 
-@pytest.mark.anyio
-async def test_kernel_gradio_pins_the_server_prepared_rag_snapshot(
-    tmp_path, monkeypatch
-):
-    from gradio.blocks import SessionState
+def test_kernel_api_defaults_to_builtin_rag_without_exposing_an_index_path(tmp_path):
+    from cfdc.web.schemas import CreateRequest
 
+    request = CreateRequest(request_id=uuid4(), draft=_draft())
+    assert request.use_rag is True
+    with api_client(tmp_path) as client:
+        config = client.get("/api/v1/config").json()
+        assert "index_dir" not in json.dumps(config)
+        response = client.post(
+            "/api/v1/tasks",
+            json={"request_id": str(uuid4()), "draft": _draft(), "confirmed": True},
+        )
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "rag_not_ready"
+
+
+def test_kernel_api_pins_the_server_prepared_rag_snapshot(tmp_path):
     from cfdc.rag import build_index
+    from cfdc.web.schemas import RAGStatus
 
     index = build_index(None, tmp_path / "rag", encoder=_WebRAGEncoder())
     prepared = SimpleNamespace(
-        index_dir=index.snapshot.parent,
-        snapshot=index.index_snapshot,
+        index_dir=index.snapshot.parent, snapshot=index.index_snapshot
     )
-    original_start = web_service.start_kernel_app_run
-
-    def start_in_tmp(task, **kwargs):
-        kwargs["session_dir"] = tmp_path / "sessions"
-        return original_start(task, **kwargs)
-
-    monkeypatch.setattr(web_ui, "start_kernel_app_run", start_in_tmp)
-    app = web_ui.build_app(prepared_rag=prepared)
-    session_state = SessionState(app)
-
-    run_index = _fn_index(app, "run_from_ui", input_count=38)
-    run_result = await app.process_api(
-        run_index,
-        _run_inputs(rag_enabled=True),
-        state=session_state,
-        session_hash="kernel-prepared-rag",
-        simple_format=True,
-        explicit_call=True,
-    )
-
-    report = run_result["data"][15].root
-    state = session_state[app.fns[run_index].outputs[0]._id]
-    assert report["agent_config"]["rag_enabled"] is True
-    assert report["rag_snapshot"] == prepared.snapshot
-    assert state["rag_snapshot"] == prepared.snapshot
-    assert state["rag_index_dir"] == str(prepared.index_dir)
-
-    disabled_session_state = SessionState(app)
-    disabled_result = await app.process_api(
-        run_index,
-        _run_inputs(rag_enabled=False),
-        state=disabled_session_state,
-        session_hash="kernel-prepared-rag-disabled",
-        simple_format=True,
-        explicit_call=True,
-    )
-
-    disabled_report = disabled_result["data"][15].root
-    disabled_state = disabled_session_state[app.fns[run_index].outputs[0]._id]
-    assert disabled_report["agent_config"]["rag_enabled"] is False
-    assert disabled_report["rag_snapshot"] is None
-    assert disabled_state["rag_snapshot"] is None
-    assert disabled_state["rag_index_dir"] is None
+    with api_client(tmp_path / "sessions") as client:
+        runtime = client.app.state.rag
+        runtime.prepared = prepared
+        runtime._status = RAGStatus(
+            status="ready", message="ready", snapshot=prepared.snapshot
+        )
+        task_id = create(client, draft=_draft(), use_rag=True)
+        report, _ = client.app.state.cache.get(task_id)
+        assert report["agent_config"]["rag_enabled"] is True
+        assert report["rag_snapshot"] == prepared.snapshot
+        assert (
+            WorkflowService(tmp_path / "sessions").read(task_id).rag_snapshot
+            == prepared.snapshot
+        )
+        assert report["agent_config"]["rag_index_dir"] == str(prepared.index_dir)
+        disabled = create(client, draft=_draft(), use_rag=False)
+        report, _ = client.app.state.cache.get(disabled)
+        assert report["agent_config"]["rag_enabled"] is False
+        assert report["rag_snapshot"] is None
+        assert (
+            WorkflowService(tmp_path / "sessions").read(disabled).rag_snapshot is None
+        )
+        assert report["agent_config"].get("rag_index_dir") is None
 
 
-@pytest.mark.anyio
-async def test_kernel_gradio_process_api_accepts_stale_json_on_confirmation(
-    tmp_path, monkeypatch
-):
-    original_start = web_service.start_kernel_app_run
-
-    def start_in_tmp(task, **kwargs):
-        kwargs["session_dir"] = tmp_path
-        return original_start(task, **kwargs)
-
-    monkeypatch.setattr(web_ui, "start_kernel_app_run", start_in_tmp)
-    app = web_ui.build_app()
-    from gradio.blocks import SessionState
-
-    session_state = SessionState(app)
-    run_result = await app.process_api(
-        _fn_index(app, "run_from_ui", input_count=38),
-        _run_inputs(),
-        state=session_state,
-        session_hash="kernel-process-api",
-        simple_format=True,
-        explicit_call=True,
-    )
-    assert len(run_result["data"]) == 27
-    raw_report = run_result["data"][15].root
-    assert raw_report["workflow_version"].startswith("cfdc-v6-kernel")
-    assert raw_report["task"]["output_min"] is None
-    assert raw_report["task"]["output_max"] is None
-    assert raw_report["task"]["reference"] is None
-    assert raw_report["task"]["response_time_preference_s"] is None
-    assert "final_abs_error_max" not in raw_report["task"]["success_requirements"]
-    assert run_result["data"][17]["value"] == "natural_language"
-    assert "choices" not in run_result["data"][17]
-
-    confirm_result = await app.process_api(
-        _fn_index(app, "submit_measurement_from_ui"),
-        [run_result["data"][0], "", True, "", "", "", "json"],
-        state=session_state,
-        session_hash="kernel-process-api",
-        simple_format=True,
-        explicit_call=True,
-    )
-    assert "diagnostic" in confirm_result["data"][1]
-    assert confirm_result["data"][15].root["status"] == "diagnostic"
-    assert WorkflowService(tmp_path).read(raw_report["session_id"]).revision == 2
+def test_kernel_api_creation_keeps_disabled_optional_fields_absent(tmp_path):
+    with api_client(tmp_path) as client:
+        task_id = create(client, draft=_draft())
+        report, _ = client.app.state.cache.get(task_id)
+        assert report["workflow_version"].startswith("cfdc-v6-kernel")
+        for field in (
+            "output_min",
+            "output_max",
+            "reference",
+            "response_time_preference_s",
+        ):
+            assert report["task"][field] is None
+        assert "final_abs_error_max" not in report["task"]["success_requirements"]
+        assert report["status"] == "diagnostic"
+        assert report["revision"] == 2
 
 
-@pytest.mark.anyio
-async def test_kernel_gradio_process_api_natural_language_reply_chain(
-    tmp_path, monkeypatch
-):
-    original_start = web_service.start_kernel_app_run
-
-    def start_in_tmp(task, **kwargs):
-        kwargs["session_dir"] = tmp_path
-        return original_start(task, **kwargs)
-
+def test_kernel_api_natural_language_reply_chain(tmp_path, monkeypatch):
     class FakeAdapter:
         agent_mode = "multi"
         retriever = None
@@ -1499,65 +1391,35 @@ async def test_kernel_gradio_process_api_natural_language_reply_chain(
                 }
             }
 
-    monkeypatch.setattr(web_ui, "start_kernel_app_run", start_in_tmp)
     monkeypatch.setattr(
         web_service, "_build_app_adapter", lambda *args, **kwargs: FakeAdapter()
     )
-    app = web_ui.build_app()
-    from gradio.blocks import SessionState
-
-    session_state = SessionState(app)
-    run_result = await app.process_api(
-        _fn_index(app, "run_from_ui", input_count=38),
-        _run_inputs(),
-        state=session_state,
-        session_hash="kernel-process-api-reply",
-        simple_format=True,
-        explicit_call=True,
-    )
-    confirm_result = await app.process_api(
-        _fn_index(app, "submit_measurement_from_ui"),
-        [run_result["data"][0], "", True, "", "", "", "natural_language"],
-        state=session_state,
-        session_hash="kernel-process-api-reply",
-        simple_format=True,
-        explicit_call=True,
-    )
-    confirmed_page_state = confirm_result["data"][0]
-    reply_result = await app.process_api(
-        _fn_index(app, "submit_measurement_from_ui"),
-        [
-            confirmed_page_state,
-            "系统稳定，静态增益为2 degC/kW。",
-            False,
-            "https://provider.example/v1",
-            "test-model",
-            "test-key",
-            "natural_language",
-        ],
-        state=session_state,
-        session_hash="kernel-process-api-reply",
-        simple_format=True,
-        explicit_call=True,
-    )
-
-    assert (
-        reply_result["data"][15].root["parameter_facts"][0]["fact_id"] == "static_gain"
-    )
-    assert reply_result["data"][15].root["agent_records"]
+    with api_client(tmp_path) as client:
+        task_id = create(client, draft=_draft())
+        response = client.post(
+            f"/api/v1/tasks/{task_id}/actions",
+            json={
+                "request_id": str(uuid4()),
+                "expected_revision": 2,
+                "action": "answer",
+                "input": {"text": "系统稳定，静态增益为2 degC/kW。"},
+                "credentials": {
+                    "base_url": "https://provider.example/v1",
+                    "model": "test-model",
+                    "api_key": "test-key",
+                },
+            },
+        )
+        operation = finish(client, response)
+        assert operation["status"] == "completed", operation
+        report, _ = client.app.state.cache.get(task_id)
+        assert report["parameter_facts"][0]["fact_id"] == "static_gain"
+        assert report["agent_records"]
 
 
-@pytest.mark.anyio
-async def test_visible_gradio_flow_reaches_kernel_result_with_ollama_shaped_replies(
-    tmp_path,
-    monkeypatch,
+def test_kernel_api_flow_reaches_result_with_ollama_shaped_replies(
+    tmp_path, monkeypatch
 ):
-    original_start = web_service.start_kernel_app_run
-
-    def start_in_tmp(task, **kwargs):
-        kwargs["session_dir"] = tmp_path
-        return original_start(task, **kwargs)
-
     evidence = {
         "open_loop_stability": ("开环稳定", "stable"),
         "nonminimum_phase": ("没有反向响应", "minimum_phase"),
@@ -1592,70 +1454,14 @@ async def test_visible_gradio_flow_reaches_kernel_result_with_ollama_shaped_repl
                 }
             return {"modeling": {"parameter_candidates": []}}
 
-    monkeypatch.setattr(web_ui, "start_kernel_app_run", start_in_tmp)
     monkeypatch.setattr(
-        web_service,
-        "_build_app_adapter",
-        lambda *args, **kwargs: FakeOllamaAdapter(),
+        web_service, "_build_app_adapter", lambda *args, **kwargs: FakeOllamaAdapter()
     )
-    app = web_ui.build_app()
-    from gradio.blocks import SessionState
-
-    session_state = SessionState(app)
-    run_result = await app.process_api(
-        _fn_index(app, "run_from_ui", input_count=38),
-        _run_inputs(
-            description=(
-                public_training_case("dc_motor_speed_v1")["task"]["description"]
-            ),
-            measured_signals="转轴角速度_rad_s",
-            control_inputs="电枢电压_V",
-            reference_enabled=True,
-            reference=20,
-            input_min=-6,
-            input_max=6,
-            state_stop=60,
-            provider_case_id="case-01",
-            success_requirement_fields=[
-                "final_abs_error_max",
-                "overshoot_max",
-                "settling_time_max_s",
-                "perturbed_success_rate_min",
-            ],
-            final_abs_error_max=1.5,
-            overshoot_max=4,
-            settling_time_max_s=3,
-            perturbed_success_rate_min=0.8,
-            response_time_preference_enabled=True,
-            response_time_preference_s=2,
-        ),
-        state=session_state,
-        session_hash="kernel-visible-full-flow",
-        simple_format=True,
-        explicit_call=True,
-    )
-    confirm_result = await app.process_api(
-        _fn_index(app, "submit_guided_action_from_ui", input_count=12),
-        [
-            run_result["data"][0],
-            "",
-            True,
-            "",
-            "",
-            "",
-            "json",
-            "accepted",
-            [],
-            "",
-            [],
-            False,
-        ],
-        state=session_state,
-        session_hash="kernel-visible-full-flow",
-        simple_format=True,
-        explicit_call=True,
-    )
-    report = confirm_result["data"][15].root
+    with api_client(tmp_path) as client:
+        task_id = create(
+            client, draft=case_draft("dc_motor_speed_v1"), case_id="dc_motor_speed_v1"
+        )
+        report, _ = client.app.state.cache.get(task_id)
     assert report["status"] == "tuning_eligible"
     assert report["features"]["feature_version"] == "cfdc-features/v2"
     assert report["route"]["profile_id"] == "first_order_lag"
