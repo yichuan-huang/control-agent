@@ -5,6 +5,8 @@ const externalURL = process.env.CFDC_E2E_URL;
 const baseURL = externalURL ?? "http://127.0.0.1:7867";
 export default defineConfig({
   testDir: "tests",
+  // The shared real API serializes mutations, including long Provider trials.
+  workers: 1,
   use: {
     baseURL,
     headless: true,

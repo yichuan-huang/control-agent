@@ -92,6 +92,31 @@ def test_task_summary_whitelists_task_fields_and_marks_unknown_bounds() -> None:
     assert summary.count("\n\n") == 6
 
 
+@pytest.mark.parametrize(
+    ("requirement", "value", "expected"),
+    [
+        ("hold_duration_min_s", 20.0, "保持时间不少于 20 s"),
+        ("hold_duration_s", 20.0, "保持时间不少于 20 s"),
+        ("final_hold_duration_min_s", 4.0, "最终保持时间不少于 4 s"),
+        ("post_recovery_hold_duration_min_s", 8.0, "恢复后保持时间不少于 8 s"),
+        ("saturation_duration_max_s", 1.5, "饱和持续时间不超过 1.5 s"),
+        ("settling_time_max_s", 20.0, "调节时间不超过 20 s"),
+        ("success_rate_min", 0.8, "试次成功率不少于 80%"),
+        ("perturbed_success_rate_min", 0.8, "扰动试次成功率不少于 80%"),
+        ("saturation_ratio_max", 0.1, "饱和时间占比不超过 10%"),
+        ("peak_abs_input_max", 95.0, "输入峰值不超过 95 %"),
+    ],
+)
+def test_task_summary_preserves_duration_and_percentage_requirement_units(
+    requirement: str, value: float, expected: str
+) -> None:
+    task = _task()
+    task["success_requirements"] = {requirement: value}
+
+    assert expected in task_summary(task)
+    assert task["success_requirements"] == {requirement: value}
+
+
 def test_task_summary_suppresses_unknown_and_nested_requirement_credentials() -> None:
     task = _task()
     task["success_requirements"] = {

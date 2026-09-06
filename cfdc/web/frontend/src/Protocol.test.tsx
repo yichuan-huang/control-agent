@@ -33,5 +33,8 @@ test("newer protocol receipt and preview are withheld until summary refresh", as
   expect(screen.queryByText("NEW RECEIPT")).toBeNull();
   expect(screen.queryByText("NEW FEEDBACK")).toBeNull();
   expect(screen.queryByText("991")).toBeNull();
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["task", "A"] });
+  expect(invalidate).toHaveBeenCalledWith(
+    { queryKey: ["task", "A"], exact: true },
+    { cancelRefetch: false },
+  );
 });

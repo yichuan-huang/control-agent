@@ -224,7 +224,7 @@ def _criterion_unit(
 ) -> str:
     if key.endswith("_s"):
         return "s"
-    if "rate" in key or "ratio" in key:
+    if {"rate", "ratio"}.intersection(key.split("_")):
         return "%"
     if key == "iae_max":
         base = _mapping(task.get("signal_units")).get(signal or "")
@@ -245,7 +245,9 @@ def _criterion_value(
 ) -> str:
     if isinstance(value, bool):
         return "是" if value else "否"
-    if ("rate" in key or "ratio" in key) and isinstance(value, int | float):
+    if {"rate", "ratio"}.intersection(key.split("_")) and isinstance(
+        value, int | float
+    ):
         return _percent(value)
     return f"{_number(value)}{_unit_suffix(_criterion_unit(task, key, signal))}"
 
