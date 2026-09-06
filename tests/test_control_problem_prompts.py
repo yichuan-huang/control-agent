@@ -1,1086 +1,395 @@
+"""Consume the published wizard instructions, not separately authored fixtures."""
+
+import json
 import math
 import re
-from collections import Counter
-from functools import cache
+from copy import deepcopy
 from pathlib import Path
-from typing import ClassVar
 
 import numpy as np
 import pytest
 from scipy import signal
 
-from cfdc.diagnosis import start_diagnostic_session
-from cfdc.diagnosis.engine import DiagnosticEngine
-from cfdc.diagnosis.measurements import description_excerpt_answers_field
-from cfdc.models import SystemDescription
-from cfdc.specifications import (
-    assess_specification_text,
-    build_initial_specification_assessment,
-    compile_specification_model,
-    default_specification_template_catalog,
+from cfdc.kernel.cases import public_training_case
+from cfdc.kernel.contracts import DIAGNOSTIC_IDS, TaskContract
+from cfdc.kernel.session import registered_task_scope_fingerprint
+from cfdc.web.drafts import (
+    BUDGETS,
+    DRAFT_FIELDS,
+    REQUIREMENTS,
+    DraftValidationError,
+    case_draft,
+    task_from_draft,
 )
-from cfdc.workflow import (
-    default_simulation_profile_catalog,
-    deterministic_profile_selection,
-    validate_semantic_selection,
-)
+from tests.prompt_documents import read_draft_table, read_prompt_document
 
 TECHNICAL_PATH = Path("dataset/control_problems.md")
 ENGLISH_PATH = Path("dataset/control_problem_prompts.md")
 CHINESE_PATH = Path("dataset/control_problem_prompts_cn.md")
-
-ENGLISH_HEADINGS = [
-    "Control Problem Description",
-    "Profile Measurement Response (Natural Language)",
+DOCUMENTS = [ENGLISH_PATH, CHINESE_PATH]
+CASES = [
+    "dc_motor_speed_v1",
+    "dc_motor_position_v1",
+    "tclab_single_heater_v1",
+    "quadruple_tank_nmp_v1",
+    "tclab_dual_heater_v1",
+    "tclab_single_heater_staged_transition_hold_v1",
 ]
-CHINESE_HEADINGS = [
-    "控制问题描述",
-    "Profile 测量回复（自然语言）",
-]
-UNIVERSAL_ENGLISH_PROFILE_LABELS = [
-    "Known input change",
-    "Input simulation lower bound",
-    "Input simulation upper bound",
-    "Output simulation lower bound",
-    "Output simulation upper bound",
-]
-UNIVERSAL_CHINESE_PROFILE_LABELS = [
-    "已知输入变化量",
-    "输入仿真下限",
-    "输入仿真上限",
-    "输出仿真下限",
-    "输出仿真上限",
-]
-PROFILE_REQUIRED_ENGLISH_LABELS = {
-    "first_order_lag": [
-        "Final output change",
-        "63% response time",
-    ],
-    "first_order_lag_with_delay": [
-        "Final output change",
-        "63% response time",
-        "Pure waiting time",
-    ],
-    "second_order_oscillator": [
-        "Oscillation period",
-        "Successive peak ratio",
-        "Corresponding motion change",
-    ],
-    "double_integrator": [
-        "Corresponding acceleration change",
-        "Typical motion time scale",
-    ],
-    "nmp_inverse_response": [
-        "Final output change",
-        "Initial inverse change",
-        "Inverse recovery time",
-        "63% response time",
-    ],
-    "generic_unstable_higher_order": ["Complete numeric model"],
-    "underactuated_cartpole": [
-        "Cart mass",
-        "Pole mass",
-        "Center-of-mass length",
-        "Pole inertia",
-        "Cart friction",
-        "Gravity",
-        "Force limit",
-        "Cart travel limit",
-    ],
-    "vtol_cascaded": [
-        "Vehicle mass",
-        "Pitch inertia",
-        "Gravity",
-        "Linear drag",
-        "Pitch damping",
-        "Minimum thrust",
-        "Maximum thrust",
-        "Torque limit",
-        "Typical response time",
-        "Maximum tilt",
-        "Maximum altitude error",
-    ],
-    "mimo_2x2_coupled": [
-        "Local input-output gain matrix",
-        "Local response time",
-    ],
-}
-PROFILE_REQUIRED_CHINESE_LABELS = {
-    "first_order_lag": ["最终输出变化量", "63% 响应时间"],
-    "first_order_lag_with_delay": [
-        "最终输出变化量",
-        "63% 响应时间",
-        "纯等待时间",
-    ],
-    "second_order_oscillator": [
-        "相邻同向峰值间隔",
-        "相邻峰值幅度比例",
-        "对应运动变化",
-    ],
-    "double_integrator": ["对应加速度变化", "典型运动时间尺度"],
-    "nmp_inverse_response": [
-        "最终输出变化量",
-        "初始反向变化",
-        "反向恢复时间",
-        "63% 响应时间",
-    ],
-    "generic_unstable_higher_order": ["完整数值模型"],
-    "underactuated_cartpole": [
-        "小车质量",
-        "摆杆质量",
-        "摆杆质心距离",
-        "摆杆转动惯量",
-        "小车摩擦",
-        "重力加速度",
-        "推力限制",
-        "小车行程",
-    ],
-    "vtol_cascaded": [
-        "飞行器质量",
-        "俯仰转动惯量",
-        "重力加速度",
-        "平移阻力",
-        "俯仰阻尼",
-        "最小推力",
-        "最大推力",
-        "最大俯仰转矩",
-        "典型响应时间",
-        "最大安全倾角",
-        "最大高度误差",
-    ],
-    "mimo_2x2_coupled": ["局部输入输出影响矩阵", "局部响应时间"],
-}
-ENGLISH_OLD_HEADINGS = [
-    "Observable Outputs",
-    "Actuators",
-    "Safety Bounds",
-    "Forbidden Actions",
-    "Dominant Time Scale (Seconds)",
-    "Example Data (Natural Language)",
-    "Example Data (JSON)",
-]
-CHINESE_OLD_HEADINGS = [
-    "可观察输出",
-    "执行器",
-    "安全边界",
-    "禁止实验动作",
-    "主导时间尺度（秒）",
-    "示例数据（自然语言）",
-    "示例数据（JSON）",
-]
-ASSIGNMENT_TOKENS = [
-    "input_change=",
-    "steady_output_change=",
-    "response_time_s=",
-    "input_min=",
-    "input_max=",
-    "output_min=",
-    "output_max=",
-    "dead_time_s=",
-    "acceleration_change=",
-    "motion_time_scale_s=",
-]
-HAN_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
-NUMERIC_TOKEN = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
-EXPECTED_PROFILE_COUNTS = {
-    "first_order_lag": 79,
-    "first_order_lag_with_delay": 9,
-    "second_order_oscillator": 1,
-    "double_integrator": 55,
-    "generic_unstable_higher_order": 47,
-    "underactuated_cartpole": 1,
-    "vtol_cascaded": 4,
-    "mimo_2x2_coupled": 4,
-}
-SOURCE_MEASUREMENT_IDS = {*range(1, 22), 35, 38}
+ENTRIES = [(path, entry) for path in DOCUMENTS for entry in read_prompt_document(path)]
 
 
 def _technical_ids() -> list[int]:
-    markdown = TECHNICAL_PATH.read_text(encoding="utf-8")
-    matches = re.findall(r"^### (\d+)\. \[Ch(\d+)-(\d+)\] ", markdown, re.MULTILINE)
-    ids = [int(global_id) for global_id, _chapter, _local_id in matches]
-    chapter_counts = Counter(int(chapter) for _global_id, chapter, _local_id in matches)
-
-    assert ids == list(range(1, 201))
-    assert chapter_counts == Counter({chapter: 20 for chapter in range(1, 11)})
-    return ids
-
-
-def _field(entry: str, heading: str) -> str:
-    match = re.search(
-        rf"^### {re.escape(heading)}\s*$\n(.*?)(?=^### |^---\s*$|\Z)",
-        entry,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert match is not None, f"missing heading: {heading}"
-    return match.group(1).strip()
-
-
-def _sentences(description: str, language: str) -> list[str]:
-    if language == "en":
-        return re.split(r"(?<=[.!?])\s+", description)
-    return re.findall(r"[^。！？]+[。！？]", description)
-
-
-def _paragraphs(description: str) -> list[str]:
-    return [item.strip() for item in re.split(r"\n\s*\n", description) if item.strip()]
-
-
-class _DatasetDescriptionGuidanceAdapter:
-    """Select the dedicated real paragraph for each checklist item."""
-
-    _PARAGRAPH_BY_FIELD: ClassVar[dict[str, int]] = {
-        "minimum_phase": 1,
-        "significant_delay": 2,
-        "relative_degree": 3,
-        "open_loop_stability": 4,
-        "nonlinearity_strength": 5,
-        "controllability_observability": 6,
-        "coupling_severity": 7,
-        "uncertainty_magnitude": 8,
-    }
-
-    def __init__(self, language: str):
-        self.language = language
-
-    def guide_description(self, description, guidance):
-        paragraphs = _paragraphs(description.text)
-        resolved = []
-        for item in guidance:
-            paragraph_index = self._PARAGRAPH_BY_FIELD[item.diagnostic_field_id]
-            candidate = paragraphs[paragraph_index]
-            response = (
-                candidate
-                if description_excerpt_answers_field(
-                    item.diagnostic_field_id,
-                    candidate,
-                    context=description.text,
-                )
-                else "unknown"
-            )
-            resolved.append({**item.model_dump(mode="json"), "response": response})
-        return {
-            "guidance": resolved,
-            "observed_outputs": [],
-            "actuators": [],
-        }
-
-    def phrase_measurement_plan(self, description, checklist, plan):
-        del description, checklist
-        return plan.model_dump(mode="json")
-
-
-def _parse_document(path: Path, headings: list[str], language: str) -> list[dict]:
-    markdown = path.read_text(encoding="utf-8")
-    title_matches = re.findall(r"^## (\d+)\. (.+)$", markdown, re.MULTILINE)
-    entries = re.split(r"^## \d+\. .+$", markdown, flags=re.MULTILINE)[1:]
-    expected_ids = _technical_ids()
-
-    assert len(title_matches) == len(entries) == len(expected_ids) == 200
-    assert [int(number) for number, _title in title_matches] == expected_ids
-    assert "<!-- GUIDED-UI-PROMPT-AUDIT: natural-language flow -->" in markdown
-    assert "```json" not in markdown
-    assert '"specification_facts"' not in markdown
-    assert '"eight_segment_evidence"' not in markdown
-    assert "Existing-Record Diagnostic Measurement Response" not in markdown
-    assert "已有记录诊断测量回复" not in markdown
-    assert "open_loop_stability" not in markdown
-    assert "binary_command" not in markdown
-    assert not re.search(r"\b[A-Za-z][A-Za-z0-9_]*_unit\b", markdown)
-    assert not any(token in markdown for token in ASSIGNMENT_TOKENS)
-
-    old_headings = ENGLISH_OLD_HEADINGS if language == "en" else CHINESE_OLD_HEADINGS
-    for old_heading in old_headings:
-        assert f"### {old_heading}\n" not in markdown
-
-    parsed = []
-    for index, ((number, title), entry) in enumerate(zip(title_matches, entries), 1):
-        assert int(number) == index
-        assert re.findall(r"^### (.+)$", entry, re.MULTILINE) == headings, index
-
-        description = _field(entry, headings[0])
-        paragraphs = _paragraphs(description)
-        assert len(paragraphs) == 9, (language, index, len(paragraphs))
-        paragraph_sentences = [
-            _sentences(paragraph, language) for paragraph in paragraphs
-        ]
-        assert all(2 <= len(items) <= 3 for items in paragraph_sentences), (
-            language,
-            index,
-            [len(items) for items in paragraph_sentences],
-        )
-        sentences = [sentence for items in paragraph_sentences for sentence in items]
-        assert "?" not in description and "？" not in description
-        if language == "en":
-            assert sentences[0].startswith(("This is ", "These are "))
-            assert sentences[1].startswith(
-                ("The control input is ", "The control inputs are ")
-            )
-        else:
-            assert sentences[0].startswith("这是")
-            assert sentences[1].startswith("控制输入是")
-
-        profile = _field(entry, headings[1])
-        assert len(profile) >= 200, (language, index, len(profile))
-        assert "```" not in profile
-        if language == "en":
-            assert (
-                "The existing software record" in profile
-                or "The declared software model" in profile
-            )
-            assert "software-simulation stopping boundaries only" in profile
-            assert not HAN_PATTERN.search(title)
-        else:
-            assert "已有软件记录" in profile or "已有软件模型" in profile
-            assert "只作为软件仿真的停止边界" in profile
-            assert HAN_PATTERN.search(title)
-            assert HAN_PATTERN.search(profile)
-
-        parsed.append(
-            {
-                "title": title,
-                "description": description,
-                "paragraphs": paragraphs,
-                "sentences": sentences,
-                "profile": profile,
-            }
-        )
-    return parsed
-
-
-@pytest.mark.parametrize(
-    ("path", "headings", "language"),
-    [
-        (ENGLISH_PATH, ENGLISH_HEADINGS, "en"),
-        (CHINESE_PATH, CHINESE_HEADINGS, "cn"),
-    ],
-)
-def test_every_dataset_description_releases_all_eight_grounded_fields(
-    path, headings, language
-):
-    entries = _parse_document(path, headings, language)
-    adapter = _DatasetDescriptionGuidanceAdapter(language)
-
-    for index, entry in enumerate(entries, 1):
-        description = entry["description"]
-        session = start_diagnostic_session(
-            SystemDescription(text=description),
-            diagnostic_adapter=adapter,
-        )
-
-        assert session.status == "description_grounded", (language, index)
-        assert session.description_assessment is not None, (language, index)
-        assert len(session.description_assessment.facts) == 8, (language, index)
-        assert session.current_diagnosis.complete, (language, index)
-        assert all(item.status == "inferred" for item in session.checklist), (
-            language,
-            index,
-        )
-
-
-@pytest.mark.parametrize(
-    ("path", "headings", "language"),
-    [
-        (ENGLISH_PATH, ENGLISH_HEADINGS, "en"),
-        (CHINESE_PATH, CHINESE_HEADINGS, "cn"),
-    ],
-)
-def test_pole_zero_cancellation_description_preserves_inadequate_observability(
-    path, headings, language
-):
-    entry = _parse_document(path, headings, language)[125]
-    session = start_diagnostic_session(
-        SystemDescription(text=entry["description"]),
-        diagnostic_adapter=_DatasetDescriptionGuidanceAdapter(language),
-    )
-
-    assert session.status == "description_grounded"
-    assert (
-        session.current_diagnosis.controllability_observability.assessment
-        == "inadequate"
-    )
-
-
-def test_english_prompts_match_the_guided_natural_language_ui_contract():
-    markdown = ENGLISH_PATH.read_text(encoding="utf-8")
-    entries = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-
-    assert not HAN_PATTERN.search(markdown)
-    assert len({item["description"] for item in entries}) == 200
-
-
-def test_chinese_prompts_match_the_guided_natural_language_ui_contract():
-    entries = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
-
-    assert len({item["description"] for item in entries}) == 200
-    assert all(HAN_PATTERN.search(item["description"]) for item in entries)
-
-
-def test_bilingual_prompts_have_strict_two_stage_structural_parity():
-    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
-
-    assert len(english) == len(chinese) == 200
-    for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
-        assert len(english_item["paragraphs"]) == len(chinese_item["paragraphs"]), index
-
-
-@cache
-def _selected_profile_id(description_text: str, language: str) -> str:
-    if language == "cn":
-        # Use the English technical selection as the canonical locked Profile
-        # assignment.  This keeps bilingual entries aligned when a translated
-        # phrase is classified differently by the language-sensitive adapter.
-        chinese_entries = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
-        english_entries = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-        for index, entry in enumerate(chinese_entries):
-            if entry["description"] == description_text:
-                return _selected_profile_id(english_entries[index]["description"], "en")
-
-    description = SystemDescription(text=description_text)
-    adapter = _DatasetDescriptionGuidanceAdapter(language)
-    session = start_diagnostic_session(description, diagnostic_adapter=adapter)
-    diagnosis = session.current_diagnosis
-    classification = DiagnosticEngine().classify(diagnosis, description)
-    selection = deterministic_profile_selection(
-        description,
-        diagnosis,
-        classification,
-        default_simulation_profile_catalog(),
-    )
-    return selection.simulation_profile_id
-
-
-def _profile_required_labels(profile_id: str, language: str) -> list[str]:
-    universal = (
-        UNIVERSAL_CHINESE_PROFILE_LABELS
-        if language == "cn"
-        else UNIVERSAL_ENGLISH_PROFILE_LABELS
-    )
-    required = (
-        PROFILE_REQUIRED_CHINESE_LABELS
-        if language == "cn"
-        else PROFILE_REQUIRED_ENGLISH_LABELS
-    )
-    profile_fields = required[profile_id]
-    if profile_id == "first_order_lag":
-        return [universal[0], *profile_fields, *universal[1:]]
-    if profile_id == "first_order_lag_with_delay":
-        return [universal[0], *profile_fields, *universal[1:]]
-    if profile_id == "second_order_oscillator":
-        return [
-            profile_fields[0],
-            profile_fields[1],
-            universal[0],
-            profile_fields[2],
-            *universal[1:],
-        ]
-    if profile_id == "double_integrator":
-        return [universal[0], *profile_fields, *universal[1:]]
-    if profile_id == "nmp_inverse_response":
-        return [universal[0], *profile_fields, *universal[1:]]
-    return [*profile_fields, *universal]
-
-
-@pytest.mark.parametrize(
-    ("path", "headings", "language", "extra_heading"),
-    [
-        (
-            ENGLISH_PATH,
-            ENGLISH_HEADINGS,
-            "en",
-            "Additional information:",
-        ),
-        (
-            CHINESE_PATH,
-            CHINESE_HEADINGS,
-            "cn",
-            "额外信息：",
-        ),
-    ],
-)
-def test_every_profile_response_lists_its_required_answers_before_additional_information(
-    path, headings, language, extra_heading
-):
-    entries = _parse_document(path, headings, language)
-    for index, entry in enumerate(entries, 1):
-        profile = entry["profile"]
-        required_heading = (
-            "Profile 专用必填回答："
-            if language == "cn"
-            else "Profile-specific required answers:"
-        )
-        assumption = (
-            "以下数值优先采用原控制问题或现有软件模型中的数据"
-            if language == "cn"
-            else "The values below preserve source data where available"
-        )
-        assert profile.count(required_heading) == 1, (language, index)
-        assert assumption in profile, (language, index)
-        assert "已声明的 Profile 参数" not in profile
-        assert "Declared Profile parameters" not in profile
-        labels = _profile_required_labels(
-            _selected_profile_id(entry["description"], language), language
-        )
-        markers = [
-            f"**{label}：**" if language == "cn" else f"**{label}:**"
-            for label in labels
-        ]
-        positions = [profile.index(marker) for marker in markers]
-        assert positions == sorted(positions), (language, index)
-        for marker in markers:
-            assert profile.count(marker) == 1, (language, index, marker)
-            answer = re.search(rf"^- {re.escape(marker)} (.+)$", profile, re.MULTILINE)
-            assert answer is not None and re.search(r"\d", answer.group(1)), (
-                language,
-                index,
-                marker,
-            )
-        required_end = positions[-1]
-        supplemental_heading = (
-            "补充仿真测量："
-            if language == "cn"
-            else "Supplemental simulation measurements:"
-        )
-        assert profile.count(supplemental_heading) == 1, (language, index)
-        assert profile.count(extra_heading) == 1, (language, index)
-        assert required_end < profile.index(extra_heading), (language, index)
-
-
-def _profile_answers(entry: dict, language: str) -> tuple[str, dict[str, str]]:
-    profile_id = _selected_profile_id(entry["description"], language)
-    labels = _profile_required_labels(profile_id, language)
-    answers = {}
-    for label in labels:
-        colon = "：" if language == "cn" else ":"
-        marker = f"**{label}{colon}**"
-        match = re.search(
-            rf"^- {re.escape(marker)} (.+)$", entry["profile"], re.MULTILINE
-        )
-        assert match is not None, (language, label)
-        answers[label] = match.group(1)
-    return profile_id, answers
-
-
-def _numbers(text: str) -> list[float]:
-    return [float(token) for token in NUMERIC_TOKEN.findall(text)]
-
-
-def _time_numbers(text: str) -> list[float]:
     return [
-        float(token)
-        for token in re.findall(
-            rf"({NUMERIC_TOKEN.pattern})\s*(?:s|秒)", text, re.IGNORECASE
+        int(value)
+        for value in re.findall(
+            r"^### (\d+)\. \[Ch\d+-\d+\]", TECHNICAL_PATH.read_text(), re.MULTILINE
         )
     ]
 
 
-def test_profile_distribution_is_locked_and_every_numeric_answer_is_finite():
-    time_labels = {
-        "63% response time",
-        "Pure waiting time",
-        "Oscillation period",
-        "Typical motion time scale",
-        "Inverse recovery time",
-        "Local response time",
-        "63% 响应时间",
-        "纯等待时间",
-        "相邻同向峰值间隔",
-        "典型运动时间尺度",
-        "反向恢复时间",
-        "局部响应时间",
-        "典型响应时间",
-    }
-    for path, headings, language in (
-        (ENGLISH_PATH, ENGLISH_HEADINGS, "en"),
-        (CHINESE_PATH, CHINESE_HEADINGS, "cn"),
+@pytest.mark.parametrize(
+    "path,entry", ENTRIES, ids=[f"{p.stem}-{e['number']}" for p, e in ENTRIES]
+)
+def test_every_visible_wizard_draft_builds_current_task_contract(path, entry):
+    form = entry["draft"]
+    assert set(form) == set(DRAFT_FIELDS)
+    task = TaskContract.from_user_input(task_from_draft(form))
+    assert task.reference is not None
+    assert task.output_min <= task.reference <= task.output_max
+    assert task.state_stop > max(abs(task.output_min), abs(task.output_max))
+    assert task.input_min < task.input_max
+    assert task.budgets["distinct_experiments"] == form["distinct_experiments"]
+    assert (
+        task.budgets["cumulative_excitation_time_s"]
+        == form["cumulative_excitation_time_s"]
+    )
+    assert task.budgets["clarification_rounds"] == 6
+    assert task.budgets["same_failure_retries"] == 1
+    assert task.budgets["elapsed_time_s"] == 7200
+    assert task.measured_signals == tuple(row[0] for row in form["outputs"])
+    assert task.control_inputs == tuple(row[0] for row in form["inputs"])
+    assert task.signal_units == dict(form["outputs"])
+    assert all(row[1] for row in form["outputs"])
+    assert task.input_units
+    for value in form.values():
+        if isinstance(value, (float, int)):
+            assert math.isfinite(value)
+    for selection, fields in (
+        ("success_requirement_fields", REQUIREMENTS),
+        ("budget_fields", BUDGETS),
     ):
-        entries = _parse_document(path, headings, language)
-        distribution = Counter(
-            _selected_profile_id(entry["description"], language) for entry in entries
+        assert len(form[selection]) == len(set(form[selection]))
+        for name in fields:
+            assert (form[name] is not None) == (name in form[selection])
+    for enabled, value in (
+        ("reference_enabled", "reference"),
+        ("initial_output_value_enabled", "initial_output_value"),
+        ("response_time_preference_enabled", "response_time_preference_s"),
+    ):
+        assert type(form[enabled]) is bool
+        assert form[enabled] == (form[value] is not None)
+    if task.task_type == "transition_then_hold":
+        assert task.initial_region and task.goal_region
+        assert task.output_min <= task.initial_output_value <= task.output_max
+        assert all(
+            task.output_min < value < task.output_max
+            for value in task.intermediate_targets
         )
-        assert distribution == EXPECTED_PROFILE_COUNTS, language
-        for index, entry in enumerate(entries, 1):
-            profile_id, answers = _profile_answers(entry, language)
-            for label, answer in answers.items():
-                values = _numbers(answer)
-                assert values and all(math.isfinite(value) for value in values), (
-                    language,
-                    index,
-                    label,
-                    answer,
-                )
-                assert re.search(
-                    r"(?:[A-Za-z]{1,}|%|单位|无量纲|档位|矩阵|模型|系数)", answer
-                ), (language, index, label, answer)
-
-            input_min = _numbers(
-                answers[
-                    "输入仿真下限"
-                    if language == "cn"
-                    else "Input simulation lower bound"
-                ]
-            )[0]
-            input_max = _numbers(
-                answers[
-                    "输入仿真上限"
-                    if language == "cn"
-                    else "Input simulation upper bound"
-                ]
-            )[0]
-            output_min = _numbers(
-                answers[
-                    "输出仿真下限"
-                    if language == "cn"
-                    else "Output simulation lower bound"
-                ]
-            )[0]
-            output_max = _numbers(
-                answers[
-                    "输出仿真上限"
-                    if language == "cn"
-                    else "Output simulation upper bound"
-                ]
-            )[0]
-            assert input_min < input_max, (language, index)
-            assert output_min < output_max, (language, index)
-
-            for label, answer in answers.items():
-                if label in time_labels:
-                    values = _time_numbers(answer)
-                    assert values and all(value > 0 for value in values), (
-                        language,
-                        index,
-                        label,
-                        answer,
-                    )
-
-            if profile_id == "second_order_oscillator":
-                ratio_label = (
-                    "相邻峰值幅度比例" if language == "cn" else "Successive peak ratio"
-                )
-                ratio = _numbers(answers[ratio_label])[0]
-                assert 0 < ratio < 1, (language, index, ratio)
-            if profile_id == "mimo_2x2_coupled":
-                matrix_label = (
-                    "局部输入输出影响矩阵"
-                    if language == "cn"
-                    else "Local input-output gain matrix"
-                )
-                matrix_match = re.search(
-                    r"\[\[([^\]]+)\],\s*\[([^\]]+)\]\]", answers[matrix_label]
-                )
-                assert matrix_match is not None, (language, index)
-                rows = [_numbers(row) for row in matrix_match.groups()]
-                assert len(rows) == 2 and all(len(row) == 2 for row in rows)
-                assert all(math.isfinite(value) for row in rows for value in row)
-            if profile_id == "generic_unstable_higher_order":
-                model_label = (
-                    "完整数值模型" if language == "cn" else "Complete numeric model"
-                )
-                assert re.search(
-                    r"(?:numerator coefficients|matrix [ABCD]|registered nonlinear|分子系数|[ABCD]\s*(?:matrix|矩阵)|注册非线性)",
-                    answers[model_label],
-                    re.IGNORECASE,
-                ), (language, index, answers[model_label])
+    else:
+        assert not form["initial_region"] and not form["goal_region"]
+        assert not form["initial_output_value_enabled"]
+        assert not form["intermediate_targets"]
+    if task.task_type == "disturbance_recovery_to_hold":
+        assert task.disturbance_event and task.recovery_start_condition
+        assert task.disturbance_hold_region
+    else:
+        assert not form["disturbance_event"]
+        assert not form["recovery_start_condition"]
+        assert not form["disturbance_hold_region"]
+    assert re.findall(r"^\d+\. ([a-z_]+):", entry["diagnosis"], re.MULTILINE) == list(
+        DIAGNOSTIC_IDS
+    )
+    assert len(re.findall(r"^### [1-7]\. ", entry["text"], re.MULTILINE)) == 7
+    assert (
+        f"[Ch{(entry['number'] - 1) // 20 + 1}-{(entry['number'] - 1) % 20 + 1:02d}]"
+        in entry["source"]
+    )
 
 
-def test_bilingual_profile_required_numbers_and_profile_headings_match():
-    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
-    assert len(english) == len(chinese) == 200
-    for index, (english_entry, chinese_entry) in enumerate(zip(english, chinese), 1):
-        english_profile, english_answers = _profile_answers(english_entry, "en")
-        chinese_profile, chinese_answers = _profile_answers(chinese_entry, "cn")
-        assert english_profile == chinese_profile, index
-        english_labels = _profile_required_labels(english_profile, "en")
-        chinese_labels = _profile_required_labels(chinese_profile, "cn")
-        english_values = [
-            value
-            for label in english_labels
-            for value in _numbers(english_answers[label])
-        ]
-        chinese_values = [
-            value
-            for label in chinese_labels
-            for value in _numbers(chinese_answers[label])
-        ]
-        assert english_values == chinese_values, index
-
-
-def test_profile_selection_reaches_the_expected_candidate_model_stage():
-    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-    representatives: dict[str, dict] = {}
-    for entry in english:
-        profile_id = _selected_profile_id(entry["description"], "en")
-        representatives.setdefault(profile_id, entry)
-    assert set(representatives) == set(EXPECTED_PROFILE_COUNTS)
-
-    catalog = default_simulation_profile_catalog()
-    adapter = _DatasetDescriptionGuidanceAdapter("en")
-    for profile_id, entry in representatives.items():
-        description = SystemDescription(text=entry["description"])
-        session = start_diagnostic_session(description, diagnostic_adapter=adapter)
-        classification = DiagnosticEngine().classify(
-            session.current_diagnosis, description
-        )
-        selection = deterministic_profile_selection(
-            description,
-            session.current_diagnosis,
-            classification,
-            catalog,
-        )
-        assert selection.simulation_profile_id == profile_id
-        selected_profile = validate_semantic_selection(
-            selection, classification, catalog
-        )
-        assert selected_profile.required_feature_ids
-        profile = entry["profile"]
-        if profile_id == "generic_unstable_higher_order":
-            assert "**Complete numeric model:**" in profile
-        else:
-            assert "Profile-specific required answers:" in profile
-
-
-def test_every_compilable_chinese_profile_response_reaches_a_candidate_model():
-    """Exercise the actual specification parser/compiler, not only label presence."""
-    entries = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
-    templates = {
-        template.method_profile_id: template
-        for template in default_specification_template_catalog().templates
+def test_bilingual_ids_titles_numeric_values_and_signal_contracts_match_source():
+    english, chinese = [read_prompt_document(path) for path in DOCUMENTS]
+    assert (
+        [e["number"] for e in english]
+        == [e["number"] for e in chinese]
+        == _technical_ids()
+        == list(range(1, 201))
+    )
+    source_titles = re.findall(
+        r"^### \d+\. \[Ch\d+-\d+\] (.+)$", TECHNICAL_PATH.read_text(), re.MULTILINE
+    )
+    translated_fields = {
+        "description",
+        "initial_region",
+        "goal_region",
+        "disturbance_event",
+        "recovery_start_condition",
+        "disturbance_hold_region",
     }
-    compiled_counts = Counter()
-
-    for index, entry in enumerate(entries, 1):
-        profile_id = _selected_profile_id(entry["description"], "cn")
-        if profile_id == "generic_unstable_higher_order":
-            # This route deliberately hands its complete numeric plant model to
-            # the higher-order workflow instead of compiling a scalar proxy.
-            _assert_complete_numeric_model_handoff(entry, "cn", index)
-            continue
-
-        description = SystemDescription(text=entry["description"])
-        template = templates[profile_id]
-        previous = build_initial_specification_assessment(description, template)
-        assessment = assess_specification_text(
-            description,
-            template,
-            entry["profile"],
-            previous=previous,
-            method_profile_id=profile_id,
-        )
-
-        assert assessment.status == "ready", (
-            index,
-            profile_id,
-            assessment.missing_fact_ids,
-            assessment.rejected_facts,
-            assessment.conflicts,
-        )
-        compiled = compile_specification_model(
-            description=description,
-            template=template,
-            assessment=assessment,
-        )
-        assert compiled.template_id == template.template_id, (index, profile_id)
-        compiled_counts[profile_id] += 1
-
-    expected_compilable = Counter(EXPECTED_PROFILE_COUNTS)
-    del expected_compilable["generic_unstable_higher_order"]
-    assert compiled_counts == expected_compilable
+    for en, cn, title in zip(english, chinese, source_titles, strict=True):
+        # The original prompt English titles sometimes expand corpus headings;
+        # bilingual numbering, Chinese title, and source locator remain exact.
+        assert cn["title"] == title.split(" / ")[0]
+        for field in DRAFT_FIELDS:
+            if field not in translated_fields:
+                assert en["draft"][field] == cn["draft"][field], (en["number"], field)
+        assert en["source"].split("[Ch")[1] == cn["source"].split("[Ch")[1]
 
 
-def _transfer_function_coefficients(
-    profile: str,
-) -> tuple[np.ndarray, np.ndarray] | None:
-    match = re.search(
-        r"numerator coefficients are ([^;]+); its denominator coefficients are ([^;]+);",
-        profile,
+@pytest.mark.parametrize("path", DOCUMENTS)
+def test_guide_has_current_actions_credentials_and_no_legacy_runtime_promises(path):
+    text = path.read_text()
+    for marker in (
+        "gemma4:e4b",
+        "http://127.0.0.1:11434/v1",
+        "ollama",
+        "RAG",
+        "确认软件边界并开始",
+        "下载协议",
+        "选择实验数据",
+        "fresh confirmation",
+    ):
+        assert marker in text
+    for removed in (
+        "### Profile Measurement Response",
+        "### Profile 测量回复",
+        "accompanying existing software record",
+        "配套已有软件记录",
+        "Executable first-order Profile proxy",
+        "可执行一阶 Profile 代理模型",
+    ):
+        assert removed not in text
+    assert (
+        "does not authorize commands to physical hardware" in text
+        or "不授权对实体硬件下发命令" in text
     )
-    if match is None:
-        return None
-    try:
-        numerator = np.array(
-            [float(item.strip()) for item in match.group(1).split(",")]
+
+
+@pytest.mark.parametrize("path", DOCUMENTS)
+def test_appendix_preserves_exact_registered_case_drafts_and_scope(path):
+    text = path.read_text()
+    for index, case_id in enumerate(CASES):
+        start = text.index(f"### `{case_id}`")
+        end = (
+            text.index(f"### `{CASES[index + 1]}`")
+            if index + 1 < len(CASES)
+            else len(text)
         )
-        denominator = np.array(
-            [float(item.strip()) for item in match.group(2).split(",")]
+        form = read_draft_table(text[start:end])
+        assert form == case_draft(case_id)
+        task = TaskContract.from_user_input(task_from_draft(form, case_id=case_id))
+        canonical = TaskContract.from_user_input(public_training_case(case_id)["task"])
+        assert registered_task_scope_fingerprint(
+            task
+        ) == registered_task_scope_fingerprint(canonical)
+
+
+@pytest.mark.parametrize("path", DOCUMENTS)
+def test_representative_plant_units_states_and_adaptations(path):
+    items = {e["number"]: e for e in read_prompt_document(path)}
+    for n in (21, 23, 25, 33, 37, 58, 73, 126, 165, 196):
+        assert (
+            items[n]["draft"]["description"] in items[n]["text"]
+            or "\\" in items[n]["draft"]["description"]
+            or '"' in items[n]["draft"]["description"]
         )
-    except ValueError:
-        return None
-    return numerator, denominator
-
-
-def _assert_complete_numeric_model_handoff(entry: dict, language: str, index: int):
-    _profile_id, answers = _profile_answers(entry, language)
-    label = "完整数值模型" if language == "cn" else "Complete numeric model"
-    model = answers[label]
-    values = _numbers(model)
-    assert values and all(math.isfinite(value) for value in values), index
-
-    if "transfer function" in model or "传递函数" in model:
-        coefficient_patterns = (
-            (
-                r"numerator coefficients are ([^;]+)",
-                r"denominator coefficients are ([^;]+)",
-            ),
-            (r"分子系数为([^；]+)", r"分母系数为([^；]+)"),
-        )
-        for numerator_pattern, denominator_pattern in coefficient_patterns:
-            numerator = re.search(numerator_pattern, model)
-            denominator = re.search(denominator_pattern, model)
-            if numerator is not None and denominator is not None:
-                numerator_values = _numbers(numerator.group(1))
-                denominator_values = _numbers(denominator.group(1))
-                assert numerator_values and denominator_values, index
-                assert any(value != 0 for value in denominator_values), index
-                return
-        pytest.fail(f"entry {index} has no parseable transfer-function handoff")
-
-    assert "state-space" in model or "状态空间" in model, index
-    matrix_markers = (
-        ("matrix A", "matrix B", "matrix C", "matrix D")
-        if language == "en"
-        else ("A 矩阵", "B 矩阵", "C 矩阵", "D 矩阵")
+    assert items[21]["draft"]["outputs"] == [["speed_deviation", "m/s"]]
+    assert items[21]["draft"]["input_unit"] == "N"
+    assert "1250" in items[21]["diagnosis"] and "25" in items[21]["diagnosis"]
+    assert items[23]["draft"]["inputs"] == [["body_torque"]]
+    assert items[23]["draft"]["outputs"] == [["attitude_angle", "rad"]]
+    assert "1200" in items[23]["diagnosis"] and "0.01 rad/s^2" in items[23]["diagnosis"]
+    assert len(items[25]["draft"]["inputs"]) == len(items[25]["draft"]["outputs"]) == 3
+    assert items[25]["draft"]["input_unit"] == "Nm"
+    assert items[33]["draft"]["outputs"] == [["motor_position", "rad"]]
+    assert "0.005s^2+0.06s+0.1001" in items[33]["diagnosis"]
+    assert items[37]["draft"]["input_unit"] == "percentage_point"
+    assert items[37]["draft"]["outputs"] == [["outlet_temperature_deviation", "degC"]]
+    assert "0.5 exp(-10s)/[(30s+1)(60s+1)]" in items[37]["diagnosis"]
+    assert "30(s-6)/[s(s^2+4s+13)]" in items[58]["diagnosis"]
+    assert items[58]["draft"]["input_unit"] == "deg"
+    assert "natural_frequency" in items[58]["diagnosis"]
+    assert (
+        "do not submit that parameter" in items[58]["diagnosis"]
+        or "不提交该参数" in items[58]["diagnosis"]
     )
-    assert all(marker in model for marker in matrix_markers), index
-    assert model.count("[") >= 4, index
+    assert "SISO" in items[58]["diagnosis"].split("7. coupling_underactuation:")[1]
+    assert items[73]["draft"]["task_type"] == "disturbance_recovery_to_hold"
+    assert items[73]["draft"]["inputs"] == [["armature_voltage"]]
+    assert "0.067/(0.00113s^2+0.0141s+0.032489)" in items[73]["diagnosis"]
+    assert "0.233489" not in items[73]["text"]  # Old PID closed-loop polynomial.
+    assert items[126]["draft"]["outputs"] == [["visible_output_y", "normalized_output"]]
+    assert "1 < 2" in items[126]["diagnosis"] and "C=[0,1]" in items[126]["diagnosis"]
+    assert items[165]["draft"]["inputs"] == [["virtual_power_command"]]
+    assert items[165]["draft"]["input_unit"] == "W"
+    assert items[165]["draft"]["input_min"] == 0
+    assert (
+        "1 W/V^2" in items[165]["diagnosis"] and "sqrt(u/k)" in items[165]["diagnosis"]
+    )
+    assert items[196]["draft"]["task_type"] == "transition_then_hold"
+    assert items[196]["draft"]["intermediate_targets"] == "0.3, 0.6"
+    assert items[196]["draft"]["input_min"] == 0
+    assert items[196]["draft"]["input_unit"] == "normalized_input"
 
 
-def test_first_order_measurements_match_source_models_or_explicit_proxies():
-    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
+def test_model_derived_representative_numeric_claims_are_consistent():
+    # Independent source equations catch dimension/sign and source/closed-loop mixups.
+    assert 500 / 50 == 10
+    assert 1000 / 50 == 20
+    assert 12 / 1200 == pytest.approx(0.01)
+    motor_den = np.polymul([0.0113, 0.028], [0.1, 1])
+    motor_den[-1] += 0.067**2
+    assert motor_den == pytest.approx([0.00113, 0.0141, 0.032489])
+    assert all(np.real(np.roots(motor_den)) < 0)
+    a = np.diag([-3.0, -4.0])
+    b = np.array([[1.0], [1.0]])
+    c = np.array([[0.0, 1.0]])
+    assert np.linalg.matrix_rank(np.hstack([b, a @ b])) == 2
+    assert np.linalg.matrix_rank(np.vstack([c, c @ a])) == 1
+    time = np.linspace(0, 12, 12001)
+    _, altitude = signal.impulse(
+        signal.TransferFunction([-30, 180], [1, 4, 13, 0]), T=time
+    )
+    assert altitude[1] < 0
+    assert altitude[-1] == pytest.approx(180 / 13, abs=1e-6)
+    for path in DOCUMENTS:
+        item = read_prompt_document(path)[195]
+        gain = 0.5226 * 0.0876 * 0.1438 / (0.1482 * 0.0863 * 0.0527)
+        # The full model belongs in the original-scope section; the diagnostic
+        # reply need not duplicate its coefficients or calculated static gain.
+        assert str(round(gain, 3)) in item["text"]
+        assert item["draft"]["reference"] / gain < item["draft"]["input_max"]
 
-    for index, (entry, chinese_entry) in enumerate(zip(english, chinese), 1):
-        profile_id, answers = _profile_answers(entry, "en")
-        if profile_id not in {"first_order_lag", "first_order_lag_with_delay"}:
-            continue
 
-        coefficients = _transfer_function_coefficients(entry["profile"])
-        record = re.search(
-            r"uses a ([0-9.eE+-]+) s sample interval for ([0-9.eE+-]+) s,"
-            r" starts the primary output at ([0-9.eE+-]+),",
-            entry["profile"],
+@pytest.mark.parametrize("path", DOCUMENTS)
+def test_source_priors_preserve_binary_actuation_offsets_and_nondynamic_limits(path):
+    items = {entry["number"]: entry for entry in read_prompt_document(path)}
+    for number, item in items.items():
+        assert "control_problems.md" in item["source"]
+        assert (
+            "Unknown" in item["diagnosis"]
+            or "unknown" in item["diagnosis"]
+            or "未知" in item["diagnosis"]
         )
-        stable_model = False
-        if coefficients is not None and record is not None:
-            numerator, denominator = coefficients
-            if len(denominator) >= 2 and 0 < len(numerator) <= len(denominator):
-                poles = np.roots(denominator)
-                dc_gain = (
-                    numerator[-1] / denominator[-1]
-                    if abs(denominator[-1]) > 1e-12
-                    else math.nan
-                )
-                stable_model = (
-                    bool(np.all(np.real(poles) < -1e-9))
-                    and math.isfinite(dc_gain)
-                    and abs(dc_gain) > 1e-12
-                )
-
-        if stable_model and index not in SOURCE_MEASUREMENT_IDS:
-            dt, duration, initial_output = map(float, record.groups())
-            input_change = _numbers(answers["Known input change"])[0]
-            input_min = _numbers(answers["Input simulation lower bound"])[0]
-            input_max = _numbers(answers["Input simulation upper bound"])[0]
-            point_count = max(
-                1001,
-                min(100001, int(duration / max(dt, 1e-9)) + 1),
+        # Source mathematics can establish priors without fabricating measurements.
+        if number not in (10, 21, 23, 25, 33, 37, 58, 73, 126, 165, 196):
+            assert (
+                "Source-model prior:" in item["diagnosis"]
+                or "来源模型先验：" in item["diagnosis"]
             )
-            times = np.linspace(0.0, duration, point_count)
-            _, unit_step = signal.step((numerator, denominator), T=times)
-            expected_final = float(dc_gain * input_change)
-            target = 0.6321205588 * expected_final
-            response = unit_step * input_change
-            crossings = (
-                np.flatnonzero(response >= target)
-                if expected_final > 0
-                else np.flatnonzero(response <= target)
-            )
-            expected_time = (
-                max(dt, float(times[crossings[0]]))
-                if len(crossings)
-                else max(20 * dt, duration / 8)
-            )
-            amplitudes = (
-                -abs(input_min),
-                -0.5 * abs(input_min),
-                0.5 * abs(input_max),
-                abs(input_max),
-            )
-            trajectories = [
-                initial_output + multiplier * amplitude * unit_step
-                for multiplier in (0.9, 1.0, 1.1)
-                for amplitude in amplitudes
-            ]
-            raw_min = min(float(np.min(values)) for values in trajectories)
-            raw_max = max(float(np.max(values)) for values in trajectories)
-            span = raw_max - raw_min
-            expected_min = raw_min - 0.1 * span
-            expected_max = raw_max + 0.1 * span
+    assert items[1]["draft"]["final_abs_error_max"] == 0.5
+    assert "{0,1}" in items[1]["diagnosis"]
+    assert (
+        "fractional" in items[1]["diagnosis"] or "分数加热命令" in items[1]["diagnosis"]
+    )
+    assert items[2]["draft"]["outputs"] == [["speed_deviation", "mph"]]
+    assert items[2]["draft"]["reference"] == 5
+    assert "65+speed_deviation" in items[2]["diagnosis"]
+    assert "6.5+throttle_angle_deviation" in items[2]["diagnosis"]
+    assert items[29]["draft"]["input_unit"] == "A"
+    assert items[39]["draft"]["outputs"] == [["piston_position", "m"]]
+    assert "-1" in items[101]["diagnosis"]
+    assert (
+        "improper" in items[101]["diagnosis"] or "非真有理" in items[101]["diagnosis"]
+    )
+    assert (
+        "manipulated input" in items[176]["diagnosis"]
+        or "可操纵输入" in items[176]["diagnosis"]
+    )
+    assert items[200]["draft"]["task_type"] == "local_setpoint_hold"
+    assert (
+        "unsupported" in items[200]["diagnosis"] or "不支持" in items[200]["diagnosis"]
+    )
 
-            assert "model-derived" in answers["Final output change"], index
-            assert _numbers(answers["Final output change"])[0] == pytest.approx(
-                expected_final, rel=2e-5, abs=1e-8
-            )
-            assert _time_numbers(answers["63% response time"])[0] == pytest.approx(
-                expected_time, rel=2e-5, abs=1e-8
-            )
-            assert _numbers(answers["Output simulation lower bound"])[
-                0
-            ] == pytest.approx(expected_min, rel=2e-5, abs=1e-8)
-            assert _numbers(answers["Output simulation upper bound"])[
-                0
-            ] == pytest.approx(expected_max, rel=2e-5, abs=1e-8)
-            continue
 
-        if index in SOURCE_MEASUREMENT_IDS:
-            continue
+@pytest.mark.parametrize("path", DOCUMENTS)
+def test_glucose_adaptation_defines_added_input_placement_and_absolute_bias(path):
+    entry = read_prompt_document(path)[9]
+    form, reply = entry["draft"], entry["diagnosis"]
+    assert form["inputs"] == [["insulin_release_deviation"]]
+    assert form["input_unit"] == "normalized_input"
+    assert form["outputs"] == [["blood_glucose", "mg/dL"]]
+    bias = float(re.search(r"blood_glucose=([\d.]+)\+delta_G", reply)[1])
+    assert bias == form["reference"]
+    # Parse the actual document's model, so swapped meal/command ports fail.
+    a_values = re.search(r"A=(\[\[[\d.,+-]+\],\[[\d.,+-]+\]\])", reply)[1]
+    b_values = re.search(r"B_u=(\[[\d.,+-]+\])\^T", reply)[1]
+    c_values = re.search(r"C=(\[[\d.,+-]+\])", reply)[1]
+    a = np.array(json.loads(a_values))
+    b = np.array(json.loads(b_values)).reshape(2, 1)
+    c = np.array(json.loads(c_values)).reshape(1, 2)
+    assert b[0, 0] == 0 and b[1, 0] > 0
+    assert "B_m=[1,0]^T" in reply
+    numerator, denominator = signal.ss2tf(a, b, c, [[0]])
+    assert denominator == pytest.approx([1, 0.1, 0.005])
+    assert numerator[0] == pytest.approx([0, 0, -0.1], abs=1e-12)
+    gain = (-c @ np.linalg.solve(a, b)).item()
+    assert gain == pytest.approx(-20)
+    assert bias + 0.1 * gain == pytest.approx(98)
+    assert all(np.real(np.linalg.eigvals(a)) < 0)
+    for command in (form["input_min"], form["input_max"]):
+        assert form["output_min"] < bias + gain * command < form["output_max"]
+    assert "added software assumptions" in reply or "新增软件假设" in reply
 
-        english_proxy = re.search(
-            r"\*\*Executable first-order Profile proxy:\*\* (.*?)(?=\n\n)",
-            entry["profile"],
-            re.DOTALL,
+
+@pytest.mark.parametrize("path", DOCUMENTS)
+def test_pupil_command_sign_uses_source_dilation_convention(path):
+    entry = read_prompt_document(path)[12]
+    form = entry["draft"]
+    assert form["inputs"] == [["dilation_command_deviation"]]
+    assert form["input_unit"] == "iris_command"
+    assert form["outputs"] == [["pupil_diameter", "mm"]]
+    # Read the declared nominal calibration from the actual paste-ready reply.
+    gain = float(re.search(r"k_u=([+\d.]+) mm/iris_command", entry["diagnosis"])[1])
+    assert gain > 0
+    bias = float(re.search(r"D=([\d.]+)\+delta_D", entry["diagnosis"])[1])
+    assert bias == form["reference"]
+    for command in (form["input_min"], form["input_max"]):
+        predicted = bias + gain * command
+        assert form["output_min"] < predicted < form["output_max"]
+        assert math.copysign(1, predicted - bias) == math.copysign(1, command)
+    assert "conflicts" in entry["diagnosis"] or "冲突" in entry["diagnosis"]
+    assert (
+        "separate disturbance" in entry["diagnosis"]
+        or "另一个扰动" in entry["diagnosis"]
+    )
+
+
+def test_parser_and_consumers_fail_on_visible_document_corruption(tmp_path):
+    text = ENGLISH_PATH.read_text()
+    duplicate = text.replace(
+        "| Reference enabled | `reference_enabled` | `true` |",
+        "| Reference enabled | `reference_enabled` | `true` |\n| Duplicate | `reference_enabled` | `true` |",
+        1,
+    )
+    target = tmp_path / "duplicate.md"
+    target.write_text(duplicate)
+    with pytest.raises(ValueError, match="duplicate_draft_field"):
+        read_prompt_document(target)
+    # An edited visible bound reaches the actual consumer, with no parser fallback.
+    target.write_text(
+        text.replace(
+            "| Input max | `input_max` | `1.0` |",
+            "| Input max | `input_max` | `0.0` |",
+            1,
         )
-        chinese_proxy = re.search(
-            r"\*\*可执行一阶 Profile 代理模型:\*\* (.*?)(?=\n\n)",
-            chinese_entry["profile"],
-            re.DOTALL,
-        )
-        assert english_proxy is not None and chinese_proxy is not None, index
-        proxy_values = _numbers(english_proxy.group(1))
-        assert proxy_values == _numbers(chinese_proxy.group(1)), index
-        input_change = _numbers(answers["Known input change"])[0]
-        final_change = _numbers(answers["Final output change"])[0]
-        response_time = _time_numbers(answers["63% response time"])[0]
-        delay = (
-            _time_numbers(answers["Pure waiting time"])[0]
-            if profile_id == "first_order_lag_with_delay"
-            else 0.0
-        )
-        assert final_change != 0, index
-        assert proxy_values[:4] == pytest.approx(
-            [final_change / input_change, response_time, 1.0, delay]
-        )
-
-        assert record is not None, index
-        dt, duration, initial_output = map(float, record.groups())
-        times = np.linspace(
-            0.0,
-            duration,
-            max(1001, min(100001, int(duration / max(dt, 1e-9)) + 1)),
-        )
-        elapsed = np.maximum(times - delay, 0.0)
-        unit_step = (final_change / input_change) * (
-            1.0 - np.exp(-elapsed / response_time)
-        )
-        input_min = _numbers(answers["Input simulation lower bound"])[0]
-        input_max = _numbers(answers["Input simulation upper bound"])[0]
-        amplitudes = (
-            -abs(input_min),
-            -0.5 * abs(input_min),
-            0.5 * abs(input_max),
-            abs(input_max),
-        )
-        trajectories = [
-            initial_output + multiplier * amplitude * unit_step
-            for multiplier in (0.9, 1.0, 1.1)
-            for amplitude in amplitudes
-        ]
-        raw_min = min(float(np.min(values)) for values in trajectories)
-        raw_max = max(float(np.max(values)) for values in trajectories)
-        span = raw_max - raw_min
-        expected_min = raw_min - 0.1 * span
-        expected_max = raw_max + 0.1 * span
-        assert _numbers(answers["Output simulation lower bound"])[0] == pytest.approx(
-            expected_min, rel=2e-5, abs=1e-8
-        )
-        assert _numbers(answers["Output simulation upper bound"])[0] == pytest.approx(
-            expected_max, rel=2e-5, abs=1e-8
-        )
-
-
-def test_second_order_motion_answer_is_an_acceleration_measurement():
-    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
-
-    for entry, language in ((english[76], "en"), (chinese[76], "cn")):
-        _profile_id, answers = _profile_answers(entry, language)
-        label = "对应运动变化" if language == "cn" else "Corresponding motion change"
-        assert "acceleration" in answers[label] or "加速度" in answers[label]
-        assert "/s^2" in answers[label]
-
-
-def test_declared_profile_parameter_shortcut_is_removed_everywhere():
-    for path in (ENGLISH_PATH, CHINESE_PATH):
-        text = path.read_text(encoding="utf-8")
-        assert text.count("Declared Profile parameters") == 0
-        assert text.count("已声明的 Profile 参数") == 0
-        if path == ENGLISH_PATH:
-            assert text.count("Profile-specific required answers:") == 200
-        else:
-            assert text.count("Profile 专用必填回答：") == 200
-
-
-def test_bilingual_descriptions_produce_the_same_eight_diagnostic_assessments():
-    fields = tuple(_DatasetDescriptionGuidanceAdapter._PARAGRAPH_BY_FIELD)
-    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
-    english_adapter = _DatasetDescriptionGuidanceAdapter("en")
-    chinese_adapter = _DatasetDescriptionGuidanceAdapter("cn")
-
-    for index, (english_item, chinese_item) in enumerate(zip(english, chinese), 1):
-        english_session = start_diagnostic_session(
-            SystemDescription(text=english_item["description"]),
-            diagnostic_adapter=english_adapter,
-        )
-        chinese_session = start_diagnostic_session(
-            SystemDescription(text=chinese_item["description"]),
-            diagnostic_adapter=chinese_adapter,
-        )
-        english_assessments = tuple(
-            getattr(english_session.current_diagnosis, field).assessment
-            for field in fields
-        )
-        chinese_assessments = tuple(
-            getattr(chinese_session.current_diagnosis, field).assessment
-            for field in fields
-        )
-
-        assert english_assessments == chinese_assessments, index
-
-
-def test_profile_responses_preserve_representative_problem_data_as_natural_language():
-    english = _parse_document(ENGLISH_PATH, ENGLISH_HEADINGS, "en")
-    chinese = _parse_document(CHINESE_PATH, CHINESE_HEADINGS, "cn")
-
-    thermostat_en = english[0]["profile"]
-    thermostat_cn = chinese[0]["profile"]
-    assert "50 degF" in thermostat_en and "144000 s" in thermostat_en
-    assert "50 degF" in thermostat_cn and "144000 s" in thermostat_cn
-
-    cruise_en = english[1]["profile"]
-    cruise_cn = chinese[1]["profile"]
-    for value in ("1 deg", "10 mph", "5 s", "45 mph", "80 mph"):
-        assert value in cruise_en
-        assert value in cruise_cn
-
-    assert "transfer function" in english[20]["profile"]
-    assert "state-space" in english[24]["profile"]
-    assert "registered nonlinear" in english[26]["profile"]
-    assert "传递函数" in chinese[20]["profile"]
-    assert "状态空间" in chinese[24]["profile"]
-    assert "注册非线性" in chinese[26]["profile"]
-
-
-def test_prompt_documents_do_not_authorize_physical_hardware_actions():
-    english = ENGLISH_PATH.read_text(encoding="utf-8")
-    chinese = CHINESE_PATH.read_text(encoding="utf-8")
-
-    assert english.count("not commands or permissions for a physical system") == 200
-    assert chinese.count("不是对实体系统的命令或操作许可") == 200
-    assert "do not authorize commands to physical hardware" in english
-    assert "不授权对实体硬件下发命令" in chinese
+    )
+    parsed = read_prompt_document(target)[0]
+    with pytest.raises(DraftValidationError):
+        task_from_draft(parsed["draft"])
+    form = deepcopy(read_prompt_document(ENGLISH_PATH)[72]["draft"])
+    form["disturbance_event"] = ""
+    with pytest.raises(DraftValidationError):
+        task_from_draft(form)
 
 
 def test_technical_corpus_has_four_required_fields_and_source_for_every_entry():
@@ -1109,11 +418,6 @@ def test_technical_corpus_has_four_required_fields_and_source_for_every_entry():
         assert "**示例数据：**" in example, index
         assert "**理论计算：**" in example, index
         assert "**八段核对：**" in example, index
-
-
-def test_prompt_documents_describe_data_without_textbook_provenance_claims():
-    assert "textbook" not in ENGLISH_PATH.read_text(encoding="utf-8").lower()
-    assert "教材" not in CHINESE_PATH.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(

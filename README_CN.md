@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.4` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.5` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
@@ -14,7 +14,7 @@
 git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
 uv sync --locked
-uv run --locked python -m compileall -q -x '(^|/)(frontend|gradio_archive)(/|$)' cfdc tests main.py app.py
+uv run --locked python -m compileall -q cfdc tests main.py app.py
 node --version
 npm --version
 npm --prefix cfdc/web/frontend ci
@@ -40,6 +40,12 @@ uv run python app.py
 首次使用建议先选择内置软件案例。自定义对象不会自动获得仿真模型；实体或外部实验也不会由页面直接执行，而是通过 operator bundle、操作员确认和协议绑定的数据上传继续。
 
 内置权限只由服务端案例 ID 和带 fingerprint 的 `RegisteredCaseBinding` 授予，修改浏览器 JSON 不能替换 Provider。要练习教学闭环，请选择内置案例并点击“创建教学练习任务”。生成的 ZIP 只用于软件练习，会消耗预留的软件实验预算，但在下载并重新上传、通过正常审计门之前不会写入 evidence。
+
+## 数据集逐步操作指南
+
+[中文 prompt](dataset/control_problem_prompts_cn.md) 与 [英文 prompt](dataset/control_problem_prompts.md) 保留全部 200 个问题的编号，按照当前向导的“目标、信号、边界与要求、核对”组织。每题给出字段值、勾选项、启动后的诊断回复及继续所需的证据，并区分原始分析目标或不支持的目标与明确适配后的 CFDC 练习。
+
+这些条目用于自定义任务。描述数学模型不会安装仿真 Provider，也不等于提供协议绑定的实验记录。文档另行演示使用锁定合同的注册案例，包括教学 ZIP 上传和 fresh confirmation。要求外部数据或出现能力缺口不代表性能达标。如需本地操作练习，可配置 `gemma4:e4b` 并关闭 RAG；日常使用仍可选择其他已配置的模型服务。
 
 ## 选择模型服务商
 

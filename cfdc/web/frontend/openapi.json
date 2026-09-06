@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CFDC Kernel Web API",
-    "version": "0.3.4"
+    "version": "0.3.5"
   },
   "paths": {
     "/api/v1/config": {
@@ -1923,7 +1923,7 @@
           "version": {
             "type": "string",
             "title": "Version",
-            "default": "0.3.4"
+            "default": "0.3.5"
           }
         },
         "type": "object",

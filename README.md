@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.4` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.5` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
@@ -14,7 +14,7 @@ You can use a local model through Ollama or a hosted service such as DeepSeek AP
 git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
 uv sync --locked
-uv run --locked python -m compileall -q -x '(^|/)(frontend|gradio_archive)(/|$)' cfdc tests main.py app.py
+uv run --locked python -m compileall -q cfdc tests main.py app.py
 node --version
 npm --version
 npm --prefix cfdc/web/frontend ci
@@ -40,6 +40,12 @@ Before a run, `uv run --locked python main.py --doctor` prints the same non-dest
 Start with a built-in software case. A custom object does not automatically receive a simulation model. Physical or externally operated experiments are never run directly by the page; they continue through an operator bundle, operator confirmation, and protocol-bound data upload.
 
 Built-in authority is granted by a server-side case ID and a fingerprinted `RegisteredCaseBinding`; editing browser JSON cannot select another Provider. To practise the teaching loop, choose a built-in case and click “Create teaching exercise”. The generated ZIP is software-only, consumes the reserved experiment budget, and is not evidence until it is downloaded and re-uploaded through the normal audit gates.
+
+## Dataset walkthroughs
+
+The [English prompts](dataset/control_problem_prompts.md) and [Chinese prompts](dataset/control_problem_prompts_cn.md) preserve all 200 problem numbers and follow the current wizard: goal, signals, boundaries and requirements, then review. Each entry supplies the field values, checkbox choices, a subsequent diagnostic reply, and the evidence needed to continue. Original analytical or unsupported goals are distinguished from the explicitly adapted CFDC exercise.
+
+These are custom-task instructions. Describing a mathematical model does not install a simulation Provider or supply protocol-bound experimental evidence. The documents separately demonstrate registered cases using their locked contracts, including teaching ZIP upload and fresh confirmation. A request for external data or a capability gap is not a performance pass. For optional local walkthroughs, configure `gemma4:e4b` and disable RAG; normal users may choose another configured model service.
 
 ## Choose a model provider
 

@@ -57,8 +57,7 @@ def test_readmes_install_and_check_before_web_start_and_cli():
         text = path.read_text(encoding="utf-8")
         sync = text.index("uv sync --locked")
         compile_check = text.index(
-            "uv run --locked python -m compileall -q -x "
-            "'(^|/)(frontend|gradio_archive)(/|$)' cfdc tests main.py app.py"
+            "uv run --locked python -m compileall -q cfdc tests main.py app.py"
         )
         node_check = text.index("node --version")
         npm_check = text.index("npm --version")
