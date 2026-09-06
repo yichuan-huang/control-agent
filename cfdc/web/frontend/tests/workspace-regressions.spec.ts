@@ -102,7 +102,9 @@ const cases: CaseFlow[] = [
 ];
 
 async function getJson<T>(page: Page, path: string): Promise<T> {
-  const response = await page.request.get(path);
+  // Retry one reset connection on read-only requests, never a task mutation.
+  // Playwright still fails HTTP errors and a second ECONNRESET.
+  const response = await page.request.get(path, { maxRetries: 1 });
   expect(response.ok(), `${path} returned ${response.status()}`).toBe(true);
   return response.json() as Promise<T>;
 }
