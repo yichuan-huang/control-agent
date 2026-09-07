@@ -233,12 +233,14 @@ def create_app(
     async def lifespan(app):
         if prepare_rag:
             rag.start()
-        yield
-        operations.close()
+        try:
+            yield
+        finally:
+            operations.close()
 
     app = FastAPI(
         title="CFDC Kernel Web API",
-        version="0.3.5",
+        version="0.3.6",
         lifespan=lifespan,
         responses={
             400: {"model": ErrorResponse},
@@ -510,6 +512,12 @@ def create_app(
         if existing:
             return existing
         report, _ = load(task_id)
+        if body.action in {"pause_managed_workflow", "continue_managed_workflow"}:
+            raise APIError(
+                "automatic_execution_removed",
+                "自定义任务使用通用外部数据流程；请按页面指导下载、在外部执行并上传记录。",
+                422,
+            )
         check_mutation(report, body.expected_revision, body.action)
 
         def work(context):
@@ -517,9 +525,13 @@ def create_app(
                 cache.invalidate(task_id)
                 current, state = load(task_id)
                 check_mutation(current, body.expected_revision, body.action)
-                report, _ = execute_action(state, body, files)
+                report, updated_state = execute_action(state, body, files)
+                result_id = updated_state["kernel_session_id"]
+                if result_id != task_id:
+                    context.created_task(result_id)
                 cache.invalidate(task_id)
-                return {"session_id": task_id, "revision": report["revision"]}
+                cache.invalidate(result_id)
+                return {"session_id": result_id, "revision": report["revision"]}
             except Exception as exc:
                 raise fresh_error(exc, task_id) from exc
 
@@ -670,7 +682,7 @@ def create_app(
                 }
                 if selected not in available:
                     raise ValueError("artifact unavailable")
-                value = report if selected == "report" else report[selected]
+                value = readmodels._artifact(report, selected)
                 directory = (
                     runtime_root / "downloads" / task_id / str(report["revision"])
                 )
@@ -681,6 +693,42 @@ def create_app(
                     + "\n",
                     encoding="utf-8",
                 )
+            elif kind == "managed":
+                row = next(
+                    item
+                    for item in (report.get("managed_execution") or {}).get(
+                        "artifacts", []
+                    )
+                    if item.get("artifact_id") == artifact_id
+                )
+                path = Path(row["path"]).resolve()
+                roots = [
+                    (session_root / "managed" / task_id).resolve(),
+                    (session_root / "external" / task_id).resolve(),
+                    (session_root / f"{task_id}.artifacts").resolve(),
+                ]
+                if (
+                    not any(path.is_relative_to(root) for root in roots)
+                    or not path.is_file()
+                ):
+                    raise ValueError("managed_artifact_unavailable")
+                expected = row.get("sha256") or row.get("output_sha256")
+                with path.open("rb") as handle:
+                    actual = hashlib.file_digest(handle, "sha256").hexdigest()
+                if expected and actual != expected:
+                    raise ValueError("managed_artifact_changed")
+            elif kind == "external_run":
+                active = (report.get("external_workflow") or {}).get(
+                    "active_request"
+                ) or {}
+                path = Path(active["package_path"]).resolve()
+                expected_root = (session_root / "external" / task_id).resolve()
+                if (
+                    not path.is_relative_to(expected_root)
+                    or path.suffix != ".zip"
+                    or not path.is_file()
+                ):
+                    raise ValueError("invalid external package location")
             elif kind == "bundle":
                 path = Path(service.export_kernel_app_bundle(state)).resolve()
                 if path != session_root / f"{task_id}.result.zip":
@@ -720,7 +768,7 @@ def create_app(
                 if path.suffix == ".zip"
                 else "application/json",
             )
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError, StopIteration):
             raise APIError(
                 "download_unavailable", "当前任务尚无此文件，或文件已不可用。", 404
             ) from None

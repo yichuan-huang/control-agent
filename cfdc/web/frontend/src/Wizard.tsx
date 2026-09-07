@@ -7,6 +7,7 @@ import {
   Card,
   Checkbox,
   Collapse,
+  ConfigProvider,
   Form,
   Input,
   InputNumber,
@@ -78,7 +79,29 @@ export default function Wizard() {
   useEffect(() => {
     if (source.data) {
       form.setFieldsValue(
-        caseId ? source.data.draft : (readDraft() ?? source.data.draft),
+        caseId
+          ? source.data.draft
+          : {
+              transition_deadline_s: 10,
+              handoff_count_min: 1,
+              recovery_deadline_s: 10,
+              evaluation_dt_s: 0.02,
+              evaluation_horizon_s: 20,
+              evaluation_repeats: 20,
+              ...source.data.draft,
+              ...(readDraft() ?? {}),
+              external_data_enabled: true,
+              reference_enabled: true,
+              initial_output_value_enabled: true,
+              success_requirement_fields: Array.from(
+                new Set([
+                  "final_abs_error_max",
+                  ...((readDraft()?.success_requirement_fields ??
+                    source.data.draft.success_requirement_fields ??
+                    []) as string[]),
+                ]),
+              ),
+            },
       );
     }
   }, [source.data, caseId, form]);
@@ -91,7 +114,12 @@ export default function Wizard() {
     retry: false,
     queryFn: () =>
       api<DTO<"DraftValidationResponse">>("/drafts/validate", {
-        draft: readDraft() ?? source.data!.draft,
+        draft: {
+          ...source.data!.draft,
+          ...(readDraft() ?? {}),
+          external_data_enabled: true,
+          reference_enabled: true,
+        },
         case_id: "",
       }),
   });
@@ -127,6 +155,15 @@ export default function Wizard() {
             "disturbance_event",
             "recovery_start_condition",
             "disturbance_hold_region",
+            "initial_output_value",
+            "intermediate_targets",
+            "transition_deadline_s",
+            "handoff_count_min",
+            "disturbance_channel",
+            "disturbance_start_s",
+            "disturbance_amplitude",
+            "disturbance_duration_s",
+            "recovery_deadline_s",
           ].includes(field)
             ? 0
             : ["outputs", "inputs", "input_unit"].includes(field)
@@ -218,11 +255,20 @@ export default function Wizard() {
         layout="vertical"
         disabled={source.isLoading || !!caseId || operation.busy}
         onValuesChange={() => {
-          if (!caseId) saveDraft(form.getFieldsValue(true));
+          if (!caseId) {
+            saveDraft(form.getFieldsValue(true));
+          }
+          setConfirmed(false);
         }}
         preserve
       >
         <div hidden={step !== 0}>
+          {!caseId && (
+            <Alert
+              title="在浏览器中管理自己的控制任务"
+              description="依次填写目标、信号和边界，核对后回答诊断问题。系统将提供采集协议、检查清单和数据模板；实际试验在应用外部完成，您使用自己的环境执行后，在任务页上传结果。系统计算特征、形成方案并引导冻结、评价、调优和独立确认，无需手写特征或控制器 JSON。"
+            />
+          )}
           <Form.Item name="description" label="设备与目标">
             <Input.TextArea
               rows={4}
@@ -245,12 +291,20 @@ export default function Wizard() {
             <>
               {text("initial_region", "开始区域")}
               {text("goal_region", "目标区域")}
-              {optional(
-                "initial_output_value_enabled",
-                "填写初始输出值",
-                num("initial_output_value", "初始输出值"),
-              )}
+              {caseId
+                ? optional(
+                    "initial_output_value_enabled",
+                    "填写初始输出值",
+                    num("initial_output_value", "初始输出值"),
+                  )
+                : num("initial_output_value", "初始输出值")}
               {text("intermediate_targets", "中间目标（逗号分隔）")}
+              {!caseId && (
+                <>
+                  {num("transition_deadline_s", "到达目标时间上限 (s)")}
+                  {num("handoff_count_min", "最少验证阶段切换次数")}
+                </>
+              )}
             </>
           )}
           {taskType === "disturbance_recovery_to_hold" && (
@@ -258,6 +312,15 @@ export default function Wizard() {
               {text("disturbance_event", "扰动事件")}
               {text("recovery_start_condition", "恢复起点")}
               {text("disturbance_hold_region", "恢复后保持区域")}
+              {!caseId && (
+                <>
+                  {text("disturbance_channel", "扰动输入通道名称")}
+                  {num("disturbance_start_s", "扰动开始时间 (s)")}
+                  {num("disturbance_amplitude", "扰动幅度（输入单位）")}
+                  {num("disturbance_duration_s", "扰动持续时间 (s)")}
+                  {num("recovery_deadline_s", "扰动后恢复时间上限 (s)")}
+                </>
+              )}
             </>
           )}
         </div>
@@ -321,10 +384,33 @@ export default function Wizard() {
           <Typography.Paragraph type="secondary">
             {stopExplanation} 输入下限与上限共同应用于已声明的所有控制输入。
           </Typography.Paragraph>
-          {optional(
-            "reference_enabled",
-            "设置参考目标",
-            num("reference", "参考目标"),
+          {caseId ? (
+            optional(
+              "reference_enabled",
+              "设置参考目标",
+              num("reference", "参考目标"),
+            )
+          ) : (
+            <>
+              <Form.Item name="external_data_enabled" hidden>
+                <Input />
+              </Form.Item>
+              <Form.Item name="reference_enabled" hidden>
+                <Input />
+              </Form.Item>
+              {num("reference", "参考目标")}
+              {text("region_label", "评价区域（适用的工作范围）")}
+              <Typography.Title level={4}>冻结评价设置</Typography.Title>
+              <Typography.Paragraph>
+                这些设置将在确认任务后用于生成完整运行清单。外部数据必须覆盖每次重复运行和全部输入输出。
+              </Typography.Paragraph>
+              <div className="field-grid">
+                {num("evaluation_dt_s", "采样间隔 (s)")}
+                {num("evaluation_horizon_s", "每次运行时长 (s)")}
+                {num("evaluation_repeats", "重复运行次数")}
+              </div>
+              {num("final_abs_error_max", "稳定后允许偏离目标多少")}
+            </>
           )}
           {optional(
             "output_bounds_enabled",
@@ -334,57 +420,63 @@ export default function Wizard() {
               {num("output_max", "输出上限")}
             </div>,
           )}
-          <Collapse
-            activeKey={advanced ? ["optional"] : []}
-            onChange={(keys) => setAdvanced(keys.length > 0)}
-            items={[
-              {
-                key: "optional",
-                label: "性能要求与预算（可选）",
-                forceRender: true,
-                children: (
-                  <>
-                    <Form.Item
-                      name="success_requirement_fields"
-                      label="明确的性能要求"
-                    >
-                      <Checkbox.Group
-                        options={Object.entries(requirements).map(
-                          ([value, label]) => ({
-                            value,
-                            label,
-                          }),
-                        )}
-                      />
-                    </Form.Item>
-                    {(
-                      (values.success_requirement_fields ?? []) as string[]
-                    ).map((key) => (
-                      <div key={key}>{num(key, requirements[key])}</div>
-                    ))}
-                    {optional(
-                      "response_time_preference_enabled",
-                      "填写响应时间偏好",
-                      num("response_time_preference_s", "响应时间偏好 (s)"),
-                    )}
-                    <Form.Item name="budget_fields" label="实验预算">
-                      <Checkbox.Group
-                        options={Object.entries(budgets).map(
-                          ([value, label]) => ({
-                            value,
-                            label,
-                          }),
-                        )}
-                      />
-                    </Form.Item>
-                    {((values.budget_fields ?? []) as string[]).map((key) => (
-                      <div key={key}>{num(key, budgets[key])}</div>
-                    ))}
-                  </>
-                ),
-              },
-            ]}
-          />
+          <ConfigProvider theme={{ token: { motion: false } }}>
+            <Collapse
+              activeKey={advanced ? ["optional"] : []}
+              onChange={(keys) => setAdvanced(keys.length > 0)}
+              items={[
+                {
+                  key: "optional",
+                  label: "性能要求与预算（可选）",
+                  forceRender: true,
+                  children: (
+                    <>
+                      <Form.Item
+                        name="success_requirement_fields"
+                        label="明确的性能要求"
+                      >
+                        <Checkbox.Group
+                          options={Object.entries(requirements).map(
+                            ([value, label]) => ({
+                              value,
+                              label,
+                              disabled:
+                                !caseId && value === "final_abs_error_max",
+                            }),
+                          )}
+                        />
+                      </Form.Item>
+                      {((values.success_requirement_fields ?? []) as string[])
+                        .filter(
+                          (key) => caseId || key !== "final_abs_error_max",
+                        )
+                        .map((key) => (
+                          <div key={key}>{num(key, requirements[key])}</div>
+                        ))}
+                      {optional(
+                        "response_time_preference_enabled",
+                        "填写响应时间偏好",
+                        num("response_time_preference_s", "响应时间偏好 (s)"),
+                      )}
+                      <Form.Item name="budget_fields" label="实验预算">
+                        <Checkbox.Group
+                          options={Object.entries(budgets).map(
+                            ([value, label]) => ({
+                              value,
+                              label,
+                            }),
+                          )}
+                        />
+                      </Form.Item>
+                      {((values.budget_fields ?? []) as string[]).map((key) => (
+                        <div key={key}>{num(key, budgets[key])}</div>
+                      ))}
+                    </>
+                  ),
+                },
+              ]}
+            />
+          </ConfigProvider>
         </div>
       </Form>
       {step === 3 && (

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from openai import OpenAIError
 
 from cfdc.kernel.replies import _NO_INPUT_ACTIONS
 from cfdc.web import service
-from cfdc.web.errors import APIError
+from cfdc.web.errors import EXTERNAL_ERROR_MESSAGES, IMPORT_ERROR_MESSAGES, APIError
 from cfdc.web.files import FileStore
 from cfdc.web.schemas import ActionRequest
 
@@ -25,8 +26,30 @@ def check_mutation(report: dict, revision: int, action: str) -> str:
             409,
             **details,
         )
+    if action == "restart_external_acquisition" and not report.get(
+        "registered_case_binding"
+    ):
+        return action
+    if report.get("managed_execution"):
+        raise APIError(
+            "external_reacquisition_required",
+            "此任务保留了旧的自动实验记录，请派生新任务按通用流程重新采集。",
+            409,
+            **details,
+        )
     if report.get("read_only"):
         raise APIError("task_read_only", "这是只读任务，不能提交修改。", 409, **details)
+    resume_pending = bool(
+        ((report.get("external_workflow") or {}).get("active_request") or {}).get(
+            "pending_submission"
+        )
+    )
+    if (
+        resume_pending
+        and action == "submit_external_results"
+        and not report.get("registered_case_binding")
+    ):
+        return action
     if report.get("status") in {"performance_met", "capability_gap", "cancelled"}:
         raise APIError(
             "task_terminal", "此任务已结束；可查看结果或创建新任务。", 409, **details
@@ -50,6 +73,29 @@ def check_mutation(report: dict, revision: int, action: str) -> str:
 def public_action_error(exc: Exception, state: dict[str, Any]) -> APIError:
     if isinstance(exc, APIError):
         return exc
+    raw_code = str(exc).split(":", 1)[0].strip()
+    known_messages = {**EXTERNAL_ERROR_MESSAGES, **IMPORT_ERROR_MESSAGES}
+    if raw_code in known_messages:
+        return APIError(
+            raw_code,
+            known_messages[raw_code],
+            422,
+            session_id=state.get("kernel_session_id"),
+        )
+    if raw_code == "terminal_session":
+        return APIError(
+            "task_terminal",
+            "此任务已结束；可查看结果或创建新任务。",
+            409,
+            session_id=state.get("kernel_session_id"),
+        )
+    if raw_code == "read_only_legacy_session":
+        return APIError(
+            "read_only",
+            "历史记录仅供查看，请派生新任务继续。",
+            409,
+            session_id=state.get("kernel_session_id"),
+        )
     error = service.kernel_action_error_payload(exc, state)
     code = str(error.get("code") or "action_failed")
     message = str(error.get("message_cn") or "操作未完成，请检查当前任务状态。")
@@ -104,8 +150,25 @@ def execute_action(
                 "boundary_immutable", "已创建任务的边界修改需要创建新任务。", 422
             )
         payload = {}
-    elif action == "ingest_upload":
-        if not data.file_ids:
+    elif action in {"ingest_upload", "submit_external_results"}:
+        resume_pending = False
+        if (
+            action == "submit_external_results"
+            and not data.file_ids
+            and state.get("kernel_session_id")
+            and state.get("kernel_session_dir")
+        ):
+            from cfdc.kernel import WorkflowService
+
+            session = WorkflowService(state["kernel_session_dir"]).read(
+                state["kernel_session_id"]
+            )
+            resume_pending = bool(
+                ((session.external_workflow or {}).get("active_request") or {}).get(
+                    "pending_submission"
+                )
+            )
+        if not data.file_ids and not resume_pending:
             raise APIError("upload_files_required", "请选择当前协议要求的文件。", 422)
         payload = {
             "paths": [
@@ -114,9 +177,17 @@ def execute_action(
             ],
             "stopped_on_limit": data.stopped_on_limit,
         }
-    elif data.payload is not None:
+    elif data.payload is not None and not (
+        data.mode == "json" and action in {"answer", "revise_diagnostic"}
+    ):
         payload = data.payload
-    elif action in _NO_INPUT_ACTIONS:
+    elif action in _NO_INPUT_ACTIONS or action in {
+        "prepare_external_run",
+        "start_external_tuning",
+        "restart_external_acquisition",
+        "freeze",
+        "compile_protocol",
+    }:
         payload = {}
     else:
         credentials = request.credentials
@@ -132,7 +203,12 @@ def execute_action(
             )
         prepared = service.prepare_kernel_reply_for_ui(
             state,
-            data.text,
+            data.text
+            or (
+                json.dumps(data.payload, ensure_ascii=False)
+                if data.payload is not None
+                else ""
+            ),
             mode=data.mode,
             base_url=credentials.base_url,
             model=credentials.model,
@@ -157,7 +233,7 @@ def execute_action(
             reply_input_mode=prepared.get("input_mode"),
             agent_records=prepared.get("agent_records", ()),
         )
-    if action != "ingest_upload" and any(
+    if action not in {"ingest_upload", "submit_external_results"} and any(
         key in payload
         for key in ("paths", "files", "session_dir", "kernel_session_dir")
     ):

@@ -74,8 +74,8 @@ export function useOperation(taskId?: string, active = true) {
       sessionStorage.removeItem(storageKey);
       void cache.invalidateQueries({ queryKey: ["task"] });
       if (
-        !taskId &&
         op.session_id &&
+        op.session_id !== taskId &&
         currentLocation.current === originLocation.current
       )
         navigate(`/tasks/${op.session_id}`);

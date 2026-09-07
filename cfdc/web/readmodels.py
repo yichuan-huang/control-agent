@@ -19,6 +19,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from cfdc.kernel import WorkflowService
+from cfdc.kernel.tuning import TuningContract
+from cfdc.web.errors import EXTERNAL_ERROR_MESSAGES
 from cfdc.web.presentation import (
     evaluation_options,
     project_workspace,
@@ -57,6 +59,9 @@ class TaskSummary(Identity):
     pending_actions: list[dict[str, Any]]
     rag_snapshot: str | None = None
     registered_case_id: str | None = None
+    external_workflow: dict[str, Any] | None = None
+    workflow_guide: dict[str, Any] | None = None
+    upload_requirements: dict[str, Any] | None = None
 
 
 class CatalogItem(BaseModel):
@@ -239,9 +244,122 @@ def _bounded(value, *, depth=3, width=32, text=512, budget=None):
     )
 
 
+def _external_candidate_summary(row):
+    row = _map(row)
+    result = _map(row.get("result"))
+    qualified = _map(row.get("qualification")).get("status") == "offline_qualified"
+    status = "pending" if qualified else "qualification_failed"
+    reason = "等待外部试次。" if qualified else "候选未通过离线资格审查。"
+    if result:
+        if result.get("hard_failure") is True or result.get("stable") is not True:
+            status, reason = "hard_failure", "候选试次未通过稳定性或硬约束检查。"
+        elif result.get("performance_pass") is True:
+            status, reason = (
+                "performance_met",
+                "候选试次达到开发评价要求；仍需独立确认。",
+            )
+        else:
+            status, reason = "performance_not_met", "候选试次尚未达到开发评价要求。"
+    return {
+        "candidate_id": _text(row.get("candidate_id"), 128),
+        "status": status,
+        "reason": reason,
+        "score": _bounded(result.get("score")),
+    }
+
+
+def external_summary(report):
+    raw = _map(report.get("external_workflow"))
+    if report.get("registered_case_binding"):
+        return None
+    action = _map(report.get("input_contract")).get("action")
+    active_protocol = report.get("active_protocol_fingerprint")
+    protocol_missing = not active_protocol or not any(
+        _map(row).get("protocol_fingerprint") == active_protocol
+        for row in _seq(report.get("protocols"))
+    )
+    resume_pending = bool(
+        _map(_map(raw.get("active_request")).get("pending_submission"))
+    )
+    recovery_required = (
+        not resume_pending
+        and protocol_missing
+        and action
+        in {
+            "evidence",
+            "features",
+            "controller",
+            "freeze",
+            "derive_features",
+            "synthesize_controller",
+            "qualify_controller",
+            "evaluation",
+            "confirmation",
+        }
+    )
+    recovery_required = bool(report.get("managed_execution")) or recovery_required
+    source = _map(raw.get("source"))
+    active = _map(raw.get("active_request"))
+    tuning = _map(raw.get("tuning"))
+    candidates = _seq(tuning.get("candidates"))
+    rejected = [
+        row for row in _seq(raw.get("receipts")) if _map(row).get("accepted") is False
+    ]
+    reasons = [
+        EXTERNAL_ERROR_MESSAGES.get(
+            str(_map(row).get("reason", "")).split(":", 1)[0],
+            "结果未通过校验，请核对当前请求与上传文件。",
+        )
+        for row in rejected[-5:]
+    ]
+    return {
+        "source_kind": source.get("source_kind"),
+        "stage": active.get("stage") or report.get("status"),
+        "run": {
+            "purpose": active.get("stage"),
+            "run_id": active.get("request_id"),
+            **{key: active.get(key) for key in ("stage", "request_id", "candidate_id")},
+        },
+        "download_available": bool(active.get("package_path")),
+        "resume_pending": bool(active.get("pending_submission")),
+        "tuning": {
+            "attempts_used": sum(bool(_map(row).get("result")) for row in candidates),
+            "max_attempts": _map(tuning.get("contract")).get(
+                "max_probes", TuningContract.max_probes
+            ),
+            "minimum_relative_improvement": _map(tuning.get("contract")).get(
+                "minimum_relative_improvement",
+                TuningContract.minimum_relative_improvement,
+            ),
+            "repeats": _map(_map(report.get("task")).get("budgets")).get(
+                "evaluation_repeats", 20
+            ),
+            "feedback_rounds_used": int(bool(tuning)),
+            "max_feedback_rounds": 1,
+            "completed": bool(tuning.get("completed")),
+        },
+        "candidates": [_external_candidate_summary(row) for row in candidates[:100]],
+        "recovery_available": True,
+        "recovery_required": recovery_required,
+        "recovery_reason": (
+            "此任务保留了旧的自动实验记录，请派生新任务按通用流程重新采集。"
+            if report.get("managed_execution")
+            else "此记录缺少绑定的实验协议，请创建新任务重新采集证据。"
+        )
+        if recovery_required
+        else "",
+        "failure_reasons": reasons,
+    }
+
+
 def summary(report) -> TaskSummary:
+    from cfdc.web.external_guide import upload_requirements, workflow_guide
+
     task = _bounded(_map(report.get("task")), depth=3, width=32)
     contract = _bounded(_map(report.get("input_contract")), depth=4, width=32)
+    external = external_summary(report)
+    if external and external.get("recovery_required"):
+        contract["disabled_reason"] = external["recovery_reason"]
     active = report.get("active_protocol_fingerprint")
     handoff = next(
         (
@@ -280,6 +398,8 @@ def summary(report) -> TaskSummary:
             for item in _seq(report.get(key))
         ]
     workspace = project_workspace(projection)
+    if external and external.get("recovery_required"):
+        workspace["actionable"] = False
     workspace["task_summary"] = workspace["task_summary"][:16384]
     return TaskSummary(
         **_identity(report),
@@ -296,6 +416,9 @@ def summary(report) -> TaskSummary:
         if report.get("rag_snapshot")
         else None,
         registered_case_id=_map(report.get("registered_case_binding")).get("case_id"),
+        external_workflow=external,
+        workflow_guide=workflow_guide(report),
+        upload_requirements=upload_requirements(report),
     )
 
 
@@ -351,7 +474,27 @@ def artifact_catalog(report) -> ArtifactCatalog:
 
 
 def _artifact(report, artifact_id):
+    from cfdc.kernel.managed_config import public_managed_execution
+    from cfdc.kernel.service import _public_external_workflow
+
     _selector(artifact_id)
+    report = {
+        **report,
+        **(
+            {"managed_execution": public_managed_execution(report["managed_execution"])}
+            if report.get("managed_execution")
+            else {}
+        ),
+        **(
+            {
+                "external_workflow": _public_external_workflow(
+                    report["external_workflow"]
+                )
+            }
+            if report.get("external_workflow")
+            else {}
+        ),
+    }
     if artifact_id == "report":
         return report
     if artifact_id not in report:

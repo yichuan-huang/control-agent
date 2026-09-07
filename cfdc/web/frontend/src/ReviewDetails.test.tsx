@@ -32,3 +32,25 @@ test("review distinguishes omitted form budgets from actual normalized Kernel de
   expect(screen.getByText(/澄清轮次上限：6；实验种类上限：4/)).toBeTruthy();
   expect(screen.getByText("80")).toBeTruthy();
 });
+test("registered case review does not falsely label locked execution as manual", () => {
+  render(
+    <DraftReview
+      draft={{ description: "registered case", external_data_enabled: false }}
+    />,
+  );
+  expect(screen.queryByText("手动运行并上传结果")).toBeNull();
+});
+test("custom review describes external responsibility without reviving legacy execution options", () => {
+  render(
+    <DraftReview
+      draft={{
+        external_data_enabled: true,
+        execution_mode: "managed",
+        runner_id: "local_python",
+        model_id: "optical",
+      }}
+    />,
+  );
+  expect(screen.queryByText(/系统自动软件仿真/)).toBeNull();
+  expect(screen.getByText(/在自己的环境执行/)).toBeTruthy();
+});

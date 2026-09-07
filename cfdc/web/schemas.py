@@ -116,7 +116,7 @@ class ConfigResponse(BaseModel):
     base_url: str
     model: str
     rag: RAGStatus
-    version: str = "0.3.5"
+    version: str = "0.3.6"
 
 
 class ProbeResponse(BaseModel):

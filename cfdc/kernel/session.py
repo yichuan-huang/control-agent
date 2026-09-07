@@ -441,6 +441,8 @@ class EvidenceSession:
     confirmation_history: tuple[Mapping[str, Any], ...] = ()
     provider: Mapping[str, Any] | None = None
     provider_bindings: Mapping[str, Any] = field(default_factory=dict)
+    external_workflow: Mapping[str, Any] | None = None
+    managed_execution: Mapping[str, Any] | None = None
     registered_case_binding: Mapping[str, Any] | None = None
     agent_records: tuple[Mapping[str, Any], ...] = ()
     agent_config: Mapping[str, Any] | None = None
@@ -512,6 +514,16 @@ class EvidenceSession:
             "confirmation_history": [dict(item) for item in self.confirmation_history],
             "provider": dict(self.provider) if self.provider is not None else None,
             "provider_bindings": dict(self.provider_bindings),
+            **(
+                {"external_workflow": dict(self.external_workflow)}
+                if self.external_workflow is not None
+                else {}
+            ),
+            **(
+                {"managed_execution": dict(self.managed_execution)}
+                if self.managed_execution is not None
+                else {}
+            ),
             "registered_case_binding": (
                 dict(self.registered_case_binding)
                 if self.registered_case_binding is not None
@@ -562,6 +574,18 @@ class EvidenceSession:
         version = value.get("session_version")
         if version not in READABLE_EVIDENCE_SESSION_VERSIONS:
             raise ValueError("evidence_session_version_mismatch")
+        external_workflow = value.get("external_workflow")
+        if external_workflow is not None and (
+            not isinstance(external_workflow, Mapping)
+            or external_workflow.get("workflow_version") != "cfdc-external-workflow/v1"
+        ):
+            raise ValueError("external_workflow_version_mismatch")
+        managed = value.get("managed_execution")
+        if managed is not None and (
+            not isinstance(managed, Mapping)
+            or managed.get("workflow_version") != "cfdc-managed-execution/v1"
+        ):
+            raise ValueError("managed_execution_version_mismatch")
         task_value = dict(value["task"])
         task_value.pop("task_fingerprint", None)
         task = TaskContract.from_user_input(task_value)
@@ -668,6 +692,12 @@ class EvidenceSession:
             ),
             provider=value.get("provider"),
             provider_bindings=dict(value.get("provider_bindings") or {}),
+            external_workflow=dict(value["external_workflow"])
+            if value.get("external_workflow") is not None
+            else None,
+            managed_execution=dict(value["managed_execution"])
+            if value.get("managed_execution") is not None
+            else None,
             registered_case_binding=(
                 RegisteredCaseBinding.from_mapping(
                     value["registered_case_binding"], task=task

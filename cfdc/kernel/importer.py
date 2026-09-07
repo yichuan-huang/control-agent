@@ -363,8 +363,134 @@ def _verify_v3_event_chain(documents: Iterable[Mapping[str, Any]]) -> bool:
     return found
 
 
+def _inspect_current_result(path: Path) -> ImportInspection | None:
+    """Import bounded task documents, streaming audit records only for receipts."""
+    if not path.is_file() or not zipfile.is_zipfile(path):
+        return None
+    parsed_names = {
+        "manifest.json",
+        "task.json",
+        "diagnostic_ledger.json",
+        "event_chain.json",
+    }
+    with zipfile.ZipFile(path) as archive:
+        try:
+            manifest_info = archive.getinfo("manifest.json")
+        except KeyError:
+            return None
+        if manifest_info.file_size > MAX_IMPORT_FILE_BYTES:
+            raise ValueError("v3_import_file_too_large: manifest.json")
+        manifest = json.loads(archive.read(manifest_info))
+        if (
+            not isinstance(manifest, Mapping)
+            or manifest.get("bundle_version") != "cfdc-result-bundle/v1"
+        ):
+            return None
+        infos = archive.infolist()
+        if (
+            len(infos) > MAX_IMPORT_FILES
+            or sum(item.file_size for item in infos) > MAX_IMPORT_TOTAL_BYTES
+        ):
+            raise ValueError("v3_import_bundle_limit_exceeded")
+        names = set()
+        for info in infos:
+            name = _safe_member(info.filename)
+            if name in names:
+                raise ValueError("result_import_duplicate_member")
+            names.add(name)
+            if stat.S_ISLNK(info.external_attr >> 16):
+                raise ValueError(f"v3_import_symlink_not_allowed: {name}")
+            if name in parsed_names and info.file_size > MAX_IMPORT_FILE_BYTES:
+                raise ValueError(f"v3_import_file_too_large: {name}")
+        if not parsed_names <= names:
+            raise ValueError("result_import_required_document_missing")
+        unsigned = dict(manifest)
+        supplied = unsigned.pop("bundle_fingerprint", None)
+        if supplied != fingerprint(unsigned):
+            raise ValueError("result_import_manifest_fingerprint_mismatch")
+        documents = {}
+        receipts = []
+        for info in infos:
+            if info.is_dir():
+                continue
+            digest = hashlib.sha256()
+            size = 0
+            chunks = []
+            with archive.open(info) as stream:
+                while chunk := stream.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > info.file_size:
+                        raise ValueError("v3_import_size_mismatch")
+                    digest.update(chunk)
+                    if info.filename in parsed_names:
+                        chunks.append(chunk)
+            if size != info.file_size:
+                raise ValueError("v3_import_size_mismatch")
+            receipts.append(
+                {
+                    "path": info.filename,
+                    "sha256": digest.hexdigest(),
+                    "size_bytes": size,
+                }
+            )
+            if info.filename in parsed_names:
+                documents[info.filename] = json.loads(b"".join(chunks))
+        declared = manifest.get("artifacts")
+        if not isinstance(declared, Mapping):
+            raise TypeError("result_import_artifact_manifest_required")
+        for name in parsed_names - {"manifest.json"}:
+            if declared.get(name) != fingerprint(documents[name]):
+                raise ValueError("result_import_artifact_fingerprint_mismatch")
+        from .session import SessionEvent, _validate_event_chain
+
+        events = documents["event_chain.json"]
+        if not isinstance(events, list):
+            raise TypeError("session_event_chain_invalid")
+        _validate_event_chain(tuple(SessionEvent.from_dict(event) for event in events))
+        task = documents["task.json"]
+        ledger = documents["diagnostic_ledger.json"]
+        if not isinstance(task, Mapping) or not isinstance(ledger, Mapping):
+            raise TypeError("result_import_task_documents_invalid")
+        if _contains_private(task) or _contains_private(ledger):
+            raise ValueError("v3_import_public_artifact_not_found")
+        hashes = {
+            row["path"]: row["sha256"]
+            for row in sorted(receipts, key=lambda row: row["path"])
+        }
+        source_digest = hashlib.sha256(
+            json.dumps(hashes, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return ImportInspection(
+            source_path=str(path),
+            source_kind="zip",
+            source_digest=source_digest,
+            file_receipts=tuple(sorted(receipts, key=lambda row: row["path"])),
+            task_payload=dict(task),
+            diagnostic_updates=_diagnostics([ledger]),
+            candidates={},
+            checks=tuple(
+                {"check": check, "status": "passed"}
+                for check in (
+                    "path_safety",
+                    "streamed_source_hashes",
+                    "imported_document_fingerprints",
+                    "event_chain",
+                    "imported_document_public_filter",
+                )
+            ),
+            discarded=tuple(
+                {"source": row["path"], "reason": "execution_artifact_not_imported"}
+                for row in receipts
+                if row["path"] not in parsed_names
+            ),
+        )
+
+
 def inspect_v3_source(source: str | Path) -> ImportInspection:
     path = Path(source).expanduser().resolve()
+    current_result = _inspect_current_result(path)
+    if current_result is not None:
+        return current_result
     source_kind, files = _bundle_files(path)
     receipts = {
         name: hashlib.sha256(payload).hexdigest()

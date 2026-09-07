@@ -726,6 +726,11 @@ class WorkflowService:
             raise ValueError(
                 "registered_case_evidence_requires_bound_provider_or_upload"
             )
+        if (
+            session.session_version == EVIDENCE_SESSION_VERSION
+            and session.active_protocol_fingerprint
+        ):
+            raise ValueError("protocol_bound_acquisition_required")
         return self._record_public_evidence(
             session,
             action_id=action_id,
@@ -825,7 +830,11 @@ class WorkflowService:
             status="route_ready" if session.route is not None else "awaiting_evidence",
             evidence=(*session.evidence, payload),
             pending_actions=(
-                ({"kind": "feature", "action": "submit_features"},)
+                ({"kind": "provider", "action": "set_provider"},)
+                if session.route is not None
+                and session.session_version == EVIDENCE_SESSION_VERSION
+                and not session.active_protocol_fingerprint
+                else ({"kind": "feature", "action": "submit_features"},)
                 if session.route is not None
                 else ()
             ),
@@ -1038,7 +1047,12 @@ class WorkflowService:
             else (
                 {
                     "kind": "experiment",
-                    "action": "run_experiment",
+                    "action": (
+                        "set_provider"
+                        if session.session_version == EVIDENCE_SESSION_VERSION
+                        and session.registered_case_binding is None
+                        else "run_experiment"
+                    ),
                     "operation": next_experiment["operation"]
                     if next_experiment
                     else None,
@@ -1128,21 +1142,50 @@ class WorkflowService:
         # ``features={feature_id: ...}`` call.  Keeping this adapter here means
         # WebUI, CLI and embedding callers all pass through the same
         # validation and fingerprint boundary.
+        from .contracts import FEATURE_ARTIFACT_VERSION
+
+        source_artifact = None
+        wrapper = None
         if isinstance(features, Mapping) and isinstance(
             features.get("features"), Mapping
         ):
+            source_artifact = deepcopy(dict(features))
             wrapper = dict(features)
             supplied_artifact_fingerprint = wrapper.pop("artifact_fingerprint", None)
-            if quality is None and isinstance(wrapper.get("quality"), Mapping):
+            if _contains_private_marker(wrapper):
+                raise ValueError("private_feature_not_allowed")
+            if quality is not None and quality != wrapper.get("quality"):
+                raise ValueError("feature_quality_binding_mismatch")
+            if quality is None:
                 quality = wrapper.get("quality")
+            version = wrapper.get("feature_version")
+            if version is not None and version != FEATURE_ARTIFACT_VERSION:
+                raise ValueError("feature_artifact_version_mismatch")
+            if version == FEATURE_ARTIFACT_VERSION:
+                if supplied_artifact_fingerprint != fingerprint(wrapper):
+                    raise ValueError("feature_artifact_fingerprint_mismatch")
+            elif (
+                supplied_artifact_fingerprint is not None
+                and supplied_artifact_fingerprint
+                != fingerprint({"features": wrapper["features"], "quality": quality})
+            ):
+                raise ValueError("feature_artifact_fingerprint_mismatch")
             features = wrapper["features"]
-        else:
-            supplied_artifact_fingerprint = None
+
+        if quality is not None and not isinstance(quality, Mapping):
+            raise TypeError("feature_quality_object_required")
+        if (
+            quality is not None
+            and "passed" in quality
+            and not isinstance(quality["passed"], bool)
+        ):
+            raise ValueError("feature_quality_passed_must_be_boolean")
 
         session = self.read(session_id)
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
+        _require_protocol_evidence(session)
         if session.controller_freeze is not None:
             raise ValueError("controller_already_frozen_create_new_session")
         if session.route is None:
@@ -1156,6 +1199,18 @@ class WorkflowService:
             raise ValueError("features_required")
         if _contains_private_marker(features):
             raise ValueError("private_feature_not_allowed")
+        if wrapper is not None:
+            if (
+                "selected_protocol_fingerprint" in wrapper
+                and wrapper["selected_protocol_fingerprint"]
+                != session.active_protocol_fingerprint
+            ):
+                raise ValueError("feature_protocol_binding_mismatch")
+            if "evidence_fingerprints" in wrapper and wrapper[
+                "evidence_fingerprints"
+            ] != [str(item.get("fingerprint")) for item in active_evidence]:
+                raise ValueError("feature_evidence_binding_mismatch")
+        features = _normalize_feature_aliases(features)
         normalized: dict[str, Any] = {}
         evidence_ids = {str(item.get("evidence_id")) for item in active_evidence}
         for feature_id, raw in features.items():
@@ -1227,11 +1282,10 @@ class WorkflowService:
                 {"features": normalized, "quality": quality_value}
             ),
         }
-        if (
-            supplied_artifact_fingerprint is not None
-            and str(supplied_artifact_fingerprint) != artifact["artifact_fingerprint"]
-        ):
-            raise ValueError("feature_artifact_fingerprint_mismatch")
+        if source_artifact is not None:
+            # Retain the verified submitted wrapper as provenance only. Its
+            # public models do not become authoritative qualification inputs.
+            artifact["source_artifact"] = source_artifact
         updated = self._replace(
             session,
             feature_artifact=artifact,
@@ -1264,6 +1318,7 @@ class WorkflowService:
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
+        _require_protocol_evidence(session)
         if session.controller_freeze is not None:
             raise ValueError("controller_already_frozen_create_new_session")
         if session.route is None:
@@ -1873,7 +1928,12 @@ class WorkflowService:
         self._check_mutable(session, revision)
         if not session.operator_handoffs:
             raise ValueError("operator_handoff_required")
+        if report.get("actor") == "system_runner":
+            raise ValueError("system_prechecks_server_only")
         normalized = validate_operator_report(report, session.operator_handoffs[-1])
+        return self._record_checked_operator_report(session, action_id, normalized)
+
+    def _record_checked_operator_report(self, session, action_id, normalized):
         decision = normalized["decision"]
         if decision == "accepted":
             status = "awaiting_evidence"
@@ -2316,6 +2376,7 @@ class WorkflowService:
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
+        _require_protocol_evidence(session)
         active_evidence = _active_evidence(session)
         if session.route is None or not active_evidence:
             raise ValueError("route_and_public_evidence_required")
@@ -2399,6 +2460,7 @@ class WorkflowService:
                 revision=session.revision,
                 next_step="derive_features_or_submit_evidence",
             )
+        _require_protocol_evidence(session)
         ir, synthesis_audit = synthesize_registered_controller(
             session.task.to_dict(),
             session.route,
@@ -2432,6 +2494,7 @@ class WorkflowService:
         if self._event_for_action(session, action_id) is not None:
             return session
         self._check_mutable(session, revision)
+        _require_protocol_evidence(session)
         if (
             session.controller_candidate is None
             or session.feature_artifact is None
@@ -3555,7 +3618,7 @@ class WorkflowService:
             return {
                 "stable": bool(result["stability_gate"]["passed"]),
                 "performance_pass": result["status"] == "performance_met",
-                "hard_failure": not bool(result["stability_gate"]["passed"]),
+                "hard_failure": _evaluation_hard_failure(result),
                 "score": float(result["score"]),
                 "packet_fingerprint": result["packet_fingerprint"],
                 "judge_fingerprint": result["judge_fingerprint"],
@@ -3945,7 +4008,7 @@ class WorkflowService:
                 "evaluation": deepcopy(session.evaluation),
                 "confirmation": deepcopy(session.confirmation),
             },
-            "audit": session.to_dict(),
+            "audit": _public_session_value(session),
         }
         feedback = values["feedback"]
         if isinstance(feedback, Mapping):
@@ -4043,6 +4106,16 @@ class WorkflowService:
             "confirmation_history.json": list(session.confirmation_history),
             "event_chain.json": [item.to_dict() for item in session.events],
         }
+        if session.external_workflow is not None:
+            artifacts["external_workflow.json"] = _public_external_workflow(
+                session.external_workflow
+            )
+        if session.managed_execution is not None:
+            from .managed_config import public_managed_execution
+
+            artifacts["managed_execution.json"] = public_managed_execution(
+                session.managed_execution
+            )
         if session.import_report is not None:
             artifacts["import_report.json"] = session.import_report
         result = {
@@ -4084,7 +4157,15 @@ class WorkflowService:
             with zipfile.ZipFile(
                 temporary, "w", compression=zipfile.ZIP_DEFLATED
             ) as archive:
-                archive.writestr("session.json", session.to_json())
+                archive.writestr(
+                    "session.json",
+                    json.dumps(
+                        _public_session_value(session),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        indent=2,
+                    ),
+                )
                 archive.writestr(
                     "manifest.json",
                     json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2)
@@ -4622,12 +4703,95 @@ def _active_evidence(session: EvidenceSession) -> tuple[Mapping[str, Any], ...]:
 
     protocol_fingerprint = session.active_protocol_fingerprint
     if not protocol_fingerprint:
-        return () if session.protocols else session.evidence
+        return (
+            ()
+            if session.protocols or session.session_version == EVIDENCE_SESSION_VERSION
+            else session.evidence
+        )
+    accepted_ids = None
+    if session.session_version == EVIDENCE_SESSION_VERSION:
+        # Protocol identity alone cannot retroactively authorize older evidence.
+        # Only acquisitions recorded after the current compilation are active.
+        barrier = max(
+            (
+                index
+                for index, event in enumerate(session.events)
+                if event.event_type == "experiment_protocol_compiled"
+                and event.payload.get("protocol_fingerprint") == protocol_fingerprint
+            ),
+            default=len(session.events),
+        )
+        accepted_ids = set()
+        for event in session.events[barrier + 1 :]:
+            if event.event_type == "public_evidence_submitted":
+                accepted_ids.add(event.payload.get("evidence_id"))
+            elif event.event_type == "upload_accepted":
+                accepted_ids.update(event.payload.get("evidence_ids", ()))
     return tuple(
         item
         for item in session.evidence
         if item.get("protocol_fingerprint") == protocol_fingerprint
+        and (accepted_ids is None or item.get("evidence_id") in accepted_ids)
     )
+
+
+def _evaluation_hard_failure(judge: Mapping[str, Any]) -> bool:
+    """A numerical improvement cannot override failed stability or evidence gates."""
+    return any(
+        not bool((judge.get(gate) or {}).get("passed", False))
+        for gate in ("stability_gate", "evidence_gate")
+    )
+
+
+def _public_external_workflow(value: Any) -> Any:
+    """Keep portable execution bindings and receipts; omit local storage locators."""
+    if isinstance(value, Mapping):
+        return {
+            key: _public_external_workflow(item)
+            for key, item in value.items()
+            if key not in {"package_path", "packet_path", "freeze_path"}
+        }
+    if isinstance(value, (list, tuple)):
+        return [_public_external_workflow(item) for item in value]
+    return value
+
+
+def _public_session_value(session: EvidenceSession) -> dict[str, Any]:
+    value = session.to_dict()
+    if session.external_workflow is not None:
+        value["external_workflow"] = _public_external_workflow(
+            session.external_workflow
+        )
+    if session.managed_execution is not None:
+        from .managed_config import public_managed_execution
+
+        value["managed_execution"] = public_managed_execution(session.managed_execution)
+    return value
+
+
+def _normalize_feature_aliases(features: Mapping[str, Any]) -> dict[str, Any]:
+    values = dict(features)
+    alias = "low_order_residual"
+    canonical = "low_order_residual_index"
+    if alias in values:
+        original = values.pop(alias)
+        if canonical in values and values[canonical] != original:
+            raise ValueError("feature_alias_conflict: low_order_residual_index")
+        values.setdefault(canonical, original)
+    return values
+
+
+def _require_protocol_evidence(session: EvidenceSession) -> None:
+    """Keep current synthesis steps behind the accepted protocol boundary."""
+    if session.session_version != EVIDENCE_SESSION_VERSION:
+        return
+    if not session.active_protocol_fingerprint or not any(
+        item.get("protocol_fingerprint") == session.active_protocol_fingerprint
+        for item in session.protocols
+    ):
+        raise ValueError("compiled_protocol_required")
+    if not _active_evidence(session):
+        raise ValueError("active_protocol_evidence_required")
 
 
 def _qualification_matches_active_artifacts(

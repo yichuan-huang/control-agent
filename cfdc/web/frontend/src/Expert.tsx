@@ -301,7 +301,7 @@ export default function Expert({
               if (tab === "validate") void validate();
               else {
                 try {
-                  const payload = parseObject(text);
+                  const payload = task ? undefined : parseObject(text);
                   void operation
                     .submit(
                       task ? `/tasks/${task.session_id}/actions` : "/tasks",
@@ -309,7 +309,7 @@ export default function Expert({
                         ? {
                             expected_revision: task.revision,
                             action: task.workspace.action,
-                            input: { mode: "json", payload },
+                            input: { mode: "json", text },
                             credentials,
                           }
                         : {

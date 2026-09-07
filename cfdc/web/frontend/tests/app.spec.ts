@@ -243,6 +243,13 @@ test("custom wizard validates field focus then creates a revisioned task", async
   await page.getByLabel("输入下限").fill("0");
   await page.getByLabel("输入上限").fill("100");
   await page.getByLabel("软件试验停止阈值").fill("100");
+  await page.getByLabel("参考目标", { exact: true }).fill("1");
+  await page
+    .getByLabel("评价区域（适用的工作范围）")
+    .fill("local operating region");
+  await page
+    .getByRole("spinbutton", { name: "稳定后允许偏离目标多少", exact: true })
+    .fill("0.1");
   await page.getByRole("button", { name: "校验并核对" }).click();
   await page
     .getByRole("checkbox", { name: "我已核对目标、软件试验边界与预算" })

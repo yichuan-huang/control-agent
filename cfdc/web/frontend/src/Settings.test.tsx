@@ -16,7 +16,7 @@ const config = (base_url = "", model = "") => ({
   base_url,
   model,
   rag: { status: "ready", message: "ready" },
-  version: "0.3.5",
+  version: "0.3.6",
 });
 
 afterEach(() => {

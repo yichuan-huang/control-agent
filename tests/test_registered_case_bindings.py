@@ -498,7 +498,7 @@ def test_revise_diagnostic_invalidates_active_protocol_and_qualification(
     recompiled = service.compile_protocol(
         rerouted.session_id, action_id="recompile", revision=rerouted.revision
     )
-    with pytest.raises(ValueError, match="public_evidence_required_before_features"):
+    with pytest.raises(ValueError, match="active_protocol_evidence_required"):
         service.submit_features(
             recompiled.session_id,
             action_id="reuse-stale-features",

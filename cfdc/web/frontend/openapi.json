@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CFDC Kernel Web API",
-    "version": "0.3.5"
+    "version": "0.3.6"
   },
   "paths": {
     "/api/v1/config": {
@@ -1923,7 +1923,7 @@
           "version": {
             "type": "string",
             "title": "Version",
-            "default": "0.3.5"
+            "default": "0.3.6"
           }
         },
         "type": "object",
@@ -3117,6 +3117,42 @@
               }
             ],
             "title": "Registered Case Id"
+          },
+          "external_workflow": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Workflow"
+          },
+          "workflow_guide": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Guide"
+          },
+          "upload_requirements": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upload Requirements"
           }
         },
         "type": "object",

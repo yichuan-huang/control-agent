@@ -67,6 +67,22 @@ def empty_draft() -> dict[str, Any]:
     }
 
 
+EXTERNAL_DRAFT_DEFAULTS = {
+    "external_data_enabled": False,
+    "region_label": "",
+    "evaluation_dt_s": 0.02,
+    "evaluation_horizon_s": 20.0,
+    "evaluation_repeats": 20,
+    "transition_deadline_s": 10.0,
+    "handoff_count_min": 1,
+    "disturbance_channel": "",
+    "disturbance_start_s": None,
+    "disturbance_amplitude": None,
+    "disturbance_duration_s": None,
+    "recovery_deadline_s": 10.0,
+}
+
+
 DRAFT_FIELDS = tuple(empty_draft())
 PAGE_FIELDS = (
     (
@@ -107,7 +123,7 @@ PAGE_FIELDS = (
 
 def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, Any]:
     """Build the existing task contract; UI defaults never become evidence."""
-    values = {**empty_draft(), **dict(form)}
+    values = {**empty_draft(), **EXTERNAL_DRAFT_DEFAULTS, **dict(form)}
     errors: dict[str, str] = {}
 
     def required_text(key: str, message: str) -> str:
@@ -247,6 +263,82 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
             ("disturbance_hold_region", "恢复后保持区域"),
         ):
             task[key] = required_text(key, f"请描述{label}。")
+    if values["external_data_enabled"] and not case_id:
+        task["operating_region"] = required_text("region_label", "请填写工作区域。")
+        if task["reference"] is None:
+            errors["reference"] = "外部评价需要明确的目标参考值。"
+        if "final_abs_error_max" not in task["success_requirements"]:
+            errors["success_requirement_fields"] = "请至少填写稳定后的最大允许误差。"
+        dt = number("evaluation_dt_s", positive=True)
+        horizon = number("evaluation_horizon_s", positive=True)
+        repeats = number("evaluation_repeats", positive=True)
+        if repeats is not None and (not repeats.is_integer() or repeats > 100):
+            errors["evaluation_repeats"] = "重复次数应为 1 到 100 的整数。"
+        if horizon is not None and dt is not None and horizon <= dt:
+            errors["evaluation_horizon_s"] = "实验时长应大于采样周期。"
+        task["budgets"].update(
+            evaluation_sample_time_s=dt,
+            evaluation_horizon_s=horizon,
+            evaluation_repeats=int(repeats) if repeats is not None else None,
+        )
+        if task_type == "transition_then_hold":
+            if task["initial_output_value"] is None:
+                errors["initial_output_value"] = "请填写初始输出的数值。"
+            handoffs = number("handoff_count_min", positive=True)
+            phase_count = len(task.get("intermediate_targets", ())) + 2
+            if handoffs is not None and (
+                not handoffs.is_integer() or handoffs != phase_count - 1
+            ):
+                errors["handoff_count_min"] = "交接次数需要等于阶段数减一。"
+            deadline = number("transition_deadline_s", positive=True)
+            task["success_requirements"].update(
+                required_phase_count_min=phase_count,
+                verified_handoff_count_min=int(handoffs)
+                if handoffs is not None
+                else None,
+                goal_region_entry_required=True,
+                settling_time_max_s=deadline,
+                final_hold_duration_min_s=task["success_requirements"].get(
+                    "hold_duration_min_s", 1.0
+                ),
+            )
+        elif task_type == "disturbance_recovery_to_hold":
+            channel = required_text("disturbance_channel", "请填写扰动输入通道。")
+            if channel not in task["control_inputs"]:
+                errors["disturbance_channel"] = "请选择已声明的控制输入通道。"
+            start = number("disturbance_start_s", nonnegative=True)
+            duration = number("disturbance_duration_s", positive=True)
+            amplitude = number("disturbance_amplitude")
+            if amplitude == 0:
+                errors["disturbance_amplitude"] = "扰动幅度不能为 0。"
+            recovery = number("recovery_deadline_s", positive=True)
+            hold = task["success_requirements"].get("hold_duration_min_s", 1.0)
+            if (
+                all(value is not None for value in (start, duration, horizon, recovery))
+                and start + duration + recovery + hold > horizon
+            ):
+                errors["evaluation_horizon_s"] = (
+                    "实验时长需要覆盖扰动、恢复及保持时间。"
+                )
+            task["disturbance_contract"] = {
+                "channel": channel,
+                "time_s": start,
+                "duration_s": duration,
+                "amplitude": amplitude,
+            }
+            task["success_requirements"].update(
+                recovery_abs_error_max=task["success_requirements"].get(
+                    "final_abs_error_max"
+                ),
+                recovery_time_max_s=recovery,
+                post_recovery_hold_duration_min_s=hold,
+            )
+    if values.get("execution_mode") not in (None, "", "manual") or any(
+        values.get(key) for key in ("runner_id", "model_id")
+    ):
+        errors["execution_mode"] = (
+            "自动仿真入口已移除；请使用通用外部数据流程重新确认任务。"
+        )
     if errors:
         raise DraftValidationError(errors)
     if case_id:

@@ -343,7 +343,7 @@ def test_public_provider_and_multistage_contract_are_explicit() -> None:
     assert evidence_from_trace(trace)["trace_fingerprint"] == trace.fingerprint
 
 
-def test_workflow_service_runs_explicit_provider_features_and_controller(
+def test_unbound_provider_observation_cannot_authorize_controller_synthesis(
     tmp_path,
 ) -> None:
     service = WorkflowService(tmp_path)
@@ -440,39 +440,22 @@ def test_workflow_service_runs_explicit_provider_features_and_controller(
         provider_id="model",
         operation={"operation": "ramp_step"},
     )
-    features = service.submit_features(
-        measured.session_id,
-        action_id="features-service",
-        revision=measured.revision,
-        features={
-            "static_gain": {
-                "value": 1.0,
-                "unit": "unit/unit",
-                "source_evidence_ids": ["trace-service"],
+    # The historical unbound provider entrypoint may retain its raw observation,
+    # but current workflows cannot treat it as protocol-qualified synthesis input.
+    with pytest.raises(ValueError, match="compiled_protocol_required"):
+        service.submit_features(
+            measured.session_id,
+            action_id="features-service",
+            revision=measured.revision,
+            features={
+                "static_gain": {"value": 1.0, "source_evidence_ids": ["trace-service"]}
             },
-            "time_constant": {
-                "value": 1.0,
-                "unit": "s",
-                "source_evidence_ids": ["trace-service"],
-            },
-        },
-        quality={"passed": True},
-    )
-    candidate = service.submit_controller(
-        features.session_id,
-        action_id="controller-service",
-        revision=features.revision,
-        controller={
-            "family": "detuned_pi",
-            "measured_signals": ["output"],
-            "control_inputs": ["input"],
-            "parameters": {"kp": 0.5, "ki": 0.1},
-            "parameter_domains": {"kp": [0.1, 2.0], "ki": [0.01, 1.0]},
-            "output_bounds": [-1.0, 1.0],
-        },
-    )
-    assert candidate.status == "controller_candidate_ready"
-    assert candidate.phase_plan["phases"][0]["phase_id"] == "hold"
+            quality={"passed": True},
+        )
+    preserved = service.read(measured.session_id)
+    assert preserved.revision == measured.revision
+    assert preserved.evidence == measured.evidence
+    assert preserved.controller_candidate is None
 
 
 def test_controller_ir_rejects_executable_payload_and_enforces_domains() -> None:

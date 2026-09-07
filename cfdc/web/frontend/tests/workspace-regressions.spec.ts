@@ -273,6 +273,13 @@ test("custom hold duration stays in seconds through review, creation, and worksp
   await page.getByLabel("输入下限").fill("0");
   await page.getByLabel("输入上限").fill("100");
   await page.getByLabel("软件试验停止阈值").fill("100");
+  await page.getByLabel("参考目标", { exact: true }).fill("1");
+  await page
+    .getByLabel("评价区域（适用的工作范围）")
+    .fill("local operating region");
+  await page
+    .getByRole("spinbutton", { name: "稳定后允许偏离目标多少", exact: true })
+    .fill("0.1");
   await page.getByText("性能要求与预算（可选）", { exact: true }).click();
   const holdRequirement = page.getByRole("checkbox", {
     name: "至少保持多少秒",

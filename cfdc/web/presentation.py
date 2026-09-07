@@ -16,6 +16,11 @@ _TERMINAL_STATES = frozenset({"performance_met", "capability_gap", "cancelled"})
 _ACTION_ALIASES = {"submit_answer": "answer"}
 _KNOWN_ACTIONS = frozenset(
     {
+        "select_external_source",
+        "prepare_external_run",
+        "submit_external_results",
+        "start_external_tuning",
+        "restart_external_acquisition",
         "confirm_task",
         "answer",
         "relevance",
@@ -45,6 +50,11 @@ _KNOWN_ACTIONS = frozenset(
     }
 )
 _ACTION_COPY = {
+    "select_external_source": ("选择外部数据来源", "选择软件仿真或外部测量数据。"),
+    "prepare_external_run": ("准备外部试验", "下载冻结请求并在外部执行。"),
+    "submit_external_results": ("校验外部结果", "上传与当前请求绑定的结果 ZIP。"),
+    "start_external_tuning": ("开始有界调优", "按冻结合同评估候选。"),
+    "restart_external_acquisition": ("重新采集证据", "创建新任务并重新确认边界。"),
     "confirm_task": ("确认任务边界", "确认目标、软件试验边界和预算后开始。"),
     "answer": (
         "补充已知现象",

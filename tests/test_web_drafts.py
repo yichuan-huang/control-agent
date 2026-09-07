@@ -107,3 +107,62 @@ def test_converted_case_has_no_provider_authority_and_keeps_explicit_values():
     assert task["success_requirements"]["final_abs_error_max"] == 1.5
     assert "registered_case_binding" not in task
     assert "provider_references" not in task
+
+
+def external_draft(**updates):
+    return valid_draft(
+        external_data_enabled=True,
+        reference_enabled=True,
+        reference=0.5,
+        region_label="intensity 0 to 1",
+        evaluation_dt_s=0.02,
+        evaluation_horizon_s=20,
+        evaluation_repeats=20,
+        success_requirement_fields=["final_abs_error_max"],
+        final_abs_error_max=0.03,
+        **updates,
+    )
+
+
+def test_external_draft_freezes_explicit_evaluation_inputs():
+    task = drafts.task_from_draft(external_draft())
+    assert task["operating_region"] == "intensity 0 to 1"
+    assert task["budgets"]["evaluation_sample_time_s"] == 0.02
+    assert task["budgets"]["evaluation_horizon_s"] == 20
+    assert task["budgets"]["evaluation_repeats"] == 20
+
+
+@pytest.mark.parametrize(
+    "updates,field",
+    [
+        ({"evaluation_dt_s": 0}, "evaluation_dt_s"),
+        ({"evaluation_horizon_s": 0.01}, "evaluation_horizon_s"),
+        ({"evaluation_repeats": 1.5}, "evaluation_repeats"),
+        ({"reference_enabled": False}, "reference"),
+        ({"region_label": ""}, "region_label"),
+        ({"success_requirement_fields": []}, "success_requirement_fields"),
+    ],
+)
+def test_external_draft_reports_missing_or_invalid_frozen_inputs(updates, field):
+    with pytest.raises(drafts.DraftValidationError) as exc:
+        drafts.task_from_draft({**external_draft(), **updates})
+    assert field in exc.value.errors
+
+
+def test_external_disturbance_parameters_are_numeric_execution_contract():
+    task = drafts.task_from_draft(
+        external_draft(
+            task_type="disturbance_recovery_to_hold",
+            disturbance_event="diluent pulse",
+            recovery_start_condition="pulse ends",
+            disturbance_hold_region="target",
+            disturbance_channel="heater",
+            disturbance_start_s=2,
+            disturbance_amplitude=0.1,
+            disturbance_duration_s=1,
+            recovery_deadline_s=10,
+        )
+    )
+    assert task["disturbance_contract"]["channel"] == "heater"
+    assert task["disturbance_contract"]["time_s"] == 2
+    assert task["success_requirements"]["recovery_time_max_s"] == 10

@@ -558,7 +558,7 @@ export interface components {
             rag: components["schemas"]["RAGStatus"];
             /**
              * Version
-             * @default 0.3.5
+             * @default 0.3.6
              */
             version: string;
         };
@@ -1000,6 +1000,18 @@ export interface components {
             rag_snapshot?: string | null;
             /** Registered Case Id */
             registered_case_id?: string | null;
+            /** External Workflow */
+            external_workflow?: {
+                [key: string]: unknown;
+            } | null;
+            /** Workflow Guide */
+            workflow_guide?: {
+                [key: string]: unknown;
+            } | null;
+            /** Upload Requirements */
+            upload_requirements?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** UploadResponse */
         UploadResponse: {

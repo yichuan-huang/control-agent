@@ -180,6 +180,11 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 _KERNEL_PUBLIC_ACTIONS = frozenset(
     {
+        "select_external_source",
+        "prepare_external_run",
+        "submit_external_results",
+        "start_external_tuning",
+        "restart_external_acquisition",
         "confirm_task",
         "answer",
         "relevance",
@@ -396,10 +401,39 @@ def _kernel_pending_actions(session) -> tuple[dict[str, Any], ...]:
         and isinstance(evaluation_provider, Mapping)
         and str(evaluation_provider.get("execution_kind") or "") == "software"
     )
+    custom = not session.registered_case_binding
+    external = getattr(session, "external_workflow", None) or {}
+    if custom and (external.get("active_request") or {}).get("pending_submission"):
+        return (
+            {
+                "kind": "external_resume",
+                "action": "submit_external_results",
+                "ui_action": "submit_external_results",
+            },
+        )
     for item in session.pending_actions or ():
         value = dict(item)
         action = str(value.get("action") or "")
-        if action in {"run_experiment", "retry"}:
+        if custom and action == "set_provider":
+            value["ui_action"] = (
+                "compile_protocol" if external else "select_external_source"
+            )
+        elif (
+            custom
+            and external
+            and action
+            in {"run_evaluation", "record_evaluation", "record_fresh_confirmation"}
+        ):
+            value["ui_action"] = (
+                "submit_external_results"
+                if external.get("active_request")
+                else "prepare_external_run"
+            )
+        elif custom and external and action in {"run_tuning", "run_feedback_iteration"}:
+            value["ui_action"] = "start_external_tuning"
+        elif custom and external and action == "run_provider":
+            value["ui_action"] = "prepare_operator_handoff"
+        elif action in {"run_experiment", "retry"}:
             value.setdefault("ui_action", "evidence")
         elif action == "record_fresh_confirmation" and (
             registered_software_confirmation
@@ -578,6 +612,22 @@ def _run_configured_automatic(
 ):
     binding = session.registered_case_binding
     if not isinstance(binding, Mapping):
+        if not getattr(session, "external_workflow", None):
+            return session
+        automatic = {"derive_features", "synthesize_controller", "qualify_controller"}
+        for _ in range(3):
+            action = str((session.pending_actions or [{}])[0].get("action") or "")
+            if (
+                action not in automatic
+                or session.read_only
+                or session.status in {"performance_met", "capability_gap", "cancelled"}
+            ):
+                break
+            session = getattr(service, action)(
+                session.session_id,
+                action_id=f"external-auto:{session.revision}:{action}",
+                revision=session.revision,
+            )
         return session
     case_id = str(binding.get("case_id") or "").strip()
     if not case_id:
@@ -659,6 +709,9 @@ def continue_kernel_app_run(
     if page_revision != session.revision:
         raise ValueError("stale_revision: 页面状态已更新，请刷新后重试。")
 
+    if action == "restart_external_acquisition":
+        return restart_external_acquisition(app_state)
+
     pending = _kernel_pending_actions(session)
     if action != "cancel" and pending:
         expected = pending[0]
@@ -678,7 +731,52 @@ def continue_kernel_app_run(
             raise ValueError(f"当前会话已终止：{session.status}")
         raise ValueError("当前没有待处理动作，请刷新页面读取最新状态。")
 
-    if action == "confirm_task":
+    if action in {
+        "select_external_source",
+        "prepare_external_run",
+        "submit_external_results",
+        "start_external_tuning",
+    }:
+        from cfdc.kernel import external
+
+        arguments = {}
+        if action == "select_external_source":
+            arguments = {
+                "source_kind": raw.get("source_kind"),
+                "execution_mode": raw.get("execution_mode", "manual"),
+                "runner_id": raw.get("runner_id"),
+                "model_id": raw.get("model_id"),
+            }
+        elif action == "submit_external_results":
+            arguments = {"paths": [Path(item) for item in raw.get("paths", ())]}
+        elif action == "start_external_tuning":
+            arguments = {"contract": raw or None}
+        elif action == "prepare_external_run":
+            pending_action = str(
+                (session.pending_actions or [{}])[0].get("action") or ""
+            )
+            stage = (
+                "fresh_confirmation"
+                if pending_action == "record_fresh_confirmation"
+                else "development"
+            )
+            stage = str((session.pending_actions or [{}])[0].get("stage") or stage)
+            arguments = {"stage": stage}
+        session = getattr(external, action)(
+            service,
+            session_id,
+            action_id=action_id,
+            revision=page_revision,
+            **arguments,
+        )
+        if action == "select_external_source":
+            session = service.compile_protocol(
+                session_id, action_id=f"{action_id}:protocol", revision=session.revision
+            )
+            session = service.prepare_operator_handoff(
+                session_id, action_id=f"{action_id}:handoff", revision=session.revision
+            )
+    elif action == "confirm_task":
         session = service.confirm_task(
             session_id,
             action_id=action_id,
@@ -749,12 +847,13 @@ def continue_kernel_app_run(
             result=raw,
         )
     elif action == "features":
-        quality = raw.pop("quality", None)
+        wrapper = "feature_version" in raw or "artifact_fingerprint" in raw
+        quality = None if wrapper else raw.pop("quality", None)
         session = service.submit_features(
             session_id,
             action_id=action_id,
             revision=page_revision,
-            features=raw.get("features", raw),
+            features=raw if wrapper else raw.get("features", raw),
             quality=quality,
         )
     elif action == "controller":
@@ -770,9 +869,9 @@ def continue_kernel_app_run(
             session_id,
             action_id=action_id,
             revision=page_revision,
-            controller=raw["controller"],
-            runtime_contract=raw["runtime_contract"],
-            evaluation_contract=raw["evaluation_contract"],
+            controller=raw.get("controller"),
+            runtime_contract=raw.get("runtime_contract"),
+            evaluation_contract=raw.get("evaluation_contract"),
         )
     elif action == "evaluation":
         session = service.record_evaluation(
@@ -922,6 +1021,44 @@ def continue_kernel_app_run(
     }
 
 
+def restart_external_acquisition(
+    app_state: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Fork task boundaries and human observations without changing the parent."""
+    service = WorkflowService(app_state["kernel_session_dir"])
+    parent = service.read(str(app_state["kernel_session_id"]))
+    if parent.registered_case_binding is not None:
+        raise ValueError("registered_case_provider_binding_immutable")
+    child = service.fork_session(parent.session_id, agent_config=parent.agent_config)
+    report = _kernel_report(child)
+    return report, {
+        **dict(app_state),
+        "kernel_session_id": child.session_id,
+        "kernel_revision": child.revision,
+        "workflow_version": child.workflow_version,
+        "pending_actions": list(report["pending_actions"]),
+    }
+
+
+def _web_input_contract(session, pending_actions):
+    contract = build_kernel_input_contract(session, pending_actions=pending_actions)
+    if contract.get("action") in {
+        "select_external_source",
+        "prepare_external_run",
+        "submit_external_results",
+        "start_external_tuning",
+        "restart_external_acquisition",
+    }:
+        contract.update(
+            disabled_reason=None, allowed_modes=[], guidance="使用当前步骤的专用表单。"
+        )
+    if contract.get("action") in {"freeze", "compile_protocol"} and getattr(
+        session, "external_workflow", None
+    ):
+        contract.update(allowed_modes=[], json_template=None)
+    return contract
+
+
 def _kernel_report(session) -> dict[str, Any]:
     readiness = session.ledger.readiness()
     pending_actions = _kernel_pending_actions(session)
@@ -936,6 +1073,9 @@ def _kernel_report(session) -> dict[str, Any]:
         "revision": session.revision,
         "read_only": session.read_only,
         "active_protocol_fingerprint": session.active_protocol_fingerprint,
+        "managed_execution": dict(session.managed_execution)
+        if session.managed_execution
+        else None,
         "task": session.task.to_dict(),
         "parameter_facts": [dict(item) for item in session.parameter_facts],
         "diagnostic": {
@@ -991,6 +1131,7 @@ def _kernel_report(session) -> dict[str, Any]:
         "qualification": dict(session.controller_qualification)
         if session.controller_qualification
         else None,
+        "external_workflow": deepcopy(getattr(session, "external_workflow", None)),
         "provider_bindings": dict(session.provider_bindings),
         "registered_case_binding": (
             dict(session.registered_case_binding)
@@ -1006,7 +1147,7 @@ def _kernel_report(session) -> dict[str, Any]:
         "rag_snapshot": session.rag_snapshot,
         "events": [event.to_dict() for event in session.events],
         "pending_actions": [dict(item) for item in pending_actions],
-        "input_contract": build_kernel_input_contract(
+        "input_contract": _web_input_contract(
             session,
             pending_actions=pending_actions,
         ),

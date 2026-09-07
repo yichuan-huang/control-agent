@@ -1,6 +1,6 @@
 import type { Obj } from "./api/types";
 const draftFields = new Set(
-  "description task_type outputs inputs input_unit reference_enabled reference input_min input_max state_stop output_bounds_enabled output_min output_max initial_region goal_region initial_output_value_enabled initial_output_value intermediate_targets disturbance_event recovery_start_condition disturbance_hold_region success_requirement_fields final_abs_error_max overshoot_max settling_time_max_s hold_duration_min_s perturbed_success_rate_min response_time_preference_enabled response_time_preference_s budget_fields distinct_experiments cumulative_excitation_time_s".split(
+  "external_data_enabled region_label evaluation_dt_s evaluation_horizon_s evaluation_repeats transition_deadline_s handoff_count_min disturbance_channel disturbance_start_s disturbance_amplitude disturbance_duration_s recovery_deadline_s description task_type outputs inputs input_unit reference_enabled reference input_min input_max state_stop output_bounds_enabled output_min output_max initial_region goal_region initial_output_value_enabled initial_output_value intermediate_targets disturbance_event recovery_start_condition disturbance_hold_region success_requirement_fields final_abs_error_max overshoot_max settling_time_max_s hold_duration_min_s perturbed_success_rate_min response_time_preference_enabled response_time_preference_s budget_fields distinct_experiments cumulative_excitation_time_s".split(
     " ",
   ),
 );
@@ -16,9 +16,14 @@ export function saveDraft(draft: Obj) {
 }
 export function readDraft(): Obj | null {
   try {
-    return JSON.parse(
+    const value: unknown = JSON.parse(
       sessionStorage.getItem("cfdc:draft") ?? "null",
-    ) as Obj | null;
+    );
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return null;
+    return Object.fromEntries(
+      Object.entries(value).filter(([key]) => draftFields.has(key)),
+    );
   } catch {
     return null;
   }

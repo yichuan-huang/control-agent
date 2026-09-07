@@ -22,3 +22,32 @@ test("JSON submission accepts objects only", () => {
   expect(() => parseObject("null")).toThrow();
   expect(parseObject('{"value":1}')).toEqual({ value: 1 });
 });
+test("external wizard settings survive refresh without persisting unknown data", () => {
+  const draft = {
+    external_data_enabled: true,
+    region_label: "局部",
+    evaluation_dt_s: 0.02,
+    evaluation_horizon_s: 20,
+    evaluation_repeats: 20,
+    transition_deadline_s: 10,
+    handoff_count_min: 1,
+    disturbance_channel: "u",
+    disturbance_start_s: 1,
+    disturbance_amplitude: 0.1,
+    disturbance_duration_s: 2,
+    recovery_deadline_s: 10,
+  };
+  saveDraft({ ...draft, api_key: "never-store" });
+  expect(readDraft()).toEqual(draft);
+});
+test("obsolete execution configuration cannot persist into a new task", () => {
+  saveDraft({
+    description: "generic",
+    execution_mode: "managed",
+    runner_id: "local_python",
+    model_id: "optical",
+    command: "do not persist",
+    api_key: "secret",
+  });
+  expect(readDraft()).toEqual({ description: "generic" });
+});
