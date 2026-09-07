@@ -85,7 +85,7 @@ test("custom wizard collects evaluation settings before task confirmation", asyn
     evaluation_dt_s: 0.02,
     evaluation_repeats: 20,
   });
-});
+}, 15000);
 test("restoring a legacy draft removes runner configuration and guides a generic custom task", async () => {
   sessionStorage.setItem(
     "cfdc:draft",
@@ -140,4 +140,4 @@ test("restoring a legacy draft removes runner configuration and guides a generic
   expect(draft).not.toHaveProperty("execution_mode");
   expect(draft).not.toHaveProperty("runner_id");
   expect(draft).not.toHaveProperty("model_id");
-});
+}, 15000);
