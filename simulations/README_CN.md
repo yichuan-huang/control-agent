@@ -1,26 +1,137 @@
-# CFDC MATLAB/Simulink 软件仿真实验
+# 跟着 WebUI 完成五个 MATLAB/Simulink 仿真实验
 
-本目录提供五个外部 Simulink 案例。它们把当前 WebUI 下载的协议或评价请求包交给 MATLAB 执行，再把协议绑定的原始结果传回 WebUI。`case_config.json` 固定案例接口和任务边界；`build_model.m` 可重复生成本地模型；`setup_case.m` 打开案例；`prompts/` 保存可复制的中文输入。生成的 `.slx`、下载包、运行目录和返回结果均为本地工件，不提交到仓库。
+你将亲手在 WebUI 建立任务、下载实验请求，在 MATLAB 中运行 Simulink，再把原始结果上传回同一个任务。WebUI 负责引导和评价，MATLAB 负责外部软件仿真，不连接实体设备。
 
-| 案例 | 任务 | 预期教学分支 |
+**使用顺序：首次准备 → 选择一个案例 → 按该案例的第 1～9 步操作。** 不需要先学习公共 MATLAB 源码或运行开发者测试。每个案例手册都标出了“粘贴到终端”“粘贴到 MATLAB”“粘贴到 WebUI”及每一步的完成标志。只复制代码块内容，不复制三个反引号。
+
+<a id="first-start"></a>
+
+## 首次准备（只需完成一次）
+
+需要 Git、`uv`、Node.js 22（22.12 或更高的 22.x，含 npm），以及 MATLAB 和 Simulink。本教程以 MATLAB R2026a 为验收版本，不要求额外控制工具箱。MATLAB 必须能够使用 Simulink 许可证；只安装产品而没有可用许可证不能运行仿真。
+
+1. **下载项目。** 已有仓库时直接使用现有目录，不要再克隆一份。首次下载可在终端执行：
+
+   ```bash
+   git clone https://github.com/yichuan-huang/control-agent.git
+   cd control-agent
+   ```
+
+2. **进入仓库根目录。** 这是包含 `app.py`、`pyproject.toml` 和 `simulations/` 的文件夹。如果使用已有仓库，可在此文件夹打开终端；macOS 也可以在终端输入 `cd `（末尾有空格），将文件夹从 Finder 拖入，再按回车。下方终端命令都在这个根目录执行。
+
+3. **安装依赖并构建页面。** 粘贴到终端，等待每条命令成功后再执行下一条：
+
+   ```bash
+   uv --version
+   node --version
+   npm --version
+   uv sync --locked
+   npm --prefix cfdc/web/frontend ci
+   npm --prefix cfdc/web/frontend run build
+   ```
+
+   **完成标志：**依赖安装没有报错，前端构建成功，生成 `cfdc/web/frontend/dist/index.html`。首次构建不能省略：仓库不包含生成的网页文件。命令不存在时先安装对应工具，参见[项目快速开始](../README_CN.md#快速开始)。`uv` 会管理项目 Python 环境，不需要手动激活 `.venv`。
+
+4. **启动 WebUI。** 在同一个终端运行，之后保持此终端打开：
+
+   ```bash
+   uv run --locked python app.py
+   ```
+
+   **完成标志：**终端显示服务启动，浏览器打开 [http://127.0.0.1:7860](http://127.0.0.1:7860) 可以看到 CFDC 页面。以后日常使用只需这条启动命令；更新依赖或前端源码后才需要重新安装／构建。若服务已经在运行，不要再启动第二份。
+
+5. **配置自然语言模型。** 在 WebUI“设置”中填写 Base URL、Model 和 API Key，再点击“测试当前配置”。可以选择 Ollama、DeepSeek API 或 OpenAI API，具体填写方式见[模型服务商说明](../README_CN.md#选择模型服务商)。表单配置直接生效，无需另点保存；连接测试通过不代表每种模型都已验证完整流程。
+
+   想沿用本项目开发验证的本地模型时，先安装并启动 Ollama，再在另一个终端运行 `ollama list`。列表里没有 `gemma4:e4b` 时运行 `ollama pull gemma4:e4b`，等待下载完成。若连接不到服务，启动 Ollama 桌面应用，或另开终端运行 `ollama serve` 并保持运行。随后按下表填写：
+
+   | 设置字段 | 本地练习填写值 |
+   | --- | --- |
+   | Base URL | `http://127.0.0.1:11434/v1` |
+   | Model | `gemma4:e4b` |
+   | API Key | `ollama` |
+
+   选择在线服务时跳过 Ollama 准备，使用自己的模型和密钥。不要把真实密钥写入案例文件、截图或导出的共享材料。
+
+6. **创建练习前关闭“新任务使用内置知识库”。** 这五个手册已经提供固定模型的设计说明，关闭该开关可以避免首次知识库准备阻碍建任务。只影响之后的新任务，不会修改已经创建的任务。页面设置和模型连接检查成功后，打开下面任一案例手册，按其第 1 步启动 MATLAB。
+
+## 选择案例
+
+| 案例手册 | 练习内容 | 原基准记录的分支（不保证本次结果） |
 | --- | --- | --- |
-| [01 光强定点保持](01_optical_hold/README_CN.md) | `local_setpoint_hold` | 历史演练进入 `capability_gap` |
-| [02 真空压力定点保持](02_vacuum_hold/README_CN.md) | `local_setpoint_hold` | 历史演练进入有界调优和独立确认 |
-| [03 油墨黏度定点保持](03_ink_viscosity_hold/README_CN.md) | `local_setpoint_hold` | 历史演练进入有界调优和独立确认 |
-| [04 光强分阶段过渡](04_optical_transition/README_CN.md) | `transition_then_hold` | 历史演练进入 `capability_gap` |
-| [05 油墨黏度扰动恢复](05_ink_disturbance_recovery/README_CN.md) | `disturbance_recovery_to_hold` | 历史演练进入有界调优和独立确认 |
+| [01 光强定点保持](01_optical_hold/README_CN.md) | 保持在 `0.5` | 有依据的能力缺口 |
+| [02 真空压力定点保持](02_vacuum_hold/README_CN.md) | 负增益、时延对象保持在 `-0.5` | 调优后全新确认成功 |
+| [03 油墨黏度定点保持](03_ink_viscosity_hold/README_CN.md) | 二阶对象保持在 `-0.5` | 调优后全新确认成功 |
+| [04 光强分阶段过渡](04_optical_transition/README_CN.md) | 从 `0` 经 `0.25` 到 `0.5` 并保持 | 有依据的能力缺口 |
+| [05 油墨黏度扰动恢复](05_ink_disturbance_recovery/README_CN.md) | 受到输入扰动后恢复到 `-0.5` | 调优后全新确认成功 |
 
-这些分支只说明既往开发演练的预期路径，不保证新任务得到相同结论。Kernel 会根据本次上传的原始轨迹、冻结绑定和独立裁决决定实际结果；不要为了得到预期分支而修改阈值或数据。
+每个案例新建一个 WebUI 自定义任务。想先练习一次包含调优与确认的流程，可以从 02 开始；实际分支始终由本次证据和 Kernel 裁决决定。**流程跑通不等于每个案例性能达标。** 不要为匹配历史结果放宽阈值或修改数据。
 
-公共 MATLAB 接口如下。`packagePath` 可省略；省略时会打开文件选择器。识别返回结构包含 `run_dir` 和 `files`，评价返回结构还包含 `result_zip`。下载的请求包是输入，`runs/` 中生成的 CSV 或结果 ZIP 是返回物，两者不能互换。
+## 文件夹和文件分别做什么
 
-```matlab
-lab = setup_case();
-cfdcSim.preflight(lab)
-identification = cfdcSim.run_identification(lab);
-evaluation = cfdcSim.run_evaluation(lab);
+每个案例下载后都能看到以下结构：
+
+```text
+案例目录/
+├── README_CN.md       按顺序操作的手册
+├── prompts/           复制到 WebUI 的文字
+├── setup_case.m       初始化案例并打开模型
+├── build_model.m      重新生成模型的入口
+├── case_config.json   固定仿真对象与任务默认值
+├── model/            生成的 Simulink 模型
+├── incoming/         从 WebUI 下载的原始请求 ZIP
+└── runs/             MATLAB 每轮运行的记录及待上传结果
 ```
 
-默认命令使用仓库当前绝对路径 `/Users/huangyichuan/workspace/THU/control-agent`。仓库移动后，只需将手册第一条 `cd` 改成新位置；包装函数会由案例目录自动找到 `simulations/+cfdcSim`，不需要修改源码。
+`model/`、`incoming/` 和 `runs/` 起初只有 `.gitkeep`，用于保留目录结构，不用打开或编辑它。执行 `setup_case()` 时，如果没有模型，会自动生成 `.slx`。运行脚本会在 `runs/` 中创建独立子目录，已有记录不覆盖。生成模型、请求包和运行结果均由 Git 忽略。
 
-开发者可使用[验收复现说明](tests/README_CN.md)运行 MATLAB 单元测试、Python 轨迹对照、错包测试和真实 HTTP 上传闭环。
+建议手动把每轮下载包保存或移入当前案例的 `incoming/`。MATLAB 选择器默认打开这里，也允许选择“下载”目录或其他位置的 ZIP；`incoming/` 不会自动下载、扫描或执行文件。保留原始 ZIP，不需要解压或编辑。
+
+| 此时正在做什么 | MATLAB 读取的文件 | 上传回 WebUI 的文件 |
+| --- | --- | --- |
+| 辨识采集 | “下载采集请求包 ZIP”得到的原包 | `identification.files` 列出的全部 CSV |
+| 开发评价 | 本轮“下载本轮完整运行包 ZIP”得到的原包 | `evaluation.result_zip` 指向的结果 ZIP |
+| 每个调优候选 | 当前候选的新运行请求包 | 此次 MATLAB 运行生成的结果 ZIP |
+| 全新独立确认 | 当前确认阶段的新运行请求包 | 重新执行确认后生成的结果 ZIP |
+
+文件流向是 **WebUI 请求包 → `incoming/` → MATLAB 运行 → `runs/` 返回文件 → 同一个 WebUI 任务**。不能把请求 ZIP 当结果上传，也不要把不同任务、不同候选或开发／确认的数据混在一起。即使通道相同，也必须人工确认选中了当前页面下载的包；MATLAB 不读取 WebUI 会话状态，最终由 WebUI 检查当前请求绑定。
+
+<a id="troubleshooting"></a>
+
+## 常见问题与恢复方法
+
+| 看到的现象 | 处理方法 |
+| --- | --- |
+| `uv`、`node` 或 `npm` 命令不存在 | 安装相应工具，重新打开终端，再执行首次准备；不要继续执行依赖它的命令 |
+| 网页显示“前端尚未构建” | 在仓库根目录执行首次准备中的 `npm ci` 与 `npm run build` 命令，再刷新页面 |
+| `127.0.0.1:7860` 打不开 | 查看启动 CFDC 的终端是否还在运行及是否报错；端口被占用时先确认是不是已有的 CFDC，不要连续重复启动 |
+| 模型连接失败／诊断回复失败 | 在“设置”核对地址、完整模型名称和密钥；本地 Ollama 需服务运行且模型已下载。刷新后密钥可能需要重新填写。保留当前任务，连接恢复后按页面继续，不要伪造诊断结论 |
+| 建任务提示知识库未就绪 | 先关闭“新任务使用内置知识库”，再建立本练习的新任务；已有任务的知识库绑定不会跟着变化 |
+| `setup_case` 或 `cfdcSim` 无法识别，或变量 `lab` 不存在 | 重新执行当前案例第 1 步完整 MATLAB 代码，选择包含 `app.py` 的仓库根目录；不要只打开 `.slx` 后跳过初始化 |
+| `MissingSimulink`／许可证错误 | 在 MATLAB 中确认 Simulink 已安装且许可证可用，然后重新初始化；许可证失败时不能继续仿真 |
+| 误点 Simulink Run 后模型仍在运行，或出现 `ModelBusy` | 先在模型窗口点击 Stop，等待停止，再执行教程命令；工具栏 Run 是预览，不生成本任务的上传证据 |
+| 选择文件时只有空目录或 `.gitkeep` | 先从当前 WebUI 任务下载包；如果浏览器存到“下载”目录，在选择器中转到那里。取消选择后可重新执行该段代码 |
+| `WrongPackage`、`ChannelMismatch`、`BindingMismatch` 等预检错误 | 核对当前案例、任务与包类型，从当前页面重新下载原包；采集用采集请求 ZIP，评价用完整运行请求 ZIP，不用结果 ZIP。不要编辑 JSON 以绕过检查 |
+| `UnsupportedContract`／`UnsupportedController` | 记录完整错误并核对任务字段；当前运行时支持这五个案例所需的 PI、delay-aware PI 和 two-degree-of-freedom PI。其他执行条件被拒绝时，不能假装支持或手改冻结包 |
+| MATLAB 运行报错／中途退出 | 保留红色错误和本轮 `runs/` 目录；若已经生成目录，查看 `failure.json`（如有）及现有轨迹。解决原因后使用仍有效的本轮原包重新运行，脚本会建立新目录；未完成的结果不当成完整试验上传 |
+| `acquisitionPackage` 丢失，或 MATLAB 重启了 | 重新执行案例第 1 步，再执行第 4 步的 MATLAB 选包和预检代码即可恢复变量；WebUI 已完成的操作检查不用重复提交。若已有完整结果，直接选择原来的返回文件上传，无需仅为恢复变量重跑 |
+| 上传按钮旁没有列出全部文件 | 先等待文件传输完成，核对数量；多选全部本轮 CSV 后还需点击“检查上传数据”。评价只选一个结果 ZIP，再点击“校验并提交本轮轨迹” |
+| 上传被拒绝／缺少试次 | 阅读“实验协议与上传回执”及错误提示，确认选择当前任务、本轮完整结果；缺文件时补充实际缺失文件，选错包时重新选择正确包，不修改轨迹或绑定标识 |
+| 结果已接收，处理尚未完成 | 点击“完成已接收结果处理”；不要重复上传或重跑已经接受的试次 |
+| 页面显示正在执行的操作／旧版本冲突 | 等待当前操作结束；按页面提供的“恢复操作跟踪”或“刷新”恢复视图，查看已接收记录后再行动，不连续重复点击提交 |
+| 结果为能力缺口／性能不足 | 查看原因与未满足项；若仍有调优动作则继续当前分支，若已到终态则导出报告。这不是通过修改数据或放宽要求来消除的错误 |
+
+`runs/` 中 `source-package.zip` 是请求副本，`model.slx`、MAT、PNG、日志等用于追溯；只有脚本明确返回的 CSV 或结果 ZIP 用于相应上传步骤。不要为清理磁盘而删除仍需要上传或留档的运行记录。
+
+## MATLAB 接口速查（完成一次教程后使用）
+
+| 接口 | 用途与返回值 |
+| --- | --- |
+| `lab = setup_case()` | 在选定案例目录中初始化并打开模型 |
+| `modelPath = build_model()` | 在选定案例目录中重新生成模型；正常练习不需要调用 |
+| `check = cfdcSim.preflight(lab, packagePath)` | 对当前原始请求包预检，返回包类型、操作卡或执行请求 |
+| `identification = cfdcSim.run_identification(lab, packagePath)` | 执行全部辨识重复，返回 `run_dir` 和 `files` |
+| `evaluation = cfdcSim.run_evaluation(lab, packagePath)` | 执行本轮开发／调优／确认，返回 `run_dir`、`files` 和 `result_zip` |
+
+`packagePath` 是 ZIP 的完整路径，可省略以打开选择器。案例手册会保存已选路径供同一步骤复用。两种运行接口都会再次预检；实际输入、时长、重复数和冻结参数读取本轮包，不能只凭 `case_config.json` 的默认值推断。
+
+开发者需要复现数值对照和上传验收时，另见[仿真验收复现](tests/README_CN.md)。普通用户不必执行这些测试。

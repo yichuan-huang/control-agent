@@ -2,7 +2,9 @@
 
 这些工具用于开发验收，普通用户只需各案例的 `README_CN.md`。运行环境为 MATLAB R2026a 与 Simulink；Python 对照工具使用仓库的 `uv.lock`。MATLAB 未启动、缺少产品或许可证失败时，应记录为未执行，不能计为通过。
 
-在仓库根目录的终端准备独立测试目录：
+先按[首次准备](../README_CN.md#first-start)完成依赖安装。本页命令中的 `/tmp/` 适用于 macOS／Linux；Windows 请将终端和 MATLAB 中的测试路径一致替换为可写的绝对路径。每次完整验收使用新的目录；如果下面目录已有上次产物，请换新目录名，不要覆盖旧证据。
+
+**粘贴到仓库根目录的终端：**准备独立测试目录。
 
 ```bash
 uv run --locked python simulations/tests/reference_parity.py prepare /tmp/cfdc-parity
@@ -12,7 +14,8 @@ uv run --locked python simulations/tests/package_fixtures.py /tmp/cfdc-packets
 在 MATLAB 执行（已有同名结果时，换用新的测试目录）：
 
 ```matlab
-root = '/Users/huangyichuan/workspace/THU/control-agent';
+root = uigetdir(pwd, '选择包含 app.py 的 control-agent 仓库根目录');
+assert(~isequal(root, 0) && isfile(fullfile(root, 'app.py')), '请选择正确的仓库根目录。');
 addpath(fullfile(root, 'simulations'), fullfile(root, 'simulations', 'tests'));
 results = runtests(fullfile(root, 'simulations', 'tests'));
 assert(all([results.Passed]));
@@ -34,7 +37,7 @@ HTTP 闭环验收使用真实 API 下载和上传，诊断事实来自测试配�
 uv run --locked python simulations/tests/http_acceptance.py init /tmp/cfdc-http
 ```
 
-交替执行以下 MATLAB 命令与终端命令，直至显示 `0 MATLAB jobs; 5/5 terminal`：
+先确保已经执行上面的 MATLAB `addpath` 代码。按下面顺序交替执行 MATLAB 命令和终端命令，每次等待上一条完成，直至终端显示 `0 MATLAB jobs; 5/5 terminal`：
 
 ```matlab
 run_http_jobs('/tmp/cfdc-http');
@@ -50,7 +53,7 @@ uv run --locked python simulations/tests/http_acceptance.py advance /tmp/cfdc-ht
 uv run --locked python simulations/tests/http_acceptance.py verify /tmp/cfdc-http
 ```
 
-该验收不能替代浏览器与真实模型验收。浏览器验收应从五个新任务开始，按各案例的操作手册填写字段，显式选择本地 `gemma4:e4b`，逐轮下载、执行和上传。公开报告中的模型调用记录、上传回执、冻结绑定、评价重放和最终确认共同构成证据。真实任务结论由 Kernel 给出，不得为了复制预期路径修改阈值。
+该验收不能替代浏览器与真实模型验收。浏览器验收应从五个新任务开始，按各案例的操作手册填写字段，显式选择本地 `gemma4:e4b`，逐轮下载、执行和上传。验收时应另外保存模型调用记录、上传回执、冻结绑定、评价重放和最终确认作为证据；仓库不附带历史运行数据。真实任务结论由 Kernel 给出，不得为了复制预期路径修改阈值。
 
 相关 Python 回归与代码检查：
 
