@@ -21,12 +21,12 @@ npm --prefix cfdc/web/frontend ci
 npm --prefix cfdc/web/frontend run build
 ```
 
-`uv` reads the Python version from `.python-version` and manages `.venv`. Commands using `uv run` do not require manual environment activation.
+`uv` reads the Python version from `.python-version` and manages `.venv`. Commands using `uv run` do not require manual environment activation. The install and run commands below use `--locked`, which requires `uv.lock` to match the project metadata and fails instead of updating the lockfile during execution. Frontend dependencies are installed with `npm ci` from the committed `package-lock.json`.
 
 2. After that first-time `npm ci` and build, daily use requires only this command to start the WebUI:
 
 ```bash
-uv run python app.py
+uv run --locked python app.py
 ```
 
 The default entry is React + FastAPI, served from the same origin at `127.0.0.1:7860`. RAG dependencies are installed by default. RAG prepares in the background while the shell and settings remain available; the first encoder download may take time. Tasks requesting RAG cannot start while it is preparing or unavailable, and the UI reports the error. Disabling RAG changes only the binding for a future task; existing task snapshots remain immutable. Hugging Face uses its standard per-user model cache.
@@ -175,12 +175,12 @@ Operational history is a separate offline index and is never mixed into RAG or i
 Build, inspect, and query a local history index with the independent CLI. The source file must conform to the packaged schema; generated `operational-history` data is ignored by Git:
 
 ```bash
-uv run python -m cfdc.history index \
+uv run --locked python -m cfdc.history index \
   --source ./operational-history/records.json \
   --index-dir ./operational-history/index
-uv run python -m cfdc.history inspect \
+uv run --locked python -m cfdc.history inspect \
   --index-dir ./operational-history/index
-uv run python -m cfdc.history query \
+uv run --locked python -m cfdc.history query \
   --index-dir ./operational-history/index \
   --plant-id plant-a \
   --configuration-fingerprint 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
@@ -196,7 +196,7 @@ The historical Gradio application is available in the [v0.3.3 source](https://gi
 Start the application and open `http://127.0.0.1:7860`:
 
 ```bash
-uv run python app.py
+uv run --locked python app.py
 ```
 
 In Settings, enter Base URL, Model, and API Key, then choose **测试当前配置** (Test current configuration). Requests use the current form values without a separate save or environment-variable setup. A successful probe confirms service connectivity and model availability, not full inference compatibility. **高级设置** (Advanced settings) contains the optional startup-environment import for address and model; it always preserves the in-memory key.
@@ -236,7 +236,7 @@ The built-in selector contains 18 public cases:
 The CLI remains compatible with both workflows. Select the Kernel explicitly for a new custom task. The command stops at the next user or evidence boundary and prints the session ID and current input contract:
 
 ```bash
-uv run python main.py --workflow-version kernel \
+uv run --locked python main.py --workflow-version kernel \
   --kernel-session-dir ./output/kernel-sessions \
   --description "A heater holds chamber temperature." \
   --observed-output temperature --actuator voltage \
@@ -260,7 +260,7 @@ DIAGNOSIS_JSON='{
   "uncertainty_variation":{"status":"known","assessment":"small","evidence":"repeated public tests","confidence":0.95}
 }'
 
-uv run python main.py --workflow-version kernel \
+uv run --locked python main.py --workflow-version kernel \
   --kernel-case dc_motor_speed_v1 \
   --kernel-action motor-run-001 \
   --confirm-kernel-budget \
@@ -279,13 +279,13 @@ can accept it.
 For a physical or externally operated experiment, bind a public Provider contract and compile the handoff after diagnosis and route resolution:
 
 ```bash
-uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
+uv run --locked python main.py --workflow-version kernel --kernel-session SESSION_ID \
   --kernel-action physical-001 \
   --kernel-provider physical-provider.json \
   --kernel-compile-protocol --kernel-prepare-operator-handoff \
   --kernel-result-dir ./output/results
 
-uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
+uv run --locked python main.py --workflow-version kernel --kernel-session SESSION_ID \
   --kernel-action physical-002 \
   --kernel-operator-report operator-report.json \
   --kernel-upload repeat-01.csv --kernel-upload repeat-02.csv \
@@ -299,7 +299,7 @@ Provider settings for natural-language agent work can be supplied through `CFDC_
 The following example uses DeepSeek. Set `DEEPSEEK_API_KEY` in your local environment first. To use another provider, substitute its Base URL, model, and key from the table above:
 
 ```bash
-uv run python main.py --use-llm \
+uv run --locked python main.py --use-llm \
   --workflow-version kernel \
   --llm-base-url "https://api.deepseek.com" \
   --llm-model "deepseek-v4-pro" \
@@ -325,7 +325,7 @@ export CFDC_LLM_API_KEY="..."
 2. Create the first legacy diagnostic session:
 
 ```bash
-uv run python main.py --workflow-version legacy \
+uv run --locked python main.py --workflow-version legacy \
   --use-llm --agent-mode single --no-rag \
   --description "控制问题描述" \
   --diagnostic-session-output legacy-01.json
@@ -334,7 +334,7 @@ uv run python main.py --workflow-version legacy \
 3. If `legacy-01.json` still requests description facts, add the missing object, sensor, actuator, or behavior information and write a new file:
 
 ```bash
-uv run python main.py --workflow-version legacy \
+uv run --locked python main.py --workflow-version legacy \
   --use-llm --agent-mode single --no-rag \
   --diagnostic-session-input legacy-01.json \
   --diagnostic-description "补充缺少的对象、传感器或执行器信息" \
@@ -344,7 +344,7 @@ uv run python main.py --workflow-version legacy \
 4. When the latest JSON requests selected-Profile parameters, submit the known values, units, sources, and software-simulation ranges:
 
 ```bash
-uv run python main.py --workflow-version legacy \
+uv run --locked python main.py --workflow-version legacy \
   --use-llm --agent-mode single --no-rag \
   --diagnostic-session-input legacy-02.json \
   --measurement-response "已知参数、单位、来源和软件仿真范围" \

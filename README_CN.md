@@ -21,12 +21,12 @@ npm --prefix cfdc/web/frontend ci
 npm --prefix cfdc/web/frontend run build
 ```
 
-`uv` 会读取 `.python-version` 中的 Python 版本并管理 `.venv`。使用 `uv run` 时不需要手动激活环境。
+`uv` 会读取 `.python-version` 中的 Python 版本并管理 `.venv`。使用 `uv run` 时不需要手动激活环境。 本文的安装和运行命令使用 `--locked`，要求 `uv.lock` 与项目声明一致；若不一致会报错，而不是在运行时更新锁文件。前端使用 `npm ci` 按已提交的 `package-lock.json` 安装依赖。
 
 2. 完成首次 `npm ci` 和构建后，日常使用只需运行以下命令启动 WebUI：
 
 ```bash
-uv run python app.py
+uv run --locked python app.py
 ```
 
 默认入口是 React + FastAPI，同源监听 `127.0.0.1:7860`。RAG 依赖默认安装，并在后台准备；页面与设置仍可使用，首次下载 encoder 可能较慢。RAG 处于准备中或失败时，要求使用 RAG 的任务不能启动，页面会明确显示错误。关闭 RAG 只影响未来创建任务的绑定，已有任务的 snapshot 保持不可变。Hugging Face 使用当前用户的默认模型缓存。
@@ -175,12 +175,12 @@ uv run --locked python -m cfdc.rag eval --index-dir ./rag-index \
 可通过独立 CLI 构建、检查和查询本地历史索引。源文件必须符合随包 schema；生成的 `operational-history` 数据会被 Git 忽略：
 
 ```bash
-uv run python -m cfdc.history index \
+uv run --locked python -m cfdc.history index \
   --source ./operational-history/records.json \
   --index-dir ./operational-history/index
-uv run python -m cfdc.history inspect \
+uv run --locked python -m cfdc.history inspect \
   --index-dir ./operational-history/index
-uv run python -m cfdc.history query \
+uv run --locked python -m cfdc.history query \
   --index-dir ./operational-history/index \
   --plant-id plant-a \
   --configuration-fingerprint 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
@@ -196,7 +196,7 @@ uv run python -m cfdc.history query \
 启动应用后访问 `http://127.0.0.1:7860`：
 
 ```bash
-uv run python app.py
+uv run --locked python app.py
 ```
 
 内置知识库依赖默认安装。服务端管理的索引只包含 Registry artifact 和随包发布的中英文知识卡。`CFDC_RAG_INDEX_DIR` 可覆盖服务端存储位置，浏览器输入不能选择索引路径。
@@ -236,7 +236,7 @@ WebUI 不加载也不运行 legacy 会话，不提供 `single` 基线，不会�
 CLI 同时保留两套工作流的兼容接口。创建自定义 Kernel 任务时应显式选择 Kernel。命令会停在下一个用户或证据边界，并输出 session ID 与当前 input contract：
 
 ```bash
-uv run python main.py --workflow-version kernel \
+uv run --locked python main.py --workflow-version kernel \
   --kernel-session-dir ./output/kernel-sessions \
   --description "加热器保持箱体温度。" \
   --observed-output temperature --actuator voltage \
@@ -260,7 +260,7 @@ DIAGNOSIS_JSON='{
   "uncertainty_variation":{"status":"known","assessment":"small","evidence":"重复公开试验","confidence":0.95}
 }'
 
-uv run python main.py --workflow-version kernel \
+uv run --locked python main.py --workflow-version kernel \
   --kernel-case dc_motor_speed_v1 \
   --kernel-action motor-run-001 \
   --confirm-kernel-budget \
@@ -278,13 +278,13 @@ uv run python main.py --workflow-version kernel \
 对于实体或外部操作实验，在诊断和路线解析后绑定公开 Provider 合同，再生成 handoff：
 
 ```bash
-uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
+uv run --locked python main.py --workflow-version kernel --kernel-session SESSION_ID \
   --kernel-action physical-001 \
   --kernel-provider physical-provider.json \
   --kernel-compile-protocol --kernel-prepare-operator-handoff \
   --kernel-result-dir ./output/results
 
-uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
+uv run --locked python main.py --workflow-version kernel --kernel-session SESSION_ID \
   --kernel-action physical-002 \
   --kernel-operator-report operator-report.json \
   --kernel-upload repeat-01.csv --kernel-upload repeat-02.csv \
@@ -298,7 +298,7 @@ uv run python main.py --workflow-version kernel --kernel-session SESSION_ID \
 下面以 DeepSeek 为例，请先在本地环境中设置 `DEEPSEEK_API_KEY`。使用其他服务商时，将 Base URL、模型和密钥替换为上表中的对应配置：
 
 ```bash
-uv run python main.py --use-llm \
+uv run --locked python main.py --use-llm \
   --workflow-version kernel \
   --llm-base-url "https://api.deepseek.com" \
   --llm-model "deepseek-v4-pro" \
@@ -324,7 +324,7 @@ export CFDC_LLM_API_KEY="..."
 2. 创建第一份 legacy 诊断会话：
 
 ```bash
-uv run python main.py --workflow-version legacy \
+uv run --locked python main.py --workflow-version legacy \
   --use-llm --agent-mode single --no-rag \
   --description "控制问题描述" \
   --diagnostic-session-output legacy-01.json
@@ -333,7 +333,7 @@ uv run python main.py --workflow-version legacy \
 3. 如果 `legacy-01.json` 仍要求补充描述事实，就补充缺少的对象、传感器、执行器或行为信息，并写入新文件：
 
 ```bash
-uv run python main.py --workflow-version legacy \
+uv run --locked python main.py --workflow-version legacy \
   --use-llm --agent-mode single --no-rag \
   --diagnostic-session-input legacy-01.json \
   --diagnostic-description "补充缺少的对象、传感器或执行器信息" \
@@ -343,7 +343,7 @@ uv run python main.py --workflow-version legacy \
 4. 当最新 JSON 开始要求所选 Profile 的参数时，提交已知数值、单位、来源和软件仿真范围：
 
 ```bash
-uv run python main.py --workflow-version legacy \
+uv run --locked python main.py --workflow-version legacy \
   --use-llm --agent-mode single --no-rag \
   --diagnostic-session-input legacy-02.json \
   --measurement-response "已知参数、单位、来源和软件仿真范围" \

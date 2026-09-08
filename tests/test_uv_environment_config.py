@@ -63,8 +63,8 @@ def test_readmes_install_and_check_before_web_start_and_cli():
         npm_check = text.index("npm --version")
         frontend_install = text.index("npm --prefix cfdc/web/frontend ci")
         frontend_build = text.index("npm --prefix cfdc/web/frontend run build")
-        web_start = text.index("uv run python app.py")
-        cli_usage = text.index("uv run python main.py --use-llm")
+        web_start = text.index("uv run --locked python app.py")
+        cli_usage = text.index("uv run --locked python main.py --use-llm")
 
         assert (
             sync
