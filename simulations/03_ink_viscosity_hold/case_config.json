@@ -1,0 +1,40 @@
+{
+  "schema_version": "cfdc-simulink-case/v1",
+  "case_id": "03_ink_viscosity_hold",
+  "title_cn": "油墨黏度定点保持",
+  "model_name": "cfdc_ink_viscosity_hold",
+  "plant": {
+    "kind": "ink",
+    "numerator": [-1.8],
+    "denominator": [0.75, 2, 1],
+    "input_delay_s": 0,
+    "initial_perturbation": 1e-6
+  },
+  "task": {
+    "description": "在软件仿真中调节归一化稀释剂流量，使归一化油墨黏度保持在 -0.5 附近。",
+    "task_type": "local_setpoint_hold",
+    "measured_signals": ["ink_viscosity"],
+    "signal_units": {"ink_viscosity": "normalized"},
+    "control_inputs": ["diluent_flow"],
+    "control_input": "diluent_flow",
+    "input_units": "normalized",
+    "input_min": -1,
+    "input_max": 1,
+    "state_stop": 3,
+    "reference": -0.5,
+    "operating_region": "归一化油墨黏度定点附近的软件仿真工作区",
+    "success_requirements": {
+      "final_abs_error_max": 0.03,
+      "overshoot_max": 0.1,
+      "settling_time_max_s": 10,
+      "hold_duration_min_s": 2,
+      "perturbed_success_rate_min": 0.8
+    },
+    "budgets": {
+      "evaluation_sample_time_s": 0.02,
+      "evaluation_horizon_s": 20,
+      "evaluation_repeats": 20
+    }
+  },
+  "diagnosis_text": "以下来自固定仿真模型的设计说明，不是本任务实测结果。该模型开环稳定且为最小相位；没有显著时延，相对阶次为 2。归一化 ink_viscosity 测量和 diluent_flow 执行对该建模的 SISO 定点目标是充分的。模型严格线性，非线性强度弱；没有耦合或欠驱动。模型参数固定，只包含很小的初态不确定性。尚未运行协议绑定的识别与评价，因此实测响应、噪声、重复性及性能是否满足任务要求仍不知道。"
+}

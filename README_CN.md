@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.6` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.7` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
@@ -46,6 +46,10 @@ uv run python app.py
 [中文 prompt](dataset/control_problem_prompts_cn.md) 与 [英文 prompt](dataset/control_problem_prompts.md) 保留全部 200 个问题的编号，按照当前向导的“目标、信号、边界与要求、核对”组织。每题给出字段值、勾选项、启动后的诊断回复及继续所需的证据，并区分原始分析目标或不支持的目标与明确适配后的 CFDC 练习。
 
 这些条目用于自定义任务。描述数学模型不会安装仿真 Provider，也不等于提供协议绑定的实验记录。文档另行演示使用锁定合同的注册案例，包括教学 ZIP 上传和 fresh confirmation。要求外部数据或出现能力缺口不代表性能达标。如需本地操作练习，可配置 `gemma4:e4b` 并关闭 RAG；日常使用仍可选择其他已配置的模型服务。
+
+[MATLAB/Simulink 软件仿真实验](simulations/README_CN.md)提供五个中文引导式自定义任务，覆盖识别、冻结评价、有界调优和全新独立确认。实验使用原生 MATLAB/Simulink 执行当前 WebUI 下载的精确请求包，再返回与协议绑定的 CSV 或结果 ZIP。
+
+这些实验源文件不会为 WebUI 增加仿真 Provider，也不会授予硬件权限。生成模型、下载包、运行目录和返回结果只保留在本地；每次上传仍由 Kernel 校验，路线、安全、性能和最终状态仍由 Kernel 决定。
 
 ## 选择模型服务商
 

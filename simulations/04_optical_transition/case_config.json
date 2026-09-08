@@ -1,0 +1,48 @@
+{
+  "schema_version": "cfdc-simulink-case/v1",
+  "case_id": "04_optical_transition",
+  "title_cn": "光强分阶段过渡并保持",
+  "model_name": "cfdc_optical_transition",
+  "plant": {
+    "kind": "optical",
+    "numerator": [1.6],
+    "denominator": [1.1, 1],
+    "input_delay_s": 0,
+    "initial_perturbation": 1e-6
+  },
+  "task": {
+    "description": "在软件仿真中调节归一化 LED 电流，使归一化光强从 0 经 0.25 过渡到 0.5，并在最终目标附近保持。",
+    "task_type": "transition_then_hold",
+    "measured_signals": ["optical_intensity"],
+    "signal_units": {"optical_intensity": "normalized"},
+    "control_inputs": ["led_current"],
+    "control_input": "led_current",
+    "input_units": "normalized",
+    "input_min": -1,
+    "input_max": 1,
+    "state_stop": 3,
+    "reference": 0.5,
+    "operating_region": "归一化光强由 0 过渡到 0.5 的软件仿真工作区",
+    "initial_region": "归一化光强 0 附近",
+    "initial_output_value": 0,
+    "intermediate_targets": [0.25],
+    "goal_region": "归一化光强 0.5 附近",
+    "success_requirements": {
+      "final_abs_error_max": 0.03,
+      "overshoot_max": 0.1,
+      "settling_time_max_s": 10,
+      "hold_duration_min_s": 2,
+      "perturbed_success_rate_min": 0.8,
+      "required_phase_count_min": 3,
+      "verified_handoff_count_min": 2,
+      "goal_region_entry_required": true,
+      "final_hold_duration_min_s": 2
+    },
+    "budgets": {
+      "evaluation_sample_time_s": 0.02,
+      "evaluation_horizon_s": 20,
+      "evaluation_repeats": 20
+    }
+  },
+  "diagnosis_text": "以下来自固定仿真模型的设计说明，不是本任务实测结果。该模型开环稳定且为最小相位；没有显著时延，相对阶次为 1。归一化 optical_intensity 测量和 led_current 执行对该建模的 SISO 分阶段目标是充分的。模型严格线性，非线性强度弱；没有耦合或欠驱动。模型参数固定，只包含很小的初态不确定性。尚未运行协议绑定的识别与评价，因此实测响应、阶段交接、重复性及性能是否满足任务要求仍不知道。"
+}

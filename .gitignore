@@ -70,6 +70,17 @@ route_report*.json
 benchmark_report*.json
 simulation_report*.json
 
+# Local artifacts from the MATLAB/Simulink guided labs.
+/simulations/*/model/*
+!/simulations/*/model/.gitkeep
+/simulations/*/incoming/*
+!/simulations/*/incoming/.gitkeep
+/simulations/*/runs/*
+!/simulations/*/runs/.gitkeep
+/simulations/**/*.slxc
+/simulations/**/slprj/
+/simulations/validation/
+
 # Local notebooks and notebook checkpoints
 .ipynb_checkpoints/
 

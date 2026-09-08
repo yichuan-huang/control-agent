@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.6` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.7` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
@@ -46,6 +46,10 @@ Built-in authority is granted by a server-side case ID and a fingerprinted `Regi
 The [English prompts](dataset/control_problem_prompts.md) and [Chinese prompts](dataset/control_problem_prompts_cn.md) preserve all 200 problem numbers and follow the current wizard: goal, signals, boundaries and requirements, then review. Each entry supplies the field values, checkbox choices, a subsequent diagnostic reply, and the evidence needed to continue. Original analytical or unsupported goals are distinguished from the explicitly adapted CFDC exercise.
 
 These are custom-task instructions. Describing a mathematical model does not install a simulation Provider or supply protocol-bound experimental evidence. The documents separately demonstrate registered cases using their locked contracts, including teaching ZIP upload and fresh confirmation. A request for external data or a capability gap is not a performance pass. For optional local walkthroughs, configure `gemma4:e4b` and disable RAG; normal users may choose another configured model service.
+
+The [MATLAB/Simulink software labs](simulations/README_CN.md) provide five Chinese guided custom-task exercises for identification, frozen evaluation, bounded tuning, and fresh confirmation. They use native MATLAB/Simulink to execute the exact packages downloaded from the current WebUI and return protocol-bound CSV or result ZIP files.
+
+The lab sources do not add a WebUI simulation Provider or grant hardware authority. Generated models, downloaded packages, run directories, and returned results remain local; the Kernel still validates every upload and makes all route, safety, performance, and final-state decisions.
 
 ## Choose a model provider
 
