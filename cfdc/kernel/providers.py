@@ -97,7 +97,7 @@ class PublicTrace:
     def from_mapping(cls, value: Mapping[str, Any]) -> PublicTrace:
         raw = dict(value)
         # Accept both the canonical trace object and the compact public upload
-        # vocabulary used by the v3 workbench.  This adapter is deliberately
+        # vocabulary used by external evidence uploads. This adapter is deliberately
         # limited to public arrays; it never accepts an object/model payload.
         nested = raw.get("trace")
         if (
@@ -271,87 +271,6 @@ class CallableEvaluationProvider:
         return value
 
 
-class CurrentModelExperimentProvider:
-    """Adapter around the repository's existing typed model experiment runner."""
-
-    provider_id = "current-model-simulator"
-    provider_version = "cfdc-sim/v1"
-
-    def __init__(self, package: Any, plan: Any) -> None:
-        if getattr(package, "model", None) is None:
-            raise ValueError("model_provider_requires_explicit_model")
-        self.package = package
-        self.plan = plan
-        self.capabilities = frozenset(
-            str(item.primitive) for item in getattr(plan, "instructions", ())
-        )
-
-    def execute(
-        self, operation: Mapping[str, Any], *, task: Mapping[str, Any]
-    ) -> tuple[PublicTrace, ...]:
-        del task
-        primitive = str(operation.get("operation") or operation.get("primitive") or "")
-        if primitive and primitive not in self.capabilities:
-            raise ValueError(f"provider_operation_not_supported: {primitive}")
-        from cfdc.evidence.sources import run_model_experiments
-
-        records = run_model_experiments(self.package, self.plan)
-        selected = [
-            record
-            for record in records
-            if not primitive or str(record.primitive) == primitive
-        ]
-        if not selected:
-            raise ValueError("model_provider_returned_no_public_experiment")
-        traces: list[PublicTrace] = []
-        for index, record in enumerate(selected, 1):
-            raw_trace = record.trace
-            metadata = dict(getattr(raw_trace, "metadata", {}) or {})
-            units = dict(metadata.get("signal_units") or {})
-            model = getattr(self.package, "model", None)
-            if model is not None:
-                output_id = getattr(model, "output_signal_id", None)
-                if output_id and getattr(model, "output_units", None):
-                    units.setdefault(str(output_id), str(model.output_units))
-                for output_id in getattr(model, "output_signal_ids", ()) or ():
-                    model_units = getattr(model, "signal_units", {}) or {}
-                    if model_units.get(output_id):
-                        units.setdefault(str(output_id), str(model_units[output_id]))
-            units.setdefault("time", "s")
-            traces.append(
-                PublicTrace(
-                    trace_id=f"model-{index}-{record.primitive}",
-                    source="model",
-                    time_s=tuple(float(item) for item in raw_trace.time_s),
-                    signals={
-                        str(key): tuple(float(item) for item in values)
-                        for key, values in raw_trace.signals.items()
-                    },
-                    units={
-                        str(key): str(value)
-                        for key, value in units.items()
-                        if key != "time"
-                    },
-                    protocol_fingerprint=fingerprint(
-                        {
-                            "provider": self.provider_id,
-                            "primitive": record.primitive,
-                            "plan": getattr(
-                                self.plan, "model_dump", lambda: repr(self.plan)
-                            )(),
-                        }
-                    ),
-                    operating_region=str(record.operating_region),
-                    trial_id=f"model-{index}",
-                    metadata={
-                        "evidence_boundary": "user_object_model_simulation",
-                        "primitive": str(record.primitive),
-                    },
-                )
-            )
-        return tuple(traces)
-
-
 @dataclass
 class ProviderRegistry:
     """Explicit provider registry; it never resolves a Demo from object text."""
@@ -444,7 +363,6 @@ def evidence_from_trace(
 __all__ = [
     "CallableEvaluationProvider",
     "CallableExperimentProvider",
-    "CurrentModelExperimentProvider",
     "EvaluationProvider",
     "EvaluationProviderRegistry",
     "ExperimentProvider",

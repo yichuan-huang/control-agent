@@ -291,7 +291,7 @@ def test_registered_case_provider_binding_cannot_be_overridden(tmp_path) -> None
     assert service.read(session.session_id).revision == session.revision
 
 
-def test_previous_session_version_is_read_only_and_lacks_provider_authority(
+def test_previous_session_version_is_rejected_without_modifying_source(
     tmp_path,
 ) -> None:
     service = WorkflowService(tmp_path)
@@ -310,9 +310,12 @@ def test_previous_session_version_is_read_only_and_lacks_provider_authority(
     payload["session_version"] = "cfdc-session/v3.0"
     payload.pop("registered_case_binding", None)
 
-    restored = EvidenceSession.from_json(json.dumps(payload))
-    assert restored.read_only is True
-    assert restored.registered_case_binding is None
+    path = service.root / f"{current.session_id}.json"
+    path.write_text(json.dumps(payload))
+    original = path.read_bytes()
+    with pytest.raises(ValueError, match="evidence_session_version_mismatch"):
+        service.read(current.session_id)
+    assert path.read_bytes() == original
 
 
 def test_submit_answer_cannot_overwrite_known_diagnostic(tmp_path) -> None:

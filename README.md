@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.7` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a compatible CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.8` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
@@ -70,7 +70,7 @@ ollama pull your-model
 ollama list
 ```
 
-If you choose DeepSeek or OpenAI, skip the Ollama steps and enter your provider's settings directly. Keep real API keys out of source files, screenshots, and shared reports. The Kernel CLI section below explains environment variables and command-line configuration.
+If you choose DeepSeek or OpenAI, skip the Ollama steps and enter your provider's settings directly. Keep real API keys out of source files, screenshots, and shared reports. The WebUI uses these settings for natural-language interaction; the CLI uses them only for environment checks.
 
 ## Kernel workflow
 
@@ -108,7 +108,7 @@ The Kernel provides the following capabilities through versioned contracts, so e
 - Identification and evaluation Providers use separate immutable bindings. The independent `cfdc-independent-judge/v2.0` recomputes channel metrics from complete sampled trajectories and stop events, evaluates hard stability and limits first, then task-specific performance, perturbed repeats, the worst trial, and a 95% Wilson lower bound. Only stable performance gaps may enter bounded tuning; every accepted candidate receives a new freeze and must pass fresh confirmation.
 - `cfdc-session/v4.0` adds a catalog-derived `RegisteredCaseBinding` and preserves revision checks, idempotent actions, stale-revision rejection, immutable artifact histories, and an append-only event chain.
 
-The workflow exposes three separate readiness gates: legal evidence acquisition, evidence-supported route selection, and controller synthesis. Unknown dimensions block only actions that consume them. Every provider attempt is reserved before execution, so retries, excitation time, valid experiments, and distinct protocols remain separate audit quantities. Old sessions remain readable but immutable; a derived session copies only the task and human priors, never old features, qualification, or performance authority.
+The workflow exposes three separate readiness gates: legal evidence acquisition, evidence-supported route selection, and controller synthesis. Unknown dimensions block only actions that consume them. Every provider attempt is reserved before execution, so retries, excitation time, valid experiments, and distinct protocols remain separate audit quantities. Only current-schema sessions are accepted. Importing a current result bundle creates a new session with task and human priors, never prior features, qualification, or performance authority.
 
 The executable capability catalog distinguishes registration from end-to-end validation. All 20 registered families have committed tests that synthesize a typed controller, qualify it from public evidence, freeze it, run a nonzero sampled closed loop, and recompute the result independently; each also has a family-relevant rejection case.
 
@@ -145,17 +145,16 @@ uv run --locked ruff format .
 uv run --locked ruff format --check .
 uv run --locked ruff check .
 uv run --locked pytest -q
-uv run --locked python main.py --benchmark > /tmp/cfdc-benchmark.json
-uv run --locked python main.py --validate-demo
+uv run --locked pytest -q tests/test_main_cli.py
 uv run --locked python scripts/benchmark_web_api.py
 git diff --check
 ```
 
 `uv` reads the pinned Python version from `.python-version`, creates `.venv`, and installs the project and development tools. No environment activation is needed when commands use `uv run`.
 
-New indexes include two packaged sources by default: the authoritative, generated Registry artifacts and a versioned advisory knowledge pack with English and Chinese versions of twelve control-concept cards. The language variants share stable artifact-group identities and semantic versions while retaining separate content hashes and provenance. The pack has a central JSON manifest and schema, validity metadata, citation records, and 192 frozen evaluation cases: the original English/Chinese sets, one exposed regression set, and a replacement challenge holdout. Its text can explain registered choices but cannot change routes, numerical results, qualification, or authorization. New builds use immutable `cfdc-rag/v3` snapshots; valid `v2` and earlier-policy `v3` snapshots remain readable and are never rewritten in place.
+New indexes include two packaged sources by default: the authoritative, generated Registry artifacts and a versioned advisory knowledge pack with English and Chinese versions of twelve control-concept cards. The language variants share stable artifact-group identities and semantic versions while retaining separate content hashes and provenance. The pack has a central JSON manifest and schema, validity metadata, citation records, and 192 frozen evaluation cases: the original English/Chinese sets, one exposed regression set, and a replacement challenge holdout. Its text can explain registered choices but cannot change routes, numerical results, qualification, or authorization. Indexes use immutable `cfdc-rag/v3` snapshots with the current retrieval policy. Older schemas or policies are rejected; rebuild the index explicitly before selecting its new snapshot.
 
-To add local Markdown or PDF references, place them under `references`. Metadata-free legacy documents remain globally visible to structured scope filtering. Use `--knowledge-pack` for another validated pack, `--no-curated` to omit the packaged cards, or `--relevance-threshold` to record an explicit threshold in the new snapshot:
+To add local Markdown or PDF references, place them under `references`. Documents without metadata remain globally visible to structured scope filtering. Use `--knowledge-pack` for another validated pack, `--no-curated` to omit the packaged cards, or `--relevance-threshold` to record an explicit threshold in the new snapshot:
 
 ```bash
 uv run --locked python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
@@ -189,8 +188,6 @@ uv run --locked python -m cfdc.history query \
   --as-of 2026-09-03T00:00:00Z
 ```
 
-The historical Gradio application is available in the [v0.3.3 source](https://github.com/yichuan-huang/control-agent/tree/v0.3.3). The current release runs independently of historical checkouts.
-
 ## Web interface
 
 Start the application and open `http://127.0.0.1:7860`:
@@ -221,7 +218,7 @@ Web Agent orchestration is always `multi`. The page has no workflow-version sele
 
 The Kernel input contract determines whether natural language, typed JSON, or a button without input is appropriate. Every mutation checks the session revision and request identity. Reloading reconnects to its recorded operation; an interrupted operation is reported without automatic replay. Retrying is an explicit user action.
 
-The WebUI does not load or run legacy sessions, does not expose the `single` baseline, and does not fall back to a compatibility workflow. A missing, unknown, or non-Kernel Web state is rejected with an explicit error. Use the CLI procedure below for legacy sessions.
+Both the WebUI and CLI use the current Kernel workflow. A missing, unknown, or non-Kernel Web state is rejected with an explicit error.
 
 Unfinished drafts persist in this browser tab’s `sessionStorage`. Provider credentials remain in volatile memory and must be entered again after reload; API keys are excluded from drafts, Kernel sessions, audit JSON, logs, hashes, and exports. The history import API accepts only `request_id` and an uploaded `file_id`. Imported public facts require fresh boundary confirmation and never inherit registered case execution authority or RAG bindings.
 
@@ -233,10 +230,10 @@ The built-in selector contains 18 public cases:
 
 ## Kernel CLI
 
-The CLI remains compatible with both workflows. Select the Kernel explicitly for a new custom task. The command stops at the next user or evidence boundary and prints the session ID and current input contract:
+The CLI runs the current Kernel workflow using typed inputs. The command stops at the next user or evidence boundary and prints the session ID and current input contract:
 
 ```bash
-uv run --locked python main.py --workflow-version kernel \
+uv run --locked python main.py \
   --kernel-session-dir ./output/kernel-sessions \
   --description "A heater holds chamber temperature." \
   --observed-output temperature --actuator voltage \
@@ -260,7 +257,7 @@ DIAGNOSIS_JSON='{
   "uncertainty_variation":{"status":"known","assessment":"small","evidence":"repeated public tests","confidence":0.95}
 }'
 
-uv run --locked python main.py --workflow-version kernel \
+uv run --locked python main.py \
   --kernel-case dc_motor_speed_v1 \
   --kernel-action motor-run-001 \
   --confirm-kernel-budget \
@@ -279,13 +276,13 @@ can accept it.
 For a physical or externally operated experiment, bind a public Provider contract and compile the handoff after diagnosis and route resolution:
 
 ```bash
-uv run --locked python main.py --workflow-version kernel --kernel-session SESSION_ID \
+uv run --locked python main.py --kernel-session SESSION_ID \
   --kernel-action physical-001 \
   --kernel-provider physical-provider.json \
   --kernel-compile-protocol --kernel-prepare-operator-handoff \
   --kernel-result-dir ./output/results
 
-uv run --locked python main.py --workflow-version kernel --kernel-session SESSION_ID \
+uv run --locked python main.py --kernel-session SESSION_ID \
   --kernel-action physical-002 \
   --kernel-operator-report operator-report.json \
   --kernel-upload repeat-01.csv --kernel-upload repeat-02.csv \
@@ -294,65 +291,15 @@ uv run --locked python main.py --workflow-version kernel --kernel-session SESSIO
 
 If a declared stop condition fired, add `--kernel-upload-stopped-on-limit`; the upload is recorded as a failed safety gate and is never repaired or counted as accepted evidence.
 
-Provider settings for natural-language agent work can be supplied through `CFDC_LLM_BASE_URL`, `CFDC_LLM_MODEL`, and `CFDC_LLM_API_KEY`, or the corresponding `--llm-*` options. They affect role-scoped proposals and explanations only; the Kernel still decides routes, numerical results, and authorization.
+The CLI accepts typed diagnostic answers and public artifacts; natural-language Agent interaction is available in the WebUI. `--llm-base-url`, `--llm-model`, and `--llm-api-key` configure `--doctor` checks only. Prefer `CFDC_LLM_BASE_URL`, `CFDC_LLM_MODEL`, and `CFDC_LLM_API_KEY` environment variables for credentials.
 
-The following example uses DeepSeek. Set `DEEPSEEK_API_KEY` in your local environment first. To use another provider, substitute its Base URL, model, and key from the table above:
-
-```bash
-uv run --locked python main.py --use-llm \
-  --workflow-version kernel \
-  --llm-base-url "https://api.deepseek.com" \
-  --llm-model "deepseek-v4-pro" \
-  --llm-api-key "$DEEPSEEK_API_KEY" \
-  --description "A heater changes a measured chamber temperature." \
-  --observed-output temperature --actuator voltage \
-  --safety-bound input_min=-1 --safety-bound input_max=1 \
-  --safety-bound state_stop=3
-```
-
-## Legacy CLI procedure
-
-Legacy is supported only through the CLI. All commands should explicitly select the compatibility workflow, the `single` Agent baseline, and disabled RAG. Replace the example provider values and Chinese placeholder text with facts for the actual control problem.
-
-1. Export the OpenAI-compatible provider configuration:
+Export a current result ZIP with `--kernel-export-bundle`. Import it into a new session with:
 
 ```bash
-export CFDC_LLM_BASE_URL="https://your-provider.example/v1"
-export CFDC_LLM_MODEL="your-model"
-export CFDC_LLM_API_KEY="..."
+uv run --locked python main.py --kernel-import-result ./output/results/SESSION_ID.result.zip
 ```
 
-2. Create the first legacy diagnostic session:
-
-```bash
-uv run --locked python main.py --workflow-version legacy \
-  --use-llm --agent-mode single --no-rag \
-  --description "控制问题描述" \
-  --diagnostic-session-output legacy-01.json
-```
-
-3. If `legacy-01.json` still requests description facts, add the missing object, sensor, actuator, or behavior information and write a new file:
-
-```bash
-uv run --locked python main.py --workflow-version legacy \
-  --use-llm --agent-mode single --no-rag \
-  --diagnostic-session-input legacy-01.json \
-  --diagnostic-description "补充缺少的对象、传感器或执行器信息" \
-  --diagnostic-session-output legacy-02.json
-```
-
-4. When the latest JSON requests selected-Profile parameters, submit the known values, units, sources, and software-simulation ranges:
-
-```bash
-uv run --locked python main.py --workflow-version legacy \
-  --use-llm --agent-mode single --no-rag \
-  --diagnostic-session-input legacy-02.json \
-  --measurement-response "已知参数、单位、来源和软件仿真范围" \
-  --confirm-simulation-bounds \
-  --diagnostic-session-output legacy-03.json
-```
-
-Always use a new `--diagnostic-session-output` path when continuing. This preserves each revision as an audit record and avoids overwriting the input session. Inspect the latest JSON before every continuation: use `--diagnostic-description` while its status asks for missing description or diagnostic facts; use `--measurement-response` only after it asks for Profile parameters. `--measurement-response-file` may be used instead for UTF-8 text, and is mutually exclusive with `--measurement-response`.
+Import validates the current result bundle and preserves the source. The new session requires confirmation; imported results do not grant evaluation or hardware authority.
 
 ## Supported models, capability gaps, and physical boundary
 

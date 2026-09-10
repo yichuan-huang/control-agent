@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cfdc.models import (
+from .contracts import (
     SpecificationCompletionPath,
     SpecificationFieldDefinition,
     SpecificationTemplate,

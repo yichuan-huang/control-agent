@@ -40,14 +40,14 @@ test("external wizard settings survive refresh without persisting unknown data",
   saveDraft({ ...draft, api_key: "never-store" });
   expect(readDraft()).toEqual(draft);
 });
-test("obsolete execution configuration cannot persist into a new task", () => {
-  saveDraft({
+test("obsolete execution configuration is rejected instead of migrated", () => {
+  const oldDraft = {
     description: "generic",
     execution_mode: "managed",
     runner_id: "local_python",
     model_id: "optical",
-    command: "do not persist",
-    api_key: "secret",
-  });
-  expect(readDraft()).toEqual({ description: "generic" });
+  };
+  expect(() => saveDraft(oldDraft)).toThrow();
+  sessionStorage.setItem("cfdc:draft", JSON.stringify(oldDraft));
+  expect(readDraft()).toBeNull();
 });

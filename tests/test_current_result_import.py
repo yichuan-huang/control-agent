@@ -66,7 +66,7 @@ def bundle(tmp_path, *, large=False, corruption=None):
 
 def test_large_own_result_bundle_imports_only_new_task_authority(tmp_path):
     source = bundle(tmp_path, large=True)
-    child = WorkflowService(tmp_path / "target").import_v3(source)
+    child = WorkflowService(tmp_path / "target").import_result_bundle(source)
     assert child.task.description == "Import task boundaries"
     assert not child.task.budget_confirmed
     assert not child.evidence and not child.evaluation_packets
@@ -91,7 +91,7 @@ def test_large_own_result_bundle_imports_only_new_task_authority(tmp_path):
         ("manifest", "result_import_manifest_fingerprint_mismatch"),
         ("task", "result_import_artifact_fingerprint_mismatch"),
         ("events", "session_event_fingerprint_mismatch"),
-        ("total", "v3_import_bundle_limit_exceeded"),
+        ("total", "result_import_bundle_limit_exceeded"),
         ("duplicate", "result_import_duplicate_member"),
     ],
 )
@@ -101,7 +101,7 @@ def test_current_result_import_rejects_corruption_before_creating_task(
     source = bundle(tmp_path, corruption=corruption)
     target = WorkflowService(tmp_path / "target")
     with pytest.raises(ValueError, match=error):
-        target.import_v3(source)
+        target.import_result_bundle(source)
     assert not list(Path(tmp_path / "target").glob("*.json"))
 
 
@@ -138,3 +138,84 @@ def test_corrupt_result_import_has_public_chinese_http_error(tmp_path):
             result["error"]["message"]
             == "导入包中的任务或诊断文档已改变，请重新导出后再导入。"
         )
+
+
+def test_result_import_is_idempotent_and_preserves_source(tmp_path):
+    source = bundle(tmp_path)
+    original = source.read_bytes()
+    service = WorkflowService(tmp_path / "target")
+    first = service.import_result_bundle(source)
+    second = service.import_result_bundle(source)
+    assert second.to_dict() == first.to_dict()
+    assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize("kind", ["directory", "old_zip", "unsafe_zip"])
+def test_old_or_unsafe_result_sources_are_rejected_without_writes(tmp_path, kind):
+    source = tmp_path / "old"
+    if kind == "directory":
+        source.mkdir()
+        (source / "task.json").write_text("{}")
+        error = "result_import_current_bundle_required"
+    elif kind == "old_zip":
+        source = source.with_suffix(".zip")
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("task.json", "{}")
+        error = "result_import_current_bundle_required"
+    else:
+        source = bundle(tmp_path)
+        with zipfile.ZipFile(source, "a") as archive:
+            archive.writestr("../outside.json", "{}")
+        error = "result_import_unsafe_path"
+    service = WorkflowService(tmp_path / "target")
+    with pytest.raises(ValueError, match=error):
+        service.import_result_bundle(source)
+    assert not list(service.root.glob("*.json"))
+
+
+@pytest.mark.parametrize(
+    "document,field,version,error",
+    [
+        ("task.json", "schema_version", "1.1.0", "task_contract_version_mismatch"),
+        ("task.json", "schema_version", None, "task_contract_version_mismatch"),
+        ("task.json", "contract_version", "1.1.0", "task_contract_version_mismatch"),
+        (
+            "diagnostic_ledger.json",
+            "ledger_version",
+            "cfdc-diagnostics/v1.0",
+            "diagnostic_ledger_version_mismatch",
+        ),
+        (
+            "diagnostic_ledger.json",
+            "ledger_version",
+            None,
+            "diagnostic_ledger_version_mismatch",
+        ),
+    ],
+)
+def test_result_import_rejects_obsolete_typed_documents(
+    tmp_path, document, field, version, error
+):
+    source = bundle(tmp_path)
+    with zipfile.ZipFile(source) as archive:
+        values = {name: archive.read(name) for name in archive.namelist()}
+    payload = json.loads(values[document])
+    if version is None:
+        payload.pop(field)
+    else:
+        payload[field] = version
+    values[document] = json.dumps(payload).encode()
+    manifest = json.loads(values["manifest.json"])
+    manifest["artifacts"][document] = fingerprint(payload)
+    manifest.pop("bundle_fingerprint")
+    manifest["bundle_fingerprint"] = fingerprint(manifest)
+    values["manifest.json"] = json.dumps(manifest).encode()
+    with zipfile.ZipFile(source, "w") as archive:
+        for name, value in values.items():
+            archive.writestr(name, value)
+    original = source.read_bytes()
+    service = WorkflowService(tmp_path / "target")
+    with pytest.raises(ValueError, match=error):
+        service.import_result_bundle(source)
+    assert not list(service.root.glob("*.json"))
+    assert source.read_bytes() == original

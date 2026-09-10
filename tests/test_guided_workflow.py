@@ -83,26 +83,20 @@ def test_generic_creation_has_guide_without_managed_authority(client, tmp_path):
     assert summary["workspace"]["action"] == "answer"
     _assert_guide(summary)
     session = WorkflowService(tmp_path / "sessions").read(session_id)
-    assert session.managed_execution is None
     assert "managed_execution" not in session.to_dict()
     assert session.external_workflow is None
 
 
-def _historical_managed_session(tmp_path, state):
+def _external_recovery_session(tmp_path, state):
     service, session, _ = prepared_service(tmp_path / "sessions", successful_packet)
     # Construct historical stored evidence only; production APIs must never create
     # this removed execution capability or grant authority from these records.
     session = replace(
         session,
-        managed_execution={
-            "workflow_version": "cfdc-managed-execution/v1",
-            "authorized": True,
-            "state": state,
-            "runner_id": "local_python",
-            "model_id": "optical",
-            "task_fingerprint": session.task.fingerprint,
-            "artifacts": [],
-        },
+        active_protocol_fingerprint=None,
+        protocols=(),
+        status="awaiting_evidence",
+        pending_actions=({"kind": "evidence", "action": "evidence"},),
         external_workflow={
             "workflow_version": "cfdc-external-workflow/v1",
             "source": {"source_kind": "software", "provider_id": "historical"},
@@ -121,10 +115,8 @@ def _historical_managed_session(tmp_path, state):
 
 
 @pytest.mark.parametrize("state", ["running", "paused", "blocked"])
-def test_historical_managed_startup_read_and_restart_preserve_parent_bytes(
-    tmp_path, state
-):
-    service, parent = _historical_managed_session(tmp_path, state)
+def test_external_recovery_preserves_parent_bytes(tmp_path, state):
+    service, parent = _external_recovery_session(tmp_path, state)
     parent_path = service._path(parent.session_id)
     before = parent_path.read_bytes()
     app = create_app(
@@ -150,7 +142,6 @@ def test_historical_managed_startup_read_and_restart_preserve_parent_bytes(
         assert child.legacy_lineage["source_session_id"] == parent.session_id
         assert child.task.description == parent.task.description
         assert child.task.budget_confirmed is False
-        assert child.managed_execution is None
         assert child.external_workflow is None
         assert child.evidence == ()
         assert child.protocols == ()

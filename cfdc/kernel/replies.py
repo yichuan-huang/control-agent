@@ -685,19 +685,12 @@ def prepare_kernel_reply(
         task_payload=diagnosis_task_payload,
         revision=session.revision,
     )
-    # The single-agent baseline deliberately makes one provider call and lets
-    # the same typed response carry both sections.  Multi-agent mode isolates
-    # Diagnosis and Modeling into separate role calls before the Critic gate.
-    modeling_record = (
-        coordinator.execute(
-            session,
-            role=AgentRole.MODELING,
-            operation="user_reply",
-            task_payload=modeling_task_payload,
-            revision=session.revision,
-        )
-        if coordinator.agent_mode == "multi"
-        else diagnosis_record
+    modeling_record = coordinator.execute(
+        session,
+        role=AgentRole.MODELING,
+        operation="user_reply",
+        task_payload=modeling_task_payload,
+        revision=session.revision,
     )
     diagnosis_payload = _normalize_agent_payload(diagnosis_record, AgentRole.DIAGNOSIS)
     modeling_payload = _normalize_agent_payload(modeling_record, AgentRole.MODELING)
@@ -706,38 +699,45 @@ def prepare_kernel_reply(
     )
     if conflicts:
         raise ValueError("检测到矛盾信息，请先澄清：" + "；".join(conflicts[:4]))
-    if coordinator.agent_mode == "single":
-        updates, parameters = _candidate_parts(diagnosis_payload, source_text)
-    else:
-        updates = _diagnostic_updates(diagnosis_payload)
-        parameters = _parameter_candidates(modeling_payload, source_text)
+    updates = _diagnostic_updates(diagnosis_payload)
+    parameters = _parameter_candidates(modeling_payload, source_text)
     for value in updates.values():
         if not _evidence_in_source(source_text, value):
             raise ValueError("Diagnosis 提取的 evidence 不在用户原文中。")
     candidate = {"diagnostic_updates": updates, "parameter_candidates": parameters}
-    if coordinator.agent_mode == "multi":
-        reviewed_candidate = coordinator.review_and_correct(
-            session,
-            owner_role=AgentRole.MODELING,
-            operation="user_reply",
-            candidate=candidate,
-            task_payload={"user_response": source_text},
-        )
-        if not isinstance(reviewed_candidate, Mapping):
-            raise TypeError("Critic 修正结果必须是 JSON 对象。")
-        updates, parameters = _candidate_parts(
-            reviewed_candidate,
-            source_text,
-            fallback_updates=updates,
-            fallback_parameters=parameters,
-        )
-        for value in updates.values():
-            if not _evidence_in_source(source_text, value):
-                raise ValueError("Critic 修正后的 Diagnosis evidence 不在用户原文中。")
-        candidate = {
-            "diagnostic_updates": updates,
-            "parameter_candidates": parameters,
-        }
+    reviewed_candidate = coordinator.review_and_correct(
+        session,
+        owner_role=AgentRole.MODELING,
+        operation="user_reply",
+        candidate=candidate,
+        task_payload={
+            "user_response": source_text,
+            "allowed_diagnostic_ids": diagnosis_task_payload["allowed_diagnostic_ids"],
+            "canonical_assessments": diagnosis_task_payload["canonical_assessments"],
+            "allowed_parameter_fact_ids": modeling_task_payload[
+                "allowed_parameter_fact_ids"
+            ],
+            "required_output_schema": {
+                **diagnosis_task_payload["required_output_schema"],
+                **modeling_task_payload["required_output_schema"],
+            },
+        },
+    )
+    if not isinstance(reviewed_candidate, Mapping):
+        raise TypeError("Critic 修正结果必须是 JSON 对象。")
+    updates, parameters = _candidate_parts(
+        reviewed_candidate,
+        source_text,
+        fallback_updates=updates,
+        fallback_parameters=parameters,
+    )
+    for value in updates.values():
+        if not _evidence_in_source(source_text, value):
+            raise ValueError("Critic 修正后的 Diagnosis evidence 不在用户原文中。")
+    candidate = {
+        "diagnostic_updates": updates,
+        "parameter_candidates": parameters,
+    }
     if not updates and not parameters:
         raise ValueError("没有从回复中提取到可验证的诊断或参数事实，请补充原文证据。")
     return {

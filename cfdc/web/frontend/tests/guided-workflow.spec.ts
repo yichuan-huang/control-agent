@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("legacy automatic task preserves recovery guidance across reload without executing", async ({
+test("current external task preserves recovery guidance across reload without executing", async ({
   page,
 }) => {
   let operation = await (
@@ -8,7 +8,7 @@ test("legacy automatic task preserves recovery guidance across reload without ex
       data: {
         request_id: crypto.randomUUID(),
         task: {
-          description: "Managed UI progress fixture",
+          description: "Current external recovery fixture",
           measured_signals: ["y"],
           control_input: "u",
           input_min: -1,
@@ -34,7 +34,7 @@ test("legacy automatic task preserves recovery guidance across reload without ex
   page.on("request", (request) => {
     if (request.method() === "POST") mutations.push(request.url());
   });
-  // A persisted legacy task is read-only; it must never restart on page load.
+  // A current task awaiting explicit recovery must never restart on page load.
   await page.route(`**/api/v1/tasks/${id}`, (route) =>
     route.fulfill({
       json: {
@@ -43,7 +43,7 @@ test("legacy automatic task preserves recovery guidance across reload without ex
           source_kind: "software",
           recovery_required: true,
           recovery_available: true,
-          recovery_reason: "旧自动执行任务已停止，请创建新任务重新采集。",
+          recovery_reason: "当前外部采集已停止，请创建新任务重新采集。",
         },
         read_only: true,
         workspace: { ...original.workspace, action: "", actionable: false },
@@ -51,7 +51,7 @@ test("legacy automatic task preserves recovery guidance across reload without ex
     }),
   );
   await page.goto(`/tasks/${id}`);
-  await expect(page.getByText(/旧自动执行任务已停止/)).toBeVisible();
+  await expect(page.getByText(/当前外部采集已停止/)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "重新采集并创建新任务" }),
   ).toBeVisible();
@@ -59,11 +59,11 @@ test("legacy automatic task preserves recovery guidance across reload without ex
     page.getByRole("button", { name: /暂停自动|继续自动|选择完整结果 ZIP/ }),
   ).toHaveCount(0);
   await page.reload();
-  await expect(page.getByText(/旧自动执行任务已停止/)).toBeVisible();
+  await expect(page.getByText(/当前外部采集已停止/)).toBeVisible();
   expect(mutations).toEqual([]);
 });
 
-test("custom wizard restores only task details and has no execution or apparatus selector", async ({
+test("custom wizard rejects retired drafts and has no execution or apparatus selector", async ({
   page,
 }) => {
   await page.goto("/new");
@@ -78,8 +78,22 @@ test("custom wizard restores only task details and has no execution or apparatus
       }),
     ),
   );
+  const original = await page.evaluate(() => {
+    sessionStorage.setItem("cfdc:wizard:custom", JSON.stringify({ step: 3 }));
+    return sessionStorage.getItem("cfdc:draft");
+  });
   await page.reload();
-  await expect(page.getByLabel("设备与目标")).toHaveValue("我的外部系统");
+  await expect(page.getByText(/已拒绝恢复含旧实验配置的草稿/)).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("cfdc:draft"))).toBe(
+    original,
+  );
+  await expect(page.getByLabel("设备与目标")).toBeVisible();
+  await expect(page.getByLabel("设备与目标")).not.toHaveValue("我的外部系统");
+  await page.getByLabel("设备与目标").fill("重新创建的当前任务");
+  await expect(page.getByText(/已拒绝恢复含旧实验配置的草稿/)).toHaveCount(0);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("cfdc:draft")),
+  ).not.toBe(original);
   await expect(page.getByText(/实际试验在应用外部完成/)).toBeVisible();
   await expect(
     page.getByRole("radio", { name: /自动运行|手动运行|光学|真空|墨水/ }),

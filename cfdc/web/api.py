@@ -240,7 +240,7 @@ def create_app(
 
     app = FastAPI(
         title="CFDC Kernel Web API",
-        version="0.3.7",
+        version="0.3.8",
         lifespan=lifespan,
         responses={
             400: {"model": ErrorResponse},
@@ -485,7 +485,7 @@ def create_app(
 
         def work(context):
             try:
-                report, state = service.import_v3_app_run(
+                report, state = service.import_result_app_run(
                     path, session_dir=session_root
                 )
                 context.created_task(state["kernel_session_id"])
@@ -693,30 +693,6 @@ def create_app(
                     + "\n",
                     encoding="utf-8",
                 )
-            elif kind == "managed":
-                row = next(
-                    item
-                    for item in (report.get("managed_execution") or {}).get(
-                        "artifacts", []
-                    )
-                    if item.get("artifact_id") == artifact_id
-                )
-                path = Path(row["path"]).resolve()
-                roots = [
-                    (session_root / "managed" / task_id).resolve(),
-                    (session_root / "external" / task_id).resolve(),
-                    (session_root / f"{task_id}.artifacts").resolve(),
-                ]
-                if (
-                    not any(path.is_relative_to(root) for root in roots)
-                    or not path.is_file()
-                ):
-                    raise ValueError("managed_artifact_unavailable")
-                expected = row.get("sha256") or row.get("output_sha256")
-                with path.open("rb") as handle:
-                    actual = hashlib.file_digest(handle, "sha256").hexdigest()
-                if expected and actual != expected:
-                    raise ValueError("managed_artifact_changed")
             elif kind == "external_run":
                 active = (report.get("external_workflow") or {}).get(
                     "active_request"

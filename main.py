@@ -6,77 +6,9 @@ import math
 from pathlib import Path
 from uuid import uuid4
 
-from cfdc.agents import wrap_agent_adapter
-from cfdc.demo import run_demo_validation
-from cfdc.diagnosis import (
-    OpenAICompatibleDiagnosticAdapter,
-    migrate_diagnostic_session_payload,
-    run_diagnostic_evaluation,
-    run_live_llm_diagnostic_comparison,
-    run_saved_llm_diagnostic_comparison,
-    start_diagnostic_session,
-    validate_guided_adapter_capabilities,
-)
 from cfdc.doctor import run_doctor
-from cfdc.evidence import plant_id_for_description
 from cfdc.kernel import WorkflowService
 from cfdc.kernel.cases import public_case_catalog
-from cfdc.models import (
-    CFDCRunReport,
-    ClosedLoopValidationSpec,
-    DiagnosticSessionState,
-    MeasuredTraceManifest,
-    PlantEvidencePackage,
-    SystemDescription,
-)
-from cfdc.runtime import run_cfdc_route
-from cfdc.sim import (
-    run_benchmark_suite,
-    run_feature_ablation_suite,
-    run_vtol_simulation,
-    simulate_cartpole_energy_swingup,
-)
-
-
-def compact_route_report(report: CFDCRunReport) -> dict:
-    payload = report.model_dump()
-    for result in payload.get("experiment_results", []):
-        trace = result.get("trace")
-        if trace:
-            trace["sample_count"] = len(trace.get("time_s", []))
-            trace["signal_names"] = sorted(trace.get("signals", {}))
-            trace.pop("time_s", None)
-            trace.pop("signals", None)
-    for trial in payload.get("trial_reports", []):
-        samples = trial.pop("samples", [])
-        trial["sample_count"] = len(samples)
-    boundary = payload.get("cartpole_boundary")
-    if boundary:
-        nested_trials = list(boundary.get("candidate_trials", []))
-        rollback_trial = boundary.get("rollback_trial")
-        if rollback_trial:
-            nested_trials.append(rollback_trial)
-        for trial in nested_trials:
-            samples = trial.pop("samples", [])
-            trial["sample_count"] = len(samples)
-    search_state = payload.get("safe_gain_search_state")
-    if search_state:
-        history = search_state.pop("history", [])
-        search_state["history_count"] = len(history)
-        search_state["history_tail"] = history[-5:]
-    cartpole_simulation = payload.get("cartpole_simulation")
-    if cartpole_simulation:
-        events = cartpole_simulation.pop("events", [])
-        cartpole_simulation["event_count"] = len(events)
-        cartpole_simulation["event_tail"] = events[-5:]
-    return payload
-
-
-def _positive_float(value: str) -> float:
-    parsed = float(value)
-    if not math.isfinite(parsed) or parsed <= 0.0:
-        raise argparse.ArgumentTypeError("must be a finite number greater than zero")
-    return parsed
 
 
 def parse_safety_bounds(values: list[str]) -> dict[str, float]:
@@ -100,58 +32,10 @@ def parse_safety_bounds(values: list[str]) -> dict[str, float]:
     return bounds
 
 
-def load_diagnostic_session(path: Path) -> DiagnosticSessionState:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return migrate_diagnostic_session_payload(payload)
-    except (OSError, TypeError, ValueError) as exc:
-        raise SystemExit(f"invalid --diagnostic-session-input {path}: {exc}") from None
-
-
-def write_diagnostic_session_atomic(
-    path: Path,
-    session: DiagnosticSessionState,
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
-    try:
-        temporary.write_text(session.model_dump_json(indent=2), encoding="utf-8")
-        temporary.replace(path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
-
-
-def parse_diagnostic_answers(values: list[str]) -> dict[str, str]:
-    answers: dict[str, str] = {}
-    for item in values:
-        question, separator, answer = item.partition("=")
-        if not separator or not question.strip() or not answer.strip():
-            raise SystemExit(
-                f"invalid --diagnostic-answer {item!r}; expected QUESTION_ID=ANSWER"
-            )
-        if question in answers:
-            raise SystemExit(f"duplicate --diagnostic-answer question {question!r}")
-        answers[question] = answer
-    return answers
-
-
-def _uses_builtin_experiment_inputs(args: argparse.Namespace) -> bool:
-    return bool(
-        args.benchmark
-        or args.feature_ablation
-        or args.diagnostic_eval
-        or args.diagnostic_eval_current
-        or args.diagnostic_eval_llm
-        or args.diagnostic_eval_llm_saved
-        or args.validate_demo
-        or args.cartpole_swingup
-        or args.vtol_sim
-    )
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the independent CFDC framework.")
+    parser = argparse.ArgumentParser(
+        description="Run the CFDC Kernel workflow.", allow_abbrev=False
+    )
     parser.add_argument(
         "--doctor",
         action="store_true",
@@ -161,12 +45,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--description", type=str, help="Plain-language system description."
     )
     parser.add_argument(
-        "--workflow-version",
-        choices=["legacy", "kernel"],
-        default="legacy",
-        help="Use the migrated evidence-driven kernel for new tasks (default: legacy compatibility path).",
-    )
-    parser.add_argument(
         "--task-type",
         choices=[
             "local_setpoint_hold",
@@ -174,19 +52,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "disturbance_recovery_to_hold",
         ],
         default=None,
-        help="Kernel task type; selecting it automatically uses the migrated workflow.",
+        help="Kernel task type; used when creating a custom task.",
     )
     parser.add_argument(
         "--kernel-session-dir",
         type=Path,
         default=None,
-        help="Directory for migrated kernel session JSON files (default: output/kernel-sessions).",
+        help="Directory for Kernel session JSON files (default: output/kernel-sessions).",
     )
     parser.add_argument(
         "--kernel-session",
         type=str,
         default=None,
-        help="Read or advance a migrated kernel session by ID.",
+        help="Read or advance a Kernel session by ID.",
     )
     parser.add_argument(
         "--kernel-case",
@@ -201,10 +79,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Evidence mode for a newly started registered case.",
     )
     parser.add_argument(
-        "--kernel-import-v3",
+        "--kernel-import-result",
         type=Path,
         default=None,
-        help="Read-only import a CFDC v3 directory or ZIP into a new Kernel session.",
+        help="Import a current Kernel result ZIP into a new session.",
     )
     parser.add_argument(
         "--kernel-action",
@@ -408,185 +286,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Safety bound. Can be repeated.",
     )
     parser.add_argument(
-        "--time-scale-hint-s",
-        type=_positive_float,
-        default=None,
-        help="Positive process time-scale hint in seconds.",
-    )
-    parser.add_argument(
-        "--diagnostic-session-input",
-        type=Path,
-        default=None,
-        help="Resume a DiagnosticSessionState JSON file.",
-    )
-    parser.add_argument(
-        "--diagnostic-session-output",
-        type=Path,
-        default=None,
-        help="Atomically write the resulting DiagnosticSessionState JSON file.",
-    )
-    parser.add_argument(
-        "--diagnostic-answer",
-        action="append",
-        default=[],
-        metavar="QUESTION_ID=ANSWER",
-        help="Answer a pending question by stable question ID.",
-    )
-    parser.add_argument(
-        "--diagnostic-description",
-        type=str,
-        default=None,
-        help="Add a free-form supplemental description when resuming a diagnostic session.",
-    )
-    measurement_group = parser.add_mutually_exclusive_group()
-    measurement_group.add_argument(
-        "--measurement-response",
-        type=str,
-        default=None,
-        help="Submit existing-record evidence or requested profile facts.",
-    )
-    measurement_group.add_argument(
-        "--measurement-response-file",
-        type=Path,
-        default=None,
-        help="Read the measurement response from a UTF-8 text file.",
-    )
-    parser.add_argument(
-        "--confirm-simulation-bounds",
-        action="store_true",
-        help=(
-            "Confirm that supplied ranges are software-simulation run/stop bounds, "
-            "not real-hardware safety certification."
-        ),
-    )
-    parser.add_argument(
-        "--benchmark",
-        action="store_true",
-        help="Run the built-in CFDC synthetic benchmark chain.",
-    )
-    parser.add_argument(
-        "--feature-ablation",
-        action="store_true",
-        help="Run minimal/noisy/full-model feature ablations.",
-    )
-    parser.add_argument(
-        "--diagnostic-eval",
-        action="store_true",
-        help="Score the saved 8+4 offline diagnostic responses.",
-    )
-    parser.add_argument(
-        "--diagnostic-eval-current",
-        action="store_true",
-        help="Score fresh deterministic diagnostic responses.",
-    )
-    parser.add_argument(
-        "--diagnostic-eval-llm",
-        action="store_true",
-        help="Call the configured LLM for all frozen 8+4 cases, save structured responses, and compare with deterministic results.",
-    )
-    parser.add_argument(
-        "--diagnostic-eval-llm-saved",
-        action="store_true",
-        help="Compare a previously saved LLM response snapshot with the deterministic baseline.",
-    )
-    parser.add_argument(
-        "--diagnostic-llm-output",
-        type=Path,
-        default=None,
-        help="Optional path for the structured LLM diagnostic response snapshot.",
-    )
-    parser.add_argument(
-        "--validate-demo",
-        action="store_true",
-        help="Validate the stable Cartpole and VTOL software demo routes.",
-    )
-    parser.add_argument(
-        "--cartpole-swingup",
-        action="store_true",
-        help="Run the deterministic cartpole energy swing-up simulation.",
-    )
-    parser.add_argument(
-        "--vtol-sim",
-        action="store_true",
-        help="Run the deterministic planar VTOL simulation.",
-    )
-    parser.add_argument(
-        "--vtol-mode",
-        choices=["altitude", "hover", "position", "boundary"],
-        default="position",
-        help="Planar VTOL simulation mode.",
-    )
-    parser.add_argument(
-        "--run-route",
-        choices=[
-            "generic",
-            "cartpole",
-            "cartpole-boundary",
-            "vtol-position",
-            "vtol-boundary",
-            "vtol-altitude",
-            "vtol-hover",
-            "vtol-variation",
-        ],
-        help="Run an end-to-end structured CFDC route report.",
-    )
-    parser.add_argument(
-        "--include-trajectory",
-        action="store_true",
-        help="Include route simulation trajectories in JSON output.",
-    )
-    parser.add_argument(
-        "--full-report",
-        action="store_true",
-        help="Include raw experiment traces and trial samples in route JSON output.",
-    )
-    parser.add_argument(
-        "--model-spec",
-        type=Path,
-        default=None,
-        help="JSON file containing a structured transfer-function, state-space, or registered nonlinear model.",
-    )
-    parser.add_argument(
-        "--specification-text",
-        type=str,
-        default=None,
-        help="Plain-language equipment specifications or a pasted manual excerpt.",
-    )
-    parser.add_argument(
-        "--specification-answer",
-        action="append",
-        default=[],
-        help="Additional plain-language specification answer; can be repeated.",
-    )
-    parser.add_argument(
-        "--trace-manifest",
-        type=Path,
-        default=None,
-        help="JSON file containing one or more measured CSV trace manifests.",
-    )
-    parser.add_argument(
-        "--validation-spec",
-        type=Path,
-        default=None,
-        help="JSON file containing explicit closed-loop validation references, limits, and performance targets.",
-    )
-    parser.add_argument(
-        "--demo-fixture",
-        action="store_true",
-        help="Explicitly run the selected standard profile as a demo fixture; results do not represent the user object.",
-    )
-    parser.add_argument(
-        "--use-llm",
-        action="store_true",
-        help="Use the configured OpenAI-compatible provider for role-scoped agent work; routing remains deterministic.",
-    )
-    parser.add_argument(
-        "--agent-mode",
-        choices=["single", "multi"],
-        default=None,
-        help="Agent orchestration mode (default: multi; CFDC_AGENT_MODE can override).",
-    )
-    parser.add_argument(
         "--rag-index",
         type=Path,
         default=None,
@@ -602,11 +301,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--no-rag",
         action="store_true",
         help="Disable local RAG for this run without changing the index.",
-    )
-    parser.add_argument(
-        "--use-mechanism-cards",
-        action="store_true",
-        help="Add optional mechanism-card labels without changing the canonical archetype route.",
     )
     parser.add_argument(
         "--llm-base-url",
@@ -625,18 +319,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=str,
         default=None,
         help="Provider API key (env: CFDC_LLM_API_KEY). Prefer environment variables for normal use.",
-    )
-    parser.add_argument(
-        "--llm-timeout-s",
-        type=float,
-        default=60.0,
-        help="LLM request timeout in seconds.",
-    )
-    parser.add_argument(
-        "--llm-max-tokens",
-        type=int,
-        default=1400,
-        help="Maximum diagnostic response tokens.",
     )
     return parser.parse_args(argv)
 
@@ -701,19 +383,19 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
         args.kernel_session_dir or Path("output") / "kernel-sessions"
     )
     action_id = args.kernel_action or f"cli-{uuid4().hex}"
-    if args.kernel_import_v3 is not None:
+    if args.kernel_import_result is not None:
         if args.kernel_session:
             raise SystemExit(
-                "--kernel-import-v3 cannot be combined with --kernel-session"
+                "--kernel-import-result cannot be combined with --kernel-session"
             )
-        session = service.import_v3(args.kernel_import_v3)
+        session = service.import_result_bundle(args.kernel_import_result)
     elif args.kernel_session:
         session = service.read(args.kernel_session)
     else:
         if not args.kernel_case:
             if not args.description:
                 raise SystemExit(
-                    "--workflow-version kernel requires --description or --kernel-case for a new task"
+                    "A new Kernel task requires --description or --kernel-case for a new task"
                 )
             payload = {
                 "description": args.description,
@@ -747,7 +429,7 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
             raise SystemExit("--rag-snapshot requires --rag-index for a kernel task")
         rag_active = bool(rag_requested and rag_snapshot)
         agent_config = {
-            "mode": args.agent_mode or "multi",
+            "mode": "multi",
             "rag_requested": rag_requested,
             "rag_enabled": rag_active,
             "rag_status": (
@@ -760,7 +442,7 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
             "rag_index_dir": str(args.rag_index)
             if args.rag_index is not None
             else None,
-            "llm_configured": bool(args.use_llm),
+            "llm_configured": False,
         }
         session = (
             service.start_registered_case(
@@ -1143,332 +825,7 @@ def main() -> None:
         if not bool(payload.get("ok")):
             raise SystemExit(1)
         return
-    if (
-        args.workflow_version == "kernel"
-        or args.task_type is not None
-        or args.kernel_session is not None
-        or args.kernel_case is not None
-        or args.kernel_import_v3 is not None
-        or args.kernel_answer is not None
-        or args.kernel_evidence is not None
-        or args.kernel_phase_result is not None
-        or args.kernel_features is not None
-        or args.kernel_controller is not None
-        or args.kernel_evaluation is not None
-        or args.kernel_relevance is not None
-        or args.kernel_provider is not None
-        or args.kernel_compile_protocol
-        or args.kernel_protocol_request is not None
-        or args.kernel_prepare_operator_handoff
-        or args.kernel_prepare_training_exercise
-        or args.kernel_operator_report is not None
-        or bool(args.kernel_upload)
-        or args.kernel_upload_stopped_on_limit
-        or args.kernel_run_provider
-        or args.kernel_derive_features
-        or args.kernel_synthesize_controller
-        or args.kernel_qualify_controller
-        or args.kernel_run_evaluation
-        or args.kernel_run_feedback
-        or args.kernel_confirm_result
-        or args.kernel_auto
-        or args.kernel_result_dir is not None
-        or args.kernel_export_bundle
-        or args.kernel_advance
-        or args.kernel_freeze
-        or args.kernel_replay
-        or args.kernel_tuning is not None
-        or args.kernel_tuning_results is not None
-        or args.kernel_confirmation is not None
-        or args.confirm_kernel_budget
-    ):
-        _run_kernel_cli(args, safety_bounds)
-        return
-    session_state = (
-        load_diagnostic_session(args.diagnostic_session_input)
-        if args.diagnostic_session_input is not None
-        else None
-    )
-    diagnostic_answers = parse_diagnostic_answers(args.diagnostic_answer)
-    if diagnostic_answers and session_state is None:
-        raise SystemExit("--diagnostic-answer requires --diagnostic-session-input")
-    if (
-        args.measurement_response is not None
-        or args.measurement_response_file is not None
-    ) and session_state is None:
-        raise SystemExit("--measurement-response requires --diagnostic-session-input")
-    adapter = None
-    if args.use_llm or args.diagnostic_eval_llm:
-        try:
-            base_adapter = OpenAICompatibleDiagnosticAdapter(
-                base_url=args.llm_base_url,
-                model=args.llm_model,
-                api_key=args.llm_api_key,
-                timeout_s=args.llm_timeout_s,
-                max_tokens=args.llm_max_tokens,
-            )
-            if args.use_llm and not args.diagnostic_eval_llm:
-                adapter = wrap_agent_adapter(
-                    base_adapter,
-                    agent_mode=args.agent_mode,
-                    rag_index_dir=(
-                        str(args.rag_index) if args.rag_index is not None else None
-                    ),
-                    rag_snapshot=args.rag_snapshot,
-                    use_rag=not args.no_rag,
-                )
-            else:
-                # Frozen LLM evaluations intentionally measure the underlying
-                # adapter and must not add the runtime critic to the baseline.
-                adapter = base_adapter
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from None
-
-    if args.validate_demo:
-        result = run_demo_validation()
-        print(json.dumps(result, indent=2, sort_keys=True))
-        if not result["passed"]:
-            raise SystemExit(1)
-        return
-    if args.benchmark:
-        print(json.dumps(run_benchmark_suite(), indent=2, sort_keys=True))
-        return
-    if args.feature_ablation:
-        print(
-            json.dumps(
-                run_feature_ablation_suite().model_dump(mode="json"),
-                indent=2,
-                sort_keys=True,
-            )
-        )
-        return
-    if args.diagnostic_eval or args.diagnostic_eval_current:
-        result = run_diagnostic_evaluation(
-            use_saved_responses=not args.diagnostic_eval_current,
-        )
-        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
-        return
-    if args.diagnostic_eval_llm:
-        if adapter is None:
-            raise RuntimeError(
-                "LLM diagnostic evaluation requires a configured adapter"
-            )
-        kwargs = {}
-        if args.diagnostic_llm_output is not None:
-            kwargs["output_path"] = args.diagnostic_llm_output
-        result = run_live_llm_diagnostic_comparison(adapter, **kwargs)
-        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
-        return
-    if args.diagnostic_eval_llm_saved:
-        kwargs = {}
-        if args.diagnostic_llm_output is not None:
-            kwargs["path"] = args.diagnostic_llm_output
-        result = run_saved_llm_diagnostic_comparison(**kwargs)
-        print(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True))
-        return
-    if args.cartpole_swingup:
-        print(
-            json.dumps(
-                simulate_cartpole_energy_swingup(include_trajectory=False).model_dump(),
-                indent=2,
-                sort_keys=True,
-            )
-        )
-        return
-    if args.vtol_sim:
-        print(
-            json.dumps(
-                run_vtol_simulation(
-                    mode=args.vtol_mode, include_trajectory=args.include_trajectory
-                ).model_dump(),
-                indent=2,
-                sort_keys=True,
-            )
-        )
-        return
-    if args.run_route or session_state is not None or args.description:
-        description = None
-        if args.description:
-            description = SystemDescription(
-                text=args.description,
-                observed_outputs=args.observed_output,
-                actuators=args.actuator,
-                safety_bounds=safety_bounds,
-                time_scale_hint_s=args.time_scale_hint_s,
-            )
-        route_id = args.run_route or (
-            session_state.route_id if session_state is not None else "generic"
-        )
-        if route_id == "generic" and adapter is None:
-            raise SystemExit(
-                "The generic guided measurement flow requires an LLM; use --use-llm."
-            )
-        if route_id == "generic":
-            try:
-                validate_guided_adapter_capabilities(adapter)
-            except ValueError as exc:
-                raise SystemExit(str(exc)) from None
-        try:
-            measurement_response = (
-                args.measurement_response_file.read_text(encoding="utf-8")
-                if args.measurement_response_file is not None
-                else args.measurement_response
-            )
-        except (OSError, UnicodeError) as exc:
-            raise SystemExit(
-                f"invalid --measurement-response-file {args.measurement_response_file}: {exc}"
-            ) from None
-        if measurement_response is not None and not measurement_response.strip():
-            source = (
-                "--measurement-response-file"
-                if args.measurement_response_file is not None
-                else "--measurement-response"
-            )
-            raise SystemExit(f"{source} must contain non-empty UTF-8 text")
-        specification_parts = [
-            item.strip()
-            for item in [args.specification_text, *args.specification_answer]
-            if item and item.strip()
-        ]
-        specification_text = "\n".join(specification_parts) or None
-        if specification_text is not None and (
-            session_state is not None or route_id == "generic"
-        ):
-            raise SystemExit(
-                "v4 guided sessions require --measurement-response; "
-                "--specification-text is unsupported"
-            )
-        if measurement_response is not None and (
-            diagnostic_answers
-            or args.diagnostic_description is not None
-            or specification_text is not None
-        ):
-            raise SystemExit(
-                "--measurement-response cannot be combined with diagnostic answers, "
-                "--diagnostic-description, or --specification-text"
-            )
-        if args.validation_spec is not None and args.model_spec is None:
-            raise SystemExit("--validation-spec requires --model-spec")
-        if specification_text is not None and (
-            args.model_spec is not None or args.trace_manifest is not None
-        ):
-            raise SystemExit(
-                "plain-language specifications cannot be combined with structured model or trace evidence"
-            )
-        if args.demo_fixture and (
-            args.model_spec is not None
-            or args.trace_manifest is not None
-            or specification_text is not None
-        ):
-            raise SystemExit(
-                "--demo-fixture cannot be combined with user-object model or trace evidence"
-            )
-        evidence_package = None
-        if args.model_spec is not None or args.trace_manifest is not None:
-            evidence_description = (
-                description
-                if description is not None
-                else session_state.accumulated_description
-                if session_state is not None
-                else None
-            )
-            if evidence_description is None:
-                raise SystemExit(
-                    "object evidence requires --description or --diagnostic-session-input"
-                )
-            try:
-                model_payload = (
-                    json.loads(args.model_spec.read_text(encoding="utf-8"))
-                    if args.model_spec is not None
-                    else None
-                )
-                trace_payload = (
-                    json.loads(args.trace_manifest.read_text(encoding="utf-8"))
-                    if args.trace_manifest is not None
-                    else []
-                )
-                if isinstance(trace_payload, dict):
-                    trace_payload = trace_payload.get("measured_traces", [])
-                manifests = []
-                for item in trace_payload:
-                    resolved = dict(item)
-                    csv_path = Path(resolved["csv_path"])
-                    if not csv_path.is_absolute() and args.trace_manifest is not None:
-                        resolved["csv_path"] = str(
-                            args.trace_manifest.parent / csv_path
-                        )
-                    manifests.append(MeasuredTraceManifest.model_validate(resolved))
-                validation = (
-                    ClosedLoopValidationSpec.model_validate_json(
-                        args.validation_spec.read_text(encoding="utf-8")
-                    )
-                    if args.validation_spec is not None
-                    else None
-                )
-                evidence_package = PlantEvidencePackage.model_validate(
-                    {
-                        "plant_id": plant_id_for_description(evidence_description),
-                        "model": model_payload,
-                        "measured_traces": manifests,
-                        "validation_spec": validation,
-                        "provenance": ["CLI structured object evidence"],
-                    }
-                )
-            except (OSError, ValueError, KeyError, TypeError) as exc:
-                raise SystemExit(f"invalid object evidence: {exc}") from None
-        if session_state is not None and route_id != session_state.route_id:
-            raise SystemExit("--run-route must match the diagnostic session route_id")
-        if session_state is None and args.diagnostic_session_output is not None:
-            if description is None:
-                description = SystemDescription(
-                    text=(
-                        "A route description was not supplied; ask for the missing "
-                        "system behavior, sensors, actuators, and safety bounds."
-                    )
-                )
-            session_state = start_diagnostic_session(
-                description,
-                route_id=route_id,
-                diagnostic_adapter=adapter,
-                use_mechanism_cards=args.use_mechanism_cards,
-            )
-        report = run_cfdc_route(
-            route_id,
-            description=description,
-            safety_limits=safety_bounds,
-            diagnostic_adapter=adapter,
-            use_mechanism_cards=args.use_mechanism_cards,
-            include_trajectory=args.include_trajectory,
-            diagnostic_session_state=session_state,
-            diagnostic_answers=(diagnostic_answers or None),
-            supplemental_description=args.diagnostic_description,
-            measurement_response=measurement_response,
-            simulation_bounds_confirmed=args.confirm_simulation_bounds,
-            evidence_package=evidence_package,
-            specification_text=specification_text,
-            execution_mode="demo_fixture" if args.demo_fixture else "user_object",
-        )
-        trace_reader = getattr(adapter, "agent_trace", None)
-        if callable(trace_reader):
-            report = report.model_copy(update={"agent_trace": trace_reader()})
-        if args.diagnostic_session_output is not None:
-            if report.diagnostic_session is None:
-                raise SystemExit("route did not produce a diagnostic session state")
-            write_diagnostic_session_atomic(
-                args.diagnostic_session_output,
-                report.diagnostic_session,
-            )
-        payload = (
-            report.model_dump() if args.full_report else compact_route_report(report)
-        )
-        print(json.dumps(payload, indent=2, sort_keys=True))
-        return
-    if not args.description:
-        raise SystemExit(
-            "Provide --description, use --run-route, --validate-demo, --benchmark, "
-            "--feature-ablation, --diagnostic-eval, --diagnostic-eval-llm, "
-            "--cartpole-swingup, or --vtol-sim."
-        )
+    _run_kernel_cli(args, safety_bounds)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 """Role-scoped Agent facade for kernel tasks.
 
-It reuses the existing audit and one-correction implementation in
-``cfdc.agents`` while replacing the old ``SystemDescription``-centric context
+It uses the audit and one-correction implementation in ``cfdc.agents``
 with the immutable kernel session contract.  There is intentionally no
 supervisor role: Python decides which role is called and when.
 """
@@ -43,12 +42,9 @@ class KernelAgentCoordinator:
         completion: Any | None = None,
         *,
         retriever: Any | None = None,
-        agent_mode: str = "multi",
     ) -> None:
-        if agent_mode not in {"single", "multi"}:
-            raise ValueError("agent_mode_must_be_single_or_multi")
         if completion is not None and not callable(completion):
-            # OpenAICompatibleDiagnosticAdapter exposes ``complete_agent``;
+            # OpenAICompatibleAdapter exposes ``complete_agent``;
             # accepting the object here keeps the kernel entry point aligned
             # with the existing adapter while preserving provider telemetry.
             complete_agent = getattr(completion, "complete_agent", None)
@@ -56,7 +52,6 @@ class KernelAgentCoordinator:
                 completion = complete_agent
         self.completion = completion
         self.retriever = retriever
-        self.agent_mode = agent_mode
         self.runtime = AgentRuntime(completion) if completion is not None else None
 
     @property
@@ -196,7 +191,6 @@ class KernelAgentCoordinator:
         )
         return self.runtime.execute(
             role_value,
-            description=None,
             stage=operation,
             request=context["payload"],
             retrieval=tuple(context["references"]),
@@ -244,7 +238,6 @@ class KernelAgentCoordinator:
         )
         return self.runtime.review_and_correct(
             role=owner,
-            description=None,
             stage=operation,
             request=context["payload"],
             candidate=candidate,

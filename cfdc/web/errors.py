@@ -63,14 +63,15 @@ EXTERNAL_ERROR_MESSAGES = {
 }
 
 IMPORT_ERROR_MESSAGES = {
+    "result_import_current_bundle_required": "仅支持导入当前格式的结果 ZIP 包。",
     "result_import_manifest_fingerprint_mismatch": "导入包清单校验失败，请重新导出后再导入。",
     "result_import_artifact_fingerprint_mismatch": "导入包中的任务或诊断文档已改变，请重新导出后再导入。",
     "result_import_duplicate_member": "导入包包含重复文件，无法确定唯一记录。",
     "result_import_required_document_missing": "导入包缺少任务、诊断或审计文档。",
     "result_import_artifact_manifest_required": "导入包缺少有效的产物清单。",
     "result_import_task_documents_invalid": "导入包中的任务或诊断文档格式无效。",
-    "v3_import_file_too_large": "需要解析的导入文档超过 32 MiB 限制。",
-    "v3_import_bundle_limit_exceeded": "导入包超过文件数量或 256 MiB 解压总量限制。",
+    "result_import_file_too_large": "需要解析的导入文档超过 32 MiB 限制。",
+    "result_import_bundle_limit_exceeded": "导入包超过文件数量或 256 MiB 解压总量限制。",
     "session_event_chain_invalid": "导入记录的审计事件顺序不完整，请重新导出。",
     "session_event_fingerprint_mismatch": "导入记录的审计事件校验失败，请重新导出。",
     "session_event_revision_invalid": "导入记录的审计版本不连续，请重新导出。",

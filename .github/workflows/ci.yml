@@ -21,8 +21,8 @@ jobs:
       - run: uv run --locked ruff format --check .
       - run: uv run --locked ruff check .
       - run: uv run --locked pytest -q
-      - run: uv run --locked python main.py --benchmark > /tmp/cfdc-benchmark.json
-      - run: uv run --locked python main.py --validate-demo
+      - name: Kernel CLI subprocess acceptance
+        run: uv run --locked pytest -q tests/test_main_cli.py
 
   frontend:
     runs-on: ubuntu-latest

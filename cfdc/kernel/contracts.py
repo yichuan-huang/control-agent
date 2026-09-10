@@ -17,14 +17,7 @@ from typing import Any, ClassVar
 
 TASK_CONTRACT_VERSION = "cfdc-task/v1.2"
 EVIDENCE_SESSION_VERSION = "cfdc-session/v4.0"
-READABLE_EVIDENCE_SESSION_VERSIONS = frozenset(
-    {
-        "cfdc-session/v1.0",
-        "cfdc-session/v2.0",
-        "cfdc-session/v3.0",
-        EVIDENCE_SESSION_VERSION,
-    }
-)
+READABLE_EVIDENCE_SESSION_VERSIONS = frozenset({EVIDENCE_SESSION_VERSION})
 DIAGNOSTIC_LEDGER_VERSION = "cfdc-diagnostics/v2.0"
 FREEZE_VERSION = "cfdc-freeze/v2.0"
 PACKET_VERSION = "cfdc-evaluation-packet/v2.0"
@@ -254,7 +247,6 @@ class TaskContract:
         if declared_schema is not None and str(declared_schema).strip() not in {
             "",
             TASK_CONTRACT_VERSION,
-            "1.1.0",
         }:
             raise ValueError("task_contract_version_mismatch")
         description = str(

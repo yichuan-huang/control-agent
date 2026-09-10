@@ -117,3 +117,41 @@ def test_legacy_search_includes_builtin_registry_and_prioritizes_exact_id(tmp_pa
     assert results
     assert results[0].artifact_id == "first_order_lag"
     assert results[0].source_kind == "builtin_registry"
+
+
+def test_builtin_catalog_change_rejects_pinned_snapshot_without_rewriting(
+    tmp_path, monkeypatch
+):
+    from cfdc.rag import core
+
+    root = tmp_path / "index"
+    original = build_index(None, root, encoder=FakeEncoder())
+    manifest_path = original.snapshot / "manifest.json"
+    before = manifest_path.read_bytes()
+    old_fingerprint = original.manifest["builtin_catalog_fingerprint"]
+    monkeypatch.setattr(core, "builtin_catalog_fingerprint", lambda: "changed-catalog")
+    with pytest.raises(ValueError, match="built-in catalog.*rebuild explicitly"):
+        load_index(root, snapshot_name=original.index_snapshot, encoder=FakeEncoder())
+    rebuilt = build_index(None, root, encoder=FakeEncoder())
+    assert rebuilt.index_snapshot != original.index_snapshot
+    assert rebuilt.manifest["builtin_catalog_fingerprint"] != old_fingerprint
+    assert manifest_path.read_bytes() == before
+
+
+def test_builtin_capabilities_describe_current_kernel_not_retired_runtime():
+    import json
+
+    from cfdc.kernel.route_catalog import route_catalog
+    from cfdc.rag.core import _builtin_artifacts
+
+    artifact = next(
+        item
+        for item in _builtin_artifacts()
+        if item.artifact_id == "capability_catalog"
+    )
+    assert (
+        json.dumps(route_catalog(), ensure_ascii=False, sort_keys=True, indent=2)
+        in artifact.text
+    )
+    assert "online_refinement_policies" not in artifact.text
+    assert "tracking_implementations" not in artifact.text

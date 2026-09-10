@@ -74,8 +74,6 @@ def select_external_source(
         raise ValueError("external_source_kind_invalid")
     if execution_mode not in (None, "", "manual") or runner_id or model_id:
         raise ValueError("automatic_execution_removed")
-    if session.managed_execution:
-        raise ValueError("external_reacquisition_required")
 
     if session.external_workflow and (
         session.external_workflow.get("requests")

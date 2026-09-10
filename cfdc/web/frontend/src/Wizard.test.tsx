@@ -86,7 +86,8 @@ test("custom wizard collects evaluation settings before task confirmation", asyn
     evaluation_repeats: 20,
   });
 }, 15000);
-test("restoring a legacy draft removes runner configuration and guides a generic custom task", async () => {
+test("rejecting a retired draft starts a fresh custom task", async () => {
+  sessionStorage.setItem("cfdc:wizard:custom", JSON.stringify({ step: 3 }));
   sessionStorage.setItem(
     "cfdc:draft",
     JSON.stringify({
@@ -96,6 +97,7 @@ test("restoring a legacy draft removes runner configuration and guides a generic
       model_id: "optical",
     }),
   );
+  const original = sessionStorage.getItem("cfdc:draft");
   const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(
       JSON.stringify({
@@ -118,8 +120,21 @@ test("restoring a legacy draft removes runner configuration and guides a generic
   await waitFor(() =>
     expect(
       (screen.getByLabelText("设备与目标") as HTMLInputElement).value,
-    ).toBe("我的外部系统"),
+    ).toBe("默认任务"),
   );
+  expect(screen.getByText(/已拒绝恢复含旧实验配置的草稿/)).toBeTruthy();
+  expect(sessionStorage.getItem("cfdc:draft")).toBe(original);
+  expect(
+    fetch.mock.calls.some((call) =>
+      String(call[0]).includes("drafts/validate"),
+    ),
+  ).toBe(false);
+  expect(screen.getByLabelText("设备与目标").closest("[hidden]")).toBeNull();
+  fireEvent.change(screen.getByLabelText("设备与目标"), {
+    target: { value: "新任务" },
+  });
+  expect(screen.queryByText(/已拒绝恢复含旧实验配置的草稿/)).toBeNull();
+  expect(sessionStorage.getItem("cfdc:draft")).not.toBe(original);
   expect(screen.queryByLabelText("由系统自动运行软件仿真")).toBeNull();
   expect(screen.getByText(/实际试验在应用外部完成/)).toBeTruthy();
   fireEvent.click(screen.getByText("下一步", { exact: true }));
@@ -136,7 +151,7 @@ test("restoring a legacy draft removes runner configuration and guides a generic
     String(call[0]).includes("drafts/validate"),
   );
   const draft = JSON.parse(String(call?.[1]?.body)).draft;
-  expect(draft.description).toBe("我的外部系统");
+  expect(draft.description).toBe("新任务");
   expect(draft).not.toHaveProperty("execution_mode");
   expect(draft).not.toHaveProperty("runner_id");
   expect(draft).not.toHaveProperty("model_id");

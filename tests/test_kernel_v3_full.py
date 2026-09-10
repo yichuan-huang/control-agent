@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import zipfile
 from pathlib import Path
@@ -24,8 +23,6 @@ from cfdc.kernel import (
     EvidenceSession,
     TaskContract,
     WorkflowService,
-    build_migration_manifest,
-    build_v3_parity_matrix,
 )
 from cfdc.kernel.cases import (
     AUDIT_CASES,
@@ -85,25 +82,6 @@ def _resolved_case(service: WorkflowService, case_id: str, *, mimo: bool = False
         action_id="route",
         revision=session.revision,
     )
-
-
-def test_migration_manifest_and_v3_parity_matrix_have_source_hashes() -> None:
-    source = Path("archive/CFDC_Project_v3")
-    if not source.is_dir():
-        pytest.skip(
-            "development-only CFDC v3 archive is not shipped in release checkouts"
-        )
-    manifest = build_migration_manifest(source)
-    matrix = build_v3_parity_matrix(source)
-
-    assert len(manifest["items"]) == 41
-    assert all(item["source_hash"] for item in manifest["items"])
-    assert len(matrix["rows"]) == 11
-    assert all(
-        digest for row in matrix["rows"] for digest in row["source_hashes"].values()
-    )
-    assert manifest["runtime_archive_dependency"] is False
-    assert matrix["runtime_archive_dependency"] is False
 
 
 def test_case_catalog_has_five_training_six_transition_and_seven_audit_cases() -> None:
@@ -444,96 +422,6 @@ def test_registered_case_full_chain_reaches_independent_evaluation(
         assert session.pending_actions == ()
 
 
-def test_v3_import_is_read_only_safe_and_idempotent(tmp_path: Path) -> None:
-    source = tmp_path / "v3-source"
-    source.mkdir()
-    task_path = source / "task.json"
-    task_path.write_text(
-        json.dumps(
-            {
-                "task": {
-                    "description": "Hold a measured public output.",
-                    "task_type": "local_setpoint_hold",
-                    "measured_signals": ["output"],
-                    "control_input": "input",
-                    "input_min": -1,
-                    "input_max": 1,
-                    "state_stop": 4,
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    private_path = source / "private.json"
-    private_path.write_text(
-        json.dumps({"private_truth": {"gain": 2.0}}),
-        encoding="utf-8",
-    )
-    before = {
-        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in source.iterdir()
-    }
-    service = WorkflowService(tmp_path / "sessions")
-
-    imported = service.import_v3(source)
-    repeated = service.import_v3(source)
-
-    after = {
-        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in source.iterdir()
-    }
-    assert repeated.session_id == imported.session_id
-    assert before == after
-    assert imported.import_report["source_modified"] is False
-    assert imported.import_report["private_truth_imported"] is False
-    assert imported.pending_actions[0]["action"] == "confirm_task"
-
-    unsafe = tmp_path / "unsafe.zip"
-    with zipfile.ZipFile(unsafe, "w") as archive:
-        archive.writestr("../task.json", task_path.read_bytes())
-    with pytest.raises(ValueError, match="v3_import_unsafe_path"):
-        service.import_v3(unsafe)
-
-
-def test_session_v1_is_read_only_and_can_fork_without_old_authority(
-    tmp_path: Path,
-) -> None:
-    service = WorkflowService(tmp_path)
-    session = service.start(
-        {
-            "description": "Hold a measured output in a bounded software experiment.",
-            "measured_signals": ["output"],
-            "control_input": "input",
-            "input_min": -1.0,
-            "input_max": 1.0,
-            "state_stop": 4.0,
-        }
-    )
-    path = tmp_path / f"{session.session_id}.json"
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    raw["session_version"] = "cfdc-session/v1.0"
-    path.write_text(json.dumps(raw), encoding="utf-8")
-
-    loaded = service.read(session.session_id)
-    assert loaded.session_version == "cfdc-session/v1.0"
-
-    original = path.read_bytes()
-    with pytest.raises(ValueError, match="read_only_legacy_session"):
-        service.confirm_task(
-            loaded.session_id,
-            action_id="upgrade-v1",
-            revision=loaded.revision,
-        )
-    child = service.fork_session(loaded.session_id)
-    assert child.session_id != loaded.session_id
-    assert child.session_version == "cfdc-session/v4.0"
-    assert child.evidence == ()
-    assert child.controller_qualification is None
-    assert child.evaluation is None
-    assert child.legacy_lineage["source_session_id"] == loaded.session_id
-    assert path.read_bytes() == original
-
-
 def test_physical_preflight_and_engineering_unit_normalization() -> None:
     ready = audit_physical_preflight(
         {
@@ -599,13 +487,13 @@ def test_expert_artifact_validation_checks_typed_fingerprints(tmp_path: Path) ->
         evidence_fingerprints=("evidence-1",),
     ).to_dict()
     feature_artifact = {
-        "feature_version": "cfdc-features/v1",
+        "feature_version": "cfdc-features/v2",
         "features": {},
         "missing_feature_ids": [],
     }
     feature_artifact["artifact_fingerprint"] = fingerprint(feature_artifact)
     qualification = {
-        "qualification_version": "cfdc-qualification/v1",
+        "qualification_version": "cfdc-qualification/v2",
         "status": "offline_qualified",
     }
     qualification["qualification_fingerprint"] = fingerprint(qualification)

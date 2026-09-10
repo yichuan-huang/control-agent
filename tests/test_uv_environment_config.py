@@ -64,7 +64,7 @@ def test_readmes_install_and_check_before_web_start_and_cli():
         frontend_install = text.index("npm --prefix cfdc/web/frontend ci")
         frontend_build = text.index("npm --prefix cfdc/web/frontend run build")
         web_start = text.index("uv run --locked python app.py")
-        cli_usage = text.index("uv run --locked python main.py --use-llm")
+        cli_usage = text.index("--kernel-session-dir ./output/kernel-sessions")
 
         assert (
             sync

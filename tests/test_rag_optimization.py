@@ -5,13 +5,10 @@ import sqlite3
 import numpy as np
 import pytest
 
-from cfdc.diagnosis.engine import classify_archetype, infer_structural_diagnosis
 from cfdc.knowledge import (
     REGISTRY_VERSION,
     RetrievalRequest,
-    resolve_route_decision,
 )
-from cfdc.models import SystemDescription
 from cfdc.rag import build_index
 
 
@@ -229,23 +226,6 @@ def test_external_documents_can_fill_all_four_result_slots(tmp_path):
 
     assert len(results) == 4
     assert {result.source_kind for result in results} == {"external"}
-
-
-def test_registry_resolver_is_deterministic_and_does_not_need_llm():
-    description = SystemDescription(
-        text="A stable heater has a voltage input and temperature output."
-    )
-    diagnosis = infer_structural_diagnosis(description).model_copy(
-        update={"complete": True, "clarification_questions": []}
-    )
-    classification = classify_archetype(diagnosis, description)
-
-    decision = resolve_route_decision(description, diagnosis, classification)
-
-    assert decision.registry_version == REGISTRY_VERSION
-    assert decision.primary_class == str(classification.primary_class)
-    assert decision.simulation_profile_id == "first_order_lag"
-    assert decision.matched_rule_ids
 
 
 def test_structured_retrieval_filters_by_profile_and_returns_empty_for_irrelevant_query(

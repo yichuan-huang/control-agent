@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.7` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 CLI 兼容入口。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.8` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
@@ -70,7 +70,7 @@ ollama pull your-model
 ollama list
 ```
 
-如果选择 DeepSeek 或 OpenAI，跳过 Ollama 步骤，直接填写对应配置即可。不要将真实 API Key 写入源码、截图或共享报告。下方 Kernel CLI 部分说明了环境变量及命令行配置方式。
+如果选择 DeepSeek 或 OpenAI，跳过 Ollama 步骤，直接填写对应配置即可。不要将真实 API Key 写入源码、截图或共享报告。WebUI 使用这些配置进行自然语言交互；CLI 仅将其用于环境检查。
 
 ## Kernel 主流程
 
@@ -108,7 +108,7 @@ Kernel 通过版本化合同提供以下能力，使实验、证据、控制器�
 - Identification Provider 与 Evaluation Provider 使用两个独立且不可混淆的绑定。独立 `cfdc-independent-judge/v2.0` 从完整逐采样轨迹和停止事件重新计算逐通道指标，先判断硬稳定性与边界，再判断任务性能、扰动重复、最差试次和 95% Wilson 下界。只有稳定但性能不足才允许有界调优；接受的候选会创建新 freeze，并且必须通过 fresh confirmation。
 - `cfdc-session/v4.0` 增加从案例目录重算的 `RegisteredCaseBinding`，并保留 revision、幂等 action、stale revision 拒绝、不可覆盖的 artifact 历史和只追加事件链。
 
-工作流公开三个彼此独立的就绪门：合法取证、证据支持的路线选择、控制器综合。未知维度只阻塞实际消费它的动作。每次 Provider 调用都在执行前预留预算，因此重试次数、激励时间、有效实验数和不同协议数会分别审计。旧会话可以读取但不能修改；派生会话只复制任务和人工先验，不继承旧特征、资格或性能授权。
+工作流公开三个彼此独立的就绪门：合法取证、证据支持的路线选择、控制器综合。未知维度只阻塞实际消费它的动作。每次 Provider 调用都在执行前预留预算，因此重试次数、激励时间、有效实验数和不同协议数会分别审计。系统只接受当前 schema 的会话。导入当前结果包时会创建新会话，仅复制任务和人工先验，不继承既有特征、资格或性能授权。
 
 可执行能力目录明确区分“合同已注册”和“端到端已验证”。以下 20 个 family 都有提交到仓库的验收：由公开证据综合类型化控制器、恢复稳定资格、冻结、执行非零逐采样闭环并由独立裁判复算；每个 family 另有与其机制相关的拒绝反例。
 
@@ -145,17 +145,16 @@ uv run --locked ruff format .
 uv run --locked ruff format --check .
 uv run --locked ruff check .
 uv run --locked pytest -q
-uv run --locked python main.py --benchmark > /tmp/cfdc-benchmark.json
-uv run --locked python main.py --validate-demo
+uv run --locked pytest -q tests/test_main_cli.py
 uv run --locked python scripts/benchmark_web_api.py
 git diff --check
 ```
 
 `uv` 会读取 `.python-version` 中固定的 Python 版本，创建 `.venv`，并安装项目及开发工具。使用 `uv run` 时不需要手动激活环境。
 
-新建索引默认包含两类随包资源：由 Registry 生成的权威 artifact，以及 12 个控制概念组的中英文版本化 advisory 知识卡。同组语言版本共享稳定 group identity 和语义版本，但保留各自的内容哈希与 provenance。知识包采用中央 JSON manifest 与 schema，记录有效期、引用元数据和 192 条冻结评估案例：原英文/中文集合、一个已曝光的 regression 集，以及 replacement challenge holdout。卡片只能解释已注册选择，不能改变路线、数值结果、资格审查或授权。新索引使用不可变 `cfdc-rag/v3` snapshot；合法 `v2` 和旧策略 `v3` snapshot 仍可只读加载，系统不会原地重写。
+新建索引默认包含两类随包资源：由 Registry 生成的权威 artifact，以及 12 个控制概念组的中英文版本化 advisory 知识卡。同组语言版本共享稳定 group identity 和语义版本，但保留各自的内容哈希与 provenance。知识包采用中央 JSON manifest 与 schema，记录有效期、引用元数据和 192 条冻结评估案例：原英文/中文集合、一个已曝光的 regression 集，以及 replacement challenge holdout。卡片只能解释已注册选择，不能改变路线、数值结果、资格审查或授权。索引使用当前检索策略和不可变 `cfdc-rag/v3` snapshot。旧 schema 或旧策略会被拒绝；请显式重建索引后选择新的 snapshot。
 
-如需加入本地 Markdown 或 PDF，可放在 `references` 目录。没有 metadata 的旧文档仍按“全 scope 可见”的兼容语义进入统一过滤。`--knowledge-pack` 可指定另一份通过校验的知识包，`--no-curated` 可排除随包卡片，`--relevance-threshold` 可把显式阈值固化到新 snapshot：
+如需加入本地 Markdown 或 PDF，可放在 `references` 目录。没有 metadata 的文档按“全 scope 可见”语义进入统一过滤。`--knowledge-pack` 可指定另一份通过校验的知识包，`--no-curated` 可排除随包卡片，`--relevance-threshold` 可把显式阈值固化到新 snapshot：
 
 ```bash
 uv run --locked python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
@@ -189,8 +188,6 @@ uv run --locked python -m cfdc.history query \
   --as-of 2026-09-03T00:00:00Z
 ```
 
-历史 Gradio 应用可从 [v0.3.3 源码](https://github.com/yichuan-huang/control-agent/tree/v0.3.3) 获取。当前版本独立运行，不依赖历史检出目录。
-
 ## Web 界面
 
 启动应用后访问 `http://127.0.0.1:7860`：
@@ -221,7 +218,7 @@ Web Agent 编排固定为 `multi`。页面没有工作流版本和 Agent 模式�
 
 Kernel 输入契约决定当前动作接受自然语言、类型化 JSON，还是无需输入的按钮。每次修改均检查会话修订号和请求标识。刷新后会重新连接已记录的操作；中断操作会明确显示，不自动重放，由用户显式重试。
 
-WebUI 不加载也不运行 legacy 会话，不提供 `single` 基线，不会自动回退到兼容流程。缺失、未知或非 Kernel 的 Web state 会返回明确错误。需要 legacy 时，请使用下方 CLI 步骤。
+WebUI 与 CLI 均运行当前 Kernel 工作流。缺失、未知或非 Kernel 的 Web state 会返回明确错误。
 
 未完成草稿保存在当前浏览器标签页的 `sessionStorage`。Provider 凭据仅保留在易失内存，刷新后需要重新填写；API Key 不进入草稿、Kernel 会话、审计 JSON、日志、哈希或导出文件。历史导入 API 只接受 `request_id` 和已上传的 `file_id`。导入的公开事实必须重新确认边界，不继承注册案例执行权限或 RAG 绑定。
 
@@ -233,10 +230,10 @@ WebUI 不加载也不运行 legacy 会话，不提供 `single` 基线，不会�
 
 ## Kernel CLI
 
-CLI 同时保留两套工作流的兼容接口。创建自定义 Kernel 任务时应显式选择 Kernel。命令会停在下一个用户或证据边界，并输出 session ID 与当前 input contract：
+CLI 通过类型化输入运行当前 Kernel 工作流。命令会停在下一个用户或证据边界，并输出 session ID 与当前 input contract：
 
 ```bash
-uv run --locked python main.py --workflow-version kernel \
+uv run --locked python main.py \
   --kernel-session-dir ./output/kernel-sessions \
   --description "加热器保持箱体温度。" \
   --observed-output temperature --actuator voltage \
@@ -260,7 +257,7 @@ DIAGNOSIS_JSON='{
   "uncertainty_variation":{"status":"known","assessment":"small","evidence":"重复公开试验","confidence":0.95}
 }'
 
-uv run --locked python main.py --workflow-version kernel \
+uv run --locked python main.py \
   --kernel-case dc_motor_speed_v1 \
   --kernel-action motor-run-001 \
   --confirm-kernel-budget \
@@ -278,13 +275,13 @@ uv run --locked python main.py --workflow-version kernel \
 对于实体或外部操作实验，在诊断和路线解析后绑定公开 Provider 合同，再生成 handoff：
 
 ```bash
-uv run --locked python main.py --workflow-version kernel --kernel-session SESSION_ID \
+uv run --locked python main.py --kernel-session SESSION_ID \
   --kernel-action physical-001 \
   --kernel-provider physical-provider.json \
   --kernel-compile-protocol --kernel-prepare-operator-handoff \
   --kernel-result-dir ./output/results
 
-uv run --locked python main.py --workflow-version kernel --kernel-session SESSION_ID \
+uv run --locked python main.py --kernel-session SESSION_ID \
   --kernel-action physical-002 \
   --kernel-operator-report operator-report.json \
   --kernel-upload repeat-01.csv --kernel-upload repeat-02.csv \
@@ -293,65 +290,15 @@ uv run --locked python main.py --workflow-version kernel --kernel-session SESSIO
 
 如果声明的停止条件曾触发，应增加 `--kernel-upload-stopped-on-limit`；该上传会作为安全门失败记录，系统不会修补数据，也不会把它计作已接受证据。
 
-自然语言 Agent 使用的 Provider 可通过 `CFDC_LLM_BASE_URL`、`CFDC_LLM_MODEL`、`CFDC_LLM_API_KEY` 或对应 `--llm-*` 参数配置。它们只影响角色内 proposal 和解释，路线、数值结果与授权仍由 Kernel 决定。
+CLI 接收类型化诊断答案和公开工件；自然语言 Agent 交互通过 WebUI 提供。`--llm-base-url`、`--llm-model` 和 `--llm-api-key` 仅用于配置 `--doctor` 检查。凭证优先通过 `CFDC_LLM_BASE_URL`、`CFDC_LLM_MODEL` 和 `CFDC_LLM_API_KEY` 环境变量提供。
 
-下面以 DeepSeek 为例，请先在本地环境中设置 `DEEPSEEK_API_KEY`。使用其他服务商时，将 Base URL、模型和密钥替换为上表中的对应配置：
-
-```bash
-uv run --locked python main.py --use-llm \
-  --workflow-version kernel \
-  --llm-base-url "https://api.deepseek.com" \
-  --llm-model "deepseek-v4-pro" \
-  --llm-api-key "$DEEPSEEK_API_KEY" \
-  --description "加热器改变箱体内测得的温度。" \
-  --observed-output temperature --actuator voltage \
-  --safety-bound input_min=-1 --safety-bound input_max=1 \
-  --safety-bound state_stop=3
-```
-
-## Legacy CLI 分步操作
-
-Legacy 只在 CLI 中提供。每条命令都应显式选择兼容工作流、`single` Agent 基线并关闭 RAG。请把示例 Provider 和中文占位文本替换为实际控制问题的事实。
-
-1. 配置 OpenAI-compatible Provider：
+使用 `--kernel-export-bundle` 导出当前结果 ZIP，再导入为新会话：
 
 ```bash
-export CFDC_LLM_BASE_URL="https://your-provider.example/v1"
-export CFDC_LLM_MODEL="your-model"
-export CFDC_LLM_API_KEY="..."
+uv run --locked python main.py --kernel-import-result ./output/results/SESSION_ID.result.zip
 ```
 
-2. 创建第一份 legacy 诊断会话：
-
-```bash
-uv run --locked python main.py --workflow-version legacy \
-  --use-llm --agent-mode single --no-rag \
-  --description "控制问题描述" \
-  --diagnostic-session-output legacy-01.json
-```
-
-3. 如果 `legacy-01.json` 仍要求补充描述事实，就补充缺少的对象、传感器、执行器或行为信息，并写入新文件：
-
-```bash
-uv run --locked python main.py --workflow-version legacy \
-  --use-llm --agent-mode single --no-rag \
-  --diagnostic-session-input legacy-01.json \
-  --diagnostic-description "补充缺少的对象、传感器或执行器信息" \
-  --diagnostic-session-output legacy-02.json
-```
-
-4. 当最新 JSON 开始要求所选 Profile 的参数时，提交已知数值、单位、来源和软件仿真范围：
-
-```bash
-uv run --locked python main.py --workflow-version legacy \
-  --use-llm --agent-mode single --no-rag \
-  --diagnostic-session-input legacy-02.json \
-  --measurement-response "已知参数、单位、来源和软件仿真范围" \
-  --confirm-simulation-bounds \
-  --diagnostic-session-output legacy-03.json
-```
-
-每次续跑都应使用新的 `--diagnostic-session-output` 路径。这样会保留每个 revision 的审计记录，也不会覆盖输入会话。每次续跑前先检查最新 JSON：状态仍要求描述或诊断事实时使用 `--diagnostic-description`；只有状态开始要求 Profile 参数后才使用 `--measurement-response`。也可以改用 `--measurement-response-file` 读取 UTF-8 文本，但它与 `--measurement-response` 互斥。
+导入会验证当前结果包，并保留源文件。新会话需要重新确认；导入的结果不赋予评估或硬件操作授权。
 
 ## 支持模型、能力缺口与物理边界
 

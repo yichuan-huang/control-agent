@@ -389,27 +389,9 @@ def validate_handoff(
         ):
             failures.append(f"safety_failure:{phase.phase_id}")
             continue
-        entry_passed = observation.get(
-            "entry_condition_met", observation.get("entry_passed")
-        )
-        exit_passed = observation.get(
-            "exit_condition_met", observation.get("exit_passed")
-        )
+        entry_passed = observation.get("entry_condition_met")
+        exit_passed = observation.get("exit_condition_met")
         success = observation.get("success")
-        # The archived progression contract used ``entry_passed`` and
-        # ``exit_passed`` as the complete public handoff observation and did
-        # not emit a separate ``success`` flag.  Preserve that wire format at
-        # this compatibility boundary while keeping the canonical format
-        # strict: a canonical observation must explicitly provide ``success``
-        # and an observation with no gate fields is still blocked.
-        if (
-            success is None
-            and "entry_condition_met" not in observation
-            and "exit_condition_met" not in observation
-            and "entry_passed" in observation
-            and "exit_passed" in observation
-        ):
-            success = True
         if any(value is None for value in (entry_passed, exit_passed, success)):
             failures.append(f"missing_gate:{phase.phase_id}")
             continue

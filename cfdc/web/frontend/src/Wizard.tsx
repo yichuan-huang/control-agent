@@ -42,7 +42,16 @@ export default function Wizard() {
   const navigationKey = caseId
     ? `cfdc:wizard:case:${caseId}`
     : "cfdc:wizard:custom";
+  const [draftRejection, setDraftRejection] = useState(() => {
+    let reason = "";
+    if (!caseId)
+      readDraft((message) => {
+        reason = message;
+      });
+    return reason;
+  });
   const [restored] = useState(() => {
+    if (draftRejection) return { step: 0, evidence: "automatic" };
     try {
       const value = JSON.parse(sessionStorage.getItem(navigationKey) ?? "{}");
       return {
@@ -222,6 +231,7 @@ export default function Wizard() {
           }
         />
       )}
+      {draftRejection && <Alert type="warning" title={draftRejection} />}
       {error && <Alert type="error" title={error} />}
       {resumedReview.error && (
         <Alert
@@ -257,6 +267,7 @@ export default function Wizard() {
         onValuesChange={() => {
           if (!caseId) {
             saveDraft(form.getFieldsValue(true));
+            setDraftRejection("");
           }
           setConfirmed(false);
         }}

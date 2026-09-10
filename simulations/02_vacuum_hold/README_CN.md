@@ -16,19 +16,11 @@ uv run --locked python app.py
 
 **点击／填写 WebUI。** 打开 [http://127.0.0.1:7860](http://127.0.0.1:7860)，在“设置”中确认模型配置，“测试当前配置”应成功。创建本练习任务前关闭“新任务使用内置知识库”。若页面刷新后 API Key 为空，重新填写即可。
 
-**粘贴到 MATLAB 命令窗口。** 文件夹选择器中选择仓库根目录 `control-agent`（包含 `app.py` 和 `simulations` 的文件夹），脚本会进入本案例，不需要修改路径：
+**打开 MATLAB 编辑器。** 在文件管理器找到本案例的 [run_case.m](run_case.m)，用 MATLAB 打开并点击编辑器 **Run（运行）**。如果 MATLAB 提示当前文件夹存在同名脚本遮蔽，或需要更改路径，点击“更改文件夹”（Change Folder）后运行。脚本按自身位置找到案例，无需复制命令或保留工作区变量。菜单中点击“初始化／打开模型”。
 
-```matlab
-repoRoot = uigetdir(pwd, '选择 control-agent 仓库根目录');
-assert(~isequal(repoRoot, 0), '已取消，请重新运行本段并选择文件夹。');
-assert(isfile(fullfile(repoRoot, 'app.py')), '请选择包含 app.py 的仓库根目录。');
-cd(fullfile(repoRoot, 'simulations', '02_vacuum_hold'));
-lab = setup_case();
-```
+**完成标志：**打开本案例的 Simulink 模型，命令窗口显示“已准备”和“Simulink 许可证可用”。首次运行会生成 `model/` 中的 `.slx`；仓库下载后这里只有 `.gitkeep` 是正常的。无需手工搭模型或填写控制器。Simulink 工具栏的 Run 仅用于开环预览；后面的正式采集和评价均使用案例菜单，不能用预览替代。
 
-**完成标志：**打开本案例的 Simulink 模型，命令窗口显示“已准备”和“Simulink 许可证可用”。首次运行会生成 `model/` 中的 `.slx`；仓库下载后这里只有 `.gitkeep` 是正常的。无需手工搭模型或填写控制器。Simulink 工具栏的 Run 仅用于开环预览；后面的正式采集和评价均使用 MATLAB 命令，不能用预览替代。
-
-本案例中，`prompts/` 是要复制的文字，`incoming/` 放 WebUI 下载的请求包，`runs/` 放 MATLAB 生成的记录和待上传结果。请在整个案例中保留 `lab` 等工作区变量；切换案例时重新执行本步骤。
+本案例中，`prompts/` 是要复制的文字，`incoming/` 放 WebUI 下载的请求包，`runs/` 放 MATLAB 生成的记录和待上传结果。菜单状态只保存在本次运行中，无需保留 `lab` 等工作区变量。退出菜单或重启 MATLAB 后，重新 Run 并初始化；需要采集时重新选包预检。切换案例先退出旧菜单，再打开目标案例的 `run_case.m`。
 
 ## 2. 在 WebUI 新建并核对任务
 
@@ -95,16 +87,7 @@ lab = setup_case();
 
 **点击／选择文件｜WebUI。** 选择“外部软件仿真”，点击“确认数据来源”。当出现“下载采集请求包 ZIP”时下载本轮 ZIP，建议保存或移入本案例的 `incoming/`。保留原包，不用解压、改名或编辑；浏览器自动放进“下载”目录也可以，下一段可直接选取它。
 
-**粘贴到 MATLAB。** 在文件选择器中选中刚下载的采集请求 ZIP。这里将路径保存为 `acquisitionPackage`，第 5 步直接复用，避免第二次选错包。
-
-```matlab
-[file, folder] = uigetfile('*.zip', '选择本任务刚下载的采集请求 ZIP', fullfile(lab.case_dir, 'incoming', filesep));
-assert(~isequal(file, 0), '已取消，请重新运行本段并选择采集包。');
-acquisitionPackage = fullfile(folder, file);
-check = cfdcSim.preflight(lab, acquisitionPackage);
-assert(strcmp(check.kind, 'identification'), '选错包：本步需要采集请求 ZIP。');
-disp(check.card);
-```
+**点击 MATLAB 菜单。** 选择“选择采集 ZIP 并预检”，在系统原生文件选择窗口中选中刚下载的采集请求 ZIP。默认打开本案例 `incoming/`，也可自由浏览“下载”、其他磁盘或可访问的网络目录。菜单在本次运行的局部状态中记住路径和文件指纹；第 5 步直接使用它。取消选择只返回菜单。
 
 **完成标志：**命令窗口显示“预检通过：identification”，并列出当前操作卡。出现红色错误时先按[常见问题](../README_CN.md#troubleshooting)处理，不要提交检查通过。
 
@@ -119,22 +102,13 @@ disp(check.card);
 
 ## 5. 在 MATLAB 采集，然后上传全部 CSV
 
-**粘贴到 MATLAB。** 直接使用第 4 步已经预检的采集包：
+**点击 MATLAB 菜单。** 完成 WebUI 操作检查后，选择“执行已预检采集（先在 WebUI 完成操作检查）”。菜单核对文件未改变，再执行采集并显示本轮目录、全部 CSV 数量与路径及是否触发停止。文件变化或缺少预检会明确报错，须重新选包预检；菜单不会替你提交 WebUI 操作检查。
 
-```matlab
-identification = cfdcSim.run_identification(lab, acquisitionPackage);
-fprintf('本轮结果目录：%s\n', identification.run_dir);
-fprintf('待上传 CSV 共 %d 份：\n', numel(identification.files));
-fprintf('%s\n', identification.files{:});
-stopped = any(cellfun(@(r) r.stop_event.triggered, identification.repeats));
-fprintf('是否有重复触发停止：%d（1=是，0=否）\n', stopped);
-```
-
-**完成标志：**脚本逐次打印“采集 … 完成”，最后列出全部 CSV 的完整路径和数量。等待 MATLAB 返回命令提示符后再上传。文件在 `runs/` 的本轮独立子目录中，不在 `incoming/`。重复执行会建立新目录；一次上传只使用同一轮的文件。
+**完成标志：**脚本逐次打印“采集 … 完成”，最后列出全部 CSV 的完整路径和数量。等待 MATLAB 返回案例菜单后再上传。可点“显示上次结果位置”再次查看。文件在 `runs/` 的本轮独立子目录中，不在 `incoming/`。重复执行会建立新目录；一次上传只使用同一轮的文件。
 
 **点击／选择文件｜WebUI。** 点击“选择实验数据”，进入刚打印的结果目录，多选列表中的全部 CSV（macOS 可按住 Command 多选，Windows 可按住 Ctrl 多选）。macOS 文件选择器可用 Command+Shift+G 粘贴目录路径；Windows 可在地址栏粘贴目录路径。只选 CSV，不选 MAT、PNG、JSON 或 `source-package.zip`。
 
-等待文件名全部显示在页面上，核对数量与 MATLAB 打印数量相同。如果上面 `stopped` 为 `1`，如实勾选“实验触及限制，已停止”；为 `0` 时保持不勾选。然后点击“检查上传数据”。选择文件后还需要这个提交动作。
+等待文件名全部显示在页面上，核对数量与 MATLAB 打印数量相同。如果 MATLAB 显示“是否有重复触发停止”为 `1`，如实勾选“实验触及限制，已停止”；为 `0` 时保持不勾选。然后点击“检查上传数据”。选择文件后还需要这个提交动作。
 
 **完成标志：**页面显示上传回执并继续形成方案；通过后进入冻结步骤。若回执拒绝或缺少文件，按原因核对当前任务和本轮文件，补充缺失文件，不要编辑轨迹、标识或补齐被停止截短的数据。
 
@@ -150,23 +124,13 @@ fprintf('是否有重复触发停止：%d（1=是，0=否）\n', stopped);
 
 **点击／选择文件｜WebUI。** 如果显示“准备本轮外部运行包”，点击一次；出现“下载本轮完整运行包 ZIP”后下载。建议将这个新 ZIP 存到本案例 `incoming/`。核对页面的本轮阶段：首次是开发评价，后续也可能是调优候选或独立确认。本步不能使用第 4 步的采集包。
 
-**粘贴到 MATLAB。** 每轮都重新执行这整段，在选择器中选刚从当前页面下载的新运行请求 ZIP：
-
-```matlab
-[file, folder] = uigetfile('*.zip', '选择本轮新下载的完整运行请求 ZIP', fullfile(lab.case_dir, 'incoming', filesep));
-assert(~isequal(file, 0), '已取消，请重新运行本段并选择运行请求包。');
-evaluationPackage = fullfile(folder, file);
-evaluation = cfdcSim.run_evaluation(lab, evaluationPackage);
-fprintf('本轮阶段：%s\n', evaluation.stage);
-fprintf('本轮结果目录：%s\n', evaluation.run_dir);
-fprintf('只上传这个结果 ZIP：\n%s\n', evaluation.result_zip);
-```
+**点击 MATLAB 菜单。** 选择“运行本轮评价（每次选择新 ZIP）”，选刚从当前页面下载的新完整运行请求 ZIP。每次评价都重新打开系统原生文件选择窗口，预检后显示本轮阶段、请求标识和会话标识，再执行评价。核对这些信息与当前 WebUI 一致。
 
 脚本会自动预检、执行全部试次、记录曲线及停止事件，并打包结果，无需手工编辑 JSON 或压缩文件。
 
 **完成标志：**逐试次进度结束，打印“本轮完整结果 ZIP”和返回路径。MATLAB 完成运行只表示数据已生成，是否达标由 WebUI 上传后的 Kernel 评价决定。
 
-**点击／选择文件｜WebUI。** 点击“选择完整结果 ZIP”，选择 `evaluation.result_zip` 打印的那个文件。等待文件名显示，再点击“校验并提交本轮轨迹”。应选择 `runs/` 中本轮生成的结果 ZIP，不能回传 `incoming/` 的请求 ZIP，也不能上传整个运行目录。
+**点击／选择文件｜WebUI。** 点击“选择完整结果 ZIP”，选择菜单打印“只上传这个结果 ZIP”下的那个文件。等待文件名显示，再点击“校验并提交本轮轨迹”。应选择 `runs/` 中本轮生成的结果 ZIP，不能回传 `incoming/` 的请求 ZIP，也不能上传整个运行目录。
 
 **完成标志：**本轮结果通过校验，页面显示评价和下一步。若显示“结果已接收，处理尚未完成”，点击“完成已接收结果处理”，不要重新上传；若拒绝，先查看回执原因。
 

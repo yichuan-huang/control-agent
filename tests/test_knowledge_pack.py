@@ -623,7 +623,7 @@ def test_rag_index_cli_passes_curated_pack_and_threshold(monkeypatch, tmp_path, 
     assert json.loads(capsys.readouterr().out)["snapshot"] == "snapshot-test"
 
 
-def test_v2_snapshot_remains_readable_without_v3_metadata(tmp_path):
+def test_v2_snapshot_is_rejected_without_rewriting(tmp_path):
     index_dir = tmp_path / "index"
     snapshot = index_dir / "snapshot-legacy"
     snapshot.mkdir(parents=True)
@@ -694,15 +694,15 @@ def test_v2_snapshot_remains_readable_without_v3_metadata(tmp_path):
     )
     (index_dir / "CURRENT").write_text("snapshot-legacy", encoding="utf-8")
 
-    index = load_index(index_dir, encoder=KeywordEncoder())
-    result = index.search("stability")[0]
+    original = (snapshot / "manifest.json").read_bytes()
+    with pytest.raises(
+        ValueError, match="schema version is incompatible; rebuild explicitly"
+    ):
+        load_index(index_dir, encoder=KeywordEncoder())
+    assert (snapshot / "manifest.json").read_bytes() == original
 
-    assert result.artifact_id == "legacy-card"
-    assert result.language == "und"
-    assert result.artifact_group_id is None
 
-
-def test_prior_v3_snapshot_without_policy_fingerprint_remains_readable(tmp_path):
+def test_prior_v3_snapshot_without_current_policy_requires_rebuild(tmp_path):
     index_dir = tmp_path / "index"
     built = build_index(
         None,
@@ -719,10 +719,12 @@ def test_prior_v3_snapshot_without_policy_fingerprint_remains_readable(tmp_path)
     manifest["retrieval_policy"].pop("max_curated_group_results")
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    loaded = load_index(index_dir, encoder=KeywordEncoder())
-
-    assert loaded.index_snapshot == built.index_snapshot
-    assert loaded.manifest["retrieval_policy_version"] == "cfdc-retrieval/v1"
+    original = manifest_path.read_bytes()
+    with pytest.raises(
+        ValueError, match="policy version is incompatible; rebuild explicitly"
+    ):
+        load_index(index_dir, encoder=KeywordEncoder())
+    assert manifest_path.read_bytes() == original
 
 
 def test_rag_query_cli_reports_curated_provenance(monkeypatch, capsys):

@@ -117,7 +117,7 @@ test("source selection exposes only generic provenance and external execution in
   expect(screen.queryByLabelText("手动运行并上传结果")).toBeNull();
   expect(screen.getByText(/实际试验在应用外部完成/)).toBeTruthy();
 });
-test("legacy recovery preserves evidence and requires a derived task without resuming execution", () => {
+test("current external recovery preserves evidence and requires a new acquisition", () => {
   const submit = vi.fn();
   render(
     <ExternalWorkflow
@@ -126,14 +126,14 @@ test("legacy recovery preserves evidence and requires a derived task without res
       workflow={{
         recovery_required: true,
         recovery_available: true,
-        recovery_reason: "旧自动执行任务只保留历史证据，请创建新任务。",
+        recovery_reason: "当前采集需要重新开始，请创建新任务。",
       }}
       busy={false}
       onSubmit={submit}
     />,
   );
   expect(submit).not.toHaveBeenCalled();
-  expect(screen.getByText(/旧自动执行任务只保留历史证据/)).toBeTruthy();
+  expect(screen.getByText(/当前采集需要重新开始/)).toBeTruthy();
   expect(
     screen.queryByRole("button", { name: /继续自动|暂停自动/ }),
   ).toBeNull();

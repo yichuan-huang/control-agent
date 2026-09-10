@@ -13,6 +13,7 @@ from cfdc.rag import (
     RAG_SCHEMA_VERSION,
     RETRIEVAL_POLICY_VERSION,
     build_index,
+    builtin_catalog_fingerprint,
     load_index,
     load_knowledge_pack,
     retrieval_policy_fingerprint,
@@ -78,6 +79,8 @@ def _is_current_builtin_snapshot(manifest: dict[str, Any], pack: Any) -> bool:
     if not isinstance(pack_manifest, dict) or not isinstance(policy, dict):
         return False
     if not isinstance(source_files, list) or not source_files:
+        return False
+    if manifest.get("builtin_catalog_fingerprint") != builtin_catalog_fingerprint():
         return False
     if manifest.get("schema_version") != RAG_SCHEMA_VERSION:
         return False

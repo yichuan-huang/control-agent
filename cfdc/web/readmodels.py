@@ -297,7 +297,6 @@ def external_summary(report):
             "confirmation",
         }
     )
-    recovery_required = bool(report.get("managed_execution")) or recovery_required
     source = _map(raw.get("source"))
     active = _map(raw.get("active_request"))
     tuning = _map(raw.get("tuning"))
@@ -341,11 +340,7 @@ def external_summary(report):
         "candidates": [_external_candidate_summary(row) for row in candidates[:100]],
         "recovery_available": True,
         "recovery_required": recovery_required,
-        "recovery_reason": (
-            "此任务保留了旧的自动实验记录，请派生新任务按通用流程重新采集。"
-            if report.get("managed_execution")
-            else "此记录缺少绑定的实验协议，请创建新任务重新采集证据。"
-        )
+        "recovery_reason": ("此记录缺少绑定的实验协议，请创建新任务重新采集证据。")
         if recovery_required
         else "",
         "failure_reasons": reasons,
@@ -474,17 +469,11 @@ def artifact_catalog(report) -> ArtifactCatalog:
 
 
 def _artifact(report, artifact_id):
-    from cfdc.kernel.managed_config import public_managed_execution
     from cfdc.kernel.service import _public_external_workflow
 
     _selector(artifact_id)
     report = {
         **report,
-        **(
-            {"managed_execution": public_managed_execution(report["managed_execution"])}
-            if report.get("managed_execution")
-            else {}
-        ),
         **(
             {
                 "external_workflow": _public_external_workflow(

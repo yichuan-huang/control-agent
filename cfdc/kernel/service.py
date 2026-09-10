@@ -59,7 +59,7 @@ from .controllers import (
 )
 from .diagnostics import DiagnosticLedger
 from .execution_contract import execution_request, freeze_trial_manifest
-from .importer import build_import_report, inspect_v3_source
+from .importer import build_import_report, inspect_result_bundle
 from .multistage import MultiStagePlan, compile_phase_plan
 from .providers import (
     EvaluationProviderRegistry,
@@ -147,11 +147,8 @@ class WorkflowService:
         )
         if agent_config is not None:
             configured_mode = agent_config.get("mode")
-            if configured_mode is not None and str(configured_mode) not in {
-                "single",
-                "multi",
-            }:
-                raise ValueError("agent_mode_must_be_single_or_multi")
+            if configured_mode is not None and configured_mode != "multi":
+                raise ValueError("agent_mode_must_be_multi")
             if (
                 agent_config.get("rag_enabled") is True
                 and agent_config.get("rag_index_dir")
@@ -2586,19 +2583,6 @@ class WorkflowService:
             raise ValueError("phase_result_order_mismatch")
         phase = dict(result)
         phase["phase_id"] = phase_id
-        # Accept the archive's public observation spellings at this boundary,
-        # then require the canonical booleans before the result can advance the
-        # phase cursor.  No condition string is evaluated here.
-        if "entry_condition_met" not in phase and "entry_passed" in phase:
-            phase["entry_condition_met"] = phase["entry_passed"]
-        if "exit_condition_met" not in phase and "exit_passed" in phase:
-            phase["exit_condition_met"] = phase["exit_passed"]
-        if "success" not in phase and "status" in phase:
-            phase["success"] = str(phase["status"]).casefold() in {
-                "completed",
-                "passed",
-                "success",
-            }
         required_fields = ("entry_condition_met", "exit_condition_met", "success")
         missing_fields = [
             field_name for field_name in required_fields if field_name not in phase
@@ -2721,7 +2705,7 @@ class WorkflowService:
         # session export.  Private-truth markers were rejected above rather
         # than silently redacted because they would also violate the evidence
         # boundary.
-        from cfdc.lab.llm import sanitize_for_audit
+        from cfdc.audit import sanitize_for_audit
 
         sanitized = sanitize_for_audit(deepcopy(dict(record)))
         role_value = (
@@ -4110,12 +4094,6 @@ class WorkflowService:
             artifacts["external_workflow.json"] = _public_external_workflow(
                 session.external_workflow
             )
-        if session.managed_execution is not None:
-            from .managed_config import public_managed_execution
-
-            artifacts["managed_execution.json"] = public_managed_execution(
-                session.managed_execution
-            )
         if session.import_report is not None:
             artifacts["import_report.json"] = session.import_report
         result = {
@@ -4182,15 +4160,15 @@ class WorkflowService:
             temporary.unlink(missing_ok=True)
         return output
 
-    def import_v3(self, source: str | Path) -> EvidenceSession:
-        """Create a new mutable Kernel session from a read-only v3 bundle.
+    def import_result_bundle(self, source: str | Path) -> EvidenceSession:
+        """Create a new mutable Kernel session from a current result bundle.
 
         Only public facts that validate under current contracts are carried
         forward.  Old execution authority, private provider state, and
         performance claims are deliberately excluded.
         """
 
-        inspection = inspect_v3_source(source)
+        inspection = inspect_result_bundle(source)
         session_id = f"cfdc-import-{inspection.source_digest[:16]}"
         target = self._path(session_id)
         if target.exists():
@@ -4198,24 +4176,11 @@ class WorkflowService:
             report = existing.import_report or {}
             if report.get("source_digest") == inspection.source_digest:
                 return existing
-            raise ValueError("v3_import_digest_collision")
+            raise ValueError("result_import_digest_collision")
 
-        raw_task = deepcopy(dict(inspection.task_payload))
-        for key in (
-            "task_fingerprint",
-            "schema_version",
-            "contract_version",
-            "task_contract_version",
-        ):
-            raw_task.pop(key, None)
-        if "measured_signals" not in raw_task and raw_task.get("observed_outputs"):
-            raw_task["measured_signals"] = raw_task["observed_outputs"]
-        if (
-            "control_input" not in raw_task
-            and not raw_task.get("control_inputs")
-            and raw_task.get("actuator")
-        ):
-            raw_task["control_input"] = raw_task["actuator"]
+        imported_task = TaskContract.from_user_input(inspection.task_payload)
+        raw_task = imported_task.to_dict()
+        raw_task.pop("task_fingerprint", None)
         raw_task["budget_confirmed"] = False
         task = TaskContract.from_user_input(raw_task)
 
@@ -4229,7 +4194,7 @@ class WorkflowService:
         ]
         discarded: list[dict[str, Any]] = [
             {
-                "artifact": "legacy_execution_authority",
+                "artifact": "source_execution_authority",
                 "reason": "fresh Kernel confirmation required",
             },
             {
@@ -4244,7 +4209,8 @@ class WorkflowService:
         if inspection.diagnostic_updates:
             try:
                 ledger = ledger.update(
-                    inspection.diagnostic_updates, source="v3_import:public_evidence"
+                    inspection.diagnostic_updates,
+                    source="result_import:public_evidence",
                 )
                 accepted.append(
                     {
@@ -4261,13 +4227,6 @@ class WorkflowService:
         if ledger.readiness().status == "ready":
             try:
                 route = self._resolve_route(ledger)
-                supplied_routes = inspection.candidates.get("route", ())
-                if supplied_routes and not any(
-                    str(item.get("route_id")) == route["route_id"]
-                    or str(item.get("profile_id")) == route["profile_id"]
-                    for item in supplied_routes
-                ):
-                    raise ValueError("v3_route_disagrees_with_current_kernel")
                 accepted.append(
                     {
                         "artifact": "route",
@@ -4278,47 +4237,6 @@ class WorkflowService:
                 resumed_stage = "route"
             except (TypeError, ValueError) as exc:
                 discarded.append({"artifact": "route", "reason": str(exc)})
-
-        # Validate portable artifact syntax for the report, but leave all
-        # execution-bound objects out of the new session until the new task,
-        # provider and protocol fingerprints have been confirmed.
-        for candidate in inspection.candidates.get("controller", ()):
-            raw_controller = (
-                candidate.get("controller_ir")
-                if isinstance(candidate.get("controller_ir"), Mapping)
-                else candidate
-            )
-            try:
-                controller = ControllerIR.from_mapping(raw_controller)
-                discarded.append(
-                    {
-                        "artifact": "controller",
-                        "source_fingerprint": controller.fingerprint,
-                        "reason": "source controller requires current features, qualification and a new freeze",
-                    }
-                )
-            except (TypeError, ValueError) as exc:
-                discarded.append(
-                    {"artifact": "controller", "reason": f"validation_failed: {exc}"}
-                )
-        for kind in ("protocol", "evidence", "features", "freeze", "evaluation_packet"):
-            for candidate in inspection.candidates.get(kind, ()):
-                discarded.append(
-                    {
-                        "artifact": kind,
-                        "source_fingerprint": candidate.get(
-                            "protocol_fingerprint",
-                            candidate.get(
-                                "artifact_fingerprint",
-                                candidate.get(
-                                    "freeze_fingerprint",
-                                    candidate.get("packet_fingerprint"),
-                                ),
-                            ),
-                        ),
-                        "reason": "source binding must be regenerated or resubmitted under the new Kernel session",
-                    }
-                )
 
         session = EvidenceSession(
             session_id=session_id,
@@ -4332,7 +4250,7 @@ class WorkflowService:
                     "reason": "imported_task_requires_fresh_boundary_confirmation",
                 },
             ),
-            agent_config={"mode": "multi", "source": "v3_import"},
+            agent_config={"mode": "multi", "source": "result_import"},
         )
         report = build_import_report(
             inspection,
@@ -4344,8 +4262,8 @@ class WorkflowService:
         session = self._replace(session, import_report=report)
         session = self._append(
             session,
-            "v3_bundle_imported",
-            f"v3-import:{inspection.source_digest[:24]}",
+            "result_bundle_imported",
+            f"result-import:{inspection.source_digest[:24]}",
             {
                 "source_digest": inspection.source_digest,
                 "import_fingerprint": report["import_fingerprint"],
@@ -4353,87 +4271,6 @@ class WorkflowService:
             },
         )
         return self._save(session)
-
-    def import_legacy(self, path: Path) -> EvidenceSession:
-        """Import a v0/v1 receipt as a read-only view without inventing facts."""
-
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
-        source_id = hashlib.sha256(Path(path).read_bytes()).hexdigest()[:12]
-        existing_path = self._path(f"legacy-{source_id}")
-        if existing_path.exists():
-            existing = EvidenceSession.from_json(
-                existing_path.read_text(encoding="utf-8"), path=existing_path
-            )
-            if existing.read_only:
-                return existing
-            raise ValueError("legacy_import_target_not_read_only")
-        # Carry only explicitly public task text and interface names.  Legacy
-        # approvals, routes, controller parameters, and performance claims are
-        # intentionally discarded and must be re-confirmed in a new task.
-        legacy_task = raw.get("task") if isinstance(raw.get("task"), Mapping) else raw
-        description = str(
-            legacy_task.get("description")
-            or legacy_task.get("natural_language_description")
-            or f"Legacy session {source_id}; task contract unavailable"
-        ).strip()
-        signals = (
-            legacy_task.get("measured_signals")
-            or legacy_task.get("observed_outputs")
-            or ["output"]
-        )
-        control_input = (
-            legacy_task.get("control_input") or legacy_task.get("actuator") or "input"
-        )
-        task = TaskContract.from_user_input(
-            {
-                "description": description,
-                "measured_signals": signals,
-                "control_input": control_input,
-            }
-        )
-        session = EvidenceSession(
-            session_id=f"legacy-{source_id}",
-            task=task,
-            ledger=DiagnosticLedger.initial(),
-            status=str(raw.get("status", "legacy_read_only")),
-            read_only=True,
-            legacy_lineage={
-                "source_path": str(Path(path).resolve()),
-                "source_hash": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
-                "source_schema": str(
-                    raw.get("schema_version") or raw.get("session_version") or "unknown"
-                ),
-                "import_policy": "public_task_facts_only; approvals_and_results_discarded",
-            },
-        )
-        return self._save(session)
-
-    def create_task_from_legacy(
-        self,
-        path: Path,
-        *,
-        agent_config: Mapping[str, Any] | None = None,
-    ) -> EvidenceSession:
-        """Start a fresh mutable task carrying only public legacy facts."""
-
-        legacy = self.import_legacy(path)
-        task = legacy.task
-        session = self.start(task, agent_config=agent_config)
-        lineage = {
-            "source_session_id": legacy.session_id,
-            "source_hash": legacy.legacy_lineage.get("source_hash")
-            if legacy.legacy_lineage
-            else None,
-            "import_policy": "public_task_facts_only; approvals_and_results_discarded",
-        }
-        updated = self._replace(session, legacy_lineage=lineage)
-        return self._save(
-            self._append(
-                updated, "legacy_public_facts_carried_forward", "legacy-import", lineage
-            )
-        )
-
-    continue_from_legacy = create_task_from_legacy
 
     def _resolve_route(self, ledger: DiagnosticLedger) -> dict[str, Any]:
         route = resolve_route(ledger)
@@ -4762,10 +4599,6 @@ def _public_session_value(session: EvidenceSession) -> dict[str, Any]:
         value["external_workflow"] = _public_external_workflow(
             session.external_workflow
         )
-    if session.managed_execution is not None:
-        from .managed_config import public_managed_execution
-
-        value["managed_execution"] = public_managed_execution(session.managed_execution)
     return value
 
 
@@ -5010,7 +4843,7 @@ def _sanitize_reply_agent_records(value: Any) -> list[dict[str, Any]]:
         return []
     if not isinstance(value, (list, tuple)):
         raise TypeError("kernel_reply_agent_records_must_be_array")
-    from cfdc.lab.llm import sanitize_for_audit
+    from cfdc.audit import sanitize_for_audit
 
     result: list[dict[str, Any]] = []
     for raw in value:

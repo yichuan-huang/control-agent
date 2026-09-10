@@ -442,7 +442,6 @@ class EvidenceSession:
     provider: Mapping[str, Any] | None = None
     provider_bindings: Mapping[str, Any] = field(default_factory=dict)
     external_workflow: Mapping[str, Any] | None = None
-    managed_execution: Mapping[str, Any] | None = None
     registered_case_binding: Mapping[str, Any] | None = None
     agent_records: tuple[Mapping[str, Any], ...] = ()
     agent_config: Mapping[str, Any] | None = None
@@ -519,11 +518,6 @@ class EvidenceSession:
                 if self.external_workflow is not None
                 else {}
             ),
-            **(
-                {"managed_execution": dict(self.managed_execution)}
-                if self.managed_execution is not None
-                else {}
-            ),
             "registered_case_binding": (
                 dict(self.registered_case_binding)
                 if self.registered_case_binding is not None
@@ -574,18 +568,21 @@ class EvidenceSession:
         version = value.get("session_version")
         if version not in READABLE_EVIDENCE_SESSION_VERSIONS:
             raise ValueError("evidence_session_version_mismatch")
+        _validate_persisted_artifact_versions(value)
         external_workflow = value.get("external_workflow")
         if external_workflow is not None and (
             not isinstance(external_workflow, Mapping)
             or external_workflow.get("workflow_version") != "cfdc-external-workflow/v1"
         ):
             raise ValueError("external_workflow_version_mismatch")
-        managed = value.get("managed_execution")
-        if managed is not None and (
-            not isinstance(managed, Mapping)
-            or managed.get("workflow_version") != "cfdc-managed-execution/v1"
-        ):
-            raise ValueError("managed_execution_version_mismatch")
+        if "managed_execution" in value:
+            raise ValueError("managed_execution_removed")
+        agent_config = value.get("agent_config")
+        if agent_config is not None:
+            if not isinstance(agent_config, Mapping):
+                raise TypeError("agent_config_mapping_required")
+            if agent_config.get("mode") not in (None, "multi"):
+                raise ValueError("agent_mode_must_be_multi")
         task_value = dict(value["task"])
         task_value.pop("task_fingerprint", None)
         task = TaskContract.from_user_input(task_value)
@@ -597,10 +594,7 @@ class EvidenceSession:
         _validate_event_chain(events)
         session_id = str(value["session_id"])
         controller_freeze = value.get("controller_freeze")
-        historical = version != EVIDENCE_SESSION_VERSION
-        if historical and controller_freeze is not None:
-            _validate_historical_freeze(controller_freeze, session_id, task.fingerprint)
-        if controller_freeze is not None and not historical:
+        if controller_freeze is not None:
             freeze = ControllerFreeze.from_mapping(controller_freeze)
             if (
                 freeze.session_id != session_id
@@ -609,11 +603,6 @@ class EvidenceSession:
                 raise ValueError("controller_freeze_session_binding_mismatch")
         freeze_history = tuple(dict(item) for item in value.get("freeze_history", ()))
         for previous_freeze in freeze_history:
-            if historical:
-                _validate_historical_freeze(
-                    previous_freeze, session_id, task.fingerprint
-                )
-                continue
             freeze = ControllerFreeze.from_mapping(previous_freeze)
             if (
                 freeze.session_id != session_id
@@ -695,15 +684,11 @@ class EvidenceSession:
             external_workflow=dict(value["external_workflow"])
             if value.get("external_workflow") is not None
             else None,
-            managed_execution=dict(value["managed_execution"])
-            if value.get("managed_execution") is not None
-            else None,
             registered_case_binding=(
                 RegisteredCaseBinding.from_mapping(
                     value["registered_case_binding"], task=task
                 ).to_dict()
-                if not historical
-                and isinstance(value.get("registered_case_binding"), Mapping)
+                if isinstance(value.get("registered_case_binding"), Mapping)
                 else None
             ),
             agent_records=tuple(dict(item) for item in value.get("agent_records", ())),
@@ -716,16 +701,11 @@ class EvidenceSession:
             workflow_version=str(value.get("workflow_version", "cfdc-v6-kernel/v1")),
             legacy_lineage=value.get("legacy_lineage"),
             import_report=value.get("import_report"),
-            read_only=historical or bool(value.get("read_only", False)),
+            read_only=bool(value.get("read_only", False)),
             session_version=str(version),
             _path=str(path) if path is not None else None,
         )
-        if session.phase_plan is not None and historical:
-            plan_raw = dict(session.phase_plan)
-            plan_digest = plan_raw.pop("plan_fingerprint", None)
-            if plan_digest and fingerprint(plan_raw) != plan_digest:
-                raise ValueError("historical_phase_plan_fingerprint_mismatch")
-        if session.phase_plan is not None and not historical:
+        if session.phase_plan is not None:
             plan = MultiStagePlan.from_mapping(session.phase_plan)
             if plan.task_fingerprint != task.fingerprint:
                 raise ValueError("phase_plan_task_binding_mismatch")
@@ -796,16 +776,67 @@ def _validate_event_chain(events: tuple[SessionEvent, ...]) -> None:
         expected_revision = event.revision_after
 
 
-def _validate_historical_freeze(
-    value: Mapping[str, Any], session_id: str, task_fingerprint: str
-) -> None:
-    """Check stored integrity without upgrading historical execution authority."""
-    raw = dict(value)
-    supplied = raw.pop("freeze_fingerprint", None)
-    if not supplied or fingerprint(raw) != supplied:
-        raise ValueError("historical_freeze_fingerprint_mismatch")
-    if (
-        raw.get("session_id") != session_id
-        or raw.get("task_fingerprint") != task_fingerprint
-    ):
-        raise ValueError("historical_freeze_session_binding_mismatch")
+def _validate_persisted_artifact_versions(value: Mapping[str, Any]) -> None:
+    """Reject obsolete versions only at recognized persisted artifact boundaries."""
+    from .contracts import (
+        CONTROLLER_IR_VERSION,
+        FEATURE_ARTIFACT_VERSION,
+        PACKET_VERSION,
+        PROTOCOL_VERSION,
+        QUALIFICATION_VERSION,
+        TUNING_CONTRACT_VERSION,
+    )
+    from .judging import JUDGE_VERSION
+
+    contracts = (
+        (
+            ("feature_artifact", "feature_history"),
+            "feature_version",
+            FEATURE_ARTIFACT_VERSION,
+        ),
+        (
+            ("controller_qualification", "qualification_history"),
+            "qualification_version",
+            QUALIFICATION_VERSION,
+        ),
+        (("evaluation",), "judge_version", JUDGE_VERSION),
+        (("evaluation_packets",), "packet_version", PACKET_VERSION),
+        (("protocols",), "protocol_version", PROTOCOL_VERSION),
+    )
+    for fields, version_key, expected in contracts:
+        for field_name in fields:
+            raw = value.get(field_name)
+            artifacts = raw if isinstance(raw, (list, tuple)) else (raw,)
+            for artifact in artifacts:
+                if (
+                    isinstance(artifact, Mapping)
+                    and version_key in artifact
+                    and artifact[version_key] != expected
+                ):
+                    raise ValueError(f"{version_key}_mismatch")
+    for field_name in ("controller_candidate", "controller_history"):
+        raw = value.get(field_name)
+        artifacts = raw if isinstance(raw, (list, tuple)) else (raw,)
+        for artifact in artifacts:
+            if not isinstance(artifact, Mapping):
+                continue
+            controller = artifact.get("ir", artifact)
+            if (
+                isinstance(controller, Mapping)
+                and "ir_version" in controller
+                and controller["ir_version"] != CONTROLLER_IR_VERSION
+            ):
+                raise ValueError("ir_version_mismatch")
+    for field_name in ("tuning", "tuning_history"):
+        raw = value.get(field_name)
+        artifacts = raw if isinstance(raw, (list, tuple)) else (raw,)
+        for artifact in artifacts:
+            if not isinstance(artifact, Mapping):
+                continue
+            contract = artifact.get("contract", artifact)
+            if (
+                isinstance(contract, Mapping)
+                and "contract_version" in contract
+                and contract["contract_version"] != TUNING_CONTRACT_VERSION
+            ):
+                raise ValueError("tuning_contract_version_mismatch")

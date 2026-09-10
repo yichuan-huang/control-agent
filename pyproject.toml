@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cfdc-control"
-version = "0.3.7"
+version = "0.3.8"
 description = "Independent Core-Feature-Driven Control framework"
 authors = [{ name = "Yichuan Huang" }]
 license = "AGPL-3.0-only"
@@ -15,7 +15,6 @@ dependencies = [
   "jsonschema>=4.20",
   "numpy>=2.0",
   "openai>=1.0",
-  "pandas>=2.2",
   "pydantic>=2.0",
   "pypdf>=5.0",
   "python-multipart>=0.0.18,<1",
@@ -24,9 +23,6 @@ dependencies = [
   "sentence-transformers>=3.0",
   "uvicorn>=0.34,<1",
 ]
-
-[project.optional-dependencies]
-rag = []  # Compatibility alias; knowledge-base dependencies are installed by default.
 
 [project.urls]
 Repository = "https://github.com/yichuan-huang/control-agent"
@@ -46,8 +42,7 @@ python-preference = "only-managed"
 
 [tool.setuptools.package-data]
 cfdc = [
-  "diagnosis/*.json",
-  "lab/resources/*.json",
+  "knowledge/resources/*.json",
   "kernel/resources/*.json",
   "history/resources/*.json",
   "resources/knowledge_pack/v1/*.json",
@@ -72,14 +67,4 @@ extend-exclude = ["cfdc/web/gradio_archive", "cfdc/web/frontend/node_modules", "
 # These input-validation boundaries intentionally expose malformed payloads as
 # ValueError for a stable public/API and Pydantic validation contract.
 [tool.ruff.lint.per-file-ignores]
-"cfdc/controllers/synthesis.py" = ["TRY004"]
-"cfdc/diagnosis/llm.py" = ["TRY004"]
-"cfdc/diagnosis/mechanism_cards.py" = ["TRY004"]
-"cfdc/lab/controller_compatibility.py" = ["TRY004"]
-"cfdc/lab/model_contracts.py" = ["TRY004"]
-"cfdc/lab/model_discovery_llm.py" = ["TRY004"]
-"cfdc/sim/closed_loop_runtime.py" = ["TRY004"]
-"cfdc/sim/profile_runtime.py" = ["TRY004"]
-"cfdc/specifications/compiler.py" = ["TRY004"]
-"cfdc/specifications/dialogue.py" = ["TRY004"]
 "cfdc/web/service.py" = ["TRY004"]

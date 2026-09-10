@@ -15,11 +15,11 @@ uv run --locked ruff format .
 uv run --locked ruff format --check .
 uv run --locked ruff check .
 uv run --locked pytest -q
-uv run --locked python main.py --benchmark > /tmp/cfdc-benchmark.json
-uv run --locked python main.py --validate-demo
+uv run --locked pytest -q tests/test_main_cli.py
 git diff --check
 ```
 
+- The CLI acceptance tests execute create/read/automatic progression/export/import as subprocesses and verify exit codes, JSON output, and evidence bindings. Keep this coverage in CI.
 - Fix failures before proceeding. Do not weaken assertions, add unjustified skips, disable CI jobs, or relax lint rules just to obtain a passing result.
 - For frontend changes and releases, use the existing npm lockfile and Node.js 22. Run `npm ci`, `npm run format:check`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npx playwright install chromium`, and `npm run test:e2e` from `cfdc/web/frontend`. The default Playwright configuration starts the production frontend and real API on port 7867 with disposable data, without RAG preparation or model calls. Keep these checks aligned with the frontend CI job and require it to pass for the published SHA.
 - Report existing optional skips separately from failures. A skipped test is not evidence that its behavior works.
@@ -53,7 +53,7 @@ uv run --locked pytest -q tests/test_kernel_webui.py::test_live_ollama_dc_motor_
 
 ## CFDC Boundaries
 
-- Keep the WebUI dedicated to the current Kernel workflow. Legacy workflows and the `single` baseline belong in the CLI, not in WebUI selectors or fallbacks.
+- Keep both the WebUI and CLI dedicated to the current Kernel workflow. Do not introduce legacy workflows, the `single` baseline, compatibility selectors, or fallback execution paths.
 - Preserve the Kernel's authority over state transitions, routes, numerical evaluation, controller validation, safety gates, and final claims. LLM replies and RAG references are untrusted inputs and cannot grant authorization or bypass typed validation.
 - Never execute model-generated code or turn software confirmation into hardware authorization. The WebUI must not command physical hardware.
 - Preserve revision checks, immutable artifacts, and append-only audit records. Do not overwrite evidence or silently repair rejected experimental data.

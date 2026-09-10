@@ -1,4 +1,4 @@
-"""Evidence-driven CFDC kernel migrated from the archived v3 workbench."""
+"""Evidence-driven CFDC Kernel and current public contracts."""
 
 from cfdc.knowledge import KnowledgeContext, RetrievalRequest, RuleDecision
 
@@ -24,15 +24,6 @@ from .controllers import (
     validate_controller_for_route,
 )
 from .diagnostics import DiagnosticEntry, DiagnosticLedger, DiagnosticReadiness
-from .migration_manifest import (
-    MIGRATION_ITEMS,
-    MIGRATION_MANIFEST_VERSION,
-    PARITY_CAPABILITIES,
-    PARITY_MATRIX_VERSION,
-    MigrationItem,
-    build_migration_manifest,
-    build_v3_parity_matrix,
-)
 from .multistage import (
     MultiStagePlan,
     PhaseContract,
@@ -42,7 +33,6 @@ from .multistage import (
 from .providers import (
     CallableEvaluationProvider,
     CallableExperimentProvider,
-    CurrentModelExperimentProvider,
     EvaluationProvider,
     EvaluationProviderRegistry,
     ExperimentProvider,
@@ -81,13 +71,9 @@ __all__ = [
     "DIAGNOSTIC_IDS",
     "EVIDENCE_SESSION_VERSION",
     "FREEZE_VERSION",
-    "MIGRATION_ITEMS",
-    "MIGRATION_MANIFEST_VERSION",
     "MULTISTAGE_VERSION",
     "P1_1_TASK_SEMANTICS_VERSION",
     "PACKET_VERSION",
-    "PARITY_CAPABILITIES",
-    "PARITY_MATRIX_VERSION",
     "SUPPORTED_TASK_TYPES",
     "TASK_SUCCESS_METRICS",
     "TUNING_CONTRACT_VERSION",
@@ -98,7 +84,6 @@ __all__ = [
     "CallableExperimentProvider",
     "ControllerFreeze",
     "ControllerIR",
-    "CurrentModelExperimentProvider",
     "DiagnosticEntry",
     "DiagnosticLedger",
     "DiagnosticReadiness",
@@ -111,7 +96,6 @@ __all__ = [
     "KernelAgentCoordinator",
     "KernelReplyMode",
     "KnowledgeContext",
-    "MigrationItem",
     "MultiStagePlan",
     "PhaseContract",
     "ProviderRegistry",
@@ -128,8 +112,6 @@ __all__ = [
     "WorkflowService",
     "bounded_parameter_candidates",
     "build_kernel_input_contract",
-    "build_migration_manifest",
-    "build_v3_parity_matrix",
     "compile_phase_plan",
     "disturbance_event_fingerprint",
     "evaluate_nominal_task_outcome",

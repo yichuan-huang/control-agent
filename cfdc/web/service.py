@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 from collections.abc import Mapping
 from copy import deepcopy
@@ -10,8 +11,6 @@ from pathlib import Path
 from threading import Event, RLock
 from typing import Any
 
-from cfdc.agents import wrap_agent_adapter
-from cfdc.diagnosis import OpenAICompatibleDiagnosticAdapter
 from cfdc.kernel import KernelActionError, WorkflowService
 from cfdc.kernel.agents import KernelAgentCoordinator
 from cfdc.kernel.cases import case_learning_material, public_training_case
@@ -21,6 +20,7 @@ from cfdc.kernel.replies import (
     prepare_kernel_reply,
 )
 from cfdc.kernel.session import registered_task_scope_fingerprint
+from cfdc.llm import OpenAICompatibleAdapter
 
 
 class _ReplyPreparation:
@@ -98,7 +98,7 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
         artifact = EvaluationPacket.from_mapping(value)
         kind = "evaluation_packet"
         artifact_fingerprint = artifact.to_dict()["packet_fingerprint"]
-    elif value.get("contract_version") == "cfdc-tuning/v1.0":
+    elif str(value.get("contract_version", "")).startswith("cfdc-tuning/"):
         artifact = TuningContract.from_mapping(value)
         kind = "tuning_contract"
         artifact_fingerprint = artifact.fingerprint
@@ -108,17 +108,9 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
         artifact_fingerprint = artifact.fingerprint
     else:
         typed_fingerprints = {
-            ("feature_version", "cfdc-features/v1"): (
-                "artifact_fingerprint",
-                "features",
-            ),
             ("feature_version", FEATURE_ARTIFACT_VERSION): (
                 "artifact_fingerprint",
                 "features",
-            ),
-            ("qualification_version", "cfdc-qualification/v1"): (
-                "qualification_fingerprint",
-                "qualification",
             ),
             ("qualification_version", QUALIFICATION_VERSION): (
                 "qualification_fingerprint",
@@ -131,10 +123,6 @@ def validate_kernel_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
             ("import_version", "cfdc-import/v1"): (
                 "import_fingerprint",
                 "import_report",
-            ),
-            ("judge_version", "cfdc-independent-judge/v1"): (
-                "judge_fingerprint",
-                "evaluation",
             ),
             ("judge_version", JUDGE_VERSION): (
                 "judge_fingerprint",
@@ -1073,9 +1061,6 @@ def _kernel_report(session) -> dict[str, Any]:
         "revision": session.revision,
         "read_only": session.read_only,
         "active_protocol_fingerprint": session.active_protocol_fingerprint,
-        "managed_execution": dict(session.managed_execution)
-        if session.managed_execution
-        else None,
         "task": session.task.to_dict(),
         "parameter_facts": [dict(item) for item in session.parameter_facts],
         "diagnostic": {
@@ -1182,13 +1167,13 @@ def load_kernel_app_run(
     }
 
 
-def import_v3_app_run(
+def import_result_app_run(
     source: str | Path,
     *,
     session_dir: str | Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     service = WorkflowService(session_dir or Path("output") / "kernel-sessions")
-    session = service.import_v3(source)
+    session = service.import_result_bundle(source)
     report = _kernel_report(session)
     return report, {
         "kernel_session_id": session.session_id,
@@ -1236,20 +1221,30 @@ def build_adapter(
 ):
     if not use_llm:
         return None
-    adapter = OpenAICompatibleDiagnosticAdapter(
+    adapter = OpenAICompatibleAdapter(
         base_url=str(base_url or "").strip() or None,
         model=str(model or "").strip() or None,
         api_key=str(api_key or "").strip() or None,
         timeout_s=timeout_s,
         max_tokens=max_tokens,
     )
-    return wrap_agent_adapter(
-        adapter,
-        agent_mode="multi",
-        rag_index_dir=str(rag_index_dir) if rag_index_dir is not None else None,
-        rag_snapshot=rag_snapshot,
-        use_rag=use_rag,
+    adapter.retriever = None
+    requested_index = rag_index_dir or os.getenv("CFDC_RAG_INDEX_DIR")
+    if use_rag and requested_index:
+        from cfdc.rag import load_index
+
+        try:
+            adapter.retriever = load_index(requested_index, snapshot_name=rag_snapshot)
+        except (FileNotFoundError, ImportError, OSError, ValueError) as exc:
+            raise ValueError(
+                f"unable to load RAG index {requested_index!s}: {exc}"
+            ) from exc
+    adapter.rag_enabled = adapter.retriever is not None
+    adapter.rag_index_dir = (
+        str(requested_index) if use_rag and requested_index else None
     )
+    adapter.rag_snapshot = getattr(adapter.retriever, "index_snapshot", None)
+    return adapter
 
 
 def _build_app_adapter(
@@ -1464,12 +1459,9 @@ def _prepare_kernel_reply_for_ui_uncached(
             rag_snapshot=app_state.get("rag_snapshot") or session.rag_snapshot,
             use_rag=use_rag,
         )
-        if str(getattr(adapter, "agent_mode", "")).strip().casefold() != "multi":
-            raise ValueError("WebUI 需要支持 multi-agent 边界的 Provider adapter。")
         coordinator = KernelAgentCoordinator(
             adapter,
             retriever=getattr(adapter, "retriever", None),
-            agent_mode="multi",
         )
     prepared = prepare_kernel_reply(
         session,
@@ -1490,7 +1482,7 @@ __all__ = [
     "continue_kernel_app_run",
     "export_kernel_app_artifact",
     "export_kernel_app_bundle",
-    "import_v3_app_run",
+    "import_result_app_run",
     "load_kernel_app_run",
     "parse_names",
     "prepare_kernel_reply_for_ui",

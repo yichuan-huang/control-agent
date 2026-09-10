@@ -706,3 +706,66 @@ test("pending creation cannot cross same-path different-case navigation", async 
   await page.goto("/new?case=dc_motor_speed_v1");
   await expect(page).toHaveURL(/\/tasks\//, { timeout: 30000 });
 });
+
+test("old session JSON import shows rejection without changing the current task", async ({
+  page,
+}) => {
+  const detail = await (
+    await page.request.get("/api/v1/cases/dc_motor_speed_v1")
+  ).json();
+  let operation = await (
+    await page.request.post("/api/v1/tasks", {
+      data: {
+        request_id: crypto.randomUUID(),
+        task: detail.task,
+        confirmed: false,
+        use_rag: false,
+      },
+    })
+  ).json();
+  await expect
+    .poll(async () => {
+      operation = await (
+        await page.request.get(`/api/v1/operations/${operation.operation_id}`)
+      ).json();
+      return operation.status;
+    })
+    .toBe("completed");
+  const id = operation.session_id;
+  const reportUrl = `/api/v1/tasks/${id}/downloads/report`;
+  const operationsUrl = `/api/v1/tasks/${id}/operations`;
+  const before = await (await page.request.get(reportUrl)).json();
+  const beforeOperations = await (await page.request.get(operationsUrl)).json();
+  await page.goto(`/tasks/${id}`);
+  await page.getByRole("button", { name: "专家工具", exact: true }).click();
+  await page.getByRole("tab", { name: "历史公开包导入" }).click();
+  const rejection = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/imports") &&
+      response.request().method() === "POST",
+  );
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "old-session.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        workflow_version: "legacy",
+        schema_version: "1.0",
+        session_id: "old-session",
+        status: "ready_for_experiments",
+        task: detail.task,
+      }),
+    ),
+  });
+  expect((await rejection).status()).toBe(422);
+  await expect(
+    page.getByText("历史记录导入需要 ZIP 文件。", { exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/tasks/${id}$`));
+  const after = await (await page.request.get(reportUrl)).json();
+  expect(after.revision).toBe(before.revision);
+  expect(after).toEqual(before);
+  expect(await (await page.request.get(operationsUrl)).json()).toEqual(
+    beforeOperations,
+  );
+});

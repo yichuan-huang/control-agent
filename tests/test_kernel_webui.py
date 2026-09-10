@@ -508,7 +508,7 @@ def test_kernel_reply_contract_allows_natural_language_diagnosis(tmp_path):
                 ]
             }
 
-    coordinator = KernelAgentCoordinator(FakeCompletion(), agent_mode="multi")
+    coordinator = KernelAgentCoordinator(FakeCompletion())
     prepared = prepare_kernel_reply(
         WorkflowService(tmp_path).read(state["kernel_session_id"]),
         "系统稳定，静态增益为2 degC/kW。",
@@ -522,41 +522,9 @@ def test_kernel_reply_contract_allows_natural_language_diagnosis(tmp_path):
     assert prepared["source_text"] == "系统稳定，静态增益为2 degC/kW。"
 
 
-def test_kernel_single_reply_uses_one_typed_agent_call(tmp_path):
-    _, state = _kernel_inputs(tmp_path)
-    _, state = continue_kernel_app_run(state, action="confirm_task", payload={})
-    session = WorkflowService(tmp_path).read(state["kernel_session_id"])
-    calls = []
-
-    class FakeCompletion:
-        def __call__(self, request):
-            calls.append(request.role.value)
-            return {
-                "diagnostic_updates": {
-                    "open_loop_stability": {
-                        "status": "known",
-                        "evidence": "系统稳定",
-                    }
-                },
-                "parameter_candidates": [
-                    {
-                        "fact_id": "static_gain",
-                        "value": 2,
-                        "unit": "degC/kW",
-                        "source_text": "静态增益为2 degC/kW",
-                    }
-                ],
-            }
-
-    prepared = prepare_kernel_reply(
-        session,
-        "系统稳定，静态增益为2 degC/kW。",
-        mode=KernelReplyMode.NATURAL_LANGUAGE,
-        coordinator=KernelAgentCoordinator(FakeCompletion(), agent_mode="single"),
-    )
-
-    assert calls == ["diagnosis"]
-    assert prepared["parameter_candidates"][0]["fact_id"] == "static_gain"
+def test_kernel_coordinator_rejects_removed_single_mode():
+    with pytest.raises(TypeError, match="agent_mode"):
+        KernelAgentCoordinator(lambda request: {}, agent_mode="single")
 
 
 def test_kernel_reply_json_code_fence_is_parsed_without_llm(tmp_path):
@@ -650,7 +618,7 @@ def test_kernel_reply_uses_critic_correction_before_submission(tmp_path):
         session,
         "系统稳定，静态增益为2 degC/kW。",
         mode=KernelReplyMode.NATURAL_LANGUAGE,
-        coordinator=KernelAgentCoordinator(FakeCompletion(), agent_mode="multi"),
+        coordinator=KernelAgentCoordinator(FakeCompletion()),
     )
 
     assert prepared["parameter_candidates"][0]["value"] == 2.0
@@ -662,11 +630,20 @@ def test_kernel_reply_uses_critic_correction_before_submission(tmp_path):
         if request.role.value == "critic" or request.revision == 1
     ]
     assert review_or_revision
+
+    def assert_no_task_limits(value):
+        if isinstance(value, dict):
+            assert not {"input_min", "output_max", "state_stop"} & value.keys()
+            for child in value.values():
+                assert_no_task_limits(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                assert_no_task_limits(child)
+
     for request in review_or_revision:
-        rendered = json.dumps(request.request, ensure_ascii=False)
-        assert "input_min" not in rendered
-        assert "output_max" not in rendered
-        assert "state_stop" not in rendered
+        # Allowed fact IDs are schema, not task values. No task-limit fields or
+        # values may leak into either the review or the correction context.
+        assert_no_task_limits(request.request)
     critic_system = next(
         request.messages[0]["content"]
         for request in observed_requests
@@ -702,7 +679,7 @@ def test_kernel_diagnosis_prompt_distinguishes_asserted_and_unknown_facts(tmp_pa
         session,
         "系统稳定。",
         mode=KernelReplyMode.NATURAL_LANGUAGE,
-        coordinator=KernelAgentCoordinator(FakeCompletion(), agent_mode="multi"),
+        coordinator=KernelAgentCoordinator(FakeCompletion()),
     )
 
     assert len(diagnosis_requests) == 1
@@ -1471,3 +1448,114 @@ def test_kernel_api_flow_reaches_result_with_ollama_shaped_replies(
     assert report["freeze"]["freeze_version"] == "cfdc-freeze/v2.0"
     assert report["evaluation"]["status"] == "performance_not_met"
     assert report["evaluation"]["wilson_lower_bound_95"] == 0.0
+
+
+@pytest.mark.parametrize("invalid", [None, "evidence", "parameter_shape"])
+def test_user_reply_correction_keeps_combined_schema_and_source_gates(
+    tmp_path, invalid
+):
+    _, state = _kernel_inputs(tmp_path)
+    _, state = continue_kernel_app_run(state, action="confirm_task", payload={})
+    session = WorkflowService(tmp_path).read(state["kernel_session_id"])
+    original = session.to_dict()
+    source = "系统稳定，相对阶次为 1。"
+    requests = []
+    critic_calls = 0
+
+    def completion(request):
+        nonlocal critic_calls
+        requests.append(request)
+        if request.role.value == "critic":
+            critic_calls += 1
+            return {
+                "decision": "revise" if critic_calls == 1 else "pass",
+                "feedback": "Use the canonical relative-degree assessment."
+                if critic_calls == 1
+                else "",
+            }
+        if request.stage == "user_reply:correction":
+            payload = request.request["task_payload"]
+            assert payload["user_response"] == source
+            assert set(payload["required_output_schema"]) == {
+                "diagnostic_updates",
+                "parameter_candidates",
+            }
+            assert "relative_degree" in payload["allowed_diagnostic_ids"]
+            assert "static_gain" in payload["allowed_parameter_fact_ids"]
+            assert "low" in payload["canonical_assessments"]["relative_degree"]
+            assert "state_stop" not in json.dumps(request.request)
+            assert (
+                request.request["candidate"]["diagnostic_updates"][
+                    "open_loop_stability"
+                ]["evidence"]
+                == "系统稳定"
+            )
+            assert "complete combined candidate" in request.messages[0]["content"]
+            return {
+                "diagnostic_updates": {
+                    "open_loop_stability": {
+                        "status": "known",
+                        "assessment": "stable",
+                        "evidence": "系统稳定",
+                    },
+                    "relative_degree": {
+                        "status": "known",
+                        "assessment": "low",
+                        "evidence": "用户没有说的内容"
+                        if invalid == "evidence"
+                        else "相对阶次为 1",
+                    },
+                },
+                "parameter_candidates": ["1"] if invalid == "parameter_shape" else [],
+            }
+        if request.role.value == "diagnosis":
+            return {
+                "diagnostic_updates": {
+                    "open_loop_stability": {
+                        "status": "known",
+                        "assessment": "stable",
+                        "evidence": "系统稳定",
+                    },
+                    "relative_degree": {"status": "known", "evidence": "相对阶次为 1"},
+                }
+            }
+        return {"parameter_candidates": []}
+
+    def prepare():
+        return prepare_kernel_reply(
+            session,
+            source,
+            mode=KernelReplyMode.NATURAL_LANGUAGE,
+            coordinator=KernelAgentCoordinator(completion),
+        )
+
+    if invalid == "evidence":
+        with pytest.raises(ValueError, match="Critic 修正后的 Diagnosis evidence"):
+            prepare()
+    elif invalid == "parameter_shape":
+        with pytest.raises(TypeError, match="参数候选必须是 JSON 对象"):
+            prepare()
+    else:
+        prepared = prepare()
+        assert prepared["diagnostic_updates"]["relative_degree"]["assessment"] == "low"
+        assert (
+            prepared["diagnostic_updates"]["open_loop_stability"]["assessment"]
+            == "stable"
+        )
+        assert prepared["parameter_candidates"] == []
+    assert [r.role.value for r in requests] == [
+        "diagnosis",
+        "modeling",
+        "critic",
+        "modeling",
+        "critic",
+    ]
+    assert critic_calls == 2
+    critic_system = requests[2].messages[0]["content"]
+    assert (
+        "Numeric facts explicitly stated in user_response are allowed" in critic_system
+    )
+    assert "Reject facts sourced only from task limits" in critic_system
+    assert (
+        WorkflowService(tmp_path).read(state["kernel_session_id"]).to_dict() == original
+    )

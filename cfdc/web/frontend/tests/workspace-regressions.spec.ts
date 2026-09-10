@@ -48,6 +48,31 @@ type CaseFlow = {
 
 const cases: CaseFlow[] = [
   {
+    caseId: "tclab_single_heater_staged_transition_hold_v1",
+    initialStatus: "capability_gap",
+    actions: [],
+    finalStatus: "capability_gap",
+    qualification: "offline_qualified",
+  },
+  {
+    caseId: "audit_class_iv_high_order",
+    initialStatus: "tuning_eligible",
+    actions: [
+      {
+        from: "tuning_eligible",
+        action: "run_feedback_iteration",
+        to: "awaiting_confirmation",
+      },
+      {
+        from: "awaiting_confirmation",
+        action: "confirm_result",
+        to: "performance_met",
+      },
+    ],
+    finalStatus: "performance_met",
+    qualification: "offline_qualified",
+  },
+  {
     caseId: "dc_motor_speed_v1",
     initialStatus: "tuning_eligible",
     actions: [
@@ -241,7 +266,11 @@ for (const flow of cases) {
       expect(report.tuning?.status).toBe("exhausted");
       expect(report.tuning?.reason).toBe("no_strict_development_improvement");
     }
-    if (flow.caseId === "tclab_single_heater_v1") {
+    if (
+      ["tclab_single_heater_v1", "audit_class_iv_high_order"].includes(
+        flow.caseId,
+      )
+    ) {
       expect(report.confirmation?.status).toBe("performance_met");
       expect(report.evaluation_packets.at(-1)?.evaluation_split).toBe(
         "fresh_confirmation",

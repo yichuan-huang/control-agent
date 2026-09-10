@@ -30,13 +30,6 @@ def check_mutation(report: dict, revision: int, action: str) -> str:
         "registered_case_binding"
     ):
         return action
-    if report.get("managed_execution"):
-        raise APIError(
-            "external_reacquisition_required",
-            "此任务保留了旧的自动实验记录，请派生新任务按通用流程重新采集。",
-            409,
-            **details,
-        )
     if report.get("read_only"):
         raise APIError("task_read_only", "这是只读任务，不能提交修改。", 409, **details)
     resume_pending = bool(

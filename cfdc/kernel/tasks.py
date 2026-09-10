@@ -1,10 +1,4 @@
-"""Task-type compatibility helpers migrated from the v3 workbench.
-
-The service uses :class:`~cfdc.kernel.contracts.TaskContract` as its single
-typed boundary.  These small helpers keep the archive's public validation and
-outcome vocabulary available to callers without importing anything from the
-archive at runtime.
-"""
+"""Public task semantics and deterministic outcome validation."""
 
 from __future__ import annotations
 
@@ -93,7 +87,7 @@ def infer_task_type(task: Mapping[str, Any]) -> tuple[str, str]:
     for task_type, candidates in markers.items():
         if any(marker in visible for marker in candidates):
             return task_type, "conservative_public_text_detection"
-    return "local_setpoint_hold", "legacy_single_stage_migration"
+    return "local_setpoint_hold", "default_local_setpoint_hold"
 
 
 def validate_task_type_contract(task: Mapping[str, Any]) -> dict[str, Any]:
@@ -108,7 +102,7 @@ def validate_task_type_contract(task: Mapping[str, Any]) -> dict[str, Any]:
             code = "unsupported_task_type"
         raise TaskTypeContractError(code=code, task_type=task_type) from exc
     requirements = contract.success_requirements
-    if source == "legacy_single_stage_migration" and not requirements:
+    if source == "default_local_setpoint_hold" and not requirements:
         return {
             "task_type": contract.task_type,
             "source": source,
@@ -124,7 +118,7 @@ def validate_task_type_contract(task: Mapping[str, Any]) -> dict[str, Any]:
         criteria_status = "p1_1_explicit_task_success_requirements"
         metric_ids = list(TASK_SUCCESS_METRICS[contract.task_type])
     elif source == "explicit_task_contract" and requirements:
-        criteria_status = "p1_explicit_compatibility"
+        criteria_status = "explicit_performance_requirements"
         metric_ids = [
             "final_abs_error",
             "overshoot",
@@ -132,7 +126,7 @@ def validate_task_type_contract(task: Mapping[str, Any]) -> dict[str, Any]:
             "perturbed_success_rate",
         ]
     elif requirements:
-        criteria_status = "legacy_performance_requirements"
+        criteria_status = "performance_requirements"
         metric_ids = [
             "final_abs_error",
             "overshoot",

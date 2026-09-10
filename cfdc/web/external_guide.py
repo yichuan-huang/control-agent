@@ -107,18 +107,7 @@ def workflow_guide(report):
         return None
     action = (report.get("input_contract") or {}).get("action", "")
     status = report.get("status", "")
-    if report.get("managed_execution"):
-        title, purpose, actor, next_step, rows = (
-            "从历史记录重新建立任务",
-            "旧自动实验记录仅供查看，不能继续自动运行或转用为新证据。",
-            "用户",
-            "重新确认任务边界与外部数据来源",
-            [
-                ("保留原记录", "原任务、已保存文件和审查回执继续可查看和下载。"),
-                ("派生新任务", "只携带任务与人工诊断信息；重新确认后按通用流程采集。"),
-            ],
-        )
-    elif status in {"performance_met", "capability_gap", "cancelled"}:
+    if status in {"performance_met", "capability_gap", "cancelled"}:
         title, purpose, actor, next_step, rows = (
             "查看结果与过程记录",
             "依据已接受的数据、独立判定与重放查看结论。",

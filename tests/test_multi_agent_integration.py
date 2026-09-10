@@ -3,16 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-import pytest
 
-from cfdc.agents import AgentRole, CompositeAgentAdapter
-from cfdc.lab.llm import (
-    GainProposalContext,
-    MinimalStabilityEvidence,
-    build_gain_proposal_messages,
-)
+from cfdc.agents import AgentRole, AgentRuntime, RetrievalSnippet
 from cfdc.web.service import build_adapter
-from main import parse_args
 
 
 @dataclass
@@ -63,38 +56,9 @@ class _Adapter:
         assert request.role is AgentRole.CRITIC
         return {"decision": "pass", "feedback": ""}
 
-    def propose_gain_update(self, context):
-        return {
-            "new_parameters": {
-                name: value * 0.95 for name, value in context.current_parameters.items()
-            },
-            "rationale": "stability-only adjustment",
-        }
 
-
-def _gain_context() -> GainProposalContext:
-    return GainProposalContext(
-        session_id="session-1",
-        revision=1,
-        base_trial_iteration=1,
-        controller_kind="pi",
-        architecture_sha256="0" * 64,
-        current_parameters={"kp": 1.0},
-        tunable_whitelist=["kp"],
-        parameter_bounds={"kp": (0.0, 2.0)},
-        last_stability_evidence=MinimalStabilityEvidence(
-            status="stable",
-            analysis_domain="continuous",
-            normalized_margin=0.2,
-            tail_error_envelope_contraction=0.8,
-            saturation_fraction=0.0,
-            hard_failure=False,
-        ),
-    )
-
-
-def test_web_factory_always_wraps_existing_adapter_for_multi_agent(monkeypatch):
-    monkeypatch.setattr("cfdc.web.service.OpenAICompatibleDiagnosticAdapter", _Adapter)
+def test_web_factory_constructs_current_transport_directly(monkeypatch):
+    monkeypatch.setattr("cfdc.web.service.OpenAICompatibleAdapter", _Adapter)
 
     multi = build_adapter(
         True,
@@ -104,48 +68,30 @@ def test_web_factory_always_wraps_existing_adapter_for_multi_agent(monkeypatch):
         use_rag=False,
     )
 
-    assert isinstance(multi, CompositeAgentAdapter)
-    assert isinstance(multi.adapter, _Adapter)
+    assert isinstance(multi, _Adapter)
+    assert multi.retriever is None
 
 
-def test_gain_retrieval_is_added_to_the_exact_provider_message(monkeypatch):
-    adapter = _Adapter()
-    wrapped = CompositeAgentAdapter(
-        adapter,
-        # The critic response is used by the candidate review gate.
-        runtime=__import__("cfdc.agents", fromlist=["AgentRuntime"]).AgentRuntime(
-            adapter.complete_agent
-        ),
-        retriever=_Retriever(),
+def test_retrieval_is_added_to_the_exact_provider_message():
+    captured = []
+    runtime = AgentRuntime(
+        lambda request: captured.append(request) or {"decision": "pass"}
     )
-    context = wrapped.prepare_gain_context(_gain_context())
-    messages = build_gain_proposal_messages(context)
-    serialized = "\n".join(message["content"] for message in messages)
-
+    record = runtime.execute(
+        AgentRole.CRITIC,
+        stage="review",
+        request={"candidate": "bounded gain"},
+        retrieval=[
+            RetrievalSnippet(
+                source_id="manual:p3",
+                content="The method is valid near the stated operating point.",
+            )
+        ],
+    )
+    serialized = "\n".join(message["content"] for message in captured[0].messages)
     assert "manual:p3" in serialized
     assert "The method is valid near the stated operating point." in serialized
-    assert context.agent_retrieved_references[0]["source_id"] == "manual:p3"
-
-
-def test_cli_exposes_agent_and_rag_switches(tmp_path):
-    args = parse_args(
-        [
-            "--agent-mode",
-            "single",
-            "--rag-index",
-            str(tmp_path / "rag-index"),
-            "--no-rag",
-        ]
-    )
-
-    assert args.agent_mode == "single"
-    assert args.rag_index == tmp_path / "rag-index"
-    assert args.no_rag is True
-
-
-def test_invalid_agent_mode_is_rejected():
-    with pytest.raises(SystemExit):
-        parse_args(["--agent-mode", "supervisor"])
+    assert record.messages == captured[0].messages
 
 
 def test_factory_loads_a_snapshot_only_when_rag_is_enabled(tmp_path, monkeypatch):
@@ -157,7 +103,7 @@ def test_factory_loads_a_snapshot_only_when_rag_is_enabled(tmp_path, monkeypatch
     index_dir = tmp_path / "rag"
     build_index(source, index_dir, encoder=_IndexEncoder(), include_builtin=False)
     monkeypatch.setattr("cfdc.rag.core.SentenceTransformerEncoder", _IndexEncoder)
-    monkeypatch.setattr("cfdc.web.service.OpenAICompatibleDiagnosticAdapter", _Adapter)
+    monkeypatch.setattr("cfdc.web.service.OpenAICompatibleAdapter", _Adapter)
 
     enabled = build_adapter(
         True,

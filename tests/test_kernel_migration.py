@@ -4,7 +4,6 @@ import json
 
 import pytest
 
-from cfdc.agents import AgentReviewBlocked, AgentRuntime, CompositeAgentAdapter
 from cfdc.kernel import (
     AgentRole,
     CallableExperimentProvider,
@@ -17,14 +16,12 @@ from cfdc.kernel import (
     TaskContract,
     TuningContract,
     WorkflowService,
-    build_migration_manifest,
     compile_phase_plan,
     evidence_from_trace,
     run_bounded_tuning,
     validate_handoff,
 )
 from cfdc.kernel.service import _boolean_sequence
-from cfdc.models import SystemDescription
 
 
 def test_task_contract_rejects_adjacent_task_types() -> None:
@@ -37,23 +34,6 @@ def test_task_contract_rejects_adjacent_task_types() -> None:
                 "control_input": "input",
             }
         )
-
-
-def test_migration_manifest_covers_dynamic_route_and_schema_resources() -> None:
-    # The release checkout intentionally excludes the development-only archive.
-    # Structural migration coverage must therefore be verifiable without it.
-    manifest = build_migration_manifest()
-    sources = {item["source"] for item in manifest["items"]}
-    assert {
-        "src/control_route_registry.py",
-        "control_route_registry.json",
-        "control_route_extensions.json",
-        "unified_executor_capabilities.json",
-        "cfdc_loop_schema.json",
-        "diagnostic_ledger_schema.json",
-        "performance_evaluation_packet_schema.json",
-    } <= sources
-    assert manifest["runtime_archive_dependency"] is False
 
 
 def test_diagnostic_ledger_requires_all_eight_dimensions() -> None:
@@ -155,10 +135,8 @@ def test_session_round_trip_and_old_payload_is_read_only(tmp_path) -> None:
     old.write_text(
         json.dumps({"schema_version": "4.0", "status": "complete"}), encoding="utf-8"
     )
-    imported = service.import_legacy(old)
-    assert imported.read_only is True
-    with pytest.raises(ValueError, match="read_only"):
-        service.submit_answer(imported.session_id, action_id="x", revision=0, answer={})
+    with pytest.raises(ValueError, match="evidence_session_version_mismatch"):
+        EvidenceSession.from_json(old.read_text())
 
 
 def _resolved_session(service: WorkflowService):
@@ -317,8 +295,16 @@ def test_public_provider_and_multistage_contract_are_explicit() -> None:
         validate_handoff(
             plan,
             {
-                "transition": {"entry_passed": True, "exit_passed": True},
-                "hold": {"entry_passed": True, "exit_passed": True},
+                "transition": {
+                    "entry_condition_met": True,
+                    "exit_condition_met": True,
+                    "success": True,
+                },
+                "hold": {
+                    "entry_condition_met": True,
+                    "exit_condition_met": True,
+                    "success": True,
+                },
             },
         )["status"]
         == "passed"
@@ -549,9 +535,7 @@ def test_kernel_agent_context_is_role_scoped_and_has_no_supervisor(tmp_path) -> 
             "control_input": "u",
         }
     )
-    coordinator = KernelAgentCoordinator(
-        lambda request: {"ok": True}, agent_mode="multi"
-    )
+    coordinator = KernelAgentCoordinator(lambda request: {"ok": True})
     diagnosis = coordinator.build_context(
         session, role=AgentRole.DIAGNOSIS, operation="diagnosis"
     )
@@ -783,37 +767,6 @@ def test_phase_summary_cannot_replace_executed_phase_trace(tmp_path) -> None:
         )
 
 
-def test_critic_correction_is_revalidated_before_returning() -> None:
-    class GainAdapter:
-        def propose_gain_update(self, context):
-            del context
-            return {"new_parameters": {"kp": 1.0}, "rationale": "bounded"}
-
-    class Completion:
-        def __init__(self):
-            self.responses = iter(
-                [
-                    {
-                        "decision": "revise",
-                        "feedback": "return the typed gain proposal",
-                    },
-                    {"rationale": "missing new parameters"},
-                    {"decision": "pass", "feedback": ""},
-                ]
-            )
-
-        def __call__(self, request):
-            return next(self.responses)
-
-    wrapped = CompositeAgentAdapter(
-        GainAdapter(),
-        AgentRuntime(Completion()),
-        description_provider=lambda _value: SystemDescription(text="A plant."),
-    )
-    with pytest.raises((ValueError, AgentReviewBlocked)):
-        wrapped.propose_gain_update({"context": "plant"})
-
-
 def test_feature_quality_flag_must_be_boolean(tmp_path) -> None:
     service = WorkflowService(tmp_path)
     session = _resolved_session(service)
@@ -914,3 +867,51 @@ def test_tuning_stability_gate_does_not_use_string_truthiness() -> None:
     )
     assert result.status == "blocked"
     assert result.reason == "initial_qualification_failed"
+
+
+@pytest.mark.parametrize(
+    "observation",
+    [
+        {"entry_passed": True, "exit_passed": True},
+        {"entry_passed": True, "exit_passed": True, "success": True},
+        {"entry_condition_met": True, "exit_condition_met": True},
+        {"entry_condition_met": True, "exit_condition_met": True, "status": "passed"},
+    ],
+)
+def test_phase_handoff_requires_canonical_explicit_gates(tmp_path, observation):
+    from dataclasses import replace
+
+    from test_service_evaluation_replay import prepared_service, successful_packet
+
+    service, session, _ = prepared_service(tmp_path, successful_packet)
+    plan = compile_phase_plan(
+        session.task,
+        {
+            "route_id": "test",
+            "profile_id": "first_order_lag",
+            "controller_template_id": "detuned_pi",
+        },
+    )
+    result = validate_handoff(
+        plan, {phase.phase_id: observation for phase in plan.phases}
+    )
+    assert result["status"] == "blocked"
+    assert all(item.startswith("missing_gate:") for item in result["failures"])
+    session = service._save(
+        service._append(
+            replace(session, phase_plan=plan.to_dict()),
+            "test_plan_prepared",
+            "prepare-plan",
+            {},
+        )
+    )
+    path = service.root / f"{session.session_id}.json"
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="phase_result_fields_required"):
+        service.record_phase_result(
+            session.session_id,
+            action_id="reject-old-gates",
+            revision=session.revision,
+            result={"phase_id": plan.phases[0].phase_id, **observation},
+        )
+    assert path.read_bytes() == before

@@ -4,7 +4,20 @@ const draftFields = new Set(
     " ",
   ),
 );
+const removedDraftFields = new Set([
+  "execution_mode",
+  "runner_id",
+  "model_id",
+  "managed_execution",
+  "runner",
+  "command",
+]);
+function hasRemovedFields(value: object): boolean {
+  return Object.keys(value).some((key) => removedDraftFields.has(key));
+}
 export function saveDraft(draft: Obj) {
+  if (hasRemovedFields(draft))
+    throw new Error("旧实验配置不受支持，请创建新任务。");
   const clean = Object.fromEntries(
     Object.entries(draft).filter(([key]) => draftFields.has(key)),
   );
@@ -14,13 +27,19 @@ export function saveDraft(draft: Obj) {
     /* Full storage must not discard the in-memory form. */
   }
 }
-export function readDraft(): Obj | null {
+export function readDraft(onRejected?: (message: string) => void): Obj | null {
   try {
     const value: unknown = JSON.parse(
       sessionStorage.getItem("cfdc:draft") ?? "null",
     );
     if (!value || typeof value !== "object" || Array.isArray(value))
       return null;
+    if (hasRemovedFields(value)) {
+      onRejected?.(
+        "已拒绝恢复含旧实验配置的草稿。请从第一步创建新任务；原草稿将在您编辑新任务前保留。",
+      );
+      return null;
+    }
     return Object.fromEntries(
       Object.entries(value).filter(([key]) => draftFields.has(key)),
     );

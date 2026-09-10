@@ -6,10 +6,8 @@ from cfdc.agents import (
     AgentReviewBlocked,
     AgentRole,
     AgentRuntime,
-    CompositeAgentAdapter,
     RetrievalSnippet,
 )
-from cfdc.models import SystemDescription
 
 
 class ScriptedCompletion:
@@ -19,49 +17,37 @@ class ScriptedCompletion:
 
     def __call__(self, request):
         self.requests.append(request)
-        return next(self.responses)
-
-
-class ProposalAdapter:
-    def __init__(self):
-        self.calls = 0
-
-    def propose_model(self, context):
-        self.calls += 1
-        return {"proposal": "initial", "context": context}
+        response = next(self.responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def test_role_context_keeps_system_description_immutable_and_isolates_rag_feedback():
-    description = SystemDescription(
-        text="A heater uses voltage to regulate temperature.",
-        observed_outputs=["temperature"],
-        actuators=["voltage"],
-    )
+    description = {
+        "text": "A heater uses voltage to regulate temperature.",
+        "observed_outputs": ["temperature"],
+        "actuators": ["voltage"],
+    }
     completion = ScriptedCompletion([{"answer": "ok"}])
     runtime = AgentRuntime(completion=completion)
 
     record = runtime.execute(
         AgentRole.DIAGNOSIS,
-        description=description,
         stage="diagnose",
-        request={"task": "extract structure"},
+        request={"task": "extract structure", "description": description},
         retrieval=[RetrievalSnippet(source_id="manual-7", content="thermal lag")],
         feedback="do not invent a delay",
     )
 
-    assert description.model_dump() == {
+    assert description == {
         "text": "A heater uses voltage to regulate temperature.",
         "observed_outputs": ["temperature"],
         "actuators": ["voltage"],
-        "safety_bounds": {},
-        "forbidden_actions": [],
-        "time_scale_hint_s": None,
-        "simulation_boundary_confirmation": None,
-        "metadata": {},
     }
     assert record.payload == {"answer": "ok"}
     request = completion.requests[0]
-    assert request.description is description
+    assert request.request["description"] is description
     assert request.retrieval[0].source_id == "manual-7"
     assert request.feedback == "do not invent a delay"
     assert "manual-7" in request.prompt
@@ -80,7 +66,6 @@ def test_agent_audit_preserves_curated_reference_metadata():
 
     record = runtime.execute(
         AgentRole.CRITIC,
-        description=SystemDescription(text="A process has inverse response."),
         stage="review",
         request={"task": "review"},
         retrieval=[
@@ -106,8 +91,7 @@ def test_agent_audit_preserves_curated_reference_metadata():
     assert record.source_refs[0]["citation_refs"] == [citation]
 
 
-def test_composite_adapter_revises_once_then_submits_only_after_critic_passes():
-    description = SystemDescription(text="A heater.")
+def test_runtime_revises_once_then_submits_only_after_critic_passes():
     completion = ScriptedCompletion(
         [
             {"decision": "revise", "feedback": "add units"},
@@ -116,15 +100,14 @@ def test_composite_adapter_revises_once_then_submits_only_after_critic_passes():
         ]
     )
     runtime = AgentRuntime(completion=completion)
-    adapter = ProposalAdapter()
-    wrapped = CompositeAgentAdapter(
-        adapter, runtime, description_provider=lambda _: description
+    result = runtime.review_and_correct(
+        role=AgentRole.MODELING,
+        stage="model",
+        request={"session": "s1"},
+        candidate={"proposal": "initial"},
     )
 
-    result = wrapped.propose_model({"session": "s1"})
-
     assert result == {"proposal": "revised", "units": "V"}
-    assert adapter.calls == 1
     assert [request.role for request in completion.requests] == [
         AgentRole.CRITIC,
         AgentRole.MODELING,
@@ -137,13 +120,17 @@ def test_composite_adapter_revises_once_then_submits_only_after_critic_passes():
     assert runtime.audit_log[0].source_ids == ()
 
 
-def test_composite_adapter_blocks_failed_review_without_returning_candidate():
+def test_runtime_blocks_failed_review_without_returning_candidate():
     completion = ScriptedCompletion([{"decision": "block", "feedback": "unsafe"}])
     runtime = AgentRuntime(completion=completion)
-    wrapped = CompositeAgentAdapter(ProposalAdapter(), runtime)
 
     with pytest.raises(AgentReviewBlocked, match="unsafe"):
-        wrapped.propose_model({"session": "s1"})
+        runtime.review_and_correct(
+            role=AgentRole.MODELING,
+            stage="model",
+            request={"session": "s1"},
+            candidate={"proposal": "initial"},
+        )
 
 
 @pytest.mark.parametrize("response", [{"decision": "maybe"}, TimeoutError("timed out")])
@@ -154,7 +141,6 @@ def test_invalid_or_timed_out_critic_review_fails_closed(response):
     with pytest.raises(AgentReviewBlocked):
         runtime.review_candidate(
             role=AgentRole.CONTROLLER,
-            description=SystemDescription(text="A plant."),
             stage="gain_update",
             request={"candidate": "K"},
             candidate={"gain": 1.0},

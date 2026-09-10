@@ -48,9 +48,6 @@ class ProfileDefinition:
     controller_template_id: str
     experiment_primitives: tuple[str, ...]
     tunable_gain_names: tuple[str, ...]
-    tracking_ids: tuple[str, ...]
-    simulator_backend: str
-    change_scenario_id: str
     preconditions: tuple[str, ...] = ()
     limitations: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
@@ -177,8 +174,7 @@ class KnowledgeContext:
 
 
 # The tuple is intentionally explicit and reviewed with the runtime catalogs.
-# ``profiles.py`` and ``method_profiles.py`` generate their Pydantic views from
-# this definition, so IDs and capability metadata cannot silently drift.
+# The Kernel consumes these profile IDs and feature requirements directly.
 _PROFILES: tuple[ProfileDefinition, ...] = (
     ProfileDefinition(
         "first_order_lag",
@@ -189,9 +185,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "detuned_pi",
         ("ramp_step",),
         ("kp", "ki"),
-        ("scalar_rls",),
-        "scalar_first_order",
-        "gain_and_time_constant_drift",
         ("stable self-regulating scalar response",),
         ("does not model higher-order, unstable, or materially coupled dynamics",),
         ("first order", "lag", "一阶惯性", "稳定自衡"),
@@ -205,9 +198,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "detuned_pi",
         ("ramp_step",),
         ("kp", "ki"),
-        ("scalar_rls",),
-        "scalar_first_order_delay",
-        "gain_and_time_constant_drift",
         ("stable response with explicitly significant delay",),
         ("delay must be evidenced; silence is not zero delay",),
         ("dead time", "transport delay", "时延", "延迟"),
@@ -221,9 +211,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "damping_pd",
         ("free_decay", "pulse"),
         ("kp", "kd"),
-        ("frequency_locked_loop", "scalar_rls"),
-        "scalar_second_order",
-        "frequency_and_gain_drift",
         ("positive ringing or free-vibration evidence",),
         ("an order bound or thermostat hysteresis alone is insufficient",),
         ("oscillator", "ringing", "振荡", "二阶"),
@@ -237,9 +224,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "saturated_pd",
         ("pulse",),
         ("kp", "kd"),
-        ("scalar_rls",),
-        "scalar_double_integrator",
-        "input_gain_drift",
         ("marginal non-restoring dynamics",),
         ("requires hard saturation and bounded excitation",),
         ("integrator", "drifting", "积分", "漂移"),
@@ -253,9 +237,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "nmp_outer_loop",
         ("ramp_step",),
         ("kp", "ki"),
-        ("scalar_rls",),
-        "scalar_inverse_response",
-        "gain_and_inverse_response_drift",
         ("explicit inverse-response evidence",),
         ("cannot be selected from generic delay or transient overshoot alone",),
         ("inverse response", "nonminimum phase", "反向响应", "非最小相位"),
@@ -269,9 +250,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "class_iv_conservative",
         ("free_decay", "pulse"),
         ("kp", "kd"),
-        ("frequency_locked_loop", "scalar_rls"),
-        "generic_unstable",
-        "unstable_mode_drift",
         ("Class IV condition without a more specific registered profile",),
         (
             "generic profile has no registered specification compiler for arbitrary plants",
@@ -287,9 +265,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "cartpole_cascaded",
         ("free_decay",),
         ("kp", "kd", "kp_y", "kd_y"),
-        ("frequency_locked_loop",),
-        "cartpole",
-        "pole_frequency_drift",
         ("underactuation and an unactuated coordinate are explicit",),
         ("requires cart-pole-compatible signals; not a generic Class IV fallback",),
         ("cartpole", "underactuated", "欠驱动"),
@@ -303,9 +278,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "vtol_cascaded",
         ("hover_thrust", "pulse"),
         ("kp_z", "kd_z", "kp_theta", "kd_theta", "kp_y", "kd_y"),
-        ("hover_average", "scalar_rls"),
-        "vtol",
-        "payload_and_inertia_drift",
         ("cascaded hover and lateral coupling are explicit",),
         ("does not establish real vehicle safety or flight authority",),
         ("VTOL", "hover", "悬停", "垂直起降"),
@@ -319,9 +291,6 @@ _PROFILES: tuple[ProfileDefinition, ...] = (
         "mimo_decoupling_matrix",
         ("bounded_scan",),
         ("loop_1_gain", "loop_2_gain"),
-        ("matrix_rls",),
-        "mimo_2x2",
-        "coupling_matrix_drift",
         ("two inputs and two outputs with severe coupling evidence",),
         ("only the registered 2x2 route is implemented",),
         ("MIMO", "coupled", "多变量", "耦合"),
@@ -499,99 +468,6 @@ def registry_fingerprint() -> str:
     ).hexdigest()
 
 
-def _profile_for_diagnosis(
-    diagnosis: Any, classification: Any
-) -> tuple[ProfileDefinition, str]:
-    archetype = str(classification.primary_class)
-    if archetype == "class_i_first_order_lag":
-        profile_id = (
-            "first_order_lag_with_delay"
-            if str(diagnosis.significant_delay.assessment) == "significant"
-            else "first_order_lag"
-        )
-    elif archetype == "class_ii_second_order_oscillator":
-        profile_id = "second_order_oscillator"
-    elif archetype == "class_iii_double_or_pure_integrator":
-        profile_id = "double_integrator"
-    elif archetype == "class_v_multivariable_significant_coupling":
-        profile_id = "mimo_2x2_coupled"
-    elif str(diagnosis.coupling_severity.assessment) == "underactuated":
-        profile_id = "underactuated_cartpole"
-    elif str(diagnosis.coupling_severity.assessment) == "cascaded":
-        profile_id = "vtol_cascaded"
-    elif (
-        str(diagnosis.minimum_phase.assessment) == "nonminimum_phase"
-        and str(diagnosis.open_loop_stability.assessment) == "stable"
-    ):
-        profile_id = "nmp_inverse_response"
-    else:
-        profile_id = "generic_unstable_higher_order"
-    return get_profile_definition(profile_id), profile_id
-
-
-def _matched_rule_ids(
-    diagnosis: Any, classification: Any, description: Any | None
-) -> tuple[str, ...]:
-    del description
-    class_name = str(classification.primary_class)
-    if class_name == "class_v_multivariable_significant_coupling":
-        return ("class.v.severe_mimo",)
-    if class_name == "class_iv_higher_order_unstable_nonlinear_or_nmp":
-        return ("class.iv.escalating_dynamics",)
-    if class_name == "class_iii_double_or_pure_integrator":
-        return ("class.iii.marginal",)
-    if class_name == "class_ii_second_order_oscillator":
-        return ("class.ii.explicit_oscillation",)
-    return ("class.i.stable_remaining",)
-
-
-def resolve_route_decision(
-    description: Any,
-    diagnosis: Any,
-    classification: Any | None = None,
-) -> RuleDecision:
-    """Resolve class/profile from existing deterministic diagnosis rules.
-
-    The description is passed to the canonical classifier when needed; no LLM
-    or retrieved text is consulted.  Incomplete diagnosis is a hard stop.
-    """
-
-    if not getattr(diagnosis, "complete", False):
-        raise ValueError("cannot resolve a profile from an incomplete diagnosis")
-    if classification is None:
-        from cfdc.diagnosis.engine import classify_archetype
-
-        classification = classify_archetype(diagnosis, description)
-    profile, _ = _profile_for_diagnosis(diagnosis, classification)
-    return RuleDecision(
-        primary_class=str(classification.primary_class),
-        simulation_profile_id=profile.profile_id,
-        feature_bundle_id=profile.feature_bundle_id,
-        selected_feature_ids=profile.required_feature_ids,
-        matched_rule_ids=_matched_rule_ids(diagnosis, classification, description),
-        registry_version=REGISTRY_VERSION,
-        rationale=(
-            f"{get_classification_rules()[0].explanation if str(classification.primary_class) == get_classification_rules()[0].result_class else classification.rationale} "
-            f"Canonical profile '{profile.profile_id}' is selected from the closed registry."
-        ),
-    )
-
-
-def semantic_selection_for_decision(decision: RuleDecision) -> Any:
-    """Create the legacy Pydantic selection payload from a RuleDecision."""
-
-    from cfdc.models import SemanticRouteSelection
-
-    return SemanticRouteSelection(
-        simulation_profile_id=decision.simulation_profile_id,
-        feature_bundle_id=decision.feature_bundle_id,
-        selected_feature_ids=list(decision.selected_feature_ids),
-        confidence=decision.confidence,
-        evidence=list(decision.matched_rule_ids),
-        rationale=decision.rationale,
-    )
-
-
 def explain_profile(decision: RuleDecision) -> dict[str, Any]:
     profile = get_profile_definition(decision.simulation_profile_id)
     rules = {rule.rule_id: rule for rule in _CLASS_RULES}
@@ -640,11 +516,6 @@ def canonical_knowledge_documents() -> tuple[KnowledgeArtifact, ...]:
             )
         )
     for profile in _PROFILES:
-        runtime_supported = not any(
-            "no registered" in str(limitation).casefold()
-            or "capability gap" in str(limitation).casefold()
-            for limitation in profile.limitations
-        )
         text = (
             f"Registry version: {REGISTRY_VERSION}\n"
             f"Profile ID: {profile.profile_id}\n"
@@ -655,11 +526,8 @@ def canonical_knowledge_documents() -> tuple[KnowledgeArtifact, ...]:
             f"Experiment primitives: {', '.join(profile.experiment_primitives)}\n"
             f"Preconditions: {'; '.join(profile.preconditions) or 'none'}\n"
             f"Limitations: {'; '.join(profile.limitations) or 'none'}\n"
-            + (
-                "Runtime support: this is an implemented closed-catalog route."
-                if runtime_supported
-                else "Runtime support: capability gap; this profile is documented but cannot execute without a registered object adapter."
-            )
+            + "Execution support is determined by the current Kernel route and provider "
+            "contracts. This profile describes control concepts, not an execution backend."
             + " External method descriptions do not add capabilities."
         )
         documents.append(

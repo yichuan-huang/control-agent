@@ -21,8 +21,6 @@ from .registry import (
     get_profile_definition,
     profile_definitions,
     registry_fingerprint,
-    resolve_route_decision,
-    semantic_selection_for_decision,
 )
 
 __all__ = [
@@ -41,6 +39,4 @@ __all__ = [
     "get_profile_definition",
     "profile_definitions",
     "registry_fingerprint",
-    "resolve_route_decision",
-    "semantic_selection_for_decision",
 ]
