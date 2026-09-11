@@ -16,7 +16,7 @@ const config = (base_url = "", model = "") => ({
   base_url,
   model,
   rag: { status: "ready", message: "ready" },
-  version: "0.3.8",
+  version: "0.3.9",
 });
 
 afterEach(() => {
@@ -198,13 +198,12 @@ test("shows doctor request failure, clears stale checks, and retains credentials
     return json(config());
   });
   await enterCurrentCredentials();
-  fireEvent.click(screen.getByRole("button", { name: "环境检查" }));
+  const doctorButton = screen.getByRole("button", { name: "环境检查" });
+  fireEvent.click(doctorButton);
   expect(await screen.findByText("模型可用")).toBeInTheDocument();
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "环境检查" })).not.toBeDisabled(),
-  );
+  await waitFor(() => expect(doctorButton).toBeEnabled());
 
-  fireEvent.click(screen.getByRole("button", { name: "环境检查" }));
+  fireEvent.click(doctorButton);
 
   expect(
     await screen.findByText("环境检查失败：TypeError: doctor offline"),
@@ -284,7 +283,9 @@ test.each([
     await enterCurrentCredentials();
     fireEvent.change(screen.getByLabelText(label), { target: { value: " " } });
     fireEvent.click(screen.getByRole("button", { name: "测试当前配置" }));
-    expect(await screen.findByText(`请填写 ${label}。`)).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByText(`请填写 ${label}。`)).toBeVisible(),
+    );
     expect(screen.getByLabelText(label)).toHaveFocus();
     expect(submissions).toBe(0);
   },

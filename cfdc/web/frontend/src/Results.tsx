@@ -29,6 +29,7 @@ export default function Results({ task }: { task: Summary }) {
     null,
     null,
   ]);
+  const [showChart, setShowChart] = useState(false);
   const changeWindow = useCallback((next: WindowRange) => {
     setStart(next[0]);
     setEnd(next[1]);
@@ -129,6 +130,7 @@ export default function Results({ task }: { task: Summary }) {
             setWindow([null, null]);
             setStart(null);
             setEnd(null);
+            setShowChart(false);
           }}
         />
         {selected && (
@@ -158,7 +160,10 @@ export default function Results({ task }: { task: Summary }) {
                   value,
                   label: value,
                 }))}
-                onChange={setSignal}
+                onChange={(value) => {
+                  setSignal(value);
+                  setShowChart(false);
+                }}
               />
               <Select
                 aria-label="控制输入信号"
@@ -168,7 +173,10 @@ export default function Results({ task }: { task: Summary }) {
                   value,
                   label: value,
                 }))}
-                onChange={setControl}
+                onChange={(value) => {
+                  setControl(value);
+                  setShowChart(false);
+                }}
               />
               <InputNumber
                 aria-label="窗口开始秒"
@@ -207,13 +215,16 @@ export default function Results({ task }: { task: Summary }) {
                   原始 {curve.data.original_points} 点 · 显示{" "}
                   {curve.data.display_points} 点 · 修订 {curve.data.revision}
                 </Typography.Text>
-                <Suspense fallback={<Spin />}>
-                  <Charts
-                    curve={curve.data}
-                    window={window}
-                    onWindowChange={changeWindow}
-                  />
-                </Suspense>
+                <Button onClick={() => setShowChart(true)}>查看评价曲线</Button>
+                {showChart && (
+                  <Suspense fallback={<Spin />}>
+                    <Charts
+                      curve={curve.data}
+                      window={window}
+                      onWindowChange={changeWindow}
+                    />
+                  </Suspense>
+                )}
               </>
             )}
           </>

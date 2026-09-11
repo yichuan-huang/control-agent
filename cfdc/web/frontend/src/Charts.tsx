@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { PlotRelayoutEvent, PlotlyHTMLElement } from "plotly.js";
 import type { Curve } from "./api/types";
-import Plotly from "plotly.js-dist-min";
+import Plotly from "plotly.js-basic-dist-min";
 import { plotWindow, type WindowRange } from "./plotWindow";
 type PlotData = Pick<Curve, "output"> & Partial<Pick<Curve, "control">>;
 export default function Charts({

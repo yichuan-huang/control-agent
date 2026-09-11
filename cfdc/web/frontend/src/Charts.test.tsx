@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 const { handlers } = vi.hoisted(() => ({
   handlers: [] as ((event: Record<string, unknown>) => void)[],
 }));
-vi.mock("plotly.js-dist-min", () => ({
+vi.mock("plotly.js-basic-dist-min", () => ({
   default: {
     react: async (element: HTMLElement) =>
       Object.assign(element, {

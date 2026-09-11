@@ -440,6 +440,14 @@ test("accepted experiment curve loads lazily and graph zoom requests a real wind
   page.on("request", (r) => {
     if (r.url().includes("/evidence/curves?")) urls.push(r.url());
   });
+  const plotlyResources = () =>
+    page.evaluate(
+      () =>
+        performance
+          .getEntriesByType("resource")
+          .filter((entry) => /\/assets\/plotly-[^/]+\.js$/.test(entry.name))
+          .length,
+    );
   await page
     .getByRole("button", { name: "实验协议与上传回执", exact: true })
     .click();
@@ -447,6 +455,7 @@ test("accepted experiment curve loads lazily and graph zoom requests a real wind
     page.getByRole("heading", { name: "已通过的实验数据" }),
   ).toBeVisible();
   expect(urls).toHaveLength(0);
+  await expect.poll(plotlyResources).toBe(0);
   const initialResponse = page.waitForResponse((r) =>
     r.url().includes("/evidence/curves?"),
   );
@@ -455,6 +464,7 @@ test("accepted experiment curve loads lazily and graph zoom requests a real wind
     .click();
   const initial = await (await initialResponse).json();
   expect(initial.stage).toBe("evidence");
+  await expect.poll(plotlyResources).toBeGreaterThan(0);
   const drag = page
     .getByTestId("evidence-curves")
     .locator(".js-plotly-plot .nsewdrag")
