@@ -31,6 +31,8 @@ def test_python_uses_uv_lock_and_frontend_has_its_own_pnpm_lock():
     assert not (frontend / "package-lock.json").exists()
     package = json.loads((frontend / "package.json").read_text(encoding="utf-8"))
     assert package["packageManager"] == "pnpm@12.4.1"
+    assert package["engines"]["node"] == ">=24.21.0 <25"
+    assert (ROOT / ".nvmrc").read_text(encoding="utf-8") == "24.21.0\n"
 
 
 def test_docs_and_ci_publish_only_uv_workflow():
@@ -97,7 +99,7 @@ def test_frontend_docs_and_ci_use_frozen_pnpm_workflow():
     for path in paths:
         text = path.read_text(encoding="utf-8")
         assert "pnpm 12.4.1" in text
-        assert "22.13" in text
+        assert "24.21.0" in text
         assert not re.search(r"\b(?:npm|npx)\b", text)
 
     for path in [ROOT / "README.md", ROOT / "README_CN.md"]:
@@ -106,6 +108,8 @@ def test_frontend_docs_and_ci_use_frozen_pnpm_workflow():
         assert "https://pnpm.io/installation" in text
 
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert 'node-version-file: ".nvmrc"' in ci
+    assert "node-version:" not in ci
     assert "cache: pnpm" in ci
     assert "cache-dependency-path: cfdc/web/frontend/pnpm-lock.yaml" in ci
     assert not re.search(r"\b(?:npm|npx)\b", ci)

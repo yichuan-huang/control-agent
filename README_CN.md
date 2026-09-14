@@ -2,13 +2,15 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.10` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.11` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
 你可以通过 Ollama 使用本地模型，也可以使用 DeepSeek API、OpenAI API 等在线服务。请按自己的需要选择服务商和模型，Ollama 不是必需依赖。模型负责理解自然语言回复；路线、实验、控制器、数值评价和最终结论仍由 Kernel 决定。
 
-1. 安装 Git、`uv`、[Node.js](https://nodejs.org/en/download) 22（22.13 或更高的 22.x）和 pnpm 12.4.1。使用 [pnpm 官方独立安装程序](https://pnpm.io/installation)，明确选择 12.4.1 版本。macOS/Linux 可执行 `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`，然后重新打开终端。开发与 CI 使用相同的 Node.js 和 pnpm 版本。然后下载项目、安装依赖、检查 Python 文件、验证 Node 与 pnpm，并完成首次前端安装和构建：
+1. 安装 Git、`uv`、[Node.js](https://nodejs.org/en/download) 24.21.0 和 pnpm 12.4.1。使用 [pnpm 官方独立安装程序](https://pnpm.io/installation)，明确选择 12.4.1 版本。macOS/Linux 可执行 `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`，然后重新打开终端。开发与 CI 使用相同的 Node.js 和 pnpm 版本。然后下载项目、安装依赖、检查 Python 文件、验证 Node 与 pnpm，并完成首次前端安装和构建：
+
+仓库的 `.nvmrc` 固定本地开发与 CI 使用 Node.js 24.21.0。使用 nvm 时，请先完成下面的 `git clone` 和 `cd`，然后运行 `nvm install` 和 `nvm use`，再继续安装与检查。
 
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
@@ -134,7 +136,7 @@ pnpm --dir cfdc/web/frontend run test:e2e
 pnpm --dir cfdc/web/frontend run dev
 ```
 
-Playwright 会在 `127.0.0.1:7867` 自动启动构建后的界面与真实 FastAPI 服务，使用临时数据且不调用模型。设置 `CFDC_E2E_URL` 可检查已运行的服务。CI 使用 pnpm 12.4.1 和 Node.js 22（22.13 或更高的 22.x）执行这些前端检查，同时保留 Python 3.11–3.13 检查。使用 Vite 开发时，在另一个终端运行 FastAPI；Vite 位于 `127.0.0.1:5173`，`/api` 代理到 `127.0.0.1:7860`。
+Playwright 会在 `127.0.0.1:7867` 自动启动构建后的界面与真实 FastAPI 服务，使用临时数据且不调用模型。设置 `CFDC_E2E_URL` 可检查已运行的服务。CI 使用 pnpm 12.4.1 和 Node.js 24.21.0 执行这些前端检查，同时保留 Python 3.11–3.13 检查。使用 Vite 开发时，在另一个终端运行 FastAPI；Vite 位于 `127.0.0.1:5173`，`/api` 代理到 `127.0.0.1:7860`。
 
 在项目目录中运行自动化测试和 Python 检查：
 

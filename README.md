@@ -2,13 +2,15 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.10` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.11` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
 You can use a local model through Ollama or a hosted service such as DeepSeek API or OpenAI API. Choose the provider and model that suit your needs; Ollama is not required. Models interpret natural-language replies, while the Kernel decides routes, experiments, controllers, numerical evaluation, and final claims.
 
-1. Install Git, `uv`, [Node.js](https://nodejs.org/en/download) 22 (22.13 or later in the 22.x series), and pnpm 12.4.1. Use the [official pnpm standalone installer](https://pnpm.io/installation), selecting exactly version 12.4.1. On macOS/Linux, run `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`, then reopen your terminal. Development and CI use these same Node.js and pnpm versions. Then download the project, install its dependencies, check the Python files, verify Node and pnpm, and perform the first-time frontend install and build:
+1. Install Git, `uv`, [Node.js](https://nodejs.org/en/download) 24.21.0, and pnpm 12.4.1. Use the [official pnpm standalone installer](https://pnpm.io/installation), selecting exactly version 12.4.1. On macOS/Linux, run `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`, then reopen your terminal. Development and CI use these same Node.js and pnpm versions. Then download the project, install its dependencies, check the Python files, verify Node and pnpm, and perform the first-time frontend install and build:
+
+The repository `.nvmrc` pins Node.js 24.21.0 for local development and CI. If you use nvm, complete the `git clone` and `cd` commands below first, then run `nvm install` and `nvm use` before continuing with installation and checks.
 
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
@@ -134,7 +136,7 @@ pnpm --dir cfdc/web/frontend run test:e2e
 pnpm --dir cfdc/web/frontend run dev
 ```
 
-Playwright starts the built UI and a real FastAPI service on `127.0.0.1:7867` with temporary data and no model calls. Set `CFDC_E2E_URL` to test an already running service. CI runs these frontend checks with pnpm 12.4.1 and Node.js 22 (22.13 or later in the 22.x series) alongside Python 3.11–3.13 checks. For Vite development, run FastAPI in another terminal; Vite runs at `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:7860`.
+Playwright starts the built UI and a real FastAPI service on `127.0.0.1:7867` with temporary data and no model calls. Set `CFDC_E2E_URL` to test an already running service. CI runs these frontend checks with pnpm 12.4.1 and Node.js 24.21.0 alongside Python 3.11–3.13 checks. For Vite development, run FastAPI in another terminal; Vite runs at `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:7860`.
 
 From the project directory, run the automated tests and Python checks:
 

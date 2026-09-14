@@ -2,7 +2,7 @@
 
 React 19, TypeScript, Ant Design 6, React Router, TanStack Query and Vite. All workflow decisions and evaluation values come from the versioned Kernel API. Plotly and expert tools load on demand. Plot data are display samples; metrics remain the server's recorded metrics.
 
-Install [Node.js](https://nodejs.org/en/download) 22 (22.13 or later in the 22.x series) and pnpm 12.4.1 before working on the frontend. Use the [official pnpm standalone installer](https://pnpm.io/installation), selecting exactly version 12.4.1. On macOS/Linux, run `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`, then reopen your terminal. The committed `pnpm-lock.yaml` fixes frontend dependencies; use `pnpm install --frozen-lockfile` for installation. From the repository root, verify the tools and perform the first-time install and production build:
+Install [Node.js](https://nodejs.org/en/download) 24.21.0 and pnpm 12.4.1 before working on the frontend. Use the [official pnpm standalone installer](https://pnpm.io/installation), selecting exactly version 12.4.1. On macOS/Linux, run `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`, then reopen your terminal. The committed `pnpm-lock.yaml` fixes frontend dependencies; use `pnpm install --frozen-lockfile` for installation. From the repository root, verify the tools and perform the first-time install and production build:
 
 ```sh
 node --version
@@ -45,7 +45,7 @@ pnpm exec playwright install chromium
 pnpm run test:e2e
 ```
 
-Playwright starts the built frontend and real API at `127.0.0.1:7867` with temporary data, which are removed when the server stops. RAG preparation and model calls are disabled for ordinary tests. `CFDC_E2E_URL` selects an already running service instead. Tests do not require credentials, historical local files or private datasets. The refresh test delays a real GET response while retaining the actual API response; it verifies task creation is not replayed. CI runs the same checks with pnpm 12.4.1 and Node.js 22 (22.13 or later in the 22.x series).
+Playwright starts the built frontend and real API at `127.0.0.1:7867` with temporary data, which are removed when the server stops. RAG preparation and model calls are disabled for ordinary tests. `CFDC_E2E_URL` selects an already running service instead. Tests do not require credentials, historical local files or private datasets. The refresh test delays a real GET response while retaining the actual API response; it verifies task creation is not replayed. CI runs the same checks with pnpm 12.4.1 and Node.js 24.21.0.
 
 For opt-in local validation, run `uv run --locked python scripts/serve_web_e2e.py --prepare-rag` from the repository root. Its disposable RAG index is built from packaged sources. Point `CFDC_E2E_URL` at this service, set `CFDC_E2E_OLLAMA=1` for the live settings check, and enter the required local model explicitly in the form.
 
