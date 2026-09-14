@@ -32,18 +32,22 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+      - uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          package-json-file: cfdc/web/frontend/package.json
+          install: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: cfdc/web/frontend/package-lock.json
+          cache: pnpm
+          cache-dependency-path: cfdc/web/frontend/pnpm-lock.yaml
       - run: uv sync --locked
-      - run: npm --prefix cfdc/web/frontend ci
-      - run: npm --prefix cfdc/web/frontend run format:check
-      - run: npm --prefix cfdc/web/frontend run typecheck
-      - run: npm --prefix cfdc/web/frontend run lint
-      - run: npm --prefix cfdc/web/frontend test
-      - run: npm --prefix cfdc/web/frontend run build
-      - run: npx playwright install --with-deps chromium
+      - run: pnpm --dir cfdc/web/frontend install --frozen-lockfile
+      - run: pnpm --dir cfdc/web/frontend run format:check
+      - run: pnpm --dir cfdc/web/frontend run typecheck
+      - run: pnpm --dir cfdc/web/frontend run lint
+      - run: pnpm --dir cfdc/web/frontend run test
+      - run: pnpm --dir cfdc/web/frontend run build
+      - run: pnpm exec playwright install --with-deps chromium
         working-directory: cfdc/web/frontend
-      - run: npm --prefix cfdc/web/frontend run test:e2e
+      - run: pnpm --dir cfdc/web/frontend run test:e2e

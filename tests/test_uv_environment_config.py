@@ -1,3 +1,5 @@
+import json
+import re
 import tomllib
 from pathlib import Path
 
@@ -21,10 +23,14 @@ def test_project_uses_uv_managed_python_and_dev_dependency_group():
     assert "test" not in metadata["project"].get("optional-dependencies", {})
 
 
-def test_python_uses_uv_lock_and_frontend_has_its_own_npm_lock():
+def test_python_uses_uv_lock_and_frontend_has_its_own_pnpm_lock():
     assert (ROOT / "uv.lock").is_file()
     assert not (ROOT / "requirements.txt").exists()
-    assert (ROOT / "cfdc/web/frontend/package-lock.json").is_file()
+    frontend = ROOT / "cfdc/web/frontend"
+    assert (frontend / "pnpm-lock.yaml").is_file()
+    assert not (frontend / "package-lock.json").exists()
+    package = json.loads((frontend / "package.json").read_text(encoding="utf-8"))
+    assert package["packageManager"] == "pnpm@12.4.1"
 
 
 def test_docs_and_ci_publish_only_uv_workflow():
@@ -60,9 +66,11 @@ def test_readmes_install_and_check_before_web_start_and_cli():
             "uv run --locked python -m compileall -q cfdc tests main.py app.py"
         )
         node_check = text.index("node --version")
-        npm_check = text.index("npm --version")
-        frontend_install = text.index("npm --prefix cfdc/web/frontend ci")
-        frontend_build = text.index("npm --prefix cfdc/web/frontend run build")
+        pnpm_check = text.index("pnpm --version")
+        frontend_install = text.index(
+            "pnpm --dir cfdc/web/frontend install --frozen-lockfile"
+        )
+        frontend_build = text.index("pnpm --dir cfdc/web/frontend run build")
         web_start = text.index("uv run --locked python app.py")
         cli_usage = text.index("--kernel-session-dir ./output/kernel-sessions")
 
@@ -70,9 +78,46 @@ def test_readmes_install_and_check_before_web_start_and_cli():
             sync
             < compile_check
             < node_check
-            < npm_check
+            < pnpm_check
             < frontend_install
             < frontend_build
             < web_start
             < cli_usage
         )
+
+
+def test_frontend_docs_and_ci_use_frozen_pnpm_workflow():
+    paths = [
+        ROOT / "README.md",
+        ROOT / "README_CN.md",
+        ROOT / "AGENTS.md",
+        ROOT / "cfdc/web/frontend/README.md",
+        ROOT / "simulations/README_CN.md",
+    ]
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        assert "pnpm 12.4.1" in text
+        assert "22.13" in text
+        assert not re.search(r"\b(?:npm|npx)\b", text)
+
+    for path in [ROOT / "README.md", ROOT / "README_CN.md"]:
+        text = path.read_text(encoding="utf-8")
+        assert "PNPM_VERSION=12.4.1" in text
+        assert "https://pnpm.io/installation" in text
+
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "cache: pnpm" in ci
+    assert "cache-dependency-path: cfdc/web/frontend/pnpm-lock.yaml" in ci
+    assert not re.search(r"\b(?:npm|npx)\b", ci)
+    steps = [
+        "pnpm --dir cfdc/web/frontend install --frozen-lockfile",
+        "pnpm --dir cfdc/web/frontend run format:check",
+        "pnpm --dir cfdc/web/frontend run typecheck",
+        "pnpm --dir cfdc/web/frontend run lint",
+        "pnpm --dir cfdc/web/frontend run test",
+        "pnpm --dir cfdc/web/frontend run build",
+        "pnpm exec playwright install --with-deps chromium",
+        "pnpm --dir cfdc/web/frontend run test:e2e",
+    ]
+    positions = [ci.index(step) for step in steps]
+    assert positions == sorted(positions)

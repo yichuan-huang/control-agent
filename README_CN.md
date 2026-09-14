@@ -2,13 +2,13 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.9` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.10` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
 你可以通过 Ollama 使用本地模型，也可以使用 DeepSeek API、OpenAI API 等在线服务。请按自己的需要选择服务商和模型，Ollama 不是必需依赖。模型负责理解自然语言回复；路线、实验、控制器、数值评价和最终结论仍由 Kernel 决定。
 
-1. 安装 Git、`uv` 和 [Node.js 与 npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)。npm 通常随 Node.js 一同安装。Node.js 需要 20.19+ 或 22.12+。然后下载项目、安装依赖、检查 Python 文件、验证 Node 与 npm，并完成首次前端安装和构建：
+1. 安装 Git、`uv`、[Node.js](https://nodejs.org/en/download) 22（22.13 或更高的 22.x）和 pnpm 12.4.1。使用 [pnpm 官方独立安装程序](https://pnpm.io/installation)，明确选择 12.4.1 版本。macOS/Linux 可执行 `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`，然后重新打开终端。开发与 CI 使用相同的 Node.js 和 pnpm 版本。然后下载项目、安装依赖、检查 Python 文件、验证 Node 与 pnpm，并完成首次前端安装和构建：
 
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
@@ -16,14 +16,14 @@ cd control-agent
 uv sync --locked
 uv run --locked python -m compileall -q cfdc tests main.py app.py
 node --version
-npm --version
-npm --prefix cfdc/web/frontend ci
-npm --prefix cfdc/web/frontend run build
+pnpm --version
+pnpm --dir cfdc/web/frontend install --frozen-lockfile
+pnpm --dir cfdc/web/frontend run build
 ```
 
-`uv` 会读取 `.python-version` 中的 Python 版本并管理 `.venv`。使用 `uv run` 时不需要手动激活环境。 本文的安装和运行命令使用 `--locked`，要求 `uv.lock` 与项目声明一致；若不一致会报错，而不是在运行时更新锁文件。前端使用 `npm ci` 按已提交的 `package-lock.json` 安装依赖。
+`uv` 会读取 `.python-version` 中的 Python 版本并管理 `.venv`。使用 `uv run` 时不需要手动激活环境。 本文的安装和运行命令使用 `--locked`，要求 `uv.lock` 与项目声明一致；若不一致会报错，而不是在运行时更新锁文件。前端使用 `pnpm install --frozen-lockfile` 按已提交的 `pnpm-lock.yaml` 安装依赖。
 
-2. 完成首次 `npm ci` 和构建后，日常使用只需运行以下命令启动 WebUI：
+2. 完成首次 `pnpm install --frozen-lockfile` 和构建后，日常使用只需运行以下命令启动 WebUI：
 
 ```bash
 uv run --locked python app.py
@@ -123,18 +123,18 @@ Kernel 通过版本化合同提供以下能力，使实验、证据、控制器�
 前端本地检查与开发：
 
 ```bash
-npm --prefix cfdc/web/frontend ci
-npm --prefix cfdc/web/frontend run typecheck
-npm --prefix cfdc/web/frontend run lint
-npm --prefix cfdc/web/frontend run format:check
-npm --prefix cfdc/web/frontend test
-npm --prefix cfdc/web/frontend run build
-cd cfdc/web/frontend && npx playwright install chromium && cd ../../..
-npm --prefix cfdc/web/frontend run test:e2e
-npm --prefix cfdc/web/frontend run dev
+pnpm --dir cfdc/web/frontend install --frozen-lockfile
+pnpm --dir cfdc/web/frontend run format:check
+pnpm --dir cfdc/web/frontend run typecheck
+pnpm --dir cfdc/web/frontend run lint
+pnpm --dir cfdc/web/frontend run test
+pnpm --dir cfdc/web/frontend run build
+pnpm --dir cfdc/web/frontend exec playwright install chromium
+pnpm --dir cfdc/web/frontend run test:e2e
+pnpm --dir cfdc/web/frontend run dev
 ```
 
-Playwright 会在 `127.0.0.1:7867` 自动启动构建后的界面与真实 FastAPI 服务，使用临时数据且不调用模型。设置 `CFDC_E2E_URL` 可检查已运行的服务。CI 使用 Node 22 执行这些前端检查，同时保留 Python 3.11–3.13 检查。使用 Vite 开发时，在另一个终端运行 FastAPI；Vite 位于 `127.0.0.1:5173`，`/api` 代理到 `127.0.0.1:7860`。
+Playwright 会在 `127.0.0.1:7867` 自动启动构建后的界面与真实 FastAPI 服务，使用临时数据且不调用模型。设置 `CFDC_E2E_URL` 可检查已运行的服务。CI 使用 pnpm 12.4.1 和 Node.js 22（22.13 或更高的 22.x）执行这些前端检查，同时保留 Python 3.11–3.13 检查。使用 Vite 开发时，在另一个终端运行 FastAPI；Vite 位于 `127.0.0.1:5173`，`/api` 代理到 `127.0.0.1:7860`。
 
 在项目目录中运行自动化测试和 Python 检查：
 

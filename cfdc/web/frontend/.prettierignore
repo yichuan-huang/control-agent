@@ -1,5 +1,5 @@
 src/api/schema.d.ts
 openapi.json
-package-lock.json
+pnpm-lock.yaml
 dist
 node_modules

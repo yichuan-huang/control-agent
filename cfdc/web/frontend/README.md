@@ -2,50 +2,50 @@
 
 React 19, TypeScript, Ant Design 6, React Router, TanStack Query and Vite. All workflow decisions and evaluation values come from the versioned Kernel API. Plotly and expert tools load on demand. Plot data are display samples; metrics remain the server's recorded metrics.
 
-Install [Node.js and npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) before working on the frontend. npm normally ships with Node.js. Node.js 20.19+ or 22.12+ is required. From the repository root, verify the tools and perform the first-time install and production build:
+Install [Node.js](https://nodejs.org/en/download) 22 (22.13 or later in the 22.x series) and pnpm 12.4.1 before working on the frontend. Use the [official pnpm standalone installer](https://pnpm.io/installation), selecting exactly version 12.4.1. On macOS/Linux, run `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`, then reopen your terminal. The committed `pnpm-lock.yaml` fixes frontend dependencies; use `pnpm install --frozen-lockfile` for installation. From the repository root, verify the tools and perform the first-time install and production build:
 
 ```sh
 node --version
-npm --version
-npm --prefix cfdc/web/frontend ci
-npm --prefix cfdc/web/frontend run build
+pnpm --version
+pnpm --dir cfdc/web/frontend install --frozen-lockfile
+pnpm --dir cfdc/web/frontend run build
 ```
 
 For daily use, start the complete application with one command:
 
 ```sh
-uv run python app.py
+uv run --locked python app.py
 ```
 
 Its default address is `http://127.0.0.1:7860`. For frontend development, start the API with that command from the repository root, then run in this directory:
 
 ```sh
-npm ci
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
-Vite serves `http://127.0.0.1:5173` and proxies `/api` to port 7860. Production `npm run build` creates the assets served by `app.py`; there is no separate production Node service.
+Vite serves `http://127.0.0.1:5173` and proxies `/api` to port 7860. Production `pnpm run build` creates the assets served by `app.py`; there is no separate production Node service.
 
 Regenerate the checked-in API types after backend schema changes:
 
 ```sh
 uv run --locked python scripts/export_web_openapi.py  # from repository root
-npm run generate --prefix cfdc/web/frontend         # from repository root
+pnpm --dir cfdc/web/frontend run generate         # from repository root
 ```
 
 Frontend checks, run from this directory:
 
 ```sh
-npm run format:check
-npm run typecheck
-npm run lint
-npm test
-npm run build
-npx playwright install chromium
-npm run test:e2e
+pnpm run format:check
+pnpm run typecheck
+pnpm run lint
+pnpm run test
+pnpm run build
+pnpm exec playwright install chromium
+pnpm run test:e2e
 ```
 
-Playwright starts the built frontend and real API at `127.0.0.1:7867` with temporary data, which are removed when the server stops. RAG preparation and model calls are disabled for ordinary tests. `CFDC_E2E_URL` selects an already running service instead. Tests do not require credentials, historical local files or private datasets. The refresh test delays a real GET response while retaining the actual API response; it verifies task creation is not replayed. CI runs the same checks with Node 22.
+Playwright starts the built frontend and real API at `127.0.0.1:7867` with temporary data, which are removed when the server stops. RAG preparation and model calls are disabled for ordinary tests. `CFDC_E2E_URL` selects an already running service instead. Tests do not require credentials, historical local files or private datasets. The refresh test delays a real GET response while retaining the actual API response; it verifies task creation is not replayed. CI runs the same checks with pnpm 12.4.1 and Node.js 22 (22.13 or later in the 22.x series).
 
 For opt-in local validation, run `uv run --locked python scripts/serve_web_e2e.py --prepare-rag` from the repository root. Its disposable RAG index is built from packaged sources. Point `CFDC_E2E_URL` at this service, set `CFDC_E2E_OLLAMA=1` for the live settings check, and enter the required local model explicitly in the form.
 

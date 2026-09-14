@@ -414,7 +414,10 @@ def test_static_spa_shell_has_safe_api_404(client):
     response = client.get("/api/v1/does-not-exist")
     assert response.status_code == 404
     assert response.headers["content-type"].startswith("application/json")
-    assert client.get("/").status_code == 503  # explicit frontend build instructions
+    shell = client.get("/")
+    assert shell.status_code == 503
+    assert "pnpm install --frozen-lockfile" in shell.text
+    assert "pnpm run build" in shell.text
 
 
 def test_untrusted_host_cannot_make_its_origin_look_like_local_app(client):

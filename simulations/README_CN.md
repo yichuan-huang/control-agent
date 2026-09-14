@@ -8,7 +8,7 @@
 
 ## 首次准备（只需完成一次）
 
-需要 Git、`uv`、Node.js 22（22.12 或更高的 22.x，含 npm），以及 MATLAB 和 Simulink。本教程以 MATLAB R2026a 为验收版本，不要求额外控制工具箱。MATLAB 必须能够使用 Simulink 许可证；只安装产品而没有可用许可证不能运行仿真。
+需要 Git、`uv`、Node.js 22（22.13 或更高的 22.x）、pnpm 12.4.1，以及 MATLAB 和 Simulink。pnpm 请按 [项目快速开始](../README_CN.md#快速开始) 使用官方独立安装程序安装指定的 12.4.1 版本。本教程以 MATLAB R2026a 为验收版本，不要求额外控制工具箱。MATLAB 必须能够使用 Simulink 许可证；只安装产品而没有可用许可证不能运行仿真。
 
 1. **下载项目。** 已有仓库时直接使用现有目录，不要再克隆一份。首次下载可在终端执行：
 
@@ -24,10 +24,10 @@
    ```bash
    uv --version
    node --version
-   npm --version
+   pnpm --version
    uv sync --locked
-   npm --prefix cfdc/web/frontend ci
-   npm --prefix cfdc/web/frontend run build
+   pnpm --dir cfdc/web/frontend install --frozen-lockfile
+   pnpm --dir cfdc/web/frontend run build
    ```
 
    **完成标志：**依赖安装没有报错，前端构建成功，生成 `cfdc/web/frontend/dist/index.html`。首次构建不能省略：仓库不包含生成的网页文件。命令不存在时先安装对应工具，参见[项目快速开始](../README_CN.md#快速开始)。`uv` 会管理项目 Python 环境，不需要手动激活 `.venv`。
@@ -102,8 +102,8 @@
 
 | 看到的现象 | 处理方法 |
 | --- | --- |
-| `uv`、`node` 或 `npm` 命令不存在 | 安装相应工具，重新打开终端，再执行首次准备；不要继续执行依赖它的命令 |
-| 网页显示“前端尚未构建” | 在仓库根目录执行首次准备中的 `npm ci` 与 `npm run build` 命令，再刷新页面 |
+| `uv`、`node` 或 `pnpm` 命令不存在 | 安装相应工具，重新打开终端，再执行首次准备；不要继续执行依赖它的命令 |
+| 网页显示“前端尚未构建” | 在仓库根目录执行首次准备中的 `pnpm --dir cfdc/web/frontend install --frozen-lockfile` 与 `pnpm --dir cfdc/web/frontend run build` 命令，再刷新页面 |
 | `127.0.0.1:7860` 打不开 | 查看启动 CFDC 的终端是否还在运行及是否报错；端口被占用时先确认是不是已有的 CFDC，不要连续重复启动 |
 | 模型连接失败／诊断回复失败 | 在“设置”核对地址、完整模型名称和密钥；本地 Ollama 需服务运行且模型已下载。刷新后密钥可能需要重新填写。保留当前任务，连接恢复后按页面继续，不要伪造诊断结论 |
 | 建任务提示知识库未就绪 | 先关闭“新任务使用内置知识库”，再建立本练习的新任务；已有任务的知识库绑定不会跟着变化 |

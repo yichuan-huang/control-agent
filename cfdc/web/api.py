@@ -759,7 +759,7 @@ def create_app(
         index = static_root / "index.html"
         if not index.is_file():
             return HTMLResponse(
-                "<html lang='zh'><meta charset='utf-8'><title>CFDC</title><h1>前端尚未构建</h1><p>请进入 cfdc/web/frontend 执行 npm ci 和 npm run build，然后刷新页面。</p></html>",
+                "<html lang='zh'><meta charset='utf-8'><title>CFDC</title><h1>前端尚未构建</h1><p>请进入 cfdc/web/frontend 执行 pnpm install --frozen-lockfile 和 pnpm run build，然后刷新页面。</p></html>",
                 status_code=503,
             )
         return FileResponse(index)

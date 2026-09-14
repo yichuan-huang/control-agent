@@ -2,13 +2,13 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.9` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.10` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
 You can use a local model through Ollama or a hosted service such as DeepSeek API or OpenAI API. Choose the provider and model that suit your needs; Ollama is not required. Models interpret natural-language replies, while the Kernel decides routes, experiments, controllers, numerical evaluation, and final claims.
 
-1. Install Git, `uv`, and [Node.js with npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm). npm normally ships with Node.js. Node.js 20.19+ or 22.12+ is required. Then download the project, install its dependencies, check the Python files, verify Node and npm, and perform the first-time frontend install and build:
+1. Install Git, `uv`, [Node.js](https://nodejs.org/en/download) 22 (22.13 or later in the 22.x series), and pnpm 12.4.1. Use the [official pnpm standalone installer](https://pnpm.io/installation), selecting exactly version 12.4.1. On macOS/Linux, run `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`, then reopen your terminal. Development and CI use these same Node.js and pnpm versions. Then download the project, install its dependencies, check the Python files, verify Node and pnpm, and perform the first-time frontend install and build:
 
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
@@ -16,14 +16,14 @@ cd control-agent
 uv sync --locked
 uv run --locked python -m compileall -q cfdc tests main.py app.py
 node --version
-npm --version
-npm --prefix cfdc/web/frontend ci
-npm --prefix cfdc/web/frontend run build
+pnpm --version
+pnpm --dir cfdc/web/frontend install --frozen-lockfile
+pnpm --dir cfdc/web/frontend run build
 ```
 
-`uv` reads the Python version from `.python-version` and manages `.venv`. Commands using `uv run` do not require manual environment activation. The install and run commands below use `--locked`, which requires `uv.lock` to match the project metadata and fails instead of updating the lockfile during execution. Frontend dependencies are installed with `npm ci` from the committed `package-lock.json`.
+`uv` reads the Python version from `.python-version` and manages `.venv`. Commands using `uv run` do not require manual environment activation. The install and run commands below use `--locked`, which requires `uv.lock` to match the project metadata and fails instead of updating the lockfile during execution. Frontend dependencies are installed with `pnpm install --frozen-lockfile` from the committed `pnpm-lock.yaml`.
 
-2. After that first-time `npm ci` and build, daily use requires only this command to start the WebUI:
+2. After that first-time `pnpm install --frozen-lockfile` and build, daily use requires only this command to start the WebUI:
 
 ```bash
 uv run --locked python app.py
@@ -123,18 +123,18 @@ The executable capability catalog distinguishes registration from end-to-end val
 Frontend local checks and development:
 
 ```bash
-npm --prefix cfdc/web/frontend ci
-npm --prefix cfdc/web/frontend run typecheck
-npm --prefix cfdc/web/frontend run lint
-npm --prefix cfdc/web/frontend run format:check
-npm --prefix cfdc/web/frontend test
-npm --prefix cfdc/web/frontend run build
-cd cfdc/web/frontend && npx playwright install chromium && cd ../../..
-npm --prefix cfdc/web/frontend run test:e2e
-npm --prefix cfdc/web/frontend run dev
+pnpm --dir cfdc/web/frontend install --frozen-lockfile
+pnpm --dir cfdc/web/frontend run format:check
+pnpm --dir cfdc/web/frontend run typecheck
+pnpm --dir cfdc/web/frontend run lint
+pnpm --dir cfdc/web/frontend run test
+pnpm --dir cfdc/web/frontend run build
+pnpm --dir cfdc/web/frontend exec playwright install chromium
+pnpm --dir cfdc/web/frontend run test:e2e
+pnpm --dir cfdc/web/frontend run dev
 ```
 
-Playwright starts the built UI and a real FastAPI service on `127.0.0.1:7867` with temporary data and no model calls. Set `CFDC_E2E_URL` to test an already running service. CI runs these frontend checks with Node 22 alongside Python 3.11–3.13 checks. For Vite development, run FastAPI in another terminal; Vite runs at `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:7860`.
+Playwright starts the built UI and a real FastAPI service on `127.0.0.1:7867` with temporary data and no model calls. Set `CFDC_E2E_URL` to test an already running service. CI runs these frontend checks with pnpm 12.4.1 and Node.js 22 (22.13 or later in the 22.x series) alongside Python 3.11–3.13 checks. For Vite development, run FastAPI in another terminal; Vite runs at `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:7860`.
 
 From the project directory, run the automated tests and Python checks:
 
