@@ -2,42 +2,35 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.11` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.12` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
 You can use a local model through Ollama or a hosted service such as DeepSeek API or OpenAI API. Choose the provider and model that suit your needs; Ollama is not required. Models interpret natural-language replies, while the Kernel decides routes, experiments, controllers, numerical evaluation, and final claims.
 
-1. Install Git, `uv`, [Node.js](https://nodejs.org/en/download) 24.21.0, and pnpm 12.4.1. Use the [official pnpm standalone installer](https://pnpm.io/installation), selecting exactly version 12.4.1. On macOS/Linux, run `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`, then reopen your terminal. Development and CI use these same Node.js and pnpm versions. Then download the project, install its dependencies, check the Python files, verify Node and pnpm, and perform the first-time frontend install and build:
-
-The repository `.nvmrc` pins Node.js 24.21.0 for local development and CI. If you use nvm, complete the `git clone` and `cd` commands below first, then run `nvm install` and `nvm use` before continuing with installation and checks.
+1. Install Git and Docker Desktop (or Docker Engine with Compose), and start Docker. Clone the repository and build the application:
 
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
-uv sync --locked
-uv run --locked python -m compileall -q cfdc tests main.py app.py
-node --version
-pnpm --version
-pnpm --dir cfdc/web/frontend install --frozen-lockfile
-pnpm --dir cfdc/web/frontend run build
+docker compose up --build -d app
 ```
 
-`uv` reads the Python version from `.python-version` and manages `.venv`. Commands using `uv run` do not require manual environment activation. The install and run commands below use `--locked`, which requires `uv.lock` to match the project metadata and fails instead of updating the lockfile during execution. Frontend dependencies are installed with `pnpm install --frozen-lockfile` from the committed `pnpm-lock.yaml`.
+The image builds the React assets and installs locked Python and frontend dependencies. You do not need Python, uv, Node.js, or pnpm on the host. The first build downloads the base images and dependencies.
 
-2. After that first-time `pnpm install --frozen-lockfile` and build, daily use requires only this command to start the WebUI:
+2. On later starts, use:
 
 ```bash
-uv run --locked python app.py
+docker compose up -d app
 ```
 
-The default entry is React + FastAPI, served from the same origin at `127.0.0.1:7860`. RAG dependencies are installed by default. RAG prepares in the background while the shell and settings remain available; the first encoder download may take time. Tasks requesting RAG cannot start while it is preparing or unavailable, and the UI reports the error. Disabling RAG changes only the binding for a future task; existing task snapshots remain immutable. Hugging Face uses its standard per-user model cache.
+The default entry is React + FastAPI, served from the same origin at `127.0.0.1:7860`. Use `docker compose logs -f app` to inspect startup and `docker compose down` to stop it. The application data and Hugging Face cache live in named Docker volumes and survive ordinary stops and rebuilds. RAG prepares in the background while the shell and settings remain available; the first encoder download may take time. Tasks requesting RAG cannot start while it is preparing or unavailable, and the UI reports the error. Disabling RAG changes only the binding for a future task; existing task snapshots remain immutable.
 
 3. Open `http://127.0.0.1:7860`. For natural-language replies, fill in Base URL, Model, and API Key using your chosen provider from the table below. Choose a built-in case such as “01 | DC motor speed” in the Guided Workbench.
 
 4. Follow the four guided steps: task and goal, measurements and inputs, constraints and preferences, then review the summary and confirm the software trial boundary. Registered case contracts are locked; converting to a custom task preserves form values and removes the case execution binding. Default-on RAG pins the server-prepared snapshot. The workspace follows the Kernel’s current next action until a user decision or terminal state.
 
-Before a run, `uv run --locked python main.py --doctor` prints the same non-destructive environment report used by the WebUI. It checks Python, packaged resources, the writable session directory, the public case registry, optional RAG, and (only for loopback addresses) the configured Ollama service/model. The writable-directory check creates and immediately removes one bounded probe file.
+Before a run, `docker compose run --rm app python main.py --doctor` prints the same non-destructive environment report used by the WebUI. It checks Python, packaged resources, the writable session directory, the public case registry, and optional RAG. Its Ollama probe only visits loopback addresses; use **Test current configuration** in the WebUI to test the host service through Docker. The writable-directory check creates and immediately removes one bounded probe file.
 
 Start with a built-in software case. For a custom task, choose manual data return or explicitly select an available server-configured software model before confirming the boundaries. Physical experiments remain outside the WebUI and use an operator bundle, operator confirmation, and protocol-bound data upload.
 
@@ -59,18 +52,20 @@ Configure one provider. The model must support OpenAI-compatible Chat Completion
 
 | Provider | Base URL | Model | API Key |
 | --- | --- | --- | --- |
-| Ollama (local, optional) | `http://127.0.0.1:11434/v1` | The exact model name from `ollama list` | `ollama` for the default local service |
+| Ollama (local, optional) | `http://host.docker.internal:11434/v1` | The exact model name from `ollama list` | `ollama` for the default local service |
 | DeepSeek API | `https://api.deepseek.com` | For example, `deepseek-v4-pro` | Your DeepSeek API key |
 | OpenAI API | `https://api.openai.com/v1` | A compatible Chat Completions model available to your API account | Your OpenAI API key |
 
 Provider documentation: [Ollama compatibility](https://docs.ollama.com/api/openai-compatibility), [DeepSeek configuration](https://api-docs.deepseek.com/), and [OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat). Hosted services use your account's access and billing; no hosted API calls are needed merely to install the project.
 
-If you choose Ollama, install it and start its local service. The desktop application may already have started it; otherwise run `ollama serve` in another terminal. Replace `your-model` below with the model you choose, then use that same name in the WebUI:
+If you choose Ollama, install it on the host and start its service. The desktop application may already have started it; otherwise run `ollama serve` in another terminal. Replace `your-model` below with the model you choose, then use that same name in the WebUI:
 
 ```bash
 ollama pull your-model
 ollama list
 ```
+
+Docker Desktop resolves `host.docker.internal` automatically; Compose also maps it to the host gateway on Linux. If the container cannot connect, configure the host Ollama service to listen on a host interface reachable from Docker, then restart Ollama and retest. Ollama binds to loopback by default; see its [server configuration](https://docs.ollama.com/faq#how-do-i-configure-ollama-server). Restrict access to the host service to trusted networks.
 
 If you choose DeepSeek or OpenAI, skip the Ollama steps and enter your provider's settings directly. Keep real API keys out of source files, screenshots, and shared reports. The WebUI uses these settings for natural-language interaction; the CLI uses them only for environment checks.
 
@@ -122,50 +117,36 @@ The executable capability catalog distinguishes registration from end-to-end val
 
 ## Development checks and optional RAG
 
-Frontend local checks and development:
+Run all frontend checks, including a Chromium browser against the built frontend and real API, inside Docker:
 
 ```bash
-pnpm --dir cfdc/web/frontend install --frozen-lockfile
-pnpm --dir cfdc/web/frontend run format:check
-pnpm --dir cfdc/web/frontend run typecheck
-pnpm --dir cfdc/web/frontend run lint
-pnpm --dir cfdc/web/frontend run test
-pnpm --dir cfdc/web/frontend run build
-pnpm --dir cfdc/web/frontend exec playwright install chromium
-pnpm --dir cfdc/web/frontend run test:e2e
-pnpm --dir cfdc/web/frontend run dev
+docker compose --profile checks run --build --rm frontend-check
 ```
 
-Playwright starts the built UI and a real FastAPI service on `127.0.0.1:7867` with temporary data and no model calls. Set `CFDC_E2E_URL` to test an already running service. CI runs these frontend checks with pnpm 12.4.1 and Node.js 24.21.0 alongside Python 3.11–3.13 checks. For Vite development, run FastAPI in another terminal; Vite runs at `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:7860`.
+Playwright starts the built UI and a real FastAPI service on `127.0.0.1:7867` inside the test container with disposable data and no model calls. The image pins Node.js 24.21.0 and pnpm 12.4.1. CI runs the same container checks alongside Python 3.11–3.13.
 
 From the project directory, run the automated tests and Python checks:
 
 ```bash
-uv lock --check
-uv sync --locked
-uv run --locked ruff format .
-uv run --locked ruff format --check .
-uv run --locked ruff check .
-uv run --locked pytest -q
-uv run --locked pytest -q tests/test_main_cli.py
-uv run --locked python scripts/benchmark_web_api.py
+docker compose --profile checks run --build --rm python-format
+docker compose --profile checks run --build --rm python-check
 git diff --check
 ```
 
-`uv` reads the pinned Python version from `.python-version`, creates `.venv`, and installs the project and development tools. No environment activation is needed when commands use `uv run`.
+The formatting service explicitly mounts the source tree so Ruff can update Python files; review those edits before staging. The check image uses the committed `uv.lock` and runs the full suite and separate CLI acceptance test. Git checks run on the host. To run the API benchmark in Docker: `docker compose --profile checks run --rm python-check uv run --locked python scripts/benchmark_web_api.py`.
 
 New indexes include two packaged sources by default: the authoritative, generated Registry artifacts and a versioned advisory knowledge pack with English and Chinese versions of twelve control-concept cards. The language variants share stable artifact-group identities and semantic versions while retaining separate content hashes and provenance. The pack has a central JSON manifest and schema, validity metadata, citation records, and 192 frozen evaluation cases: the original English/Chinese sets, one exposed regression set, and a replacement challenge holdout. Its text can explain registered choices but cannot change routes, numerical results, qualification, or authorization. Indexes use immutable `cfdc-rag/v3` snapshots with the current retrieval policy. Older schemas or policies are rejected; rebuild the index explicitly before selecting its new snapshot.
 
 To add local Markdown or PDF references, place them under `references`. Documents without metadata remain globally visible to structured scope filtering. Use `--knowledge-pack` for another validated pack, `--no-curated` to omit the packaged cards, or `--relevance-threshold` to record an explicit threshold in the new snapshot:
 
 ```bash
-uv run --locked python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
-uv run --locked python -m cfdc.rag inspect --index-dir ./rag-index
-uv run --locked python -m cfdc.rag query --index-dir ./rag-index \
+docker compose run --rm -v "$PWD/references:/app/references:ro" app python -m cfdc.rag index --source-dir /app/references --index-dir /app/output/rag-index
+docker compose run --rm app python -m cfdc.rag inspect --index-dir /app/output/rag-index
+docker compose run --rm app python -m cfdc.rag query --index-dir /app/output/rag-index \
   --role critic --operation check --stage review \
   --language auto \
   --query "Why is uncertain right-half-plane zero cancellation unsafe?"
-uv run --locked python -m cfdc.rag eval --index-dir ./rag-index \
+docker compose run --rm app python -m cfdc.rag eval --index-dir /app/output/rag-index \
   --bundled --split holdout --assert-acceptance
 ```
 
@@ -176,13 +157,13 @@ Operational history is a separate offline index and is never mixed into RAG or i
 Build, inspect, and query a local history index with the independent CLI. The source file must conform to the packaged schema; generated `operational-history` data is ignored by Git:
 
 ```bash
-uv run --locked python -m cfdc.history index \
-  --source ./operational-history/records.json \
-  --index-dir ./operational-history/index
-uv run --locked python -m cfdc.history inspect \
-  --index-dir ./operational-history/index
-uv run --locked python -m cfdc.history query \
-  --index-dir ./operational-history/index \
+docker compose run --rm -v "$PWD/operational-history:/app/operational-history:ro" app python -m cfdc.history index \
+  --source /app/operational-history/records.json \
+  --index-dir /app/output/operational-history/index
+docker compose run --rm app python -m cfdc.history inspect \
+  --index-dir /app/output/operational-history/index
+docker compose run --rm app python -m cfdc.history query \
+  --index-dir /app/output/operational-history/index \
   --plant-id plant-a \
   --configuration-fingerprint 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   --operating-region-fingerprint fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210 \
@@ -195,7 +176,7 @@ uv run --locked python -m cfdc.history query \
 Start the application and open `http://127.0.0.1:7860`:
 
 ```bash
-uv run --locked python app.py
+docker compose up -d app
 ```
 
 In Settings, enter Base URL, Model, and API Key, then choose **测试当前配置** (Test current configuration). Requests use the current form values without a separate save or environment-variable setup. A successful probe confirms service connectivity and model availability, not full inference compatibility. **高级设置** (Advanced settings) contains the optional startup-environment import for address and model; it always preserves the in-memory key.
@@ -235,7 +216,7 @@ The built-in selector contains 18 public cases:
 The CLI runs the current Kernel workflow using typed inputs. The command stops at the next user or evidence boundary and prints the session ID and current input contract:
 
 ```bash
-uv run --locked python main.py \
+docker compose run --rm app python main.py \
   --kernel-session-dir ./output/kernel-sessions \
   --description "A heater holds chamber temperature." \
   --observed-output temperature --actuator voltage \
@@ -259,7 +240,7 @@ DIAGNOSIS_JSON='{
   "uncertainty_variation":{"status":"known","assessment":"small","evidence":"repeated public tests","confidence":0.95}
 }'
 
-uv run --locked python main.py \
+docker compose run --rm app python main.py \
   --kernel-case dc_motor_speed_v1 \
   --kernel-action motor-run-001 \
   --confirm-kernel-budget \
@@ -278,17 +259,17 @@ can accept it.
 For a physical or externally operated experiment, bind a public Provider contract and compile the handoff after diagnosis and route resolution:
 
 ```bash
-uv run --locked python main.py --kernel-session SESSION_ID \
+docker compose run --rm -v "$PWD/input:/app/input:ro" app python main.py --kernel-session SESSION_ID \
   --kernel-action physical-001 \
-  --kernel-provider physical-provider.json \
+  --kernel-provider /app/input/physical-provider.json \
   --kernel-compile-protocol --kernel-prepare-operator-handoff \
   --kernel-result-dir ./output/results
 
-uv run --locked python main.py --kernel-session SESSION_ID \
+docker compose run --rm -v "$PWD/input:/app/input:ro" app python main.py --kernel-session SESSION_ID \
   --kernel-action physical-002 \
-  --kernel-operator-report operator-report.json \
-  --kernel-upload repeat-01.csv --kernel-upload repeat-02.csv \
-  --kernel-upload repeat-03.csv --kernel-auto
+  --kernel-operator-report /app/input/operator-report.json \
+  --kernel-upload /app/input/repeat-01.csv --kernel-upload /app/input/repeat-02.csv \
+  --kernel-upload /app/input/repeat-03.csv --kernel-auto
 ```
 
 If a declared stop condition fired, add `--kernel-upload-stopped-on-limit`; the upload is recorded as a failed safety gate and is never repaired or counted as accepted evidence.
@@ -298,7 +279,7 @@ The CLI accepts typed diagnostic answers and public artifacts; natural-language 
 Export a current result ZIP with `--kernel-export-bundle`. Import it into a new session with:
 
 ```bash
-uv run --locked python main.py --kernel-import-result ./output/results/SESSION_ID.result.zip
+docker compose run --rm app python main.py --kernel-import-result ./output/results/SESSION_ID.result.zip
 ```
 
 Import validates the current result bundle and preserves the source. The new session requires confirmation; imported results do not grant evaluation or hardware authority.

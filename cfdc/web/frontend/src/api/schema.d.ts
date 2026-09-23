@@ -558,7 +558,7 @@ export interface components {
             rag: components["schemas"]["RAGStatus"];
             /**
              * Version
-             * @default 0.3.9
+             * @default 0.3.12
              */
             version: string;
         };

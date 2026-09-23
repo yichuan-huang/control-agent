@@ -1,0 +1,75 @@
+services:
+  app:
+    image: cfdc-control:0.3.12
+    build:
+      context: .
+      target: app
+    init: true
+    ports:
+      - "127.0.0.1:${CFDC_PORT:-7860}:7860"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      HF_HOME: /home/cfdc/.cache/huggingface
+    volumes:
+      - cfdc-data:/app/output
+      - cfdc-hf-cache:/home/cfdc/.cache/huggingface
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:7860/api/v1/config', timeout=3).status == 200"
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+
+  python-check:
+    profiles: [checks]
+    build:
+      context: .
+      target: python-check
+      args:
+        PYTHON_VERSION: ${CFDC_PYTHON_VERSION:-3.12}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend-check:
+    profiles: [checks]
+    build:
+      context: .
+      target: frontend-check
+    init: true
+    ipc: host
+
+  browser-live:
+    profiles: [checks]
+    build:
+      context: .
+      target: frontend-check
+    init: true
+    ipc: host
+    network_mode: service:app
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      CFDC_E2E_URL: http://127.0.0.1:7860
+      CFDC_OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
+      CFDC_OLLAMA_MODEL: gemma4:e4b
+      CFDC_E2E_OLLAMA: "1"
+    command: ["pnpm", "run", "test:e2e", "ollama.spec.ts", "settings.spec.ts"]
+
+  python-format:
+    profiles: [checks]
+    build:
+      context: .
+      target: python-check
+    volumes:
+      - .:/app
+    command: ["ruff", "format", "."]
+
+volumes:
+  cfdc-data:
+  cfdc-hf-cache:

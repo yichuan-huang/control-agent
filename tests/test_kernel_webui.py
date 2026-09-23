@@ -700,9 +700,9 @@ def test_kernel_diagnosis_prompt_distinguishes_asserted_and_unknown_facts(tmp_pa
     reason="set CFDC_RUN_OLLAMA_SMOKE=1 to run the local Ollama acceptance test",
 )
 def test_live_ollama_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
-    base_url = os.getenv("CFDC_OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
-    model = os.getenv("CFDC_OLLAMA_MODEL", "gemma4:e4b")
-    api_key = os.getenv("CFDC_OLLAMA_API_KEY", "ollama")
+    base_url = os.environ["CFDC_OLLAMA_BASE_URL"]
+    model = os.environ["CFDC_OLLAMA_MODEL"]
+    api_key = os.environ["CFDC_OLLAMA_API_KEY"]
     report, state = start_kernel_case_run(
         "dc_motor_speed_v1",
         session_dir=tmp_path,

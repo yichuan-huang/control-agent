@@ -8,7 +8,7 @@
 
 ## 首次准备（只需完成一次）
 
-需要 Git、`uv`、Node.js 24.21.0、pnpm 12.4.1，以及 MATLAB 和 Simulink。pnpm 请按 [项目快速开始](../README_CN.md#快速开始) 使用官方独立安装程序安装指定的 12.4.1 版本。本教程以 MATLAB R2026a 为验收版本，不要求额外控制工具箱。MATLAB 必须能够使用 Simulink 许可证；只安装产品而没有可用许可证不能运行仿真。
+需要 Git、Docker，以及宿主机上的 MATLAB 和 Simulink。本教程以 MATLAB R2026a 为验收版本，不要求额外控制工具箱。MATLAB 必须能够使用 Simulink 许可证；只安装产品而没有可用许可证不能运行仿真。
 
 1. **下载项目。** 已有仓库时直接使用现有目录，不要再克隆一份。首次下载可在终端执行：
 
@@ -19,26 +19,21 @@
 
 2. **进入仓库根目录。** 这是包含 `app.py`、`pyproject.toml` 和 `simulations/` 的文件夹。如果使用已有仓库，可在此文件夹打开终端；macOS 也可以在终端输入 `cd `（末尾有空格），将文件夹从 Finder 拖入，再按回车。下方终端命令都在这个根目录执行。
 
-3. **安装依赖并构建页面。** 粘贴到终端，等待每条命令成功后再执行下一条：
+3. **构建并启动应用。** 先启动 Docker，再在仓库根目录运行：
 
    ```bash
-   uv --version
-   node --version
-   pnpm --version
-   uv sync --locked
-   pnpm --dir cfdc/web/frontend install --frozen-lockfile
-   pnpm --dir cfdc/web/frontend run build
+   docker compose up --build -d app
    ```
 
-   **完成标志：**依赖安装没有报错，前端构建成功，生成 `cfdc/web/frontend/dist/index.html`。首次构建不能省略：仓库不包含生成的网页文件。命令不存在时先安装对应工具，参见[项目快速开始](../README_CN.md#快速开始)。`uv` 会管理项目 Python 环境，不需要手动激活 `.venv`。
+   **完成标志：**镜像构建成功，`docker compose ps app` 显示服务为 `healthy`。首次构建会下载镜像和依赖，网页文件在镜像内生成。宿主机无需安装项目的 Python 或前端工具。
 
-4. **启动 WebUI。** 在同一个终端运行，之后保持此终端打开：
+4. **打开 WebUI。** 在浏览器打开 [http://127.0.0.1:7860](http://127.0.0.1:7860)。以后日常启动只需：
 
    ```bash
-   uv run --locked python app.py
+   docker compose up -d app
    ```
 
-   **完成标志：**终端显示服务启动，浏览器打开 [http://127.0.0.1:7860](http://127.0.0.1:7860) 可以看到 CFDC 页面。以后日常使用只需这条启动命令；更新依赖或前端源码后才需要重新安装／构建。若服务已经在运行，不要再启动第二份。
+   **完成标志：**浏览器显示 CFDC 页面。查看启动日志使用 `docker compose logs -f app`；更新源码后使用 `docker compose up --build -d app`。`docker compose down` 会停止应用并保留数据卷。
 
 5. **配置自然语言模型。** 在 WebUI“设置”中填写 Base URL、Model 和 API Key，再点击“测试当前配置”。可以选择 Ollama、DeepSeek API 或 OpenAI API，具体填写方式见[模型服务商说明](../README_CN.md#选择模型服务商)。表单配置直接生效，无需另点保存；连接测试通过不代表每种模型都已验证完整流程。
 
@@ -46,11 +41,11 @@
 
    | 设置字段 | 本地练习填写值 |
    | --- | --- |
-   | Base URL | `http://127.0.0.1:11434/v1` |
+   | Base URL | `http://host.docker.internal:11434/v1` |
    | Model | `gemma4:e4b` |
    | API Key | `ollama` |
 
-   选择在线服务时跳过 Ollama 准备，使用自己的模型和密钥。不要把真实密钥写入案例文件、截图或导出的共享材料。
+   如果容器无法连接宿主机 Ollama，请按[项目模型说明](../README_CN.md#选择模型服务商)检查监听地址。选择在线服务时跳过 Ollama 准备，使用自己的模型和密钥。不要把真实密钥写入案例文件、截图或导出的共享材料。
 
 6. **创建练习前关闭“新任务使用内置知识库”。** 这五个手册已经提供固定模型的设计说明，关闭该开关可以避免首次知识库准备阻碍建任务。只影响之后的新任务，不会修改已经创建的任务。页面设置和模型连接检查成功后，打开下面任一案例手册，按其第 1 步启动 MATLAB。
 
@@ -102,9 +97,9 @@
 
 | 看到的现象 | 处理方法 |
 | --- | --- |
-| `uv`、`node` 或 `pnpm` 命令不存在 | 安装相应工具，重新打开终端，再执行首次准备；不要继续执行依赖它的命令 |
-| 网页显示“前端尚未构建” | 在仓库根目录执行首次准备中的 `pnpm --dir cfdc/web/frontend install --frozen-lockfile` 与 `pnpm --dir cfdc/web/frontend run build` 命令，再刷新页面 |
-| `127.0.0.1:7860` 打不开 | 查看启动 CFDC 的终端是否还在运行及是否报错；端口被占用时先确认是不是已有的 CFDC，不要连续重复启动 |
+| `docker compose` 无法连接服务 | 启动 Docker Desktop／Docker Engine，确认 `docker info` 成功后再执行首次准备 |
+| 网页显示“前端尚未构建” | 在仓库根目录执行 `docker compose up --build -d app`，等待新镜像健康后刷新页面 |
+| `127.0.0.1:7860` 打不开 | 运行 `docker compose ps app` 和 `docker compose logs app` 查看状态及错误；若端口被占用，先确认是否已有 CFDC 服务 |
 | 模型连接失败／诊断回复失败 | 在“设置”核对地址、完整模型名称和密钥；本地 Ollama 需服务运行且模型已下载。刷新后密钥可能需要重新填写。保留当前任务，连接恢复后按页面继续，不要伪造诊断结论 |
 | 建任务提示知识库未就绪 | 先关闭“新任务使用内置知识库”，再建立本练习的新任务；已有任务的知识库绑定不会跟着变化 |
 | 菜单未打开，或提示 `SetupRequired` | 在 MATLAB 编辑器打开当前案例 `run_case.m` 并点击 Run，再选择“初始化／打开模型”；无需创建 `lab` 变量 |

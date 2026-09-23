@@ -4,6 +4,13 @@ import { fileURLToPath } from "node:url";
 import { chromium, expect } from "@playwright/test";
 
 const baseURL = process.env.CFDC_E2E_URL ?? "http://127.0.0.1:7865";
+const ollamaBaseURL = process.env.CFDC_OLLAMA_BASE_URL;
+if (!ollamaBaseURL) throw new Error("CFDC_OLLAMA_BASE_URL is required");
+const ollamaModel = process.env.CFDC_OLLAMA_MODEL;
+if (ollamaModel !== "gemma4:e4b")
+  throw new Error("CFDC_OLLAMA_MODEL must be gemma4:e4b");
+const ollamaAPIKey = process.env.CFDC_OLLAMA_API_KEY;
+if (!ollamaAPIKey) throw new Error("CFDC_OLLAMA_API_KEY is required");
 const projectRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const outputDir = path.resolve(
   projectRoot,
@@ -48,9 +55,9 @@ try {
   // Explicitly configure the required real local model and disable RAG for this
   // isolated server, whose startup deliberately skipped index preparation.
   await page.getByRole("button", { name: "设置" }).click();
-  await page.getByLabel("Base URL").fill("http://127.0.0.1:11434/v1");
-  await page.getByLabel("Model").fill("gemma4:e4b");
-  await page.getByLabel("API Key").fill("ollama");
+  await page.getByLabel("Base URL").fill(ollamaBaseURL);
+  await page.getByLabel("Model").fill(ollamaModel);
+  await page.getByLabel("API Key").fill(ollamaAPIKey);
   await page.getByRole("switch", { name: "新任务使用内置知识库" }).uncheck();
   await page.getByRole("button", { name: "测试当前配置", exact: true }).click();
   await expect(page.getByText(/^已连接：/)).toBeVisible({ timeout: 120_000 });

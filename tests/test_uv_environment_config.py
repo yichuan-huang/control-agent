@@ -35,13 +35,14 @@ def test_python_uses_uv_lock_and_frontend_has_its_own_pnpm_lock():
     assert (ROOT / ".nvmrc").read_text(encoding="utf-8") == "24.21.0\n"
 
 
-def test_docs_and_ci_publish_only_uv_workflow():
+def test_docs_and_ci_use_docker_for_project_checks():
     readmes = [ROOT / "README.md", ROOT / "README_CN.md"]
     for path in readmes:
         text = path.read_text(encoding="utf-8")
-        assert "uv sync" in text
-        assert "uv run --locked pytest -q" in text
-        assert "uv run pytest -q" not in text
+        assert "docker compose up --build -d app" in text
+        assert "docker compose --profile checks run --build --rm python-check" in text
+        assert "docker compose --profile checks run --build --rm frontend-check" in text
+        assert not re.search(r"(?m)^(?:uv|node|pnpm) ", text)
         assert "conda create" not in text
         assert "conda activate" not in text
         assert "pip install" not in text
@@ -49,46 +50,37 @@ def test_docs_and_ci_publish_only_uv_workflow():
         assert "requirements.txt" not in text
 
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert "astral-sh/setup-uv@" in ci
-    assert "python-version: ${{ matrix.python-version }}" in ci
-    assert "enable-cache: true" in ci
-    assert "uv lock --check" in ci
-    assert "uv sync --locked" in ci
-    assert "uv run --locked pytest -q" in ci
-    assert "actions/setup-python" not in ci
-    assert "pip install" not in ci
-    assert ".[test]" not in ci
+    assert 'python-version: ["3.11", "3.12", "3.13"]' in ci
+    assert "CFDC_PYTHON_VERSION: ${{ matrix.python-version }}" in ci
+    assert "docker compose --profile checks run --build --rm python-check" in ci
+    assert "docker compose --profile checks run --build --rm frontend-check" in ci
+    assert "docker compose build app" in ci
+    assert not re.search(r"(?m)\s+- run: (?:uv|pnpm|node) ", ci)
+
+    check = (ROOT / "scripts/check_container.sh").read_text(encoding="utf-8")
+    for command in (
+        "uv lock --check",
+        "uv sync --locked",
+        "uv run --locked ruff format --check .",
+        "uv run --locked ruff check .",
+        "uv run --locked pytest -q",
+        "uv run --locked pytest -q tests/test_main_cli.py",
+        "pnpm install --frozen-lockfile",
+        "pnpm run test:e2e",
+    ):
+        assert command in check
 
 
-def test_readmes_install_and_check_before_web_start_and_cli():
+def test_readmes_build_before_web_start_and_cli():
     for path in [ROOT / "README.md", ROOT / "README_CN.md"]:
         text = path.read_text(encoding="utf-8")
-        sync = text.index("uv sync --locked")
-        compile_check = text.index(
-            "uv run --locked python -m compileall -q cfdc tests main.py app.py"
-        )
-        node_check = text.index("node --version")
-        pnpm_check = text.index("pnpm --version")
-        frontend_install = text.index(
-            "pnpm --dir cfdc/web/frontend install --frozen-lockfile"
-        )
-        frontend_build = text.index("pnpm --dir cfdc/web/frontend run build")
-        web_start = text.index("uv run --locked python app.py")
+        build = text.index("docker compose up --build -d app")
+        web_start = text.index("docker compose up -d app")
         cli_usage = text.index("--kernel-session-dir ./output/kernel-sessions")
-
-        assert (
-            sync
-            < compile_check
-            < node_check
-            < pnpm_check
-            < frontend_install
-            < frontend_build
-            < web_start
-            < cli_usage
-        )
+        assert build < web_start < cli_usage
 
 
-def test_frontend_docs_and_ci_use_frozen_pnpm_workflow():
+def test_frontend_docs_and_ci_use_frozen_pnpm_inside_docker():
     paths = [
         ROOT / "README.md",
         ROOT / "README_CN.md",
@@ -98,30 +90,28 @@ def test_frontend_docs_and_ci_use_frozen_pnpm_workflow():
     ]
     for path in paths:
         text = path.read_text(encoding="utf-8")
-        assert "pnpm 12.4.1" in text
-        assert "24.21.0" in text
-        assert not re.search(r"\b(?:npm|npx)\b", text)
+        assert "docker compose" in text
+        assert not re.search(r"(?m)^(?:uv|node|pnpm) ", text)
 
-    for path in [ROOT / "README.md", ROOT / "README_CN.md"]:
-        text = path.read_text(encoding="utf-8")
-        assert "PNPM_VERSION=12.4.1" in text
-        assert "https://pnpm.io/installation" in text
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "node:24.21.0-bookworm-slim" in dockerfile
+    assert "corepack prepare pnpm@12.4.1 --activate" in dockerfile
+    assert "pnpm --dir cfdc/web/frontend install --frozen-lockfile" in dockerfile
+    assert "COPY --from=frontend-build /root/.cache/node/corepack" in dockerfile
+    assert "pnpm exec playwright install --with-deps chromium" in dockerfile
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    assert "127.0.0.1:${CFDC_PORT:-7860}:7860" in compose
+    assert "cfdc-data:/app/output" in compose
+    assert "cfdc-hf-cache:/home/cfdc/.cache/huggingface" in compose
 
-    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert 'node-version-file: ".nvmrc"' in ci
-    assert "node-version:" not in ci
-    assert "cache: pnpm" in ci
-    assert "cache-dependency-path: cfdc/web/frontend/pnpm-lock.yaml" in ci
-    assert not re.search(r"\b(?:npm|npx)\b", ci)
-    steps = [
-        "pnpm --dir cfdc/web/frontend install --frozen-lockfile",
-        "pnpm --dir cfdc/web/frontend run format:check",
-        "pnpm --dir cfdc/web/frontend run typecheck",
-        "pnpm --dir cfdc/web/frontend run lint",
-        "pnpm --dir cfdc/web/frontend run test",
-        "pnpm --dir cfdc/web/frontend run build",
-        "pnpm exec playwright install --with-deps chromium",
-        "pnpm --dir cfdc/web/frontend run test:e2e",
-    ]
-    positions = [ci.index(step) for step in steps]
-    assert positions == sorted(positions)
+
+def test_release_version_matches_frontend_and_public_api():
+    version = load_project_metadata()["project"]["version"]
+    assert version == "0.3.12"
+    package = json.loads(
+        (ROOT / "cfdc/web/frontend/package.json").read_text(encoding="utf-8")
+    )
+    openapi = json.loads(
+        (ROOT / "cfdc/web/frontend/openapi.json").read_text(encoding="utf-8")
+    )
+    assert package["version"] == openapi["info"]["version"] == version

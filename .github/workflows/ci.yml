@@ -5,49 +5,31 @@ on:
   pull_request:
 
 jobs:
-  test:
+  python:
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     runs-on: ubuntu-latest
+    env:
+      CFDC_PYTHON_VERSION: ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-      - run: uv lock --check
-      - run: uv sync --locked
-      - run: uv run --locked ruff format --check .
-      - run: uv run --locked ruff check .
-      - run: uv run --locked pytest -q
-      - name: Kernel CLI subprocess acceptance
-        run: uv run --locked pytest -q tests/test_main_cli.py
+      - run: docker compose --profile checks run --build --rm python-check
+      - run: git diff --check
 
   frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          python-version: "3.12"
-          enable-cache: true
-      - uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
-        with:
-          package-json-file: cfdc/web/frontend/package.json
-          install: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: ".nvmrc"
-          cache: pnpm
-          cache-dependency-path: cfdc/web/frontend/pnpm-lock.yaml
-      - run: uv sync --locked
-      - run: pnpm --dir cfdc/web/frontend install --frozen-lockfile
-      - run: pnpm --dir cfdc/web/frontend run format:check
-      - run: pnpm --dir cfdc/web/frontend run typecheck
-      - run: pnpm --dir cfdc/web/frontend run lint
-      - run: pnpm --dir cfdc/web/frontend run test
-      - run: pnpm --dir cfdc/web/frontend run build
-      - run: pnpm exec playwright install --with-deps chromium
-        working-directory: cfdc/web/frontend
-      - run: pnpm --dir cfdc/web/frontend run test:e2e
+      - run: docker compose --profile checks run --build --rm frontend-check
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose build app
+      - run: docker compose -p cfdc-ci up --no-build --wait -d app
+      - run: docker compose -p cfdc-ci exec -T app python main.py --doctor
+      - run: docker compose -p cfdc-ci exec -T app python -c "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:7860/').status == 200"
+      - if: always()
+        run: docker compose -p cfdc-ci down --volumes --remove-orphans

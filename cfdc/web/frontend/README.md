@@ -2,61 +2,49 @@
 
 React 19, TypeScript, Ant Design 6, React Router, TanStack Query and Vite. All workflow decisions and evaluation values come from the versioned Kernel API. Plotly and expert tools load on demand. Plot data are display samples; metrics remain the server's recorded metrics.
 
-Install [Node.js](https://nodejs.org/en/download) 24.21.0 and pnpm 12.4.1 before working on the frontend. Use the [official pnpm standalone installer](https://pnpm.io/installation), selecting exactly version 12.4.1. On macOS/Linux, run `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`, then reopen your terminal. The committed `pnpm-lock.yaml` fixes frontend dependencies; use `pnpm install --frozen-lockfile` for installation. From the repository root, verify the tools and perform the first-time install and production build:
+The Docker build pins Node.js 24.21.0, pnpm 12.4.1, and the committed `pnpm-lock.yaml`. From the repository root, build and start the application:
 
 ```sh
-node --version
-pnpm --version
-pnpm --dir cfdc/web/frontend install --frozen-lockfile
-pnpm --dir cfdc/web/frontend run build
+docker compose up --build -d app
 ```
 
-For daily use, start the complete application with one command:
+For later starts:
 
 ```sh
-uv run --locked python app.py
+docker compose up -d app
 ```
 
-Its default address is `http://127.0.0.1:7860`. For frontend development, start the API with that command from the repository root, then run in this directory:
+Its default address is `http://127.0.0.1:7860`. Run all frontend checks in Docker from the repository root:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm run dev
+docker compose --profile checks run --build --rm frontend-check
 ```
 
-Vite serves `http://127.0.0.1:5173` and proxies `/api` to port 7860. Production `pnpm run build` creates the assets served by `app.py`; there is no separate production Node service.
+The build stage produces the assets served by `app.py`; no separate production Node service is needed. The check stage runs format, type, lint, unit, build, and Playwright checks.
 
 Regenerate the checked-in API types after backend schema changes:
 
 ```sh
-uv run --locked python scripts/export_web_openapi.py  # from repository root
-pnpm --dir cfdc/web/frontend run generate         # from repository root
-```
-
-Frontend checks, run from this directory:
-
-```sh
-pnpm run format:check
-pnpm run typecheck
-pnpm run lint
-pnpm run test
-pnpm run build
-pnpm exec playwright install chromium
-pnpm run test:e2e
+docker compose --profile checks run --rm \
+  -v "$PWD/cfdc/web/frontend/openapi.json:/app/cfdc/web/frontend/openapi.json" \
+  frontend-check python /app/scripts/export_web_openapi.py
+docker compose --profile checks run --rm \
+  -v "$PWD/cfdc/web/frontend/src/api/schema.d.ts:/app/cfdc/web/frontend/src/api/schema.d.ts" \
+  frontend-check pnpm run generate
 ```
 
 Playwright starts the built frontend and real API at `127.0.0.1:7867` with temporary data, which are removed when the server stops. RAG preparation and model calls are disabled for ordinary tests. `CFDC_E2E_URL` selects an already running service instead. Tests do not require credentials, historical local files or private datasets. The refresh test delays a real GET response while retaining the actual API response; it verifies task creation is not replayed. CI runs the same checks with pnpm 12.4.1 and Node.js 24.21.0.
 
-For opt-in local validation, run `uv run --locked python scripts/serve_web_e2e.py --prepare-rag` from the repository root. Its disposable RAG index is built from packaged sources. Point `CFDC_E2E_URL` at this service, set `CFDC_E2E_OLLAMA=1` for the live settings check, and enter the required local model explicitly in the form.
+For opt-in local validation, start the application with `docker compose up -d app`, then run `docker compose --profile checks run --build --rm -e CFDC_OLLAMA_API_KEY=ollama browser-live`. It connects to the application's loopback address from the same network namespace and uses the configured host Ollama service. Use a separate Compose project for disposable validation data.
 
 For read-only visual validation of any existing task with recorded evaluation curves:
 
 ```sh
-node scripts/check-results.mjs <recorded-task-id>
+docker compose --profile checks run --rm browser-live node scripts/check-results.mjs <recorded-task-id>
 ```
 
-This checks trial/stage identity, a requested 0–5 second window, Plotly layout at 390 pixels, and browser errors; screenshots go to ignored `test-results/`. The supplied record must contain the requested window. No recorded task ID is embedded as a test fixture.
+This checks trial/stage identity, a requested 0–5 second window, Plotly layout at 390 pixels, and browser errors. Screenshots stay in the disposable container unless you bind-mount its `test-results/` directory. The supplied record must contain the requested window. No recorded task ID is embedded as a test fixture.
 
 Settings keep credentials only in React memory. A refresh removes credentials. Session storage contains allowlisted task drafts and navigation/operation IDs only. A network retry retains its request ID; definite errors release it. The UI never automatically replays a mutation.
 
-`node scripts/check-teaching.mjs` checks the teaching upload flow with explicit local Ollama settings. Set `CFDC_E2E_URL` to the validation service and `CFDC_TEACHING_OUTPUT` to a temporary output directory. This includes rejected CSV/JSON/ZIP uploads and recovery using the original generated bundle.
+`docker compose --profile checks run --rm -e CFDC_OLLAMA_API_KEY=ollama browser-live node scripts/check-teaching.mjs` checks the teaching upload flow against the application with explicit local Ollama settings. Run it in a separate Compose project for disposable task data, and mount a temporary output directory if you need its screenshots. This includes rejected CSV/JSON/ZIP uploads and recovery using the original generated bundle.

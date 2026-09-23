@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+const ollamaBaseURL = process.env.CFDC_OLLAMA_BASE_URL;
+const ollamaModel = process.env.CFDC_OLLAMA_MODEL;
+const ollamaAPIKey = process.env.CFDC_OLLAMA_API_KEY;
+
 test("live Ollama interprets a browser reply without persisting credentials", async ({
   page,
 }) => {
@@ -8,11 +12,14 @@ test("live Ollama interprets a browser reply without persisting credentials", as
     "Opt-in local Ollama inference",
   );
   test.setTimeout(240000);
+  expect(ollamaBaseURL, "CFDC_OLLAMA_BASE_URL is required").toBeTruthy();
+  expect(ollamaModel, "CFDC_OLLAMA_MODEL is required").toBe("gemma4:e4b");
+  expect(ollamaAPIKey, "CFDC_OLLAMA_API_KEY is required").toBeTruthy();
   await page.goto("/new");
   await page.getByRole("button", { name: "设置", exact: true }).click();
-  await page.getByLabel("Base URL").fill("http://127.0.0.1:11434/v1");
-  await page.getByLabel("Model").fill("gemma4:e4b");
-  await page.getByLabel("API Key").fill("ollama");
+  await page.getByLabel("Base URL").fill(ollamaBaseURL!);
+  await page.getByLabel("Model").fill(ollamaModel!);
+  await page.getByLabel("API Key").fill(ollamaAPIKey!);
   await page.getByRole("switch", { name: "新任务使用内置知识库" }).uncheck();
   await page.keyboard.press("Escape");
   await page

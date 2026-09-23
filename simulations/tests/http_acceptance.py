@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 import zipfile
@@ -19,6 +20,24 @@ sys.path.insert(0, str(ROOT))
 from fastapi.testclient import TestClient
 
 from cfdc.web.api import create_app
+
+EXPECTED_STATUSES = {
+    "01_optical_hold": "capability_gap",
+    "02_vacuum_hold": "performance_met",
+    "03_ink_viscosity_hold": "performance_met",
+    "04_optical_transition": "capability_gap",
+    "05_ink_disturbance_recovery": "performance_met",
+}
+
+
+def selected_cases(cases):
+    selected = tuple(cases) if cases is not None else tuple(EXPECTED_STATUSES)
+    if not selected or len(set(selected)) != len(selected):
+        raise ValueError("Select one or more distinct simulation cases")
+    unknown = set(selected) - EXPECTED_STATUSES.keys()
+    if unknown:
+        raise ValueError(f"Unknown simulation cases: {sorted(unknown)}")
+    return selected
 
 
 def finish(client, response):
@@ -87,16 +106,13 @@ def stage(client, folder, row, kind, number):
     )
 
 
-def verify(folder):
+def verify(folder, *, cases=None):
     """Verify unchanged benchmark outcomes, accepted packets and fresh seeds."""
-    expected = {
-        "01_optical_hold": "capability_gap",
-        "02_vacuum_hold": "performance_met",
-        "03_ink_viscosity_hold": "performance_met",
-        "04_optical_transition": "capability_gap",
-        "05_ink_disturbance_recovery": "performance_met",
-    }
-    for case_id, status in expected.items():
+    if cases is None:
+        state = json.loads((folder / "state.json").read_text())
+        cases = [row["case_id"] for row in state["cases"]]
+    for case_id in selected_cases(cases):
+        status = EXPECTED_STATUSES[case_id]
         report = json.loads((folder / (case_id + "-report.json")).read_text())
         assert report["status"] == status, (case_id, report["status"])
         workflow = report["external_workflow"]
@@ -121,7 +137,8 @@ def verify(folder):
         print("PASS", case_id, status)
 
 
-def run(mode, folder):
+def run(mode, folder, *, cases=None, case_root=None):
+    folder = folder.resolve()
     folder.mkdir(parents=True, exist_ok=True)
     app = create_app(
         session_dir=folder / "sessions",
@@ -133,11 +150,13 @@ def run(mode, folder):
     with TestClient(app, base_url="http://127.0.0.1:7860") as client:
         if mode == "init":
             assert not (folder / "state.json").exists()
+            selected = selected_cases(cases)
+            source_root = (case_root or ROOT / "simulations").resolve()
             rows = []
-            for config_path in sorted(
-                (ROOT / "simulations").glob("0*/case_config.json")
-            ):
+            for case_id in selected:
+                config_path = source_root / case_id / "case_config.json"
                 config = json.loads(config_path.read_text())
+                assert config["case_id"] == case_id
                 sid = finish(
                     client,
                     client.post(
@@ -188,8 +207,14 @@ def run(mode, folder):
                 rows.append(row)
                 jobs.append(stage(client, folder, row, "identification", 0))
             state = {"round": 0, "cases": rows, "terminal": {}}
+            if case_root is not None:
+                state["exchange_root"] = str(folder.parent)
         else:
             state = json.loads((folder / "state.json").read_text())
+            if cases is not None:
+                assert set(selected_cases(cases)) == {
+                    row["case_id"] for row in state["cases"]
+                }
             old_jobs = json.loads((folder / "jobs.json").read_text())
             for job in old_jobs:
                 result = json.loads(Path(job["response_path"]).read_text())
@@ -219,6 +244,8 @@ def run(mode, folder):
                 else:
                     ids = []
                     for path in map(Path, paths):
+                        if not path.is_absolute():
+                            path = Path(state["exchange_root"]) / path
                         upload = client.post(
                             "/api/v1/uploads",
                             data={"session_id": job["session_id"]},
@@ -276,8 +303,20 @@ def run(mode, folder):
             json.dumps(state, ensure_ascii=False, indent=2)
         )
         (folder / "jobs.json").write_text(json.dumps(jobs, indent=2))
+        if exchange_root := state.get("exchange_root"):
+            root = Path(exchange_root)
+            portable = []
+            for job in jobs:
+                item = dict(job)
+                for key in ("case_dir", "package_path", "response_path"):
+                    path = Path(job[key]).resolve()
+                    if not path.is_relative_to(root):
+                        raise ValueError(f"Exchange path escaped its root: {path}")
+                    item[key] = os.path.relpath(path, root)
+                portable.append(item)
+            (folder / "jobs-exchange.json").write_text(json.dumps(portable, indent=2))
         print(
-            f"Round {state['round']}: {len(jobs)} MATLAB jobs; {len(state['terminal'])}/5 terminal."
+            f"Round {state['round']}: {len(jobs)} MATLAB jobs; {len(state['terminal'])}/{len(state['cases'])} terminal."
         )
 
 
@@ -285,8 +324,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["init", "advance", "verify"])
     parser.add_argument("directory", type=Path)
+    parser.add_argument("--cases", nargs="+", metavar="CASE_ID")
+    parser.add_argument("--case-root", type=Path)
     args = parser.parse_args()
     if args.mode == "verify":
-        verify(args.directory)
+        verify(args.directory, cases=args.cases)
     else:
-        run(args.mode, args.directory)
+        run(args.mode, args.directory, cases=args.cases, case_root=args.case_root)

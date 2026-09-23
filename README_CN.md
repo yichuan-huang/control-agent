@@ -2,42 +2,35 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.11` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.12` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
 你可以通过 Ollama 使用本地模型，也可以使用 DeepSeek API、OpenAI API 等在线服务。请按自己的需要选择服务商和模型，Ollama 不是必需依赖。模型负责理解自然语言回复；路线、实验、控制器、数值评价和最终结论仍由 Kernel 决定。
 
-1. 安装 Git、`uv`、[Node.js](https://nodejs.org/en/download) 24.21.0 和 pnpm 12.4.1。使用 [pnpm 官方独立安装程序](https://pnpm.io/installation)，明确选择 12.4.1 版本。macOS/Linux 可执行 `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.4.1 sh -`，然后重新打开终端。开发与 CI 使用相同的 Node.js 和 pnpm 版本。然后下载项目、安装依赖、检查 Python 文件、验证 Node 与 pnpm，并完成首次前端安装和构建：
-
-仓库的 `.nvmrc` 固定本地开发与 CI 使用 Node.js 24.21.0。使用 nvm 时，请先完成下面的 `git clone` 和 `cd`，然后运行 `nvm install` 和 `nvm use`，再继续安装与检查。
+1. 安装 Git 和 Docker Desktop（或 Docker Engine 与 Compose），并启动 Docker。下载仓库并构建应用：
 
 ```bash
 git clone https://github.com/yichuan-huang/control-agent.git
 cd control-agent
-uv sync --locked
-uv run --locked python -m compileall -q cfdc tests main.py app.py
-node --version
-pnpm --version
-pnpm --dir cfdc/web/frontend install --frozen-lockfile
-pnpm --dir cfdc/web/frontend run build
+docker compose up --build -d app
 ```
 
-`uv` 会读取 `.python-version` 中的 Python 版本并管理 `.venv`。使用 `uv run` 时不需要手动激活环境。 本文的安装和运行命令使用 `--locked`，要求 `uv.lock` 与项目声明一致；若不一致会报错，而不是在运行时更新锁文件。前端使用 `pnpm install --frozen-lockfile` 按已提交的 `pnpm-lock.yaml` 安装依赖。
+镜像会构建 React 页面并安装锁定版本的 Python 和前端依赖。宿主机无需安装 Python、uv、Node.js 或 pnpm。首次构建需要下载基础镜像和依赖。
 
-2. 完成首次 `pnpm install --frozen-lockfile` 和构建后，日常使用只需运行以下命令启动 WebUI：
+2. 以后启动 WebUI 使用：
 
 ```bash
-uv run --locked python app.py
+docker compose up -d app
 ```
 
-默认入口是 React + FastAPI，同源监听 `127.0.0.1:7860`。RAG 依赖默认安装，并在后台准备；页面与设置仍可使用，首次下载 encoder 可能较慢。RAG 处于准备中或失败时，要求使用 RAG 的任务不能启动，页面会明确显示错误。关闭 RAG 只影响未来创建任务的绑定，已有任务的 snapshot 保持不可变。Hugging Face 使用当前用户的默认模型缓存。
+默认入口是 React + FastAPI，同源访问地址为 `127.0.0.1:7860`。使用 `docker compose logs -f app` 查看启动日志，`docker compose down` 停止服务。应用数据和 Hugging Face 缓存保存在具名 Docker 数据卷中，普通停止或重建不会删除。RAG 在后台准备；页面与设置仍可使用，首次下载 encoder 可能较慢。RAG 处于准备中或失败时，要求使用 RAG 的任务不能启动，页面会明确显示错误。关闭 RAG 只影响未来创建任务的绑定，已有任务的 snapshot 保持不可变。
 
 3. 打开 `http://127.0.0.1:7860`。使用自然语言回复时，按照下表中你选择的服务商填写 Base URL、Model 和 API Key。在“引导工作台”选择一个内置案例，例如“01｜直流电机转速”。
 
 4. 按四步填写任务与目标、观测与输入、约束与偏好，并在最后核对摘要和确认软件试验边界。内置案例的合同锁定；“转为自己的任务”保留表单值并解除案例执行绑定。默认开启的 RAG 仅绑定服务端已准备好的 snapshot。任务启动后，工作台按 Kernel 状态显示当前主要操作，直到需要用户决定或到达终态。
 
-每次运行前可执行 `uv run --locked python main.py --doctor`。它与 WebUI 的“环境自检”共用同一非破坏性服务，检查 Python、资源目录、可写会话目录、公开案例注册表、可选 RAG，以及（仅对 loopback 地址）本地 Ollama 服务和模型。会话目录检查会创建并立即删除一个受限探针文件。
+每次运行前可执行 `docker compose run --rm app python main.py --doctor`。它与 WebUI 的“环境自检”共用同一非破坏性服务，检查 Python、资源目录、可写会话目录、公开案例注册表和可选 RAG。doctor 只探测 loopback 上的 Ollama；容器到宿主机服务的连通性请在 WebUI 使用“测试当前配置”验证。会话目录检查会创建并立即删除一个受限探针文件。
 
 首次使用建议先选择内置软件案例。自定义任务可选择手动回传数据，或在确认边界前明确选择服务器已配置且可用的软件模型。实体实验仍在页面之外执行，通过 operator bundle、操作员确认和协议绑定的数据上传继续。
 
@@ -59,7 +52,7 @@ uv run --locked python app.py
 
 | 服务商 | Base URL | Model | API Key |
 | --- | --- | --- | --- |
-| Ollama（本地，可选） | `http://127.0.0.1:11434/v1` | `ollama list` 中显示的完整模型名称 | 默认本地服务填写 `ollama` |
+| Ollama（本地，可选） | `http://host.docker.internal:11434/v1` | `ollama list` 中显示的完整模型名称 | 默认本地服务填写 `ollama` |
 | DeepSeek API | `https://api.deepseek.com` | 例如 `deepseek-v4-pro` | 你的 DeepSeek API Key |
 | OpenAI API | `https://api.openai.com/v1` | 你的 API 账户可用且兼容的 Chat Completions 模型 | 你的 OpenAI API Key |
 
@@ -71,6 +64,8 @@ uv run --locked python app.py
 ollama pull your-model
 ollama list
 ```
+
+Docker Desktop 会解析 `host.docker.internal`；Compose 在 Linux 上也会映射宿主机网关。如果容器无法连接，请将宿主机 Ollama 服务配置为监听 Docker 可访问的宿主机接口，重启后在页面重新测试。Ollama 默认只监听 loopback，配置方法见其[服务说明](https://docs.ollama.com/faq#how-do-i-configure-ollama-server)。请将该服务的访问范围限制在可信网络。
 
 如果选择 DeepSeek 或 OpenAI，跳过 Ollama 步骤，直接填写对应配置即可。不要将真实 API Key 写入源码、截图或共享报告。WebUI 使用这些配置进行自然语言交互；CLI 仅将其用于环境检查。
 
@@ -122,50 +117,36 @@ Kernel 通过版本化合同提供以下能力，使实验、证据、控制器�
 
 ## 开发检查与可选 RAG
 
-前端本地检查与开发：
+在 Docker 中运行全部前端检查，包括使用 Chromium 检查构建后的页面与真实 API：
 
 ```bash
-pnpm --dir cfdc/web/frontend install --frozen-lockfile
-pnpm --dir cfdc/web/frontend run format:check
-pnpm --dir cfdc/web/frontend run typecheck
-pnpm --dir cfdc/web/frontend run lint
-pnpm --dir cfdc/web/frontend run test
-pnpm --dir cfdc/web/frontend run build
-pnpm --dir cfdc/web/frontend exec playwright install chromium
-pnpm --dir cfdc/web/frontend run test:e2e
-pnpm --dir cfdc/web/frontend run dev
+docker compose --profile checks run --build --rm frontend-check
 ```
 
-Playwright 会在 `127.0.0.1:7867` 自动启动构建后的界面与真实 FastAPI 服务，使用临时数据且不调用模型。设置 `CFDC_E2E_URL` 可检查已运行的服务。CI 使用 pnpm 12.4.1 和 Node.js 24.21.0 执行这些前端检查，同时保留 Python 3.11–3.13 检查。使用 Vite 开发时，在另一个终端运行 FastAPI；Vite 位于 `127.0.0.1:5173`，`/api` 代理到 `127.0.0.1:7860`。
+Playwright 会在测试容器中的 `127.0.0.1:7867` 自动启动构建后的界面与真实 FastAPI 服务，使用临时数据且不调用模型。镜像固定 Node.js 24.21.0 和 pnpm 12.4.1；CI 使用相同的容器检查，并保留 Python 3.11–3.13 检查。
 
 在项目目录中运行自动化测试和 Python 检查：
 
 ```bash
-uv lock --check
-uv sync --locked
-uv run --locked ruff format .
-uv run --locked ruff format --check .
-uv run --locked ruff check .
-uv run --locked pytest -q
-uv run --locked pytest -q tests/test_main_cli.py
-uv run --locked python scripts/benchmark_web_api.py
+docker compose --profile checks run --build --rm python-format
+docker compose --profile checks run --build --rm python-check
 git diff --check
 ```
 
-`uv` 会读取 `.python-version` 中固定的 Python 版本，创建 `.venv`，并安装项目及开发工具。使用 `uv run` 时不需要手动激活环境。
+格式化服务显式挂载源码供 Ruff 修改 Python 文件；暂存前请检查改动。检查镜像按已提交的 `uv.lock` 运行完整测试和独立 CLI 验收；Git 差异检查在宿主机执行。如需运行 API 基准测试：`docker compose --profile checks run --rm python-check uv run --locked python scripts/benchmark_web_api.py`。
 
 新建索引默认包含两类随包资源：由 Registry 生成的权威 artifact，以及 12 个控制概念组的中英文版本化 advisory 知识卡。同组语言版本共享稳定 group identity 和语义版本，但保留各自的内容哈希与 provenance。知识包采用中央 JSON manifest 与 schema，记录有效期、引用元数据和 192 条冻结评估案例：原英文/中文集合、一个已曝光的 regression 集，以及 replacement challenge holdout。卡片只能解释已注册选择，不能改变路线、数值结果、资格审查或授权。索引使用当前检索策略和不可变 `cfdc-rag/v3` snapshot。旧 schema 或旧策略会被拒绝；请显式重建索引后选择新的 snapshot。
 
 如需加入本地 Markdown 或 PDF，可放在 `references` 目录。没有 metadata 的文档按“全 scope 可见”语义进入统一过滤。`--knowledge-pack` 可指定另一份通过校验的知识包，`--no-curated` 可排除随包卡片，`--relevance-threshold` 可把显式阈值固化到新 snapshot：
 
 ```bash
-uv run --locked python -m cfdc.rag index --source-dir ./references --index-dir ./rag-index
-uv run --locked python -m cfdc.rag inspect --index-dir ./rag-index
-uv run --locked python -m cfdc.rag query --index-dir ./rag-index \
+docker compose run --rm -v "$PWD/references:/app/references:ro" app python -m cfdc.rag index --source-dir /app/references --index-dir /app/output/rag-index
+docker compose run --rm app python -m cfdc.rag inspect --index-dir /app/output/rag-index
+docker compose run --rm app python -m cfdc.rag query --index-dir /app/output/rag-index \
   --role critic --operation check --stage review \
   --language auto \
   --query "为什么不能消除不确定的右半平面零点？"
-uv run --locked python -m cfdc.rag eval --index-dir ./rag-index \
+docker compose run --rm app python -m cfdc.rag eval --index-dir /app/output/rag-index \
   --bundled --split holdout --assert-acceptance
 ```
 
@@ -176,13 +157,13 @@ uv run --locked python -m cfdc.rag eval --index-dir ./rag-index \
 可通过独立 CLI 构建、检查和查询本地历史索引。源文件必须符合随包 schema；生成的 `operational-history` 数据会被 Git 忽略：
 
 ```bash
-uv run --locked python -m cfdc.history index \
-  --source ./operational-history/records.json \
-  --index-dir ./operational-history/index
-uv run --locked python -m cfdc.history inspect \
-  --index-dir ./operational-history/index
-uv run --locked python -m cfdc.history query \
-  --index-dir ./operational-history/index \
+docker compose run --rm -v "$PWD/operational-history:/app/operational-history:ro" app python -m cfdc.history index \
+  --source /app/operational-history/records.json \
+  --index-dir /app/output/operational-history/index
+docker compose run --rm app python -m cfdc.history inspect \
+  --index-dir /app/output/operational-history/index
+docker compose run --rm app python -m cfdc.history query \
+  --index-dir /app/output/operational-history/index \
   --plant-id plant-a \
   --configuration-fingerprint 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   --operating-region-fingerprint fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210 \
@@ -195,7 +176,7 @@ uv run --locked python -m cfdc.history query \
 启动应用后访问 `http://127.0.0.1:7860`：
 
 ```bash
-uv run --locked python app.py
+docker compose up -d app
 ```
 
 内置知识库依赖默认安装。服务端管理的索引只包含 Registry artifact 和随包发布的中英文知识卡。`CFDC_RAG_INDEX_DIR` 可覆盖服务端存储位置，浏览器输入不能选择索引路径。
@@ -235,7 +216,7 @@ WebUI 与 CLI 均运行当前 Kernel 工作流。缺失、未知或非 Kernel �
 CLI 通过类型化输入运行当前 Kernel 工作流。命令会停在下一个用户或证据边界，并输出 session ID 与当前 input contract：
 
 ```bash
-uv run --locked python main.py \
+docker compose run --rm app python main.py \
   --kernel-session-dir ./output/kernel-sessions \
   --description "加热器保持箱体温度。" \
   --observed-output temperature --actuator voltage \
@@ -259,7 +240,7 @@ DIAGNOSIS_JSON='{
   "uncertainty_variation":{"status":"known","assessment":"small","evidence":"重复公开试验","confidence":0.95}
 }'
 
-uv run --locked python main.py \
+docker compose run --rm app python main.py \
   --kernel-case dc_motor_speed_v1 \
   --kernel-action motor-run-001 \
   --confirm-kernel-budget \
@@ -277,17 +258,17 @@ uv run --locked python main.py \
 对于实体或外部操作实验，在诊断和路线解析后绑定公开 Provider 合同，再生成 handoff：
 
 ```bash
-uv run --locked python main.py --kernel-session SESSION_ID \
+docker compose run --rm -v "$PWD/input:/app/input:ro" app python main.py --kernel-session SESSION_ID \
   --kernel-action physical-001 \
-  --kernel-provider physical-provider.json \
+  --kernel-provider /app/input/physical-provider.json \
   --kernel-compile-protocol --kernel-prepare-operator-handoff \
   --kernel-result-dir ./output/results
 
-uv run --locked python main.py --kernel-session SESSION_ID \
+docker compose run --rm -v "$PWD/input:/app/input:ro" app python main.py --kernel-session SESSION_ID \
   --kernel-action physical-002 \
-  --kernel-operator-report operator-report.json \
-  --kernel-upload repeat-01.csv --kernel-upload repeat-02.csv \
-  --kernel-upload repeat-03.csv --kernel-auto
+  --kernel-operator-report /app/input/operator-report.json \
+  --kernel-upload /app/input/repeat-01.csv --kernel-upload /app/input/repeat-02.csv \
+  --kernel-upload /app/input/repeat-03.csv --kernel-auto
 ```
 
 如果声明的停止条件曾触发，应增加 `--kernel-upload-stopped-on-limit`；该上传会作为安全门失败记录，系统不会修补数据，也不会把它计作已接受证据。
@@ -297,7 +278,7 @@ CLI 接收类型化诊断答案和公开工件；自然语言 Agent 交互通过
 使用 `--kernel-export-bundle` 导出当前结果 ZIP，再导入为新会话：
 
 ```bash
-uv run --locked python main.py --kernel-import-result ./output/results/SESSION_ID.result.zip
+docker compose run --rm app python main.py --kernel-import-result ./output/results/SESSION_ID.result.zip
 ```
 
 导入会验证当前结果包，并保留源文件。新会话需要重新确认；导入的结果不赋予评估或硬件操作授权。
