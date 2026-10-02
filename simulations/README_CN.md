@@ -37,13 +37,13 @@
 
 5. **配置自然语言模型。** 在 WebUI“设置”中填写 Base URL、Model 和 API Key，再点击“测试当前配置”。可以选择 Ollama、DeepSeek API 或 OpenAI API，具体填写方式见[模型服务商说明](../README_CN.md#选择模型服务商)。表单配置直接生效，无需另点保存；连接测试通过不代表每种模型都已验证完整流程。
 
-   想沿用本项目开发验证的本地模型时，先安装并启动 Ollama，再在另一个终端运行 `ollama list`。列表里没有 `gemma4:e4b` 时运行 `ollama pull gemma4:e4b`，等待下载完成。若连接不到服务，启动 Ollama 桌面应用，或另开终端运行 `ollama serve` 并保持运行。随后按下表填写：
+   自动开发验收使用本地 `.env` 的模型配置，详见[真实 API 验证](../README_CN.md#本地真实-api-验证)。文件缺失时由入口创建空白模板并提示手动填写。日常练习仍在表单中填写自己选择的服务：
 
-   | 设置字段 | 本地练习填写值 |
+   | 设置字段 | 填写内容 |
    | --- | --- |
-   | Base URL | `http://host.docker.internal:11434/v1` |
-   | Model | `gemma4:e4b` |
-   | API Key | `ollama` |
+   | Base URL | 服务商的 OpenAI 兼容 API 根地址 |
+   | Model | 账号可用的准确模型名称 |
+   | API Key | 在本机填写的凭据 |
 
    如果容器无法连接宿主机 Ollama，请按[项目模型说明](../README_CN.md#选择模型服务商)检查监听地址。选择在线服务时跳过 Ollama 准备，使用自己的模型和密钥。不要把真实密钥写入案例文件、截图或导出的共享材料。
 

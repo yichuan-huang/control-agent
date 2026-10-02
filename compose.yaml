@@ -1,6 +1,6 @@
 services:
   app:
-    image: cfdc-control:0.3.12
+    image: cfdc-control:0.3.13
     build:
       context: .
       target: app
@@ -42,6 +42,8 @@ services:
       target: frontend-check
     init: true
     ipc: host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   browser-live:
     profiles: [checks]
@@ -56,10 +58,7 @@ services:
         condition: service_healthy
     environment:
       CFDC_E2E_URL: http://127.0.0.1:7860
-      CFDC_OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
-      CFDC_OLLAMA_MODEL: gemma4:e4b
-      CFDC_E2E_OLLAMA: "1"
-    command: ["pnpm", "run", "test:e2e", "ollama.spec.ts", "settings.spec.ts"]
+    command: ["python", "/app/scripts/run_live_llm.py", "command", "pnpm", "run", "test:e2e", "live-llm.spec.ts", "settings.spec.ts"]
 
   python-format:
     profiles: [checks]

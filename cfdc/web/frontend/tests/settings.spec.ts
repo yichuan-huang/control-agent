@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./live-test";
 
 test("manual settings validate and probe without startup environment", async ({
   page,
@@ -43,19 +43,21 @@ test("manual settings validate and probe without startup environment", async ({
   await expect(page.getByText(/环境未提供/)).not.toBeVisible();
 });
 
-test("live Ollama form probe without server address/model presets", async ({
+test("live LLM form probe without server address/model presets", async ({
   page,
 }) => {
   test.skip(
-    process.env.CFDC_E2E_OLLAMA !== "1",
-    "Opt-in local Ollama validation",
+    process.env.CFDC_RUN_LIVE_LLM !== "1",
+    "Opt-in configured API validation",
   );
-  const ollamaBaseURL = process.env.CFDC_OLLAMA_BASE_URL;
-  const ollamaModel = process.env.CFDC_OLLAMA_MODEL;
-  const ollamaAPIKey = process.env.CFDC_OLLAMA_API_KEY;
-  expect(ollamaBaseURL, "CFDC_OLLAMA_BASE_URL is required").toBeTruthy();
-  expect(ollamaModel, "CFDC_OLLAMA_MODEL is required").toBe("gemma4:e4b");
-  expect(ollamaAPIKey, "CFDC_OLLAMA_API_KEY is required").toBeTruthy();
+  const modelBaseURL = process.env.CFDC_LLM_BASE_URL;
+  const modelName = process.env.CFDC_LLM_MODEL;
+  const modelAPIKey = process.env.CFDC_LLM_API_KEY;
+  expect(modelBaseURL, "CFDC_LLM_BASE_URL is required").toBeTruthy();
+  expect(Boolean(modelName?.trim()), "CFDC_LLM_MODEL is required").toBe(true);
+  expect(Boolean(modelAPIKey?.trim()), "CFDC_LLM_API_KEY is required").toBe(
+    true,
+  );
   const config = await (await page.request.get("/api/v1/config")).json();
   expect(config.base_url).toBe("");
   expect(config.model).toBe("");
@@ -63,9 +65,9 @@ test("live Ollama form probe without server address/model presets", async ({
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/");
     await page.getByRole("button", { name: "设置", exact: true }).click();
-    await page.getByLabel("Base URL").fill(ollamaBaseURL!);
-    await page.getByLabel("Model").fill(ollamaModel!);
-    await page.getByLabel("API Key").fill(ollamaAPIKey!);
+    await page.getByLabel("Base URL").fill(modelBaseURL!);
+    await page.getByLabel("Model").fill(modelName!);
+    await page.getByLabel("API Key").fill(modelAPIKey!);
     const probe = page.getByRole("button", { name: "测试当前配置" });
     await probe.focus();
     await page.keyboard.press("Enter");
@@ -90,7 +92,9 @@ test("live Ollama form probe without server address/model presets", async ({
     await expect(
       page.getByText("未连接：服务可连接，但未找到所选模型，请核对模型名称。"),
     ).toBeVisible();
-    await expect(page.getByLabel("API Key")).toHaveValue(ollamaAPIKey!);
+    expect(
+      (await page.getByLabel("API Key").inputValue()) === modelAPIKey,
+    ).toBe(true);
     await page.getByLabel("Base URL").fill("http://127.0.0.1:1/v1");
     await probe.click();
     await expect(
@@ -98,6 +102,8 @@ test("live Ollama form probe without server address/model presets", async ({
         "未连接：连接探测失败，请检查服务地址、密钥及服务是否启动。",
       ),
     ).toBeVisible();
-    await expect(page.getByLabel("API Key")).toHaveValue(ollamaAPIKey!);
+    expect(
+      (await page.getByLabel("API Key").inputValue()) === modelAPIKey,
+    ).toBe(true);
   }
 });

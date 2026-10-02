@@ -4,7 +4,7 @@ These instructions apply to all work in this repository. Follow the user's expli
 
 ## Docker Development and Required Checks
 
-- Run project dependency installation, formatting, builds, checks, tests, CLI commands, and real LLM clients inside Docker. If Docker is unavailable, restore it and report the limitation; do not silently run project tools on the host. Host Git, Docker, Ollama service management, and external MATLAB/Simulink execution are allowed.
+- Run project dependency installation, formatting, builds, checks, tests, CLI commands, and real LLM clients inside Docker. If Docker is unavailable, restore it and report the limitation; do not silently run project tools on the host. Host Git, Docker orchestration (including `bash scripts/test_live_llm.sh`), optional Ollama service management, and external MATLAB/Simulink execution are allowed.
 - Use `uv` and the committed `uv.lock` inside the images. Do not introduce a second Python dependency manager or regenerate the lockfile unless dependency changes are part of the task. The frontend image uses Node.js 24.21.0, pnpm 12.4.1, and the committed `pnpm-lock.yaml`.
 - After changing Python code, run the Docker Ruff formatter, then verify both formatting and lint. Review formatter changes before staging. All checks must pass before committing.
 - Run tests that cover the changed behavior. Before any release, including documentation-only releases, run the full local sequence below. Keep it aligned with `.github/workflows/ci.yml`.
@@ -25,30 +25,30 @@ git diff --check
 
 ## Real LLM, WebUI, and CLI Validation
 
-- For real LLM validation of the WebUI or CLI, use local Ollama with **`gemma4:e4b`**. This is the development validation model, not a restriction on users' provider choices.
-- Check host `ollama list` first. If the model is missing, prepare it with `ollama pull gemma4:e4b` and ensure the host service is running. If the model or service cannot be made available, report the limitation explicitly. Do not silently substitute another model or call a paid/remote API without explicit user authorization.
-- Set the model explicitly; do not rely on application or test defaults. Use these values inside Docker clients, and enter the same Base URL, Model, and API Key in the WebUI when testing through the browser:
+- Before real LLM validation, use the repository-root `.env` containing `CFDC_LLM_BASE_URL`, `CFDC_LLM_MODEL`, and `CFDC_LLM_API_KEY`. No provider or model is mandatory. Do not start or pull an Ollama model unless the user's chosen configuration requires it.
+- If `.env` is absent, create the following blank template with owner-only permissions (`600`) without overwriting any existing file. Ask the user to fill it in their local editor, never in chat. Continue independent offline work, but wait for complete configuration before real API testing or release. If fields are missing or blank, report only their names and preserve existing values.
 
-```bash
-export CFDC_LLM_BASE_URL="http://host.docker.internal:11434/v1"
-export CFDC_LLM_MODEL="gemma4:e4b"
-export CFDC_LLM_API_KEY="ollama"
+```dotenv
+CFDC_LLM_BASE_URL=
+CFDC_LLM_MODEL=
+CFDC_LLM_API_KEY=
 ```
 
-- Pass these values with `docker compose run -e` rather than persisting API keys in Compose files. The existing optional live Web service test uses separate environment variables. Invoke it explicitly inside `python-check` when real model validation is needed:
+- For authorized LLM-related development and validation, automatically use the configured API, including paid APIs, without repeatedly asking for the same authorization. Never substitute another provider, model, key, or fallback. Keep ordinary tests and CI offline; the mere presence of `.env` must not enable real calls.
+- Use the following Docker orchestration entry from the repository root. `service` runs the real Kernel service smoke; `browser` runs the real browser flow and settings probe; `all` runs both. The launcher creates a missing template, clears same-name host overrides, loads `.env` through Compose, passes only the three named variables, and explicitly enables `CFDC_RUN_LIVE_LLM=1`. Never `source` the file or put key values in CLI arguments.
 
 ```bash
-docker compose --profile checks run --build --rm \
-  -e CFDC_RUN_OLLAMA_SMOKE=1 \
-  -e CFDC_OLLAMA_BASE_URL=http://host.docker.internal:11434/v1 \
-  -e CFDC_OLLAMA_MODEL=gemma4:e4b \
-  -e CFDC_OLLAMA_API_KEY=ollama \
-  python-check uv run --locked pytest -q tests/test_kernel_webui.py::test_live_ollama_dc_motor_flow_fails_closed_after_bounded_tuning
+bash scripts/test_live_llm.sh service
+bash scripts/test_live_llm.sh browser
+# Or run both once:
+bash scripts/test_live_llm.sh all
 ```
 
-- For changes affecting an LLM-backed WebUI or CLI path, exercise the affected path with this real model as well as automated tests. UI interaction changes also require a browser check; a service-level smoke test does not prove browser behavior. CLI changes require running the relevant command and inspecting its output and exit status.
+- Do not read or print `.env` contents, dump the environment, enable shell tracing, print resolved Compose configuration, or expose credentials in logs or chat. The container runner redacts child output before displaying it. Live browser checks disable trace/HAR/video and mask credential screenshots; key-leak assertions report booleans, never secret-bearing values. The file must remain Git-ignored and excluded from Docker build contexts.
+- Browser tests fill the existing credential form from the test process environment and use disposable data. Daily WebUI credential entry is unchanged; the server must not return an environment API key. Session state, audit records, exports, and browser persistent storage must remain credential-free.
+- For changes affecting an LLM-backed WebUI or CLI path, exercise the affected path with the configured real model as well as automated tests. UI interaction changes also require a browser check; a service-level smoke test does not prove browser behavior. CLI changes require running the relevant command and inspecting its output and exit status. The current CLI `--doctor` does not validate remote inference, and a successful connectivity probe is not evidence that inference works.
 - Distinguish offline tests, real model calls, and browser interaction checks in the report. Never claim a check passed unless it ran successfully on the current changes.
-- Documentation-only changes do not require model inference or browser testing. Keep real-model tests opt-in so ordinary CI remains independent of Ollama, credentials, and external APIs.
+- Documentation-only changes do not require model inference or browser testing. Keep real-model tests opt-in so ordinary CI remains independent of credentials and external APIs. Keep bounded timeouts, output limits, and Agent rounds; failures must return nonzero rather than silently skip or repeatedly rerun the whole live suite.
 - MATLAB/Simulink remains an external, licensed software apparatus on the host. Use a task-specific disposable simulation copy and exchange directory for acceptance; Python and browser clients still run inside Docker. A Docker test is not evidence that MATLAB itself ran.
 
 ## CFDC Boundaries

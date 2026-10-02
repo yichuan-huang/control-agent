@@ -1,6 +1,6 @@
 {
   "name": "cfdc-web",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:live-redaction": "node scripts/check-live-redaction.mjs",
     "generate": "openapi-typescript openapi.json -o src/api/schema.d.ts",
     "format": "prettier --write src tests scripts *.ts *.json *.js index.html README.md pnpm-workspace.yaml",
     "format:check": "prettier --check src tests scripts *.ts *.json *.js index.html README.md pnpm-workspace.yaml"

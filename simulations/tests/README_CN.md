@@ -60,13 +60,14 @@ docker compose --profile checks run --rm -v "$PWD/output/docker-validation/accep
 
 ```bash
 CFDC_PORT=7868 docker compose -p cfdc-validation up --build --wait -d app
-CFDC_PORT=7868 docker compose -p cfdc-validation --profile checks run --build --rm \
-  -e CFDC_OLLAMA_API_KEY=ollama \
+env -u CFDC_LLM_BASE_URL -u CFDC_LLM_MODEL -u CFDC_LLM_API_KEY \
+  docker compose --env-file .env -p cfdc-validation --profile checks run --build --rm \
+  -e CFDC_RUN_LIVE_LLM=1 -e CFDC_LLM_BASE_URL -e CFDC_LLM_MODEL -e CFDC_LLM_API_KEY \
   -v "$PWD/output/docker-validation/acceptance:/exchange" browser-live \
-  node scripts/simulation-browser-acceptance.mjs init
+  python /app/scripts/run_live_llm.py command node scripts/simulation-browser-acceptance.mjs init
 ```
 
-脚本从浏览器为 02、05 新建任务，明确填写宿主机 `gemma4:e4b`、关闭 RAG，提交案例自然语言诊断，选择外部软件来源，并下载本轮真实请求包。MATLAB 使用同一交换目录执行：
+先按项目 README 的真实 API 验证说明填写本地 `.env`；缺少文件时运行 `bash scripts/test_live_llm.sh service` 创建空白模板。脚本从浏览器为 02、05 新建任务，使用配置的服务、模型和密钥，关闭 RAG，提交案例自然语言诊断，选择外部软件来源，并下载本轮真实请求包。命令通过容器内入口脱敏输出，不会自动选择或准备 Ollama 模型。MATLAB 使用同一交换目录执行：
 
 ```matlab
 run_http_jobs(fullfile(exchangeRoot, 'browser'));
@@ -75,10 +76,11 @@ run_http_jobs(fullfile(exchangeRoot, 'browser'));
 然后回到终端运行 `advance`；按这两条命令交替执行，直到显示 `0 MATLAB jobs; 2/2 terminal`：
 
 ```bash
-CFDC_PORT=7868 docker compose -p cfdc-validation --profile checks run --rm \
-  -e CFDC_OLLAMA_API_KEY=ollama \
+env -u CFDC_LLM_BASE_URL -u CFDC_LLM_MODEL -u CFDC_LLM_API_KEY \
+  docker compose --env-file .env -p cfdc-validation --profile checks run --rm \
+  -e CFDC_RUN_LIVE_LLM=1 -e CFDC_LLM_BASE_URL -e CFDC_LLM_MODEL -e CFDC_LLM_API_KEY \
   -v "$PWD/output/docker-validation/acceptance:/exchange" browser-live \
-  node scripts/simulation-browser-acceptance.mjs advance
+  python /app/scripts/run_live_llm.py command node scripts/simulation-browser-acceptance.mjs advance
 CFDC_PORT=7868 docker compose -p cfdc-validation --profile checks run --rm \
   -v "$PWD/output/docker-validation/acceptance:/exchange" python-check \
   python simulations/tests/http_acceptance.py verify /exchange/browser

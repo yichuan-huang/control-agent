@@ -4,11 +4,12 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, expect } from "@playwright/test";
+import { publicJSON } from "./live-output.mjs";
 
 const baseURL = process.env.CFDC_E2E_URL;
-const modelURL = process.env.CFDC_OLLAMA_BASE_URL;
-const model = process.env.CFDC_OLLAMA_MODEL;
-const modelKey = process.env.CFDC_OLLAMA_API_KEY;
+const modelURL = process.env.CFDC_LLM_BASE_URL;
+const model = process.env.CFDC_LLM_MODEL;
+const modelKey = process.env.CFDC_LLM_API_KEY;
 const exchange = "/exchange";
 const folder = path.join(exchange, "browser");
 const caseIds = ["02_vacuum_hold", "05_ink_disturbance_recovery"];
@@ -20,7 +21,14 @@ const precheckLabels = {
   "initial condition": "已核对初始条件",
 };
 
-assert(baseURL && modelURL && modelKey && model === "gemma4:e4b");
+assert(
+  Boolean(baseURL && modelURL && modelKey && model),
+  "CFDC_E2E_URL and all three CFDC_LLM_* fields are required",
+);
+assert(
+  process.env.CFDC_RUN_LIVE_LLM === "1",
+  "CFDC_RUN_LIVE_LLM=1 is required",
+);
 const mode = process.argv[2];
 assert(["init", "advance"].includes(mode), "Expected init or advance");
 
@@ -332,7 +340,7 @@ async function advanceCase(browser, job, round) {
     const finalReport = await report(page, id);
     await writeFile(
       path.join(folder, `${job.case_id}-report.json`),
-      JSON.stringify(finalReport, null, 2),
+      publicJSON(finalReport),
     );
     await page.reload();
     assert.equal((await summary(page, id)).status, current.status);
@@ -377,12 +385,9 @@ try {
     }
     await writeFile(
       path.join(folder, "state.json"),
-      JSON.stringify({ round: 0, cases: jobs, terminal: {} }, null, 2),
+      publicJSON({ round: 0, cases: jobs, terminal: {} }),
     );
-    await writeFile(
-      path.join(folder, "jobs-exchange.json"),
-      JSON.stringify(jobs, null, 2),
-    );
+    await writeFile(path.join(folder, "jobs-exchange.json"), publicJSON(jobs));
   } else {
     const state = await json(path.join(folder, "state.json"));
     const jobs = await json(path.join(folder, "jobs-exchange.json"));
@@ -394,14 +399,8 @@ try {
       console.log(job.case_id, result.terminal ?? result.job.kind);
     }
     state.round += 1;
-    await writeFile(
-      path.join(folder, "state.json"),
-      JSON.stringify(state, null, 2),
-    );
-    await writeFile(
-      path.join(folder, "jobs-exchange.json"),
-      JSON.stringify(next, null, 2),
-    );
+    await writeFile(path.join(folder, "state.json"), publicJSON(state));
+    await writeFile(path.join(folder, "jobs-exchange.json"), publicJSON(next));
     console.log(
       `Round ${state.round}: ${next.length} MATLAB jobs; ${Object.keys(state.terminal).length}/${caseIds.length} terminal.`,
     );

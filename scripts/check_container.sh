@@ -21,6 +21,7 @@ case "${1:-}" in
     pnpm run test
     pnpm run build
     pnpm exec playwright install chromium
+    pnpm run test:live-redaction
     pnpm run test:e2e
     ;;
   *)

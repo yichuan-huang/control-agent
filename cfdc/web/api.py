@@ -240,7 +240,7 @@ def create_app(
 
     app = FastAPI(
         title="CFDC Kernel Web API",
-        version="0.3.12",
+        version="0.3.13",
         lifespan=lifespan,
         responses={
             400: {"model": ErrorResponse},

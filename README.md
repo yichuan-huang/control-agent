@@ -2,7 +2,7 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.12` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.13` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
 
 ## Quick start
 
@@ -40,7 +40,7 @@ Built-in authority is granted by a server-side case ID and a fingerprinted `Regi
 
 The [English prompts](dataset/control_problem_prompts.md) and [Chinese prompts](dataset/control_problem_prompts_cn.md) preserve all 200 problem numbers and follow the current wizard: goal, signals, boundaries and requirements, then review. Each entry supplies the field values, checkbox choices, a subsequent diagnostic reply, and the evidence needed to continue. Original analytical or unsupported goals are distinguished from the explicitly adapted CFDC exercise.
 
-These are custom-task instructions. Describing a mathematical model does not install a simulation Provider or supply protocol-bound experimental evidence. The documents separately demonstrate registered cases using their locked contracts, including teaching ZIP upload and fresh confirmation. A request for external data or a capability gap is not a performance pass. For optional local walkthroughs, configure `gemma4:e4b` and disable RAG; normal users may choose another configured model service.
+These are custom-task instructions. Describing a mathematical model does not install a simulation Provider or supply protocol-bound experimental evidence. The documents separately demonstrate registered cases using their locked contracts, including teaching ZIP upload and fresh confirmation. A request for external data or a capability gap is not a performance pass. For optional local walkthroughs, use your chosen model configuration and disable RAG.
 
 The [MATLAB/Simulink software labs](simulations/README_CN.md) provide five Chinese guided custom-task exercises for identification, frozen evaluation, bounded tuning, and fresh confirmation. They use native MATLAB/Simulink to execute the exact packages downloaded from the current WebUI and return protocol-bound CSV or result ZIP files.
 
@@ -68,6 +68,29 @@ ollama list
 Docker Desktop resolves `host.docker.internal` automatically; Compose also maps it to the host gateway on Linux. If the container cannot connect, configure the host Ollama service to listen on a host interface reachable from Docker, then restart Ollama and retest. Ollama binds to loopback by default; see its [server configuration](https://docs.ollama.com/faq#how-do-i-configure-ollama-server). Restrict access to the host service to trusted networks.
 
 If you choose DeepSeek or OpenAI, skip the Ollama steps and enter your provider's settings directly. Keep real API keys out of source files, screenshots, and shared reports. The WebUI uses these settings for natural-language interaction; the CLI uses them only for environment checks.
+
+## Local real API validation
+
+Use `bash scripts/test_live_llm.sh all` from the repository root for Docker-based real service and browser validation. If `.env` is missing, the launcher creates a blank file with permissions `600` and stops. Fill these fields in your local editor, then rerun:
+
+```dotenv
+CFDC_LLM_BASE_URL=
+CFDC_LLM_MODEL=
+CFDC_LLM_API_KEY=
+```
+
+Choose your provider's OpenAI-compatible API root and exact model identifier. Single-quote values containing `$` or `#` to keep them literal in Compose. `.env` is local plaintext, ignored by Git and excluded from Docker builds. Never paste its contents into chat or include it in logs, screenshots or shared reports. An existing file is preserved; incomplete configuration reports only missing field names.
+
+```bash
+bash scripts/test_live_llm.sh service
+bash scripts/test_live_llm.sh browser
+# Run both once:
+bash scripts/test_live_llm.sh all
+```
+
+The host script only prepares the local file and orchestrates Docker. Every invocation clears same-name host overrides, loads `.env` through Compose and injects only the three named settings, with `CFDC_RUN_LIVE_LLM=1`. Tests run with bounded timeouts and redact child output before displaying it. Browser validation starts the built frontend and real API with disposable data, fills the existing credential form and disables RAG. It does not change daily WebUI credential entry. Remote calls use your provider account and can incur charges; no provider or model is selected automatically.
+
+Ordinary `python-check`, `frontend-check`, and GitHub CI remain independent of `.env` and skip opt-in inference. A successful `--doctor` or connection probe is not a real inference pass. Report offline, real service and browser results separately; missing credentials or failed live checks do not count as passed validation.
 
 ## Kernel workflow
 

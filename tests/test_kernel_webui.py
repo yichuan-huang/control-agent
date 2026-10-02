@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import zipfile
 from dataclasses import replace
 from types import SimpleNamespace
 from uuid import uuid4
@@ -696,13 +697,13 @@ def test_kernel_diagnosis_prompt_distinguishes_asserted_and_unknown_facts(tmp_pa
 
 
 @pytest.mark.skipif(
-    os.getenv("CFDC_RUN_OLLAMA_SMOKE") != "1",
-    reason="set CFDC_RUN_OLLAMA_SMOKE=1 to run the local Ollama acceptance test",
+    os.getenv("CFDC_RUN_LIVE_LLM") != "1",
+    reason="set CFDC_RUN_LIVE_LLM=1 to run the configured API acceptance test",
 )
-def test_live_ollama_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
-    base_url = os.environ["CFDC_OLLAMA_BASE_URL"]
-    model = os.environ["CFDC_OLLAMA_MODEL"]
-    api_key = os.environ["CFDC_OLLAMA_API_KEY"]
+def test_live_llm_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
+    base_url = os.environ["CFDC_LLM_BASE_URL"]
+    model = os.environ["CFDC_LLM_MODEL"]
+    api_key = os.environ["CFDC_LLM_API_KEY"]
     report, state = start_kernel_case_run(
         "dc_motor_speed_v1",
         session_dir=tmp_path,
@@ -769,8 +770,19 @@ def test_live_ollama_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
     assert report["tuning"]["status"] == "exhausted"
     assert report["tuning"]["reason"] == "no_strict_development_improvement"
     assert report["pending_actions"] == []
+    bundle = service.export_result_bundle(report["session_id"])
+    with zipfile.ZipFile(bundle) as archive:
+        bundle_leaks_key = any(
+            api_key.encode() in archive.read(name) for name in archive.namelist()
+        )
+    assert bundle_leaks_key is False
     serialized = json.dumps(report, ensure_ascii=False)
-    assert api_key not in serialized
+    leaked = api_key in serialized or any(
+        api_key.encode() in path.read_bytes()
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    )
+    assert leaked is False
 
 
 def test_kernel_reply_reports_agent_conflicts_without_submitting(tmp_path):

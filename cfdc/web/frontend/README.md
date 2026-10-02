@@ -35,7 +35,7 @@ docker compose --profile checks run --rm \
 
 Playwright starts the built frontend and real API at `127.0.0.1:7867` with temporary data, which are removed when the server stops. RAG preparation and model calls are disabled for ordinary tests. `CFDC_E2E_URL` selects an already running service instead. Tests do not require credentials, historical local files or private datasets. The refresh test delays a real GET response while retaining the actual API response; it verifies task creation is not replayed. CI runs the same checks with pnpm 12.4.1 and Node.js 24.21.0.
 
-For opt-in local validation, start the application with `docker compose up -d app`, then run `docker compose --profile checks run --build --rm -e CFDC_OLLAMA_API_KEY=ollama browser-live`. It connects to the application's loopback address from the same network namespace and uses the configured host Ollama service. Use a separate Compose project for disposable validation data.
+For opt-in real API validation, run `bash scripts/test_live_llm.sh browser` from the repository root. If `.env` is absent, the launcher creates an empty owner-only template and asks you to fill `CFDC_LLM_BASE_URL`, `CFDC_LLM_MODEL`, and `CFDC_LLM_API_KEY` in your local editor. Existing values are never overwritten or printed. The entry loads the file through Compose, clears same-name host overrides, and explicitly enables `CFDC_RUN_LIVE_LLM=1`. The container starts the production frontend and real API with disposable data, while the test process fills the existing credential form. No provider or model is mandatory. `service` runs the Kernel service smoke and `all` runs both. Ordinary checks and CI never enable inference. Live test output is redacted before display; traces, HAR, video and automatic screenshots are disabled.
 
 For read-only visual validation of any existing task with recorded evaluation curves:
 
@@ -47,4 +47,14 @@ This checks trial/stage identity, a requested 0–5 second window, Plotly layout
 
 Settings keep credentials only in React memory. A refresh removes credentials. Session storage contains allowlisted task drafts and navigation/operation IDs only. A network retry retains its request ID; definite errors release it. The UI never automatically replays a mutation.
 
-`docker compose --profile checks run --rm -e CFDC_OLLAMA_API_KEY=ollama browser-live node scripts/check-teaching.mjs` checks the teaching upload flow against the application with explicit local Ollama settings. Run it in a separate Compose project for disposable task data, and mount a temporary output directory if you need its screenshots. This includes rejected CSV/JSON/ZIP uploads and recovery using the original generated bundle.
+For auxiliary acceptance against an existing application, `browser-live` shares that application's network namespace. Use a separate Compose project for disposable data. The teaching check includes rejected CSV/JSON/ZIP uploads and recovery using the original generated bundle. After filling `.env`, run:
+
+```sh
+CFDC_PORT=7868 docker compose -p cfdc-validation up --build --wait -d app
+env -u CFDC_LLM_BASE_URL -u CFDC_LLM_MODEL -u CFDC_LLM_API_KEY \
+  docker compose --env-file .env -p cfdc-validation --profile checks run --build --rm \
+  -e CFDC_RUN_LIVE_LLM=1 -e CFDC_LLM_BASE_URL -e CFDC_LLM_MODEL -e CFDC_LLM_API_KEY \
+  browser-live python /app/scripts/run_live_llm.py command node scripts/check-teaching.mjs
+```
+
+Keep the redacting runner around auxiliary scripts too. Credential screenshots are masked. Generated acceptance artifacts remain local; do not persist traces, HAR, videos, credentials, or browser storage state. See the simulation acceptance instructions for the explicit MATLAB handoff; ordinary browser validation does not run MATLAB.

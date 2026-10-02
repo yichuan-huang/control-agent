@@ -107,7 +107,7 @@ def test_frontend_docs_and_ci_use_frozen_pnpm_inside_docker():
 
 def test_release_version_matches_frontend_and_public_api():
     version = load_project_metadata()["project"]["version"]
-    assert version == "0.3.12"
+    assert version == "0.3.13"
     package = json.loads(
         (ROOT / "cfdc/web/frontend/package.json").read_text(encoding="utf-8")
     )

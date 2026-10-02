@@ -2,15 +2,17 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, expect } from "@playwright/test";
+import { publicJSON } from "./live-output.mjs";
 
 const baseURL = process.env.CFDC_E2E_URL ?? "http://127.0.0.1:7865";
-const ollamaBaseURL = process.env.CFDC_OLLAMA_BASE_URL;
-if (!ollamaBaseURL) throw new Error("CFDC_OLLAMA_BASE_URL is required");
-const ollamaModel = process.env.CFDC_OLLAMA_MODEL;
-if (ollamaModel !== "gemma4:e4b")
-  throw new Error("CFDC_OLLAMA_MODEL must be gemma4:e4b");
-const ollamaAPIKey = process.env.CFDC_OLLAMA_API_KEY;
-if (!ollamaAPIKey) throw new Error("CFDC_OLLAMA_API_KEY is required");
+const modelBaseURL = process.env.CFDC_LLM_BASE_URL;
+if (!modelBaseURL) throw new Error("CFDC_LLM_BASE_URL is required");
+const modelName = process.env.CFDC_LLM_MODEL;
+if (!modelName) throw new Error("CFDC_LLM_MODEL is required");
+const modelAPIKey = process.env.CFDC_LLM_API_KEY;
+if (!modelAPIKey) throw new Error("CFDC_LLM_API_KEY is required");
+if (process.env.CFDC_RUN_LIVE_LLM !== "1")
+  throw new Error("CFDC_RUN_LIVE_LLM=1 is required");
 const projectRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const outputDir = path.resolve(
   projectRoot,
@@ -52,17 +54,18 @@ page.on("console", (message) => {
 try {
   await page.goto(baseURL);
 
-  // Explicitly configure the required real local model and disable RAG for this
+  // Explicitly configure the selected real model and disable RAG for this
   // isolated server, whose startup deliberately skipped index preparation.
   await page.getByRole("button", { name: "设置" }).click();
-  await page.getByLabel("Base URL").fill(ollamaBaseURL);
-  await page.getByLabel("Model").fill(ollamaModel);
-  await page.getByLabel("API Key").fill(ollamaAPIKey);
+  await page.getByLabel("Base URL").fill(modelBaseURL);
+  await page.getByLabel("Model").fill(modelName);
+  await page.getByLabel("API Key").fill(modelAPIKey);
   await page.getByRole("switch", { name: "新任务使用内置知识库" }).uncheck();
   await page.getByRole("button", { name: "测试当前配置", exact: true }).click();
   await expect(page.getByText(/^已连接：/)).toBeVisible({ timeout: 120_000 });
   await page.screenshot({
     path: path.join(outputDir, "01-settings-connected.png"),
+    mask: [page.getByLabel("API Key")],
   });
   await page.keyboard.press("Escape");
 
@@ -145,7 +148,7 @@ try {
     });
     await writeFile(
       path.join(outputDir, `${filename}.rejection-receipt.json`),
-      `${JSON.stringify(receipt, null, 2)}\n`,
+      publicJSON(receipt),
     );
     await page.screenshot({
       path: path.join(outputDir, `${filename}.rejected.png`),
@@ -187,7 +190,7 @@ try {
     throw new Error("Valid original teaching bundle lacks an accepted receipt");
   await writeFile(
     path.join(outputDir, "final-report.json"),
-    `${JSON.stringify(finalReport, null, 2)}\n`,
+    publicJSON(finalReport),
   );
   await page.screenshot({
     path: path.join(outputDir, "06-recovered-and-advanced.png"),
@@ -213,10 +216,7 @@ try {
     console_errors: consoleErrors,
     original_bundle_bytes: (await readFile(originalBundle)).length,
   };
-  await writeFile(
-    path.join(outputDir, "result.json"),
-    `${JSON.stringify(result, null, 2)}\n`,
-  );
+  await writeFile(path.join(outputDir, "result.json"), publicJSON(result));
   console.log(JSON.stringify(result));
 } finally {
   await browser.close();

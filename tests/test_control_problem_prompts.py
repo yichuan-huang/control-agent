@@ -149,9 +149,9 @@ def test_bilingual_ids_titles_numeric_values_and_signal_contracts_match_source()
 def test_guide_has_current_actions_credentials_and_no_legacy_runtime_promises(path):
     text = path.read_text()
     for marker in (
-        "gemma4:e4b",
-        "http://127.0.0.1:11434/v1",
-        "ollama",
+        "CFDC_LLM_BASE_URL",
+        "CFDC_LLM_MODEL",
+        "CFDC_LLM_API_KEY",
         "RAG",
         "确认软件边界并开始",
         "下载协议",

@@ -1,25 +1,27 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./live-test";
 
-const ollamaBaseURL = process.env.CFDC_OLLAMA_BASE_URL;
-const ollamaModel = process.env.CFDC_OLLAMA_MODEL;
-const ollamaAPIKey = process.env.CFDC_OLLAMA_API_KEY;
+const modelBaseURL = process.env.CFDC_LLM_BASE_URL;
+const modelName = process.env.CFDC_LLM_MODEL;
+const modelAPIKey = process.env.CFDC_LLM_API_KEY;
 
-test("live Ollama interprets a browser reply without persisting credentials", async ({
+test("live LLM interprets a browser reply without persisting credentials", async ({
   page,
 }) => {
   test.skip(
-    process.env.CFDC_E2E_OLLAMA !== "1",
-    "Opt-in local Ollama inference",
+    process.env.CFDC_RUN_LIVE_LLM !== "1",
+    "Opt-in configured API inference",
   );
   test.setTimeout(240000);
-  expect(ollamaBaseURL, "CFDC_OLLAMA_BASE_URL is required").toBeTruthy();
-  expect(ollamaModel, "CFDC_OLLAMA_MODEL is required").toBe("gemma4:e4b");
-  expect(ollamaAPIKey, "CFDC_OLLAMA_API_KEY is required").toBeTruthy();
+  expect(modelBaseURL, "CFDC_LLM_BASE_URL is required").toBeTruthy();
+  expect(Boolean(modelName?.trim()), "CFDC_LLM_MODEL is required").toBe(true);
+  expect(Boolean(modelAPIKey?.trim()), "CFDC_LLM_API_KEY is required").toBe(
+    true,
+  );
   await page.goto("/new");
   await page.getByRole("button", { name: "设置", exact: true }).click();
-  await page.getByLabel("Base URL").fill(ollamaBaseURL!);
-  await page.getByLabel("Model").fill(ollamaModel!);
-  await page.getByLabel("API Key").fill(ollamaAPIKey!);
+  await page.getByLabel("Base URL").fill(modelBaseURL!);
+  await page.getByLabel("Model").fill(modelName!);
+  await page.getByLabel("API Key").fill(modelAPIKey!);
   await page.getByRole("switch", { name: "新任务使用内置知识库" }).uncheck();
   await page.keyboard.press("Escape");
   await page
@@ -92,10 +94,15 @@ test("live Ollama interprets a browser reply without persisting credentials", as
       }),
     ]),
   );
-  expect(JSON.stringify(report)).not.toContain("ollama");
-  expect(
-    await page.evaluate(
-      () => JSON.stringify(sessionStorage) + JSON.stringify(localStorage),
-    ),
-  ).not.toContain("ollama");
+  const reportLeaksKey = JSON.stringify(report).includes(modelAPIKey!);
+  expect(reportLeaksKey, "Public report must not contain credentials").toBe(
+    false,
+  );
+  const storage = await page.evaluate(
+    () => JSON.stringify(sessionStorage) + JSON.stringify(localStorage),
+  );
+  const storageLeaksKey = storage.includes(modelAPIKey!);
+  expect(storageLeaksKey, "Browser storage must not contain credentials").toBe(
+    false,
+  );
 });

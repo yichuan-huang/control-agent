@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.12` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.13` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
 
 ## 快速开始
 
@@ -40,7 +40,7 @@ docker compose up -d app
 
 [中文 prompt](dataset/control_problem_prompts_cn.md) 与 [英文 prompt](dataset/control_problem_prompts.md) 保留全部 200 个问题的编号，按照当前向导的“目标、信号、边界与要求、核对”组织。每题给出字段值、勾选项、启动后的诊断回复及继续所需的证据，并区分原始分析目标或不支持的目标与明确适配后的 CFDC 练习。
 
-这些条目用于自定义任务。描述数学模型不会安装仿真 Provider，也不等于提供协议绑定的实验记录。文档另行演示使用锁定合同的注册案例，包括教学 ZIP 上传和 fresh confirmation。要求外部数据或出现能力缺口不代表性能达标。如需本地操作练习，可配置 `gemma4:e4b` 并关闭 RAG；日常使用仍可选择其他已配置的模型服务。
+这些条目用于自定义任务。描述数学模型不会安装仿真 Provider，也不等于提供协议绑定的实验记录。文档另行演示使用锁定合同的注册案例，包括教学 ZIP 上传和 fresh confirmation。要求外部数据或出现能力缺口不代表性能达标。如需本地操作练习，使用自己选择的模型配置并关闭 RAG。
 
 [MATLAB/Simulink 软件仿真实验](simulations/README_CN.md)提供五个中文引导式自定义任务，覆盖识别、冻结评价、有界调优和全新独立确认。实验使用原生 MATLAB/Simulink 执行当前 WebUI 下载的精确请求包，再返回与协议绑定的 CSV 或结果 ZIP。
 
@@ -68,6 +68,29 @@ ollama list
 Docker Desktop 会解析 `host.docker.internal`；Compose 在 Linux 上也会映射宿主机网关。如果容器无法连接，请将宿主机 Ollama 服务配置为监听 Docker 可访问的宿主机接口，重启后在页面重新测试。Ollama 默认只监听 loopback，配置方法见其[服务说明](https://docs.ollama.com/faq#how-do-i-configure-ollama-server)。请将该服务的访问范围限制在可信网络。
 
 如果选择 DeepSeek 或 OpenAI，跳过 Ollama 步骤，直接填写对应配置即可。不要将真实 API Key 写入源码、截图或共享报告。WebUI 使用这些配置进行自然语言交互；CLI 仅将其用于环境检查。
+
+## 本地真实 API 验证
+
+在仓库根目录执行 `bash scripts/test_live_llm.sh all`，即可通过 Docker 验证真实服务与浏览器流程。若 `.env` 不存在，入口会创建权限为 `600` 的空白文件并停止。请在本机编辑器中填写以下字段，再重新运行：
+
+```dotenv
+CFDC_LLM_BASE_URL=
+CFDC_LLM_MODEL=
+CFDC_LLM_API_KEY=
+```
+
+填写服务商的 OpenAI 兼容 API 根地址及准确模型名称。含 `$` 或 `#` 的值用单引号包裹，避免 Compose 插值。`.env` 是本地明文文件，已被 Git 忽略并排除在 Docker 构建之外。不要把内容粘贴到聊天，也不要写入日志、截图或共享报告。已有文件不会被覆盖；配置不完整时只提示缺少的字段名。
+
+```bash
+bash scripts/test_live_llm.sh service
+bash scripts/test_live_llm.sh browser
+# 两项各运行一次：
+bash scripts/test_live_llm.sh all
+```
+
+宿主脚本只准备本地文件和编排 Docker。每次运行都会排除同名宿主变量的覆盖，通过 Compose 加载 `.env`，仅注入这三个配置项，并显式设置 `CFDC_RUN_LIVE_LLM=1`。测试有超时边界，子进程输出脱敏后才显示。浏览器验收使用正式构建的前端、真实 API 和临时数据，自动填写现有凭证表单并关闭 RAG；日常 WebUI 仍按原方式填写凭证。远程调用使用你的服务商账号并可能产生费用，程序不会自动选择供应商或模型。
+
+普通 `python-check`、`frontend-check` 和 GitHub CI 不依赖 `.env`，会跳过需要显式启用的真实推理。`--doctor` 或连接探测成功不等于真实推理通过。报告分别列明离线检查、真实服务测试和浏览器验收；缺少凭据或真实测试失败不能记为通过。
 
 ## Kernel 主流程
 
