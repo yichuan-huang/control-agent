@@ -2,7 +2,15 @@
 
 [中文说明](README_CN.md)
 
-Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.13` centers the project on an auditable Python Kernel with a guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and a Kernel CLI. It does not command physical hardware or certify hardware safety.
+Control Agent is an independent implementation of the Core-Feature-Driven Control (CFDC) workflow. Release `v0.3.14` centers the project on an auditable Python Kernel with a bilingual guided WebUI, an expert JSON interface, deterministic software experiments, physical-experiment handoff, and an English Kernel CLI. It does not command physical hardware or certify hardware safety.
+
+## Interface language
+
+Use **中文 / English** in the WebUI header to switch between Simplified Chinese and English. On the first visit, a Chinese browser language selects Chinese; other browser languages select English. Your manual choice is saved in this browser. Switching preserves the current form, credentials in memory, and running operation. Interface text and subsequent AI explanations use the selected language; an operation already submitted keeps its original generation language.
+
+Original user input, task data, quoted evidence, historical model records, and downloaded JSON/audit ZIP contents retain their original text. Display translation does not change task revisions, evidence, or audit fingerprints. The optional Web API query parameter `locale=zh-CN|en` controls presentation; omitting it preserves Chinese API responses.
+
+CLI help, errors, and system messages use English. `--doctor` now returns `doctor_version: "cfdc-doctor/v2"` and an English `message` field in each check, replacing `message_cn`; update scripts that read that field. Raw task and evidence content returned by the CLI remains unchanged.
 
 ## Quick start
 

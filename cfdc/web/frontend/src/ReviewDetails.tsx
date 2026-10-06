@@ -1,134 +1,201 @@
+import { useI18n, type Translator } from "./i18n";
 import { Descriptions, Typography } from "antd";
 import type { Obj } from "./api/types";
-const display = (value: unknown) =>
-  value === null || value === undefined || value === ""
-    ? "未提供"
-    : String(value);
-const types: Record<string, string> = {
-  local_setpoint_hold: "保持在目标附近",
-  transition_then_hold: "变化到新目标后保持",
-  disturbance_recovery_to_hold: "受到扰动后恢复并保持",
-};
-const labels: Record<string, string> = {
-  final_abs_error_max: "终值绝对误差上限",
-  overshoot_max: "超调上限",
-  settling_time_max_s: "稳定时间上限 (s)",
-  hold_duration_min_s: "保持时间下限 (s)",
-  perturbed_success_rate_min: "重复试验成功率下限",
-  required_phase_count_min: "最少阶段数",
-  verified_handoff_count_min: "最少验证切换次数",
-  final_hold_duration_min_s: "目标保持时间 (s)",
-  recovery_abs_error_max: "恢复误差上限",
-  recovery_time_max_s: "恢复时间上限 (s)",
-  post_recovery_hold_duration_min_s: "恢复后保持时间 (s)",
-  goal_region_entry_required: "需要到达目标区域",
-  evaluation_sample_time_s: "评价采样间隔 (s)",
-  evaluation_horizon_s: "每次运行时长 (s)",
-  evaluation_repeats: "重复运行次数",
-  clarification_rounds: "澄清轮次上限",
-  experiments: "实验次数上限",
-  same_failure_retries: "同类失败重试上限",
-  elapsed_time_s: "累计耗时上限 (s)",
-  distinct_experiments: "实验种类上限",
-  cumulative_excitation_time_s: "累计激励时间上限 (s)",
-};
-export const stopExplanation =
-  "任一被检查测量值的绝对值大于该阈值时停止或判定越界；不是与目标的偏差，也不是硬件急停。";
+function reviewText(tr: Translator) {
+  const display = (value: unknown) =>
+    value === null || value === undefined || value === ""
+      ? tr("frontend.reviewdetails.not_provided")
+      : String(value);
+  const types: Record<string, string> = {
+    local_setpoint_hold: tr("frontend.reviewdetails.hold"),
+    transition_then_hold: tr("frontend.reviewdetails.transition"),
+    disturbance_recovery_to_hold: tr("frontend.reviewdetails.recovery"),
+  };
+  const labels: Record<string, string> = {
+    final_abs_error_max: tr("frontend.reviewdetails.final_error"),
+    overshoot_max: tr("frontend.reviewdetails.overshoot"),
+    settling_time_max_s: tr("frontend.reviewdetails.settling"),
+    hold_duration_min_s: tr("frontend.reviewdetails.hold_duration"),
+    perturbed_success_rate_min: tr("frontend.reviewdetails.success_rate"),
+    required_phase_count_min: tr("frontend.reviewdetails.phase_count"),
+    verified_handoff_count_min: tr("frontend.reviewdetails.handoff_count"),
+    final_hold_duration_min_s: tr("frontend.reviewdetails.goal_hold"),
+    recovery_abs_error_max: tr("frontend.reviewdetails.recovery_error"),
+    recovery_time_max_s: tr("frontend.reviewdetails.recovery_time"),
+    post_recovery_hold_duration_min_s: tr(
+      "frontend.reviewdetails.post_recovery_hold",
+    ),
+    goal_region_entry_required: tr("frontend.reviewdetails.goal_entry"),
+    evaluation_sample_time_s: tr(
+      "frontend.reviewdetails.evaluation_sample_time",
+    ),
+    evaluation_horizon_s: tr("frontend.reviewdetails.run_duration"),
+    evaluation_repeats: tr("frontend.reviewdetails.repeats"),
+    clarification_rounds: tr("frontend.reviewdetails.clarification_rounds"),
+    experiments: tr("frontend.reviewdetails.experiments"),
+    same_failure_retries: tr("frontend.reviewdetails.failure_retries"),
+    elapsed_time_s: tr("frontend.reviewdetails.elapsed_time"),
+    distinct_experiments: tr("frontend.reviewdetails.experiment_types"),
+    cumulative_excitation_time_s: tr("frontend.reviewdetails.excitation_time"),
+  };
+  const stopExplanation = tr("frontend.reviewdetails.stop_explanation");
+
+  return { display, types, labels, stopExplanation };
+}
 export function DraftReview({ draft, task }: { draft: Obj; task?: Obj }) {
+  const { t: tr } = useI18n();
+  const { display, types, labels, stopExplanation } = reviewText(tr);
+
   const selected = (key: string) =>
     ((draft[key] ?? []) as string[])
       .map((name) => `${labels[name] ?? name}：${display(draft[name])}`)
-      .join("；") || "未提供";
+      .join("；") || tr("frontend.reviewdetails.not_provided");
   const items = [
     ...(draft.external_data_enabled
       ? [
           [
-            "执行与回传",
-            "在自己的环境执行协议，通过任务页下载请求、上传数据并查看结果",
+            tr("frontend.reviewdetails.execution"),
+            tr("frontend.reviewdetails.execution_help"),
           ],
         ]
       : []),
-    ["任务类型", types[String(draft.task_type)] ?? display(draft.task_type)],
     [
-      "测量输出",
+      tr("frontend.reviewdetails.task_type"),
+      types[String(draft.task_type)] ?? display(draft.task_type),
+    ],
+    [
+      tr("frontend.reviewdetails.outputs"),
       ((draft.outputs ?? []) as string[][])
         .map((row) => row.filter(Boolean).join(" / "))
         .join("；"),
     ],
     [
-      "控制输入",
+      tr("frontend.charts.control_input"),
       ((draft.inputs ?? []) as string[][]).map((row) => row[0]).join("、"),
     ],
-    ["输入单位", display(draft.input_unit)],
+    [tr("frontend.reviewdetails.input_unit"), display(draft.input_unit)],
     [
-      "共享输入范围",
-      `${display(draft.input_min)} 至 ${display(draft.input_max)}`,
+      tr("frontend.reviewdetails.input_range"),
+      tr("frontend.reviewdetails.range", {
+        min: display(draft.input_min),
+        max: display(draft.input_max),
+      }),
     ],
-    ["软件试验停止阈值", display(draft.state_stop)],
-    ["参考目标", draft.reference_enabled ? display(draft.reference) : "未提供"],
+    [tr("frontend.reviewdetails.stop_threshold"), display(draft.state_stop)],
     [
-      "输出边界",
+      tr("frontend.reviewdetails.reference"),
+      draft.reference_enabled
+        ? display(draft.reference)
+        : tr("frontend.reviewdetails.not_provided"),
+    ],
+    [
+      tr("frontend.reviewdetails.output_bounds"),
       draft.output_bounds_enabled
-        ? `${display(draft.output_min)} 至 ${display(draft.output_max)}`
-        : "未提供",
+        ? tr("frontend.reviewdetails.output_range", {
+            min: display(draft.output_min),
+            max: display(draft.output_max),
+          })
+        : tr("frontend.reviewdetails.not_provided"),
     ],
-    ["性能要求", selected("success_requirement_fields")],
-    ["已填写预算", selected("budget_fields")],
     [
-      "实际应用预算（未填写项沿用内核默认）",
+      tr("frontend.reviewdetails.performance"),
+      selected("success_requirement_fields"),
+    ],
+    [tr("frontend.reviewdetails.entered_budgets"), selected("budget_fields")],
+    [
+      tr("frontend.reviewdetails.applied_defaults"),
       task?.budgets
         ? Object.entries(task.budgets as Obj)
             .map(([key, value]) => `${labels[key] ?? key}：${display(value)}`)
             .join("；")
-        : "请先校验任务",
+        : tr("frontend.reviewdetails.validate_first"),
     ],
     [
-      "响应时间偏好 (s)",
+      tr("frontend.reviewdetails.response_preference"),
       draft.response_time_preference_enabled
         ? display(draft.response_time_preference_s)
-        : "未提供",
+        : tr("frontend.reviewdetails.not_provided"),
     ],
   ];
   if (draft.external_data_enabled)
     items.push(
-      ["评价区域", display(draft.region_label)],
-      ["采样间隔 (s)", display(draft.evaluation_dt_s)],
-      ["每次运行时长 (s)", display(draft.evaluation_horizon_s)],
-      ["重复运行次数", display(draft.evaluation_repeats)],
-      ["终值绝对误差上限", display(draft.final_abs_error_max)],
+      [tr("frontend.reviewdetails.region"), display(draft.region_label)],
+      [
+        tr("frontend.reviewdetails.sample_time"),
+        display(draft.evaluation_dt_s),
+      ],
+      [
+        tr("frontend.reviewdetails.run_duration"),
+        display(draft.evaluation_horizon_s),
+      ],
+      [tr("frontend.reviewdetails.repeats"), display(draft.evaluation_repeats)],
+      [
+        tr("frontend.reviewdetails.final_error"),
+        display(draft.final_abs_error_max),
+      ],
     );
   if (draft.task_type === "transition_then_hold")
     items.push(
-      ["开始区域", display(draft.initial_region)],
-      ["目标区域", display(draft.goal_region)],
       [
-        "初始输出",
+        tr("frontend.reviewdetails.initial_region"),
+        display(draft.initial_region),
+      ],
+      [tr("frontend.reviewdetails.goal_region"), display(draft.goal_region)],
+      [
+        tr("frontend.reviewdetails.initial_output"),
         draft.initial_output_value_enabled
           ? display(draft.initial_output_value)
-          : "未提供",
+          : tr("frontend.reviewdetails.not_provided"),
       ],
-      ["中间目标", display(draft.intermediate_targets)],
+      [
+        tr("frontend.reviewdetails.intermediate_targets"),
+        display(draft.intermediate_targets),
+      ],
       ...(draft.external_data_enabled
         ? [
-            ["到达目标时间上限 (s)", display(draft.transition_deadline_s)],
-            ["最少验证阶段切换次数", display(draft.handoff_count_min)],
+            [
+              tr("frontend.reviewdetails.transition_deadline"),
+              display(draft.transition_deadline_s),
+            ],
+            [
+              tr("frontend.reviewdetails.verified_transitions"),
+              display(draft.handoff_count_min),
+            ],
           ]
         : []),
     );
   if (draft.task_type === "disturbance_recovery_to_hold")
     items.push(
-      ["扰动事件", display(draft.disturbance_event)],
-      ["恢复起点", display(draft.recovery_start_condition)],
-      ["恢复后保持区域", display(draft.disturbance_hold_region)],
+      [
+        tr("frontend.reviewdetails.disturbance_event"),
+        display(draft.disturbance_event),
+      ],
+      [
+        tr("frontend.reviewdetails.recovery_start"),
+        display(draft.recovery_start_condition),
+      ],
+      [
+        tr("frontend.reviewdetails.recovery_region"),
+        display(draft.disturbance_hold_region),
+      ],
       ...(draft.external_data_enabled
         ? [
-            ["扰动输入通道", display(draft.disturbance_channel)],
             [
-              "扰动开始 / 持续时间 (s)",
+              tr("frontend.reviewdetails.disturbance_channel"),
+              display(draft.disturbance_channel),
+            ],
+            [
+              tr("frontend.reviewdetails.disturbance_timing"),
               `${display(draft.disturbance_start_s)} / ${display(draft.disturbance_duration_s)}`,
             ],
-            ["扰动幅度", display(draft.disturbance_amplitude)],
-            ["恢复时间上限 (s)", display(draft.recovery_deadline_s)],
+            [
+              tr("frontend.reviewdetails.disturbance_amplitude"),
+              display(draft.disturbance_amplitude),
+            ],
+            [
+              tr("frontend.reviewdetails.recovery_time"),
+              display(draft.recovery_deadline_s),
+            ],
           ]
         : []),
     );
@@ -145,12 +212,15 @@ export function DraftReview({ draft, task }: { draft: Obj; task?: Obj }) {
         }))}
       />
       <Typography.Paragraph type="secondary">
-        {stopExplanation} 输入范围共同应用于已声明的控制输入。
+        {stopExplanation} {tr("frontend.reviewdetails.shared_input_help")}
       </Typography.Paragraph>
     </>
   );
 }
 export function TaskBounds({ task }: { task: Obj }) {
+  const { t: tr } = useI18n();
+  const { display, labels } = reviewText(tr);
+
   const budgets = task.budgets as Obj | undefined;
   const disturbance = (task.disturbance_contract ?? {}) as Obj;
   return (
@@ -160,27 +230,27 @@ export function TaskBounds({ task }: { task: Obj }) {
       items={[
         {
           key: "reference",
-          label: "参考目标",
+          label: tr("frontend.reviewdetails.reference"),
           children: display(task.reference),
         },
         {
           key: "region",
-          label: "评价区域",
+          label: tr("frontend.reviewdetails.region"),
           children: display(task.operating_region),
         },
         {
           key: "criteria",
-          label: "性能要求",
+          label: tr("frontend.reviewdetails.performance"),
           children:
             Object.entries((task.success_requirements ?? {}) as Obj)
               .map(([key, value]) => `${labels[key] ?? key}：${display(value)}`)
-              .join("；") || "未提供",
+              .join("；") || tr("frontend.reviewdetails.not_provided"),
         },
         ...(task.task_type === "transition_then_hold"
           ? [
               {
                 key: "targets",
-                label: "阶段目标",
+                label: tr("frontend.reviewdetails.phase_targets"),
                 children: `${display(task.initial_output_value)} → ${[...((task.intermediate_targets ?? []) as unknown[]), task.reference].map(display).join(" → ")}`,
               },
             ]
@@ -189,19 +259,24 @@ export function TaskBounds({ task }: { task: Obj }) {
           ? [
               {
                 key: "disturbance",
-                label: "扰动设置",
-                children: `通道 ${display(disturbance.channel)}；开始 ${display(disturbance.time_s)} s；幅度 ${display(disturbance.amplitude)}；持续 ${display(disturbance.duration_s)} s`,
+                label: tr("frontend.reviewdetails.disturbance_settings"),
+                children: tr("frontend.reviewdetails.disturbance_summary", {
+                  channel: display(disturbance.channel),
+                  start: display(disturbance.time_s),
+                  amplitude: display(disturbance.amplitude),
+                  duration: display(disturbance.duration_s),
+                }),
               },
             ]
           : []),
         {
           key: "stop",
-          label: "软件试验停止阈值",
+          label: tr("frontend.reviewdetails.stop_threshold"),
           children: display(task.state_stop),
         },
         {
           key: "budgets",
-          label: "实际应用预算",
+          label: tr("frontend.reviewdetails.applied_budgets"),
           children:
             budgets && Object.keys(budgets).length
               ? Object.entries(budgets)
@@ -210,7 +285,7 @@ export function TaskBounds({ task }: { task: Obj }) {
                       `${labels[key] ?? key}：${display(value)}`,
                   )
                   .join("；")
-              : "未提供",
+              : tr("frontend.reviewdetails.not_provided"),
         },
       ]}
     />

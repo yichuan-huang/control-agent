@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { keepLocaleData, useI18n } from "./i18n";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -16,25 +17,28 @@ import {
   Steps,
   Typography,
 } from "antd";
-import { api, ApiError } from "./api/client";
+import { useApi, ApiError } from "./api/client";
 import type { Obj, CaseDetail, DTO } from "./api/types";
 import { readDraft, saveDraft } from "./safety";
 import { useSettings } from "./context";
 import { useOperation } from "./operations";
 import Markdown from "./Markdown";
-import { DraftReview, stopExplanation } from "./ReviewDetails";
-const requirements: Record<string, string> = {
-  final_abs_error_max: "稳定后允许偏离目标多少",
-  overshoot_max: "允许超过目标多少",
-  settling_time_max_s: "希望多少秒内稳定",
-  hold_duration_min_s: "至少保持多少秒",
-  perturbed_success_rate_min: "重复试验成功率下限",
-};
-const budgets: Record<string, string> = {
-  distinct_experiments: "最多尝试几种实验",
-  cumulative_excitation_time_s: "累计激励时间上限 (s)",
-};
+import { DraftReview } from "./ReviewDetails";
 export default function Wizard() {
+  const { t: tr, locale, message, errorText } = useI18n();
+  const { api } = useApi();
+  const requirements: Record<string, string> = {
+    final_abs_error_max: tr("frontend.wizard.allowed_error"),
+    overshoot_max: tr("frontend.wizard.allowed_overshoot"),
+    settling_time_max_s: tr("frontend.wizard.desired_settling"),
+    hold_duration_min_s: tr("frontend.wizard.desired_hold"),
+    perturbed_success_rate_min: tr("frontend.reviewdetails.success_rate"),
+  };
+  const budgets: Record<string, string> = {
+    distinct_experiments: tr("frontend.wizard.experiment_budget"),
+    cumulative_excitation_time_s: tr("frontend.reviewdetails.excitation_time"),
+  };
+
   const [params] = useSearchParams();
   const caseId = params.get("case") ?? "";
   const navigate = useNavigate();
@@ -71,22 +75,29 @@ export default function Wizard() {
   const [step, setStep] = useState(caseId ? 3 : restored.step);
   const [advanced, setAdvanced] = useState(false);
   const [validatedTask, setValidatedTask] = useState<Obj>();
-  const [review, setReview] = useState("");
-  const [error, setError] = useState("");
+  const [review, setReview] = useState<{
+    summary: string;
+    locale: string;
+    draft: Obj;
+  }>();
+  const [error, setError] = useState<unknown>();
   const [validating, setValidating] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [evidence, setEvidence] = useState(restored.evidence);
   const { credentials, useRag } = useSettings();
   const operation = useOperation();
   const source = useQuery({
-    queryKey: ["draft", caseId],
+    placeholderData: keepLocaleData(locale, ["draft", locale, caseId]),
+    queryKey: ["draft", locale, caseId],
     queryFn: () =>
       caseId
         ? api<CaseDetail>(`/cases/${caseId}`)
         : api<DTO<"DraftResponse">>("/drafts/default"),
   });
+  const initializedDraft = useRef(false);
   useEffect(() => {
-    if (source.data) {
+    if (source.data && !initializedDraft.current) {
+      initializedDraft.current = true;
       form.setFieldsValue(
         caseId
           ? source.data.draft
@@ -118,7 +129,12 @@ export default function Wizard() {
     sessionStorage.setItem(navigationKey, JSON.stringify({ step, evidence }));
   }, [navigationKey, step, evidence]);
   const resumedReview = useQuery({
-    queryKey: ["draft-review-resume", navigationKey],
+    placeholderData: keepLocaleData(locale, [
+      "draft-review-resume",
+      locale,
+      navigationKey,
+    ]),
+    queryKey: ["draft-review-resume", locale, navigationKey],
     enabled: !caseId && restored.step === 3 && !!source.data,
     retry: false,
     queryFn: () =>
@@ -134,23 +150,45 @@ export default function Wizard() {
   });
   const taskType = Form.useWatch("task_type", form);
   const values = Form.useWatch([], form) ?? {};
+  const translatedReview = useQuery({
+    queryKey: ["draft-review", locale, review?.draft],
+    enabled: !!review && locale !== review.locale,
+    retry: false,
+    queryFn: () =>
+      api<DTO<"DraftValidationResponse">>("/drafts/validate", {
+        draft: review!.draft,
+        case_id: caseId,
+      }),
+  });
+  useEffect(() => {
+    if (!(error instanceof ApiError) || !error.detail.fields) return;
+    form.setFields(
+      Object.entries(error.detail.fields)
+        .filter(([name]) => form.getFieldError(name).length > 0)
+        .map(([name, fallback]) => ({
+          name,
+          errors: [message(error.detail.field_message_refs?.[name], fallback)],
+        })),
+    );
+  }, [error, form, message]);
   async function validate() {
     setValidating(true);
     setError("");
     try {
+      const draft = form.getFieldsValue(true);
       const r = await api<DTO<"DraftValidationResponse">>("/drafts/validate", {
-        draft: form.getFieldsValue(true),
+        draft,
         case_id: caseId,
       });
-      setReview(r.summary);
+      setReview({ summary: r.summary, locale, draft });
       setValidatedTask(r.task);
       setStep(3);
     } catch (e) {
       if (e instanceof ApiError && e.detail.fields) {
         form.setFields(
-          Object.entries(e.detail.fields).map(([name, message]) => ({
+          Object.entries(e.detail.fields).map(([name, fallback]) => ({
             name,
-            errors: [message],
+            errors: [message(e.detail.field_message_refs?.[name], fallback)],
           })),
         );
         const field = Object.keys(e.detail.fields)[0];
@@ -188,7 +226,7 @@ export default function Wizard() {
           50,
         );
       }
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e);
     } finally {
       setValidating(false);
     }
@@ -214,35 +252,43 @@ export default function Wizard() {
   return (
     <div className="narrow">
       <Typography.Title level={2}>
-        {caseId ? "核对案例任务" : "定义我的控制任务"}
+        {caseId
+          ? tr("frontend.wizard.review_case")
+          : tr("frontend.wizard.define_task")}
       </Typography.Title>
       <Steps
         current={step}
-        items={["目标", "信号", "边界与要求", "核对"].map((title) => ({
+        items={[
+          tr("frontend.wizard.goal"),
+          tr("frontend.wizard.signals"),
+          tr("frontend.wizard.boundaries"),
+          tr("frontend.wizard.review"),
+        ].map((title) => ({
           title,
         }))}
       />
       {source.error && (
         <Alert
           type="error"
-          title={String(source.error)}
+          title={errorText(source.error)}
           action={
-            <Button onClick={() => void source.refetch()}>重新读取</Button>
+            <Button onClick={() => void source.refetch()}>
+              {tr("frontend.wizard.reload")}
+            </Button>
           }
         />
       )}
-      {draftRejection && <Alert type="warning" title={draftRejection} />}
-      {error && <Alert type="error" title={error} />}
+      {draftRejection && (
+        <Alert type="warning" title={tr("frontend.safety.legacy_draft")} />
+      )}
+      {!!error && <Alert type="error" title={errorText(error)} />}
       {resumedReview.error && (
-        <Alert
-          type="error"
-          title="恢复的草稿需要重新核对；请返回边界页校验。"
-        />
+        <Alert type="error" title={tr("frontend.wizard.restored_review")} />
       )}{" "}
       {caseId && (
         <Alert
-          title="案例参数已锁定"
-          description="案例运行使用原始任务合同。修改前请复制为自己的任务。"
+          title={tr("frontend.wizard.case_locked")}
+          description={tr("frontend.wizard.case_locked_help")}
           action={
             <Button
               onClick={() => {
@@ -255,7 +301,7 @@ export default function Wizard() {
                 setStep(0);
               }}
             >
-              复制为我的任务
+              {tr("frontend.wizard.copy_case")}
             </Button>
           }
         />
@@ -276,23 +322,35 @@ export default function Wizard() {
         <div hidden={step !== 0}>
           {!caseId && (
             <Alert
-              title="在浏览器中管理自己的控制任务"
-              description="依次填写目标、信号和边界，核对后回答诊断问题。系统将提供采集协议、检查清单和数据模板；实际试验在应用外部完成，您使用自己的环境执行后，在任务页上传结果。系统计算特征、形成方案并引导冻结、评价、调优和独立确认，无需手写特征或控制器 JSON。"
+              title={tr("frontend.wizard.custom_title")}
+              description={tr("frontend.wizard.custom_help")}
             />
           )}
-          <Form.Item name="description" label="设备与目标">
+          <Form.Item
+            name="description"
+            label={tr("frontend.wizard.description")}
+          >
             <Input.TextArea
               rows={4}
-              placeholder="描述设备、可测量的量，以及希望达到的目标"
+              placeholder={tr("frontend.wizard.description_placeholder")}
             />
           </Form.Item>
-          <Form.Item name="task_type" label="任务类型">
+          <Form.Item
+            name="task_type"
+            label={tr("frontend.reviewdetails.task_type")}
+          >
             <Select
               options={[
-                { label: "保持在目标附近", value: "local_setpoint_hold" },
-                { label: "变化到新目标后保持", value: "transition_then_hold" },
                 {
-                  label: "受到扰动后恢复并保持",
+                  label: tr("frontend.reviewdetails.hold"),
+                  value: "local_setpoint_hold",
+                },
+                {
+                  label: tr("frontend.reviewdetails.transition"),
+                  value: "transition_then_hold",
+                },
+                {
+                  label: tr("frontend.reviewdetails.recovery"),
                   value: "disturbance_recovery_to_hold",
                 },
               ]}
@@ -300,43 +358,87 @@ export default function Wizard() {
           </Form.Item>
           {taskType === "transition_then_hold" && (
             <>
-              {text("initial_region", "开始区域")}
-              {text("goal_region", "目标区域")}
+              {text(
+                "initial_region",
+                tr("frontend.reviewdetails.initial_region"),
+              )}
+              {text("goal_region", tr("frontend.reviewdetails.goal_region"))}
               {caseId
                 ? optional(
                     "initial_output_value_enabled",
-                    "填写初始输出值",
-                    num("initial_output_value", "初始输出值"),
+                    tr("frontend.wizard.enable_initial_output"),
+                    num(
+                      "initial_output_value",
+                      tr("frontend.wizard.initial_output_value"),
+                    ),
                   )
-                : num("initial_output_value", "初始输出值")}
-              {text("intermediate_targets", "中间目标（逗号分隔）")}
+                : num(
+                    "initial_output_value",
+                    tr("frontend.wizard.initial_output_value"),
+                  )}
+              {text(
+                "intermediate_targets",
+                tr("frontend.wizard.intermediate_targets"),
+              )}
               {!caseId && (
                 <>
-                  {num("transition_deadline_s", "到达目标时间上限 (s)")}
-                  {num("handoff_count_min", "最少验证阶段切换次数")}
+                  {num(
+                    "transition_deadline_s",
+                    tr("frontend.reviewdetails.transition_deadline"),
+                  )}
+                  {num(
+                    "handoff_count_min",
+                    tr("frontend.reviewdetails.verified_transitions"),
+                  )}
                 </>
               )}
             </>
           )}
           {taskType === "disturbance_recovery_to_hold" && (
             <>
-              {text("disturbance_event", "扰动事件")}
-              {text("recovery_start_condition", "恢复起点")}
-              {text("disturbance_hold_region", "恢复后保持区域")}
+              {text(
+                "disturbance_event",
+                tr("frontend.reviewdetails.disturbance_event"),
+              )}
+              {text(
+                "recovery_start_condition",
+                tr("frontend.reviewdetails.recovery_start"),
+              )}
+              {text(
+                "disturbance_hold_region",
+                tr("frontend.reviewdetails.recovery_region"),
+              )}
               {!caseId && (
                 <>
-                  {text("disturbance_channel", "扰动输入通道名称")}
-                  {num("disturbance_start_s", "扰动开始时间 (s)")}
-                  {num("disturbance_amplitude", "扰动幅度（输入单位）")}
-                  {num("disturbance_duration_s", "扰动持续时间 (s)")}
-                  {num("recovery_deadline_s", "扰动后恢复时间上限 (s)")}
+                  {text(
+                    "disturbance_channel",
+                    tr("frontend.wizard.disturbance_channel"),
+                  )}
+                  {num(
+                    "disturbance_start_s",
+                    tr("frontend.wizard.disturbance_start"),
+                  )}
+                  {num(
+                    "disturbance_amplitude",
+                    tr("frontend.wizard.disturbance_amplitude"),
+                  )}
+                  {num(
+                    "disturbance_duration_s",
+                    tr("frontend.wizard.disturbance_duration"),
+                  )}
+                  {num(
+                    "recovery_deadline_s",
+                    tr("frontend.wizard.recovery_deadline"),
+                  )}
                 </>
               )}
             </>
           )}
         </div>
         <div hidden={step !== 1}>
-          <Typography.Title level={4}>测量输出</Typography.Title>
+          <Typography.Title level={4}>
+            {tr("frontend.reviewdetails.outputs")}
+          </Typography.Title>
           <Form.List name="outputs">
             {(fields, { add, remove }) => (
               <>
@@ -344,27 +446,38 @@ export default function Wizard() {
                   <Space key={field.key} align="start" className="signal-row">
                     <Form.Item
                       name={[field.name, 0]}
-                      label={`输出 ${field.name + 1} 名称`}
+                      label={tr("frontend.wizard.output_name", {
+                        number: field.name + 1,
+                      })}
                     >
                       <Input />
                     </Form.Item>
-                    <Form.Item name={[field.name, 1]} label="单位">
+                    <Form.Item
+                      name={[field.name, 1]}
+                      label={tr("frontend.wizard.unit")}
+                    >
                       <Input />
                     </Form.Item>
                     <Button
-                      aria-label={`删除输出 ${field.name + 1}`}
+                      aria-label={tr("frontend.wizard.delete_output", {
+                        number: field.name + 1,
+                      })}
                       onClick={() => remove(field.name)}
                     >
-                      删除
+                      {tr("frontend.wizard.delete")}
                     </Button>
                   </Space>
                 ))}
-                <Button onClick={() => add(["", ""])}>添加输出</Button>
+                <Button onClick={() => add(["", ""])}>
+                  {tr("frontend.wizard.add_output")}
+                </Button>
               </>
             )}
           </Form.List>
           <Form.ErrorList errors={form.getFieldError("outputs")} />
-          <Typography.Title level={4}>控制输入</Typography.Title>
+          <Typography.Title level={4}>
+            {tr("frontend.charts.control_input")}
+          </Typography.Title>
           <Form.List name="inputs">
             {(fields, { add, remove }) => (
               <>
@@ -372,34 +485,41 @@ export default function Wizard() {
                   <Space key={field.key} align="start">
                     <Form.Item
                       name={[field.name, 0]}
-                      label={`输入 ${field.name + 1} 名称`}
+                      label={tr("frontend.wizard.input_name", {
+                        number: field.name + 1,
+                      })}
                     >
                       <Input />
                     </Form.Item>
-                    <Button onClick={() => remove(field.name)}>删除</Button>
+                    <Button onClick={() => remove(field.name)}>
+                      {tr("frontend.wizard.delete")}
+                    </Button>
                   </Space>
                 ))}
-                <Button onClick={() => add([""])}>添加输入</Button>
+                <Button onClick={() => add([""])}>
+                  {tr("frontend.wizard.add_input")}
+                </Button>
               </>
             )}
           </Form.List>
           <Form.ErrorList errors={form.getFieldError("inputs")} />
-          {text("input_unit", "输入单位")}
+          {text("input_unit", tr("frontend.reviewdetails.input_unit"))}
         </div>
         <div hidden={step !== 2}>
           <div className="field-grid">
-            {num("input_min", "输入下限")}
-            {num("input_max", "输入上限")}
-            {num("state_stop", "软件试验停止阈值")}
+            {num("input_min", tr("frontend.wizard.input_min"))}
+            {num("input_max", tr("frontend.wizard.input_max"))}
+            {num("state_stop", tr("frontend.reviewdetails.stop_threshold"))}
           </div>
           <Typography.Paragraph type="secondary">
-            {stopExplanation} 输入下限与上限共同应用于已声明的所有控制输入。
+            {tr("frontend.reviewdetails.stop_explanation")}{" "}
+            {tr("frontend.wizard.input_bounds_help")}
           </Typography.Paragraph>
           {caseId ? (
             optional(
               "reference_enabled",
-              "设置参考目标",
-              num("reference", "参考目标"),
+              tr("frontend.wizard.enable_reference"),
+              num("reference", tr("frontend.reviewdetails.reference")),
             )
           ) : (
             <>
@@ -409,26 +529,37 @@ export default function Wizard() {
               <Form.Item name="reference_enabled" hidden>
                 <Input />
               </Form.Item>
-              {num("reference", "参考目标")}
-              {text("region_label", "评价区域（适用的工作范围）")}
-              <Typography.Title level={4}>冻结评价设置</Typography.Title>
+              {num("reference", tr("frontend.reviewdetails.reference"))}
+              {text("region_label", tr("frontend.wizard.region"))}
+              <Typography.Title level={4}>
+                {tr("frontend.wizard.frozen_evaluation")}
+              </Typography.Title>
               <Typography.Paragraph>
-                这些设置将在确认任务后用于生成完整运行清单。外部数据必须覆盖每次重复运行和全部输入输出。
+                {tr("frontend.wizard.evaluation_help")}
               </Typography.Paragraph>
               <div className="field-grid">
-                {num("evaluation_dt_s", "采样间隔 (s)")}
-                {num("evaluation_horizon_s", "每次运行时长 (s)")}
-                {num("evaluation_repeats", "重复运行次数")}
+                {num(
+                  "evaluation_dt_s",
+                  tr("frontend.reviewdetails.sample_time"),
+                )}
+                {num(
+                  "evaluation_horizon_s",
+                  tr("frontend.reviewdetails.run_duration"),
+                )}
+                {num(
+                  "evaluation_repeats",
+                  tr("frontend.reviewdetails.repeats"),
+                )}
               </div>
-              {num("final_abs_error_max", "稳定后允许偏离目标多少")}
+              {num("final_abs_error_max", tr("frontend.wizard.allowed_error"))}
             </>
           )}
           {optional(
             "output_bounds_enabled",
-            "设置输出边界",
+            tr("frontend.wizard.enable_output_bounds"),
             <div className="field-grid">
-              {num("output_min", "输出下限")}
-              {num("output_max", "输出上限")}
+              {num("output_min", tr("frontend.wizard.output_min"))}
+              {num("output_max", tr("frontend.wizard.output_max"))}
             </div>,
           )}
           <ConfigProvider theme={{ token: { motion: false } }}>
@@ -438,13 +569,13 @@ export default function Wizard() {
               items={[
                 {
                   key: "optional",
-                  label: "性能要求与预算（可选）",
+                  label: tr("frontend.wizard.optional_requirements"),
                   forceRender: true,
                   children: (
                     <>
                       <Form.Item
                         name="success_requirement_fields"
-                        label="明确的性能要求"
+                        label={tr("frontend.wizard.explicit_requirements")}
                       >
                         <Checkbox.Group
                           options={Object.entries(requirements).map(
@@ -466,10 +597,16 @@ export default function Wizard() {
                         ))}
                       {optional(
                         "response_time_preference_enabled",
-                        "填写响应时间偏好",
-                        num("response_time_preference_s", "响应时间偏好 (s)"),
+                        tr("frontend.wizard.enable_response_preference"),
+                        num(
+                          "response_time_preference_s",
+                          tr("frontend.reviewdetails.response_preference"),
+                        ),
                       )}
-                      <Form.Item name="budget_fields" label="实验预算">
+                      <Form.Item
+                        name="budget_fields"
+                        label={tr("frontend.wizard.budget")}
+                      >
                         <Checkbox.Group
                           options={Object.entries(budgets).map(
                             ([value, label]) => ({
@@ -491,9 +628,12 @@ export default function Wizard() {
         </div>
       </Form>
       {step === 3 && (
-        <Card title="任务核对">
+        <Card title={tr("frontend.wizard.task_review")}>
           <Markdown>
-            {review ||
+            {(locale !== review?.locale
+              ? translatedReview.data?.summary
+              : undefined) ||
+              review?.summary ||
               resumedReview.data?.summary ||
               String(
                 source.data && "description" in source.data
@@ -507,16 +647,22 @@ export default function Wizard() {
                 {String((source.data as CaseDetail)?.scope ?? "")}
               </Typography.Paragraph>
               <Typography.Paragraph>
-                数据来源：
+                {tr("frontend.externalworkflow.source_prefix")}
                 {String((source.data as CaseDetail)?.data_source ?? "")}
               </Typography.Paragraph>
               <Select
-                aria-label="证据模式"
+                aria-label={tr("frontend.wizard.evidence_mode")}
                 value={evidence}
                 onChange={setEvidence}
                 options={[
-                  { value: "automatic", label: "自动案例实验" },
-                  { value: "exercise_bundle", label: "教学练习包上传" },
+                  {
+                    value: "automatic",
+                    label: tr("frontend.wizard.automatic_evidence"),
+                  },
+                  {
+                    value: "exercise_bundle",
+                    label: tr("frontend.wizard.exercise_upload"),
+                  },
                 ]}
               />
             </>
@@ -532,7 +678,7 @@ export default function Wizard() {
             }
           />
           <details>
-            <summary>查看全部已填写参数</summary>
+            <summary>{tr("frontend.wizard.all_parameters")}</summary>
             <pre>
               {JSON.stringify(
                 caseId ? source.data?.draft : form.getFieldsValue(true),
@@ -545,7 +691,7 @@ export default function Wizard() {
             checked={confirmed}
             onChange={(e) => setConfirmed(e.target.checked)}
           >
-            我已核对目标、软件试验边界与预算
+            {tr("frontend.wizard.confirm_boundaries")}
           </Checkbox>
           <div>
             <Button
@@ -570,18 +716,20 @@ export default function Wizard() {
                   .catch(() => {})
               }
             >
-              确认软件边界并开始
+              {tr("frontend.wizard.start")}
             </Button>
           </div>
         </Card>
       )}
       <Space className="wizard-nav">
         {step > 0 && !caseId && (
-          <Button onClick={() => setStep(step - 1)}>上一步</Button>
+          <Button onClick={() => setStep(step - 1)}>
+            {tr("frontend.wizard.previous")}
+          </Button>
         )}
         {step < 2 && (
           <Button type="primary" onClick={() => setStep(step + 1)}>
-            下一步
+            {tr("frontend.wizard.next")}
           </Button>
         )}
         {step === 2 && (
@@ -590,7 +738,7 @@ export default function Wizard() {
             loading={validating}
             onClick={() => void validate()}
           >
-            校验并核对
+            {tr("frontend.wizard.validate")}
           </Button>
         )}
       </Space>

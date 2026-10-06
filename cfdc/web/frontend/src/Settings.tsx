@@ -1,3 +1,5 @@
+import { statusLabel } from "./labels";
+import { keepLocaleData, useI18n, type MessageRef } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -12,7 +14,7 @@ import {
   Typography,
 } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "./api/client";
+import { useApi } from "./api/client";
 import type { Config, DTO } from "./api/types";
 import { useSettings, ragLabel } from "./context";
 export default function Settings({
@@ -22,6 +24,9 @@ export default function Settings({
   open: boolean;
   onClose: () => void;
 }) {
+  const { t: tr, locale, message, errorText } = useI18n();
+  const { api } = useApi();
+
   const { credentials, setCredentials, useRag, setUseRag, setConnection } =
     useSettings();
   const [busy, setBusy] = useState(false);
@@ -30,22 +35,28 @@ export default function Settings({
     Partial<Record<keyof typeof credentials, string>>
   >({});
   const [probeResult, setProbeResult] = useState<{
-    title: string;
+    title: MessageRef;
+    cause?: unknown;
     type: "success" | "error";
   }>();
   const [doctorResult, setDoctorResult] = useState<{
-    title: string;
+    title: MessageRef;
+    cause?: unknown;
     type: "success" | "error";
   }>();
   const [environmentResult, setEnvironmentResult] = useState<{
-    title: string;
+    title: MessageRef;
+    cause?: unknown;
     type: "success" | "warning" | "error" | "info";
   }>();
   const [checks, setChecks] = useState<
-    { name: string; status: string; message: string }[]
+    (DTO<"DoctorResponse">["checks"][number] & {
+      message_ref?: MessageRef | null;
+    })[]
   >([]);
   const config = useQuery({
-    queryKey: ["config"],
+    placeholderData: keepLocaleData(locale, ["config", locale]),
+    queryKey: ["config", locale],
     queryFn: () => api<Config>("/config"),
     enabled: open,
     refetchInterval: (q) =>
@@ -76,16 +87,14 @@ export default function Settings({
       ] as const;
       const missing = fields.filter(([field]) => !credentials[field].trim());
       setFieldErrors(
-        Object.fromEntries(
-          missing.map(([field, label]) => [field, `请填写 ${label}。`]),
-        ),
+        Object.fromEntries(missing.map(([field, label]) => [field, label])),
       );
       if (missing.length) {
         document.getElementById(missing[0][2])?.focus();
         return;
       }
       setProbeResult(undefined);
-      setConnection("检测中");
+      setConnection("checking");
     }
     pending.current = true;
     setBusy(true);
@@ -100,27 +109,42 @@ export default function Settings({
           use_rag: useRag,
         });
         setChecks(d.checks);
-        setDoctorResult({ title: "环境检查完成。", type: "success" });
+        setDoctorResult({
+          title: { key: "frontend.settings.doctor_complete" },
+          type: "success",
+        });
       } else {
         const d = await api<DTO<"ProbeResponse">>("/config/probe", {
           credentials,
         });
-        setConnection(d.connected ? "已连接" : "连接失败");
+        setConnection(d.connected ? "connected" : "failed");
         setProbeResult({
-          title: `${d.connected ? "已连接" : "未连接"}：${d.message}`,
+          title: {
+            key: "frontend.settings.connection_result",
+            params: {
+              status: {
+                key: d.connected
+                  ? "frontend.settings.connected"
+                  : "frontend.settings.not_connected",
+              },
+              message: d.message_ref ?? d.message,
+            },
+          },
           type: d.connected ? "success" : "error",
         });
       }
     } catch (e) {
       if (doctor) {
         setDoctorResult({
-          title: `环境检查失败：${String(e)}`,
+          title: { key: "frontend.settings.doctor_failed" },
+          cause: e,
           type: "error",
         });
       } else {
-        setConnection("连接失败");
+        setConnection("failed");
         setProbeResult({
-          title: `连接测试失败：${String(e)}`,
+          title: { key: "frontend.settings.probe_failed" },
+          cause: e,
           type: "error",
         });
       }
@@ -157,23 +181,26 @@ export default function Settings({
       }
       if (baseUrl && model) {
         setEnvironmentResult({
-          title: "已应用环境中的 Base URL 和 Model。",
+          title: { key: "frontend.settings.environment_applied" },
           type: "success",
         });
       } else if (baseUrl || model) {
         setEnvironmentResult({
-          title: `环境未提供 ${baseUrl ? "Model" : "Base URL"}，已保留当前值。`,
+          title: {
+            key: "frontend.settings.environment_missing",
+            params: { field: baseUrl ? "Model" : "Base URL" },
+          },
           type: "warning",
         });
       } else {
         setEnvironmentResult({
-          title: "启动环境没有预设地址和模型，表单内容未更改。",
+          title: { key: "frontend.settings.environment_empty" },
           type: "info",
         });
       }
     } catch {
       setEnvironmentResult({
-        title: "读取环境配置失败，已保留当前值。",
+        title: { key: "frontend.settings.environment_failed" },
         type: "error",
       });
     } finally {
@@ -182,9 +209,14 @@ export default function Settings({
     }
   }
   return (
-    <Drawer title="设置" open={open} onClose={onClose} size="min(500px, 100%)">
+    <Drawer
+      title={tr("frontend.app.settings")}
+      open={open}
+      onClose={onClose}
+      size="min(500px, 100%)"
+    >
       <Typography.Paragraph>
-        Ollama、DeepSeek API 与 OpenAI API 均可配置。连接状态由显式测试确认。
+        {tr("frontend.settings.providers_help")}
       </Typography.Paragraph>
       <Form layout="vertical" disabled={busy}>
         <Form.Item
@@ -194,7 +226,11 @@ export default function Settings({
           validateStatus={fieldErrors.base_url ? "error" : undefined}
           help={
             fieldErrors.base_url && (
-              <span id="base-url-error">{fieldErrors.base_url}</span>
+              <span id="base-url-error">
+                {tr("frontend.settings.required_field", {
+                  field: fieldErrors.base_url,
+                })}
+              </span>
             )
           }
         >
@@ -216,7 +252,11 @@ export default function Settings({
           validateStatus={fieldErrors.model ? "error" : undefined}
           help={
             fieldErrors.model && (
-              <span id="model-error">{fieldErrors.model}</span>
+              <span id="model-error">
+                {tr("frontend.settings.required_field", {
+                  field: fieldErrors.model,
+                })}
+              </span>
             )
           }
         >
@@ -236,7 +276,11 @@ export default function Settings({
           validateStatus={fieldErrors.api_key ? "error" : undefined}
           help={
             fieldErrors.api_key && (
-              <span id="api-key-error">{fieldErrors.api_key}</span>
+              <span id="api-key-error">
+                {tr("frontend.settings.required_field", {
+                  field: fieldErrors.api_key,
+                })}
+              </span>
             )
           }
         >
@@ -250,55 +294,82 @@ export default function Settings({
           />
         </Form.Item>
         <Typography.Paragraph type="secondary">
-          凭据仅保存在本页内存中，刷新后请重新输入。
+          {tr("frontend.settings.credentials_help")}
         </Typography.Paragraph>
-        <Form.Item label="新任务使用内置知识库">
+        <Form.Item label={tr("frontend.settings.use_rag")}>
           <Switch
-            aria-label="新任务使用内置知识库"
+            aria-label={tr("frontend.settings.use_rag")}
             checked={useRag}
             onChange={setUseRag}
           />
         </Form.Item>
         <Typography.Paragraph>
-          填写的配置用于当前页面的模型请求，无需另外保存；可点击下方按钮测试连接。
+          {tr("frontend.settings.configuration_help")}
         </Typography.Paragraph>
         <Space wrap>
           <Button type="primary" loading={busy} onClick={() => void run()}>
-            测试当前配置
+            {tr("frontend.settings.test_connection")}
           </Button>
           <Button loading={busy} onClick={() => void run(true)}>
-            环境检查
+            {tr("frontend.settings.environment_check")}
           </Button>
         </Space>
       </Form>
       <Space orientation="vertical" style={{ width: "100%", marginTop: 24 }}>
         {probeResult && (
-          <Alert title={probeResult.title} type={probeResult.type} showIcon />
+          <Alert
+            title={message({
+              ...probeResult.title,
+              params: {
+                ...probeResult.title.params,
+                error: probeResult.cause ? errorText(probeResult.cause) : "",
+              },
+            })}
+            type={probeResult.type}
+            showIcon
+          />
         )}
         {doctorResult && (
-          <Alert title={doctorResult.title} type={doctorResult.type} showIcon />
+          <Alert
+            title={message({
+              ...doctorResult.title,
+              params: {
+                ...doctorResult.title.params,
+                error: doctorResult.cause ? errorText(doctorResult.cause) : "",
+              },
+            })}
+            type={doctorResult.type}
+            showIcon
+          />
         )}
         <Collapse
           items={[
             {
               key: "environment",
-              label: "高级设置",
+              label: tr("frontend.settings.advanced"),
               children: (
                 <Space orientation="vertical" style={{ width: "100%" }}>
                   <Typography.Paragraph>
-                    从程序启动环境变量 CFDC_LLM_BASE_URL 和 CFDC_LLM_MODEL
-                    读取地址和模型；缺项保留表单原值，API Key 始终保留。
+                    {tr("frontend.settings.environment_help")}
                   </Typography.Paragraph>
                   <Button
                     disabled={busy}
                     loading={busy}
                     onClick={() => void applyEnvironment()}
                   >
-                    从启动环境导入地址和模型
+                    {tr("frontend.settings.import_environment")}
                   </Button>
                   {environmentResult && (
                     <Alert
-                      title={environmentResult.title}
+                      title={message({
+                        ...environmentResult.title,
+                        params: {
+                          ...environmentResult.title.params,
+                          error: environmentResult.cause
+                            ? errorText(environmentResult.cause)
+                            : "",
+                        },
+                      })}
                       type={environmentResult.type}
                       showIcon
                     />
@@ -309,8 +380,13 @@ export default function Settings({
           ]}
         />
         <Alert
-          title={`知识库：${ragLabel(config.data?.rag.status)}`}
-          description={config.data?.rag.message}
+          title={tr("frontend.settings.rag_status", {
+            status: ragLabel(config.data?.rag.status, tr),
+          })}
+          description={message(
+            config.data?.rag.message_ref,
+            config.data?.rag.message,
+          )}
         />
         {checks.length > 0 && (
           <Table
@@ -319,9 +395,18 @@ export default function Settings({
             dataSource={checks}
             pagination={false}
             columns={[
-              { title: "检查", dataIndex: "name" },
-              { title: "状态", dataIndex: "status" },
-              { title: "说明", dataIndex: "message" },
+              { title: tr("frontend.settings.check"), dataIndex: "name" },
+              {
+                title: tr("frontend.externalworkflow.status"),
+                dataIndex: "status",
+                render: (value: string) => statusLabel(value, tr),
+              },
+              {
+                title: tr("frontend.results.description"),
+                dataIndex: "message",
+                render: (_: unknown, row: (typeof checks)[number]) =>
+                  message(row.message_ref, row.message),
+              },
             ]}
           />
         )}

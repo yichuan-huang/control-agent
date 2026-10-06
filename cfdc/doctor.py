@@ -24,6 +24,8 @@ from typing import Any
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from cfdc.i18n import message_ref, t
+
 
 class DoctorStatus(str, Enum):
     PASS = "pass"
@@ -35,17 +37,19 @@ class DoctorStatus(str, Enum):
 class DoctorCheck:
     check_id: str
     status: DoctorStatus
-    message_cn: str
+    message: str
     required: bool = False
     details: dict[str, Any] = field(default_factory=dict)
+    message_ref: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.check_id,
             "status": self.status.value,
-            "message_cn": self.message_cn,
+            "message": self.message,
             "required": self.required,
             "details": dict(self.details),
+            **({"message_ref": self.message_ref} if self.message_ref else {}),
         }
 
 
@@ -53,7 +57,7 @@ class DoctorCheck:
 class DoctorReport:
     checks: tuple[DoctorCheck, ...]
     generated_at: str
-    doctor_version: str = "cfdc-doctor/v1"
+    doctor_version: str = "cfdc-doctor/v2"
 
     @property
     def required_failures(self) -> tuple[DoctorCheck, ...]:
@@ -90,20 +94,38 @@ def _utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _check(
+    check_id: str,
+    status: DoctorStatus,
+    key: str,
+    *,
+    required: bool = False,
+    details: dict[str, Any] | None = None,
+) -> DoctorCheck:
+    return DoctorCheck(
+        check_id=check_id,
+        status=status,
+        message=t(key, locale="en"),
+        required=required,
+        details=details or {},
+        message_ref=message_ref(key),
+    )
+
+
 def _python_check() -> DoctorCheck:
     version = tuple(sys.version_info[:3])
     if version < (3, 11, 0):
-        return DoctorCheck(
+        return _check(
             "python",
             DoctorStatus.FAIL,
-            "Python 版本过低，需要 Python 3.11 或更高版本。",
+            "doctor.python.unsupported",
             required=True,
             details={"version": platform.python_version(), "minimum": "3.11"},
         )
-    return DoctorCheck(
+    return _check(
         "python",
         DoctorStatus.PASS,
-        "Python 版本满足要求。",
+        "doctor.python.available",
         required=True,
         details={
             "version": platform.python_version(),
@@ -128,17 +150,17 @@ def _resource_check() -> DoctorCheck:
     except (AttributeError, ImportError, OSError, TypeError):
         missing = list(required_files)
     if missing:
-        return DoctorCheck(
+        return _check(
             "resources",
             DoctorStatus.FAIL,
-            "Kernel 资源目录不完整。",
+            "doctor.resources.incomplete",
             required=True,
             details={"missing": missing},
         )
-    return DoctorCheck(
+    return _check(
         "resources",
         DoctorStatus.PASS,
-        "Kernel 资源目录可读取。",
+        "doctor.resources.available",
         required=True,
         details={"checked": list(required_files)},
     )
@@ -155,17 +177,17 @@ def _session_dir_check(session_dir: Path) -> DoctorCheck:
             probe = Path(handle.name)
         probe.unlink(missing_ok=True)
     except (OSError, ValueError) as exc:
-        return DoctorCheck(
+        return _check(
             "session_dir",
             DoctorStatus.FAIL,
-            "会话目录不可写。",
+            "doctor.session_dir.unwritable",
             required=True,
             details={"error": type(exc).__name__},
         )
-    return DoctorCheck(
+    return _check(
         "session_dir",
         DoctorStatus.PASS,
-        "会话目录可创建且可写。",
+        "doctor.session_dir.available",
         required=True,
         details={"configured": True},
     )
@@ -187,17 +209,17 @@ def _registry_check() -> DoctorCheck:
         TypeError,
         ValueError,
     ) as exc:
-        return DoctorCheck(
+        return _check(
             "case_registry",
             DoctorStatus.FAIL,
-            "注册案例目录加载失败。",
+            "doctor.case_registry.failed",
             required=True,
             details={"error": type(exc).__name__},
         )
-    return DoctorCheck(
+    return _check(
         "case_registry",
         DoctorStatus.PASS,
-        "注册案例目录已加载。",
+        "doctor.case_registry.available",
         required=True,
         details={"case_count": len(catalog), "kinds": sorted(kinds)},
     )
@@ -205,18 +227,18 @@ def _registry_check() -> DoctorCheck:
 
 def _rag_check(rag_index_dir: Path | None) -> DoctorCheck:
     if rag_index_dir is None or not str(rag_index_dir).strip():
-        return DoctorCheck(
+        return _check(
             "rag",
             DoctorStatus.WARN,
-            "未配置本地 RAG；这不影响无 RAG 的 Kernel 流程。",
+            "doctor.rag.unconfigured",
             details={"configured": False, "initialized": False},
         )
     root = Path(rag_index_dir)
     if not root.is_dir() or not (root / "CURRENT").is_file():
-        return DoctorCheck(
+        return _check(
             "rag",
             DoctorStatus.WARN,
-            "RAG 目录未初始化；请先建立本地索引，或关闭 RAG。",
+            "doctor.rag.uninitialized",
             details={"configured": True, "initialized": False},
         )
     try:
@@ -225,20 +247,20 @@ def _rag_check(rag_index_dir: Path | None) -> DoctorCheck:
         index = load_index(root, load_encoder=False)
         snapshot = str(index.index_snapshot)
     except (ImportError, KeyError, OSError, TypeError, ValueError) as exc:
-        return DoctorCheck(
+        return _check(
             "rag",
             DoctorStatus.WARN,
-            "RAG 索引存在但校验失败；请重建索引或关闭 RAG。",
+            "doctor.rag.invalid",
             details={
                 "configured": True,
                 "initialized": False,
                 "error": type(exc).__name__,
             },
         )
-    return DoctorCheck(
+    return _check(
         "rag",
         DoctorStatus.PASS,
-        "本地 RAG 索引已初始化。",
+        "doctor.rag.available",
         details={"configured": True, "initialized": True, "snapshot": snapshot},
     )
 
@@ -260,10 +282,10 @@ def _ollama_check(
     raw_url = str(base_url or os.getenv("CFDC_LLM_BASE_URL") or "").strip()
     model_name = str(model or os.getenv("CFDC_LLM_MODEL") or "").strip()
     if not raw_url or not model_name:
-        return DoctorCheck(
+        return _check(
             "ollama",
             DoctorStatus.WARN,
-            "本地 Ollama 未配置；需要真实模型时请填写 Base URL 和 Model。",
+            "doctor.ollama.unconfigured",
             details={
                 "configured": False,
                 "probed": False,
@@ -272,10 +294,10 @@ def _ollama_check(
         )
     parsed = urlparse(raw_url)
     if not _loopback(parsed.hostname):
-        return DoctorCheck(
+        return _check(
             "ollama",
             DoctorStatus.WARN,
-            "已配置远程模型地址；doctor 不会主动访问非本机服务。",
+            "doctor.ollama.remote",
             details={
                 "configured": True,
                 "probed": False,
@@ -284,10 +306,10 @@ def _ollama_check(
             },
         )
     if not probe:
-        return DoctorCheck(
+        return _check(
             "ollama",
             DoctorStatus.WARN,
-            "已配置本地 Ollama，但本次未执行网络探测。",
+            "doctor.ollama.unprobed",
             details={
                 "configured": True,
                 "probed": False,
@@ -309,10 +331,10 @@ def _ollama_check(
             if isinstance(item, dict)
         }
         if model_name not in names:
-            return DoctorCheck(
+            return _check(
                 "ollama",
                 DoctorStatus.WARN,
-                "Ollama 服务可访问，但指定模型未安装。",
+                "doctor.ollama.model_unavailable",
                 details={
                     "configured": True,
                     "probed": True,
@@ -321,10 +343,10 @@ def _ollama_check(
                 },
             )
     except (OSError, TypeError, UnicodeError, ValueError) as exc:
-        return DoctorCheck(
+        return _check(
             "ollama",
             DoctorStatus.WARN,
-            "无法访问本地 Ollama；可启动服务后重试。",
+            "doctor.ollama.unreachable",
             details={
                 "configured": True,
                 "probed": True,
@@ -332,10 +354,10 @@ def _ollama_check(
                 "error": type(exc).__name__,
             },
         )
-    return DoctorCheck(
+    return _check(
         "ollama",
         DoctorStatus.PASS,
-        "本地 Ollama 服务和指定模型可用。",
+        "doctor.ollama.available",
         details={
             "configured": True,
             "probed": True,

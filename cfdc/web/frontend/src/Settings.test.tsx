@@ -16,7 +16,7 @@ const config = (base_url = "", model = "") => ({
   base_url,
   model,
   rag: { status: "ready", message: "ready" },
-  version: "0.3.13",
+  version: "0.3.14",
 });
 
 afterEach(() => {
@@ -158,7 +158,7 @@ test.each([
   "clears probe connected=%s after applying different environment credentials",
   async (connected, message) => {
     setup(async (input, init) => {
-      if (String(input).endsWith("/config/probe"))
+      if (String(input).split("?")[0].endsWith("/config/probe"))
         return json({
           connected,
           message: connected ? "服务与模型可用。" : "找不到模型。",
@@ -187,7 +187,7 @@ test.each([
 test("shows doctor request failure, clears stale checks, and retains credentials", async () => {
   let doctorCalls = 0;
   setup(async (input) => {
-    if (String(input).endsWith("/config/doctor")) {
+    if (String(input).split("?")[0].endsWith("/config/doctor")) {
       doctorCalls += 1;
       if (doctorCalls === 1)
         return json({
@@ -218,7 +218,7 @@ test("shows doctor request failure, clears stale checks, and retains credentials
 
 test("editing credentials clears a stale probe result", async () => {
   setup(async (input) =>
-    String(input).endsWith("/config/probe")
+    String(input).split("?")[0].endsWith("/config/probe")
       ? json({ connected: false, message: "找不到模型。" })
       : json(config()),
   );
@@ -243,7 +243,7 @@ test.each([
   async (environment) => {
     const requests: unknown[] = [];
     setup(async (input, init) => {
-      if (String(input).endsWith("/config/probe")) {
+      if (String(input).split("?")[0].endsWith("/config/probe")) {
         requests.push(JSON.parse(String(init?.body)));
         return json({ connected: true, message: "服务与模型可用。" });
       }
@@ -296,7 +296,7 @@ test.each(["same", "empty", "failed"])(
   async (kind) => {
     let reads = 0;
     setup(async (input) => {
-      if (String(input).endsWith("/config/probe"))
+      if (String(input).split("?")[0].endsWith("/config/probe"))
         return json({ connected: true, message: "服务与模型可用。" });
       if (reads++ === 0) return json(config());
       if (kind === "failed") throw new TypeError("offline");
@@ -329,7 +329,7 @@ test("disables duplicate probes and retains credentials after request failure", 
   let rejectProbe: (error: Error) => void = () => {};
   let submissions = 0;
   setup(async (input) => {
-    if (String(input).endsWith("/config/probe")) {
+    if (String(input).split("?")[0].endsWith("/config/probe")) {
       submissions++;
       return new Promise<Response>((_resolve, reject) => {
         rejectProbe = reject;

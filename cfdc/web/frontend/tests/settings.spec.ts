@@ -3,7 +3,7 @@ import { expect, test } from "./live-test";
 test("manual settings validate and probe without startup environment", async ({
   page,
 }) => {
-  await page.route("**/api/v1/config", (route) =>
+  await page.route("**/api/v1/config{,?**}", (route) =>
     route.fulfill({
       json: {
         base_url: "",
@@ -13,7 +13,7 @@ test("manual settings validate and probe without startup environment", async ({
     }),
   );
   let submitted: unknown;
-  await page.route("**/api/v1/config/probe", async (route) => {
+  await page.route("**/api/v1/config/probe{,?**}", async (route) => {
     submitted = route.request().postDataJSON();
     await route.fulfill({
       json: { connected: true, message: "服务与模型可用。" },

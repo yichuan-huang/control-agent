@@ -1,3 +1,4 @@
+import { keepLocaleData, useI18n } from "./i18n";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +18,7 @@ import {
   Typography,
   Upload,
 } from "antd";
-import { api, download } from "./api/client";
+import { useApi } from "./api/client";
 import type { Summary, DTO, Obj } from "./api/types";
 import { useSettings } from "./context";
 import { useOperation } from "./operations";
@@ -30,31 +31,43 @@ import DataCurves from "./DataCurves";
 import ManualRequirements from "./ManualRequirements";
 import WorkflowGuide from "./WorkflowGuide";
 import ExternalWorkflow, { externalActions } from "./ExternalWorkflow";
-const precheckLabels: Record<string, string> = {
-  channels: "已核对测量与控制通道",
-  units: "已核对数据单位",
-  logger: "记录工具能够保存全部试验数据",
-  "stop condition": "已核对停止条件",
-  "initial condition": "已核对初始条件",
-};
 const Expert = lazy(() => import("./Expert"));
 export function Protocol({ task }: { task: Summary }) {
+  const { t: tr, locale, errorText } = useI18n();
+  const { download } = useApi();
+
   const read = useTaskReader(task);
   const p = useQuery({
-    queryKey: ["task", task.session_id, task.revision, "protocol"],
+    placeholderData: keepLocaleData(locale, [
+      "task",
+      task.session_id,
+      locale,
+      task.revision,
+      "protocol",
+    ]),
+    queryKey: ["task", task.session_id, locale, task.revision, "protocol"],
     queryFn: () =>
       read<DTO<"ProtocolView">>(`/tasks/${task.session_id}/protocol`),
   });
   return (
-    <Card title="实验协议与上传回执" loading={p.isLoading}>
-      {p.error && <Alert type="error" title={String(p.error)} />}
+    <Card
+      title={tr("frontend.workspace.protocol_receipts")}
+      loading={p.isLoading}
+    >
+      {p.error && <Alert type="error" title={errorText(p.error)} />}
       <Markdown>{p.data?.summary ?? ""}</Markdown>
       <Typography.Paragraph>{p.data?.feedback}</Typography.Paragraph>
       <Space wrap>
-        <a href={download(task.session_id, "protocol")}>下载协议</a>
-        <a href={download(task.session_id, "operator")}>下载操作包</a>
+        <a href={download(task.session_id, "protocol")}>
+          {tr("frontend.workspace.download_protocol")}
+        </a>
+        <a href={download(task.session_id, "operator")}>
+          {tr("frontend.workspace.download_operator")}
+        </a>
         {!task.external_workflow && (
-          <a href={download(task.session_id, "exercise")}>下载练习包</a>
+          <a href={download(task.session_id, "exercise")}>
+            {tr("frontend.workspace.download_exercise")}
+          </a>
         )}
       </Space>
       {p.data?.accepted && (
@@ -81,13 +94,25 @@ export default function Workspace() {
   return <WorkspaceSession key={id} id={id} />;
 }
 function WorkspaceSession({ id }: { id: string }) {
+  const { t: tr, locale, errorText } = useI18n();
+  const { api, download } = useApi();
+  const precheckLabels: Record<string, string> = {
+    channels: tr("frontend.workspace.channels_checked"),
+    units: tr("frontend.workspace.units_checked"),
+    logger: tr("frontend.workspace.logger_checked"),
+    "stop condition": tr("frontend.workspace.stop_checked"),
+    "initial condition": tr("frontend.workspace.initial_checked"),
+  };
+
   const task = useQuery({
-    queryKey: ["task", id],
+    placeholderData: keepLocaleData(locale, ["task", id, locale]),
+    queryKey: ["task", id, locale],
     queryFn: () => api<Summary>(`/tasks/${id}`),
     refetchOnWindowFocus: true,
   });
   const recent = useQuery({
-    queryKey: ["task", id, "operations"],
+    placeholderData: keepLocaleData(locale, ["task", id, locale, "operations"]),
+    queryKey: ["task", id, locale, "operations"],
     queryFn: () => api<DTO<"OperationList">>(`/tasks/${id}/operations`),
     refetchInterval: (query) =>
       !query.state.error &&
@@ -119,7 +144,7 @@ function WorkspaceSession({ id }: { id: string }) {
   );
   const [stopped, setStopped] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>();
   const [expert, setExpert] = useState(false);
   const { credentials } = useSettings();
   const operation = useOperation(id);
@@ -128,8 +153,12 @@ function WorkspaceSession({ id }: { id: string }) {
     return task.error ? (
       <Alert
         type="error"
-        title={String(task.error)}
-        action={<Button onClick={() => void task.refetch()}>重试</Button>}
+        title={errorText(task.error)}
+        action={
+          <Button onClick={() => void task.refetch()}>
+            {tr("frontend.workspace.retry")}
+          </Button>
+        }
       />
     ) : (
       <Spin />
@@ -205,29 +234,40 @@ function WorkspaceSession({ id }: { id: string }) {
       <div className="workspace-heading">
         <div>
           <Typography.Text type="secondary">
-            任务 {id.slice(0, 12)} · 修订 {t.revision}
+            {tr("frontend.workspace.identity", {
+              id: id.slice(0, 12),
+              revision: t.revision,
+            })}
           </Typography.Text>
           <Typography.Title level={2}>{t.workspace.title}</Typography.Title>
         </div>
         <Space wrap>
-          <Tag>{statusLabel(t.status)}</Tag>
+          <Tag>{statusLabel(t.status, tr)}</Tag>
           <Button
             onClick={() => void Promise.all([task.refetch(), recent.refetch()])}
           >
-            刷新
+            {tr("frontend.workspace.refresh")}
           </Button>
-          <Button onClick={() => setExpert(true)}>专家工具</Button>
+          <Button onClick={() => setExpert(true)}>
+            {tr("frontend.expert.title")}
+          </Button>
         </Space>
       </div>
       <Steps
         current={t.workspace.stage}
-        items={["明确任务", "获取证据", "形成方案", "评价与确认"].map(
-          (title) => ({ title }),
-        )}
+        items={[
+          tr("frontend.workspace.define_task"),
+          tr("frontend.workspace.get_evidence"),
+          tr("frontend.workspace.build_solution"),
+          tr("frontend.workspace.evaluate_confirm"),
+        ].map((title) => ({ title }))}
       />
       <div className="workspace-grid">
         <main>
-          <Card id="current-action" title="当前步骤">
+          <Card
+            id="current-action"
+            title={tr("frontend.workspace.current_step")}
+          >
             <Typography.Paragraph className="preserve">
               {t.workspace.explanation}
             </Typography.Paragraph>
@@ -244,7 +284,9 @@ function WorkspaceSession({ id }: { id: string }) {
             <WorkflowGuide
               value={(t as Summary & { workflow_guide?: Obj }).workflow_guide}
             />
-            {t.read_only && <Alert title="此任务只读" />}
+            {t.read_only && (
+              <Alert title={tr("frontend.workspace.read_only")} />
+            )}
             {(guidedExternal || external?.recovery_required === true) &&
               externalView}
             {t.workspace.actionable &&
@@ -257,25 +299,36 @@ function WorkspaceSession({ id }: { id: string }) {
                       checked={confirmed}
                       onChange={(e) => setConfirmed(e.target.checked)}
                     >
-                      我已核对软件试验边界与预算
+                      {tr("frontend.workspace.confirm_boundaries")}
                     </Checkbox>
                   )}
                   {action === "record_operator_report" && (
                     <>
                       <Typography.Paragraph>
-                        本步目的：确认您能按采集协议记录有效证据。由您下载并阅读采集请求包，核对每种试验的输入、时长、采样要求、文件模板和停止规则。
+                        {tr("frontend.workspace.operator_purpose")}
                       </Typography.Paragraph>
-                      <a href={download(id, "operator")}>下载采集请求包 ZIP</a>
+                      <a href={download(id, "operator")}>
+                        {tr("frontend.workspace.download_acquisition")}
+                      </a>
                       <Typography.Paragraph>
-                        逐项检查下列条件并填写检查结论；不确定时选择“需要澄清”并说明缺少的条件。提交检查后，下一步是在您自己的环境中执行采集，再回到此页上传数据。此确认只用于工作流记录，不授权任何硬件操作。
+                        {tr("frontend.workspace.operator_help")}
                       </Typography.Paragraph>
                       <Radio.Group
                         value={decision}
                         onChange={(e) => setDecision(e.target.value)}
                         options={[
-                          { label: "检查完成，可以继续", value: "accepted" },
-                          { label: "需要澄清", value: "needs_clarification" },
-                          { label: "拒绝执行", value: "refused" },
+                          {
+                            label: tr("frontend.workspace.accepted"),
+                            value: "accepted",
+                          },
+                          {
+                            label: tr("frontend.workspace.clarification"),
+                            value: "needs_clarification",
+                          },
+                          {
+                            label: tr("frontend.workspace.refused"),
+                            value: "refused",
+                          },
                         ]}
                       />
                       <Checkbox.Group
@@ -290,34 +343,37 @@ function WorkspaceSession({ id }: { id: string }) {
                         onChange={(v) => setChecks(v as string[])}
                       />
                       <Input.TextArea
-                        aria-label="操作员说明"
+                        aria-label={tr("frontend.workspace.operator_note")}
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
-                        placeholder="操作检查说明"
+                        placeholder={tr(
+                          "frontend.workspace.operator_note_placeholder",
+                        )}
                       />
                     </>
                   )}
                   {action === "ingest_upload" && (
                     <>
                       <Typography.Text strong>
-                        1 · 下载并核对本任务的采集要求
+                        {tr("frontend.workspace.download_step")}
                       </Typography.Text>
-                      <a href={download(id, "operator")}>下载采集请求包 ZIP</a>
+                      <a href={download(id, "operator")}>
+                        {tr("frontend.workspace.download_acquisition")}
+                      </a>
                       <Typography.Paragraph>
-                        本步目的：提供能支持控制方案的原始证据。请求包包含协议、试验清单和待填写的数据模板；下载请求包不会完成采集。按下面的文件名、列名、单位与重复次数准备记录。
+                        {tr("frontend.workspace.acquisition_purpose")}
                       </Typography.Paragraph>
                       <Typography.Text strong>
-                        2 · 由您在外部环境执行采集
+                        {tr("frontend.workspace.run_step")}
                       </Typography.Text>
                       <Typography.Paragraph>
-                        实际试验在应用外部完成。使用自己的仿真环境或实验设施，按协议逐项设置初始条件、输入和采样间隔，记录全部时间点的输入与输出。触及限制时立即在外部停止并如实保留停止记录；不要补造、覆盖或修改被拒绝的证据。
+                        {tr("frontend.workspace.run_help")}
                       </Typography.Paragraph>
                       <Typography.Text strong>
-                        3 · 回到此页上传并提交校验
+                        {tr("frontend.workspace.upload_step")}
                       </Typography.Text>
                       <Typography.Paragraph>
-                        用真实记录填写请求包的数据模板，保持原文件名与协议标识；按下列格式上传结果文件或结果
-                        ZIP。不要直接上传空模板。已接收的试次会保留，按回执补充缺失文件；只有本地选中文件后，还需点击下方提交按钮。
+                        {tr("frontend.workspace.upload_help")}
                       </Typography.Paragraph>
                       <ManualRequirements
                         value={
@@ -336,12 +392,14 @@ function WorkspaceSession({ id }: { id: string }) {
                           setUploading(true);
                           void api<DTO<"UploadResponse">>("/uploads", body)
                             .then((v) => setFiles((old) => [...old, v]))
-                            .catch((e) => setError(String(e)))
+                            .catch((e) => setError(e))
                             .finally(() => setUploading(false));
                           return false;
                         }}
                       >
-                        <Button loading={uploading}>选择实验数据</Button>
+                        <Button loading={uploading}>
+                          {tr("frontend.workspace.choose_data")}
+                        </Button>
                       </Upload>
                       {files.map((f) => (
                         <Space key={f.file_id}>
@@ -354,19 +412,18 @@ function WorkspaceSession({ id }: { id: string }) {
                               )
                             }
                           >
-                            移除
+                            {tr("frontend.externalworkflow.remove")}
                           </Button>
                         </Space>
                       ))}
                       <Typography.Paragraph>
-                        完成后：系统校验原始数据、自动提取特征、合成并审查候选控制器。无需您提交特征或控制器
-                        JSON；通过后进入评价约定的冻结确认，未通过则在本页显示原因和可执行的下一步。
+                        {tr("frontend.workspace.after_upload")}
                       </Typography.Paragraph>
                       <Checkbox
                         checked={stopped}
                         onChange={(e) => setStopped(e.target.checked)}
                       >
-                        实验触及限制，已停止
+                        {tr("frontend.workspace.stopped")}
                       </Checkbox>
                     </>
                   )}
@@ -374,24 +431,26 @@ function WorkspaceSession({ id }: { id: string }) {
                     <>
                       {" "}
                       <Input.TextArea
-                        aria-label="当前步骤回复"
+                        aria-label={tr("frontend.workspace.reply")}
                         rows={7}
                         value={text}
                         onChange={(e) => setText(e.target.value)}
                         placeholder={String(
                           t.input_contract.guidance ??
-                            "描述已观察到的现象；不知道的内容可以写不知道。",
+                            tr("frontend.workspace.reply_placeholder"),
                         )}
                       />
                       <Button
                         onClick={() =>
-                          setText(
-                            (previous) =>
-                              `${previous}${previous ? "\n" : ""}对于当前问题，我不知道或没有测过。`,
+                          setText((previous) =>
+                            tr("frontend.workspace.unknown_reply", {
+                              previous: previous,
+                              newline: previous ? "\n" : "",
+                            }),
                           )
                         }
                       >
-                        不知道 / 没有测过
+                        {tr("frontend.workspace.unknown")}
                       </Button>
                     </>
                   )}{" "}
@@ -401,7 +460,7 @@ function WorkspaceSession({ id }: { id: string }) {
                     action,
                   ) ? (
                     <Button type="primary" onClick={() => setExpert(true)}>
-                      打开专业 JSON 提交
+                      {tr("frontend.workspace.expert_submit")}
                     </Button>
                   ) : (
                     <Button
@@ -419,17 +478,18 @@ function WorkspaceSession({ id }: { id: string }) {
                   )}
                   {action === "run_feedback_iteration" && (
                     <Typography.Text type="secondary">
-                      每次点击仅执行当前有界调优步骤，下一阶段由 Kernel 决定。
+                      {tr("frontend.workspace.bounded_help")}
                     </Typography.Text>
                   )}
                 </Space>
               )}
             {!guidedExternal && !external?.recovery_required && externalView}
-            {error && <Alert type="error" title={error} />} {operation.view}
+            {!!error && <Alert type="error" title={errorText(error)} />}{" "}
+            {operation.view}
             {activeRecent && !operation.op && (
               <Alert
-                title="此任务有正在执行的操作"
-                description="正在等待持久化操作完成。"
+                title={tr("frontend.workspace.active_operation")}
+                description={tr("frontend.workspace.active_operation_help")}
                 action={
                   <Button
                     onClick={() => {
@@ -440,7 +500,7 @@ function WorkspaceSession({ id }: { id: string }) {
                       window.location.reload();
                     }}
                   >
-                    恢复操作跟踪
+                    {tr("frontend.workspace.restore_tracking")}
                   </Button>
                 }
               />
@@ -452,7 +512,7 @@ function WorkspaceSession({ id }: { id: string }) {
               items={[
                 {
                   key: "protocol",
-                  label: "实验协议与上传回执",
+                  label: tr("frontend.workspace.protocol_receipts"),
                   children: <Protocol task={t} />,
                 },
               ]}
@@ -461,17 +521,22 @@ function WorkspaceSession({ id }: { id: string }) {
           {t.workspace.result_visible && <Results task={t} />}
         </main>
         <aside>
-          <Card title="任务约定">
+          <Card title={tr("frontend.workspace.task_agreement")}>
             <Markdown>{t.workspace.task_summary}</Markdown>
             <TaskBounds task={t.task} />
             <Typography.Text type="secondary">
-              知识库快照：{t.rag_snapshot ?? "未绑定"}
+              {tr("frontend.workspace.rag_snapshot_prefix")}
+              {t.rag_snapshot ?? tr("frontend.workspace.unbound")}
             </Typography.Text>
           </Card>
-          <Card title="任务记录">
+          <Card title={tr("frontend.workspace.task_records")}>
             <Space orientation="vertical">
-              <a href={download(id, "bundle")}>导出完整公开包</a>
-              <a href={download(id, "report")}>下载原始报告</a>
+              <a href={download(id, "bundle")}>
+                {tr("frontend.workspace.export_bundle")}
+              </a>
+              <a href={download(id, "report")}>
+                {tr("frontend.workspace.download_report")}
+              </a>
               <Button
                 danger
                 disabled={
@@ -491,7 +556,7 @@ function WorkspaceSession({ id }: { id: string }) {
                     .catch(() => {})
                 }
               >
-                取消任务
+                {tr("frontend.workspace.cancel_task")}
               </Button>
             </Space>
           </Card>

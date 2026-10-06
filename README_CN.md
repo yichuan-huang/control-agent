@@ -2,7 +2,15 @@
 
 [English README](README.md)
 
-本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.13` 以带审计记录的 Python Kernel 为核心，提供引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+本仓库是 Core-Feature-Driven Control（CFDC）流程的独立软件实现。`v0.3.14` 以带审计记录的 Python Kernel 为核心，提供双语引导式 WebUI、专家 JSON 接口、确定性软件实验、物理实验交接和英文 Kernel CLI。系统不会向实体硬件发送命令，也不提供硬件安全认证。
+
+## 界面语言
+
+通过 WebUI 顶部的 **中文 / English** 切换简体中文与英文。首次访问时，中文浏览器默认显示中文，其余浏览器默认显示英文；手动选择后会在当前浏览器记住偏好。切换语言保留当前表单、内存中的凭据和运行中的操作。界面文案及后续 AI 说明使用所选语言；已经提交的操作保留提交时的生成语言。
+
+用户输入、原始任务数据、证据引用、历史模型记录，以及下载的 JSON／审计 ZIP 保留原文。展示翻译不会更改任务修订号、证据或审计指纹。Web API 的可选查询参数 `locale=zh-CN|en` 控制展示语言；省略时保持中文响应。
+
+CLI 帮助、错误及系统提示统一使用英文。`--doctor` 现在返回 `doctor_version: "cfdc-doctor/v2"`，每项检查中的英文 `message` 字段取代 `message_cn`；读取旧字段的脚本需要更新。CLI 返回的原始任务与证据内容保持不变。
 
 ## 快速开始
 

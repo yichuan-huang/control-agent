@@ -1,0 +1,20 @@
+{
+  "doctor.python.unsupported": "Python 3.11 or later is required.",
+  "doctor.python.available": "The Python version meets the requirements.",
+  "doctor.resources.incomplete": "Required Kernel resources are missing.",
+  "doctor.resources.available": "Kernel resources are readable.",
+  "doctor.session_dir.unwritable": "The session directory is not writable.",
+  "doctor.session_dir.available": "The session directory can be created and is writable.",
+  "doctor.case_registry.failed": "The registered case catalog could not be loaded.",
+  "doctor.case_registry.available": "The registered case catalog is loaded.",
+  "doctor.rag.unconfigured": "Local RAG is not configured; the Kernel workflow can run without RAG.",
+  "doctor.rag.uninitialized": "The RAG directory is not initialized; build a local index or disable RAG.",
+  "doctor.rag.invalid": "The RAG index failed validation; rebuild it or disable RAG.",
+  "doctor.rag.available": "The local RAG index is initialized.",
+  "doctor.ollama.unconfigured": "Local Ollama is not configured; provide a Base URL and Model to use a real model.",
+  "doctor.ollama.remote": "A remote model endpoint is configured; doctor does not contact non-local services.",
+  "doctor.ollama.unprobed": "Local Ollama is configured, but no network probe was requested.",
+  "doctor.ollama.model_unavailable": "Ollama is reachable, but the configured model is not installed.",
+  "doctor.ollama.unreachable": "Local Ollama is unreachable; start the service and retry.",
+  "doctor.ollama.available": "Local Ollama and the configured model are available."
+}

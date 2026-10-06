@@ -2,13 +2,29 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CFDC Kernel Web API",
-    "version": "0.3.13"
+    "version": "0.3.14"
   },
   "paths": {
     "/api/v1/config": {
       "get": {
         "summary": "Configuration",
         "operationId": "configuration_api_v1_config_get",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -21,34 +37,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -57,15 +73,31 @@
       "post": {
         "summary": "Probe",
         "operationId": "probe_api_v1_config_probe_post",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ProbeRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -79,34 +111,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -115,15 +147,31 @@
       "post": {
         "summary": "Doctor",
         "operationId": "doctor_api_v1_config_doctor_post",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/DoctorRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -137,34 +185,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -173,6 +221,22 @@
       "get": {
         "summary": "Cases",
         "operationId": "cases_api_v1_cases_get",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -185,34 +249,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -229,6 +293,20 @@
             "schema": {
               "type": "string",
               "title": "Case Id"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
             }
           }
         ],
@@ -280,6 +358,22 @@
       "get": {
         "summary": "Default Draft",
         "operationId": "default_draft_api_v1_drafts_default_get",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -292,34 +386,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -328,15 +422,31 @@
       "post": {
         "summary": "Validate Draft",
         "operationId": "validate_draft_api_v1_drafts_validate_post",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/DraftRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -350,34 +460,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -386,15 +496,31 @@
       "post": {
         "summary": "Create Task",
         "operationId": "create_task_api_v1_tasks_post",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "202": {
@@ -408,34 +534,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -444,15 +570,31 @@
       "post": {
         "summary": "Import History",
         "operationId": "import_history_api_v1_imports_post",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ImportRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "202": {
@@ -466,34 +608,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -510,6 +652,20 @@
             "schema": {
               "type": "string",
               "title": "Task Id"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
             }
           }
         ],
@@ -569,6 +725,20 @@
             "schema": {
               "type": "string",
               "title": "Task Id"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
             }
           }
         ],
@@ -639,6 +809,20 @@
               "type": "string",
               "title": "Operation Id"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
           }
         ],
         "responses": {
@@ -698,6 +882,20 @@
               "type": "string",
               "title": "Task Id"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
           }
         ],
         "responses": {
@@ -748,15 +946,31 @@
       "post": {
         "summary": "Upload",
         "operationId": "upload_api_v1_uploads_post",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_upload_api_v1_uploads_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -770,34 +984,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -806,15 +1020,31 @@
       "post": {
         "summary": "Validate Artifact",
         "operationId": "validate_artifact_api_v1_artifacts_validate_post",
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ArtifactValidationRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -828,34 +1058,34 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -872,6 +1102,20 @@
             "schema": {
               "type": "string",
               "title": "Task Id"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
             }
           }
         ],
@@ -975,6 +1219,20 @@
               "default": 50,
               "title": "Limit"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
           }
         ],
         "responses": {
@@ -1066,6 +1324,20 @@
               "default": 50,
               "title": "Limit"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
           }
         ],
         "responses": {
@@ -1124,6 +1396,20 @@
             "schema": {
               "type": "string",
               "title": "Task Id"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
             }
           }
         ],
@@ -1199,6 +1485,20 @@
                 }
               ],
               "title": "Selection"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
             }
           }
         ],
@@ -1325,6 +1625,20 @@
               ],
               "title": "Control"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
           }
         ],
         "responses": {
@@ -1434,6 +1748,20 @@
               ],
               "title": "End"
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
+            }
           }
         ],
         "responses": {
@@ -1517,6 +1845,20 @@
                 }
               ],
               "title": "Artifact Id"
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "zh-CN"
+              ],
+              "type": "string",
+              "default": "zh-CN",
+              "title": "Locale"
             }
           }
         ],
@@ -1923,7 +2265,7 @@
           "version": {
             "type": "string",
             "title": "Version",
-            "default": "0.3.13"
+            "default": "0.3.14"
           }
         },
         "type": "object",
@@ -2158,6 +2500,16 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "message_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2523,6 +2875,42 @@
         ],
         "title": "ImportRequest"
       },
+      "MessageRef": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "MessageRef"
+      },
       "NodeItem": {
         "properties": {
           "key": {
@@ -2835,6 +3223,16 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "message_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2967,6 +3365,23 @@
             "type": "boolean",
             "title": "Receipt Saved",
             "default": false
+          },
+          "message_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "field_message_refs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MessageRef"
+            },
+            "type": "object",
+            "title": "Field Message Refs"
           }
         },
         "type": "object",
@@ -3001,6 +3416,16 @@
               }
             ],
             "title": "Snapshot"
+          },
+          "message_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

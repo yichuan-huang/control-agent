@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { readRevision } from "./client";
+import { api, download, readRevision } from "./client";
 afterEach(() => vi.restoreAllMocks());
 test("a newer recorded revision cannot be displayed under a stale task header", async () => {
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -12,4 +12,21 @@ test("a newer recorded revision cannot be displayed under a stale task header", 
     }),
   ).rejects.toThrow("任务记录已更新");
   expect(refresh).toBe(true);
+});
+
+test("concurrent requests and downloads retain their own explicit locale", async () => {
+  const fetch = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async () => new Response("{}"));
+  await Promise.all([
+    api("/tasks/A/curves?signal=voltage", undefined, "en"),
+    api("/tasks/A/curves?signal=voltage", undefined, "zh-CN"),
+  ]);
+  expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+    "/api/v1/tasks/A/curves?signal=voltage&locale=en",
+    "/api/v1/tasks/A/curves?signal=voltage&locale=zh-CN",
+  ]);
+  expect(download("A", "artifact", "report", "en")).toBe(
+    "/api/v1/tasks/A/downloads/artifact?artifact_id=report&locale=en",
+  );
 });

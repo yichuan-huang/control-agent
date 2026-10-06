@@ -11,6 +11,7 @@ from pathlib import Path
 from threading import Event, RLock
 from typing import Any
 
+from cfdc.i18n import Locale
 from cfdc.kernel import KernelActionError, WorkflowService
 from cfdc.kernel.agents import KernelAgentCoordinator
 from cfdc.kernel.cases import case_learning_material, public_training_case
@@ -1297,6 +1298,7 @@ def prepare_kernel_reply_for_ui(
     base_url: str | None,
     model: str | None,
     api_key: str | None,
+    response_language: Locale = "zh-CN",
 ) -> dict[str, Any]:
     """Prepare one Web reply through the fixed multi-agent Kernel boundary."""
 
@@ -1383,11 +1385,17 @@ def prepare_kernel_reply_for_ui(
             identity_revision, int
         ):
             identity_revision = session.revision
+        # Prose varies by language. The persisted replay identity above does not,
+        # so switching locales cannot apply the same mutation twice.
         cache_key = _kernel_action_id(
             session.session_id,
             identity_revision,
             public_action,
-            {"input_mode": selected_mode.value, "source_text": raw_text},
+            {
+                "input_mode": selected_mode.value,
+                "source_text": raw_text,
+                "response_language": response_language,
+            },
         )
         with _KERNEL_REPLY_PREPARATIONS_LOCK:
             cache_entry = _KERNEL_REPLY_PREPARATIONS.get(cache_key)
@@ -1413,6 +1421,7 @@ def prepare_kernel_reply_for_ui(
             base_url=base_url,
             model=model,
             api_key=api_key,
+            response_language=response_language,
         )
     except Exception as exc:
         if cache_key is not None and cache_entry is not None:
@@ -1439,6 +1448,7 @@ def _prepare_kernel_reply_for_ui_uncached(
     base_url: str | None,
     model: str | None,
     api_key: str | None,
+    response_language: Locale,
 ) -> dict[str, Any]:
     coordinator = None
     if selected_mode is KernelReplyMode.NATURAL_LANGUAGE:
@@ -1462,6 +1472,7 @@ def _prepare_kernel_reply_for_ui_uncached(
         coordinator = KernelAgentCoordinator(
             adapter,
             retriever=getattr(adapter, "retriever", None),
+            response_language=response_language,
         )
     prepared = prepare_kernel_reply(
         session,

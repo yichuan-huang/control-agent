@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from cfdc.web.errors import MessageRef
+
 
 class InputModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -110,24 +112,27 @@ class RAGStatus(BaseModel):
     status: Literal["preparing", "ready", "error"]
     message: str
     snapshot: str | None = None
+    message_ref: MessageRef | None = None
 
 
 class ConfigResponse(BaseModel):
     base_url: str
     model: str
     rag: RAGStatus
-    version: str = "0.3.13"
+    version: str = "0.3.14"
 
 
 class ProbeResponse(BaseModel):
     connected: bool
     message: str
+    message_ref: MessageRef | None = None
 
 
 class DoctorCheck(BaseModel):
     name: str
     status: str
     message: str
+    message_ref: MessageRef | None = None
 
 
 class DoctorResponse(BaseModel):

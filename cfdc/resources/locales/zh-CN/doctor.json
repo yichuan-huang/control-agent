@@ -1,0 +1,20 @@
+{
+  "doctor.python.unsupported": "Python 版本过低，需要 Python 3.11 或更高版本。",
+  "doctor.python.available": "Python 版本满足要求。",
+  "doctor.resources.incomplete": "Kernel 资源目录不完整。",
+  "doctor.resources.available": "Kernel 资源目录可读取。",
+  "doctor.session_dir.unwritable": "会话目录不可写。",
+  "doctor.session_dir.available": "会话目录可创建且可写。",
+  "doctor.case_registry.failed": "注册案例目录加载失败。",
+  "doctor.case_registry.available": "注册案例目录已加载。",
+  "doctor.rag.unconfigured": "未配置本地 RAG；这不影响无 RAG 的 Kernel 流程。",
+  "doctor.rag.uninitialized": "RAG 目录未初始化；请先建立本地索引，或关闭 RAG。",
+  "doctor.rag.invalid": "RAG 索引存在但校验失败；请重建索引或关闭 RAG。",
+  "doctor.rag.available": "本地 RAG 索引已初始化。",
+  "doctor.ollama.unconfigured": "本地 Ollama 未配置；需要真实模型时请填写 Base URL 和 Model。",
+  "doctor.ollama.remote": "已配置远程模型地址；doctor 不会主动访问非本机服务。",
+  "doctor.ollama.unprobed": "已配置本地 Ollama，但本次未执行网络探测。",
+  "doctor.ollama.model_unavailable": "Ollama 服务可访问，但指定模型未安装。",
+  "doctor.ollama.unreachable": "无法访问本地 Ollama；可启动服务后重试。",
+  "doctor.ollama.available": "本地 Ollama 服务和指定模型可用。"
+}

@@ -2,8 +2,10 @@
 
 from pathlib import Path
 
+from cfdc.i18n import Locale, t
 
-def upload_requirements(report):
+
+def upload_requirements(report, locale: Locale = "zh-CN"):
     external = report.get("external_workflow") or {}
     active = external.get("active_request") or {}
     if active:
@@ -14,7 +16,8 @@ def upload_requirements(report):
         units = {
             **(task.get("signal_units") or {}),
             **{
-                name: task.get("input_units") or "按任务约定"
+                name: task.get("input_units")
+                or t("presentation.copy.as_declared_by_the_task", locale)
                 for name in request.get("control_inputs", [])
             },
         }
@@ -29,7 +32,11 @@ def upload_requirements(report):
             columns.extend(
                 {
                     "name": f"trajectory.{field}.{name}",
-                    "unit": str(units.get(name, "按任务约定")),
+                    "unit": str(
+                        units.get(
+                            name, t("presentation.copy.as_declared_by_the_task", locale)
+                        )
+                    ),
                 }
                 for name in names
             )
@@ -43,14 +50,25 @@ def upload_requirements(report):
             )
         )
         return {
-            "expected_format": "一个评价结果 ZIP，根目录包含原始 manifest.json 和下列逐试次 JSON（不是待执行包）",
+            "expected_format": t(
+                "presentation.copy.an_evaluation_result_zip_with_the_original_manifest_json_and_the_following_per_trial_json_files_at_i",
+                locale,
+            ),
             "stage": active.get("stage"),
             "file_count": len(trials),
             "repeats": len(trials),
             "files": [
                 {
                     "filename": "manifest.json",
-                    "columns": [{"name": "保持待执行包中的绑定字段原样", "unit": ""}],
+                    "columns": [
+                        {
+                            "name": t(
+                                "presentation.copy.preserve_the_binding_fields_from_the_execution_package_exactly",
+                                locale,
+                            ),
+                            "unit": "",
+                        }
+                    ],
                 },
                 *[
                     {"filename": row.get("file", ""), "columns": columns}
@@ -91,7 +109,9 @@ def upload_requirements(report):
         for name in names
     ]
     return {
-        "expected_format": "完整重复试验 CSV / JSON",
+        "expected_format": t(
+            "presentation.copy.complete_repeated_trial_csv_json", locale
+        ),
         "stage": "identification",
         "file_count": card.get("repeats", 0),
         "repeats": card.get("repeats", 0),
@@ -102,50 +122,98 @@ def upload_requirements(report):
     }
 
 
-def workflow_guide(report):
+def workflow_guide(report, locale: Locale = "zh-CN"):
     if report.get("registered_case_binding"):
         return None
     action = (report.get("input_contract") or {}).get("action", "")
     status = report.get("status", "")
     if status in {"performance_met", "capability_gap", "cancelled"}:
         title, purpose, actor, next_step, rows = (
-            "查看结果与过程记录",
-            "依据已接受的数据、独立判定与重放查看结论。",
-            "用户",
-            "导出记录，或建立新的任务",
+            t("presentation.copy.view_results_and_process_records", locale),
+            t(
+                "presentation.copy.review_the_outcome_based_on_accepted_data_independent_evaluation_and_replay",
+                locale,
+            ),
+            t("presentation.copy.user", locale),
+            t("presentation.copy.export_records_or_create_a_new_task", locale),
             [
-                ("查看结果", "在结果与曲线中查看达标情况、失败原因及能力缺口。"),
-                ("下载记录", "可导出完整公开包；下载不会改变任务结论。"),
+                (
+                    t("presentation.copy.view_results", locale),
+                    t(
+                        "presentation.copy.review_requirements_failure_reasons_and_capability_gaps_in_the_results_and_curves",
+                        locale,
+                    ),
+                ),
+                (
+                    t("presentation.copy.download_records", locale),
+                    t(
+                        "presentation.copy.export_the_complete_public_package_downloading_does_not_change_the_task_outcome",
+                        locale,
+                    ),
+                ),
             ],
         )
     elif action in {"answer", "submit_answer", "revise_diagnostic"}:
         title, purpose, actor, next_step, rows = (
-            "描述实际观察到的现象",
-            "用观察到的输入输出变化帮助确定可执行的采集协议。",
-            "用户填写，系统解析与校验",
-            "选择数据来源并生成采集协议",
+            t("presentation.copy.describe_actual_observations", locale),
+            t(
+                "presentation.copy.use_observed_input_and_output_changes_to_help_determine_an_executable_collection_protocol",
+                locale,
+            ),
+            t(
+                "presentation.copy.the_user_describes_observations_the_system_parses_and_validates_them",
+                locale,
+            ),
+            t(
+                "presentation.copy.choose_a_data_source_and_compile_the_collection_protocol",
+                locale,
+            ),
             [
                 (
-                    "回答当前问题",
-                    "结合页面中的具体诊断问题，用自然语言描述现象；不确定的内容写“不知道”。",
+                    t("presentation.copy.answer_the_current_question", locale),
+                    t(
+                        "presentation.copy.describe_observations_in_natural_language_for_the_diagnostic_question_shown_write_unknown_for_uncert",
+                        locale,
+                    ),
                 ),
                 (
-                    "提交诊断",
-                    "系统保存原文并检查诊断依据；若需补充，页面会显示下一个具体问题。",
+                    t("presentation.copy.submit_diagnostics", locale),
+                    t(
+                        "presentation.copy.the_system_preserves_the_original_text_and_checks_the_diagnostic_evidence_the_next_specific_question",
+                        locale,
+                    ),
                 ),
             ],
         )
     elif action in {"select_external_source", "set_provider"}:
         title, purpose, actor, next_step, rows = (
-            "确认外部数据来源",
-            "为自定义任务绑定辨识和评价的数据来源。",
-            "用户确认，系统编译协议",
-            "下载采集包并核对检查清单",
+            t("presentation.copy.confirm_external_data_source", locale),
+            t(
+                "presentation.copy.bind_an_identification_and_evaluation_data_source_to_the_custom_task",
+                locale,
+            ),
+            t(
+                "presentation.copy.the_user_confirms_the_system_compiles_the_protocol",
+                locale,
+            ),
+            t(
+                "presentation.copy.download_the_collection_package_and_review_the_checklist",
+                locale,
+            ),
             [
-                ("选择来源", "选择软件实验或实际测量，与实际数据的来源保持一致。"),
                 (
-                    "确认来源",
-                    "系统生成当前任务的协议、检查说明和记录模板；不会选择设备模型或执行外部实验。",
+                    t("presentation.copy.choose_source", locale),
+                    t(
+                        "presentation.copy.choose_software_experiments_or_physical_measurements_to_match_the_actual_data_source",
+                        locale,
+                    ),
+                ),
+                (
+                    t("presentation.copy.confirm_source", locale),
+                    t(
+                        "presentation.copy.the_system_generates_the_task_protocol_check_instructions_and_record_templates_it_does_not_select_a_",
+                        locale,
+                    ),
                 ),
             ],
         )
@@ -157,57 +225,111 @@ def workflow_guide(report):
         "evidence",
     }:
         title, purpose, actor, next_step, rows = (
-            "按协议采集并上传证据",
-            "采集足够的原始输入输出记录，用于特征提取和控制器资格审查。",
-            "用户在外部采集，系统审查上传",
-            "系统提取特征、合成控制器并进行资格审查",
+            t(
+                "presentation.copy.collect_and_upload_evidence_under_the_protocol",
+                locale,
+            ),
+            t(
+                "presentation.copy.collect_sufficient_raw_input_and_output_records_for_feature_extraction_and_controller_qualification",
+                locale,
+            ),
+            t(
+                "presentation.copy.the_user_collects_data_externally_the_system_checks_uploads",
+                locale,
+            ),
+            t(
+                "presentation.copy.the_system_extracts_features_synthesizes_a_controller_and_checks_qualification",
+                locale,
+            ),
             [
                 (
-                    "下载采集包",
-                    "下载当前任务的采集协议、操作说明和 CSV/JSON 模板；核对通道、单位、采样周期、重复次数及停止条件。",
+                    t("presentation.copy.download_collection_package", locale),
+                    t(
+                        "presentation.copy.download_the_current_collection_protocol_operating_instructions_and_csv_json_templates_check_channel",
+                        locale,
+                    ),
                 ),
                 (
-                    "逐项确认检查",
-                    "在自己的软件实验环境或实际实验环境完成检查后，按真实情况提交检查清单。",
+                    t("presentation.copy.confirm_each_check", locale),
+                    t(
+                        "presentation.copy.complete_the_checks_in_your_software_or_physical_experiment_environment_and_submit_the_checklist_tru",
+                        locale,
+                    ),
                 ),
                 (
-                    "在外部执行采集",
-                    "按协议规定的输入序列和重复次数实验，保存所有原始记录；不得修改任务和协议绑定。",
+                    t("presentation.copy.collect_data_externally", locale),
+                    t(
+                        "presentation.copy.follow_the_protocol_input_sequence_and_repeat_count_preserving_all_original_records_do_not_modify_ta",
+                        locale,
+                    ),
                 ),
                 (
-                    "上传采集结果",
-                    "回到本页选择填写完成的 CSV/JSON；查看文件要求和审查回执。只有接受的证据才会推进，下载不表示实验已完成。",
+                    t("presentation.copy.upload_collection_results", locale),
+                    t(
+                        "presentation.copy.return_here_to_select_the_completed_csv_json_and_review_file_requirements_and_inspection_receipts_on",
+                        locale,
+                    ),
                 ),
             ],
         )
     elif action in {"freeze", "freeze_controller"}:
         title, purpose, actor, next_step, rows = (
-            "确认并冻结评价条件",
-            "固定控制器、工作区域、性能要求和试次预算。",
-            "用户确认",
-            "生成并下载开发评价待执行包",
+            t("presentation.copy.confirm_and_freeze_evaluation_conditions", locale),
+            t(
+                "presentation.copy.fix_the_controller_operating_region_performance_requirements_and_trial_budget",
+                locale,
+            ),
+            t("presentation.copy.user_confirmation", locale),
+            t(
+                "presentation.copy.generate_and_download_the_development_evaluation_execution_package",
+                locale,
+            ),
             [
                 (
-                    "核对方案",
-                    "查看自动生成的特征、控制器与资格审查结果，不需要手写中间 JSON。",
+                    t("presentation.copy.review_candidate", locale),
+                    t(
+                        "presentation.copy.review_the_generated_features_controller_and_qualification_results_without_manually_writing_intermed",
+                        locale,
+                    ),
                 ),
                 (
-                    "确认冻结",
-                    "核对参考值、边界、性能指标和重复次数后确认；后续上传不得改变冻结条件。",
+                    t("presentation.copy.confirm_freeze", locale),
+                    t(
+                        "presentation.copy.confirm_reference_values_boundaries_performance_metrics_and_repeats_later_uploads_must_not_change_fr",
+                        locale,
+                    ),
                 ),
             ],
         )
     elif action in {"run_tuning", "run_feedback_iteration", "start_external_tuning"}:
         title, purpose, actor, next_step, rows = (
-            "确认有界调优预算",
-            "初评不足时，按固定候选顺序在既有预算内尝试改善。",
-            "用户确认，系统生成候选",
-            "下载当前候选待执行包并在外部实验",
+            t("presentation.copy.confirm_bounded_tuning_budget", locale),
+            t(
+                "presentation.copy.if_initial_evaluation_is_insufficient_try_improvements_in_the_fixed_candidate_order_within_the_exist",
+                locale,
+            ),
+            t(
+                "presentation.copy.the_user_confirms_the_system_generates_candidates",
+                locale,
+            ),
+            t(
+                "presentation.copy.download_the_current_candidate_execution_package_and_run_experiments_externally",
+                locale,
+            ),
             [
-                ("查看预算", "核对候选上限、每轮重复次数、最低改善要求和结束条件。"),
                 (
-                    "确认调优",
-                    "每轮都按页面要求下载候选包、在外部执行并上传结果；选优后还需独立的全新确认数据。",
+                    t("presentation.copy.review_budget", locale),
+                    t(
+                        "presentation.copy.check_the_candidate_limit_repeats_per_round_minimum_improvement_and_termination_conditions",
+                        locale,
+                    ),
+                ),
+                (
+                    t("presentation.copy.confirm_tuning", locale),
+                    t(
+                        "presentation.copy.for_each_round_download_the_candidate_package_execute_externally_and_upload_results_as_instructed_th",
+                        locale,
+                    ),
                 ),
             ],
         )
@@ -233,44 +355,80 @@ def workflow_guide(report):
             )
         )
         label = {
-            "development": "开发评价",
-            "tuning_probe": "候选调优",
-            "fresh_confirmation": "全新确认",
-        }.get(stage, "闭环评价")
+            "development": t("presentation.copy.development_evaluation", locale),
+            "tuning_probe": t("presentation.copy.candidate_tuning", locale),
+            "fresh_confirmation": t("presentation.copy.fresh_confirmation", locale),
+        }.get(stage, t("presentation.copy.closed_loop_evaluation", locale))
         title, purpose, actor, next_step, rows = (
-            f"完成{label}实验",
-            "使用冻结的控制器与固定试次安排收集完整闭环轨迹。",
-            "用户在外部执行，系统判定与重放",
-            "查看结论，或按页面进入下一候选与全新确认",
+            t("presentation.copy.complete_the_experiment", locale, p0=label),
+            t(
+                "presentation.copy.collect_complete_closed_loop_trajectories_using_the_frozen_controller_and_fixed_trial_schedule",
+                locale,
+            ),
+            t(
+                "presentation.copy.the_user_executes_externally_the_system_evaluates_and_replays",
+                locale,
+            ),
+            t(
+                "presentation.copy.review_the_outcome_or_follow_the_page_to_the_next_candidate_and_fresh_confirmation",
+                locale,
+            ),
             [
                 (
-                    "下载待执行实验包",
-                    "包内含控制器、执行配置、固定试次清单、说明和结果模板。将其交给能够执行该控制任务的外部实验环境。",
+                    t(
+                        "presentation.copy.download_experiment_execution_package",
+                        locale,
+                    ),
+                    t(
+                        "presentation.copy.the_package_contains_the_controller_execution_configuration_fixed_trial_list_instructions_and_result",
+                        locale,
+                    ),
                 ),
                 (
-                    "按试次执行",
-                    "逐试次记录输出、参考、实际与原始控制输入、控制器状态、阶段和事件；达到停止条件时如实记录。",
+                    t("presentation.copy.execute_each_trial", locale),
+                    t(
+                        "presentation.copy.for_each_trial_record_outputs_references_actual_and_raw_control_inputs_controller_states_phases_and_",
+                        locale,
+                    ),
                 ),
                 (
-                    "上传执行后的结果",
-                    "将原始 manifest.json 与本轮全部逐试次 JSON 打包为结果 ZIP 上传；不能上传待执行包或仅填写达标标记。",
+                    t("presentation.copy.upload_executed_results", locale),
+                    t(
+                        "presentation.copy.upload_a_result_zip_containing_the_original_manifest_json_and_every_per_trial_json_for_this_round_do",
+                        locale,
+                    ),
                 ),
                 (
-                    "查看审查结果",
-                    "系统校验绑定与轨迹，独立判定后从保存数据重放；拒绝时按回执说明准备新的文件，原记录保持不变。",
+                    t("presentation.copy.review_validation_results", locale),
+                    t(
+                        "presentation.copy.the_system_validates_bindings_and_trajectories_evaluates_independently_then_replays_saved_data_if_re",
+                        locale,
+                    ),
                 ),
             ],
         )
     else:
         title, purpose, actor, next_step, rows = (
-            "完成当前任务步骤",
-            "按当前 Kernel 状态处理任务。",
-            "用户按页面提示操作，系统校验",
-            "以完成后页面显示的当前步骤为准",
+            t("presentation.copy.complete_the_current_task_step", locale),
+            t(
+                "presentation.copy.proceed_according_to_the_current_kernel_state",
+                locale,
+            ),
+            t(
+                "presentation.copy.the_user_follows_the_page_instructions_the_system_validates",
+                locale,
+            ),
+            t(
+                "presentation.copy.follow_the_current_step_shown_after_completion",
+                locale,
+            ),
             [
                 (
-                    "核对当前步骤",
-                    "查看任务边界、当前要求及缺失信息；使用当前步骤的主按钮继续。",
+                    t("presentation.copy.review_current_step", locale),
+                    t(
+                        "presentation.copy.review_task_boundaries_current_requirements_and_missing_information_use_the_current_step_s_primary_b",
+                        locale,
+                    ),
                 )
             ],
         )

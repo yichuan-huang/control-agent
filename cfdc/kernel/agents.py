@@ -17,6 +17,7 @@ from cfdc.agents import (
     AgentRuntime,
     RetrievalSnippet,
 )
+from cfdc.i18n import Locale
 from cfdc.knowledge import (
     KnowledgeArtifact,
     KnowledgeContext,
@@ -42,6 +43,7 @@ class KernelAgentCoordinator:
         completion: Any | None = None,
         *,
         retriever: Any | None = None,
+        response_language: Locale = "en",
     ) -> None:
         if completion is not None and not callable(completion):
             # OpenAICompatibleAdapter exposes ``complete_agent``;
@@ -52,7 +54,12 @@ class KernelAgentCoordinator:
                 completion = complete_agent
         self.completion = completion
         self.retriever = retriever
-        self.runtime = AgentRuntime(completion) if completion is not None else None
+        self.response_language = response_language
+        self.runtime = (
+            AgentRuntime(completion, response_language=response_language)
+            if completion is not None
+            else None
+        )
 
     @property
     def audit_log(self) -> list[AgentExecutionRecord]:
@@ -155,6 +162,7 @@ class KernelAgentCoordinator:
             ),
             summary=session.task.description[:800],
             stage=operation,
+            language="zh" if self.response_language == "zh-CN" else "en",
         )
         snippets = [] if user_reply_path else self._retrieve(request)
         required = () if user_reply_path else self._required_rules(session, role_value)

@@ -229,11 +229,25 @@ def test_cli_subprocess_rejects_missing_task_and_invalid_options(tmp_path):
     assert "unrecognized arguments" in invalid.stderr
 
 
-def test_cli_subprocess_description_creates_kernel_task_by_default(tmp_path):
+def test_cli_subprocess_doctor_v2_is_english(tmp_path):
+    report = _run_cli(tmp_path, "--doctor")
+    assert report["doctor_version"] == "cfdc-doctor/v2"
+    assert report["checks"]
+    for check in report["checks"]:
+        assert check["message"].isascii()
+        assert "message_cn" not in check
+
+
+@pytest.mark.parametrize(
+    "description", ["A heater holds chamber temperature.", "加热器保持箱体温度。"]
+)
+def test_cli_subprocess_description_creates_kernel_task_by_default(
+    tmp_path, description
+):
     created = _run_cli(
         tmp_path,
         "--description",
-        "A heater holds chamber temperature.",
+        description,
         "--observed-output",
         "temperature",
         "--actuator",
@@ -247,6 +261,8 @@ def test_cli_subprocess_description_creates_kernel_task_by_default(tmp_path):
         "--no-rag",
     )
     assert created["workflow_version"] == "cfdc-v6-kernel/v1"
+    assert created["task"]["description"] == description
+    assert created["task"]["objective"] == "Generate an auditable software controller"
     assert created["task"]["measured_signals"] == ["temperature"]
     assert created["task"]["control_inputs"] == ["voltage"]
     assert created["pending_actions"][0]["action"] == "confirm_task"

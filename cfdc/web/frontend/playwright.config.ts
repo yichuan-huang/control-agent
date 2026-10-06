@@ -13,6 +13,7 @@ export default defineConfig({
   retries: 0,
   preserveOutput: live ? "never" : "always",
   use: {
+    locale: "zh-CN",
     baseURL,
     headless: true,
     trace: "off",

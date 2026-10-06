@@ -19,6 +19,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException
 
 from cfdc.doctor import run_doctor
+from cfdc.i18n import Locale, message_ref, render_message, t
 from cfdc.kernel.cases import (
     case_learning_material,
     public_case_catalog,
@@ -33,7 +34,7 @@ from cfdc.web.drafts import (
     empty_draft,
     task_from_draft,
 )
-from cfdc.web.errors import APIError, ErrorResponse, PublicError
+from cfdc.web.errors import APIError, ErrorResponse, PublicError, localize_error
 from cfdc.web.files import MAX_UPLOAD_BYTES, FileStore
 from cfdc.web.operations import Operation, OperationList, OperationManager
 from cfdc.web.presentation import task_summary
@@ -60,6 +61,35 @@ from cfdc.web.schemas import (
 )
 
 UPLOAD_ENVELOPE_BYTES = 64 * 1024
+
+
+def _error_payload(error: PublicError, request: Request) -> dict:
+    locale = "en" if request.query_params.get("locale") == "en" else "zh-CN"
+    return {"error": localize_error(error, locale).model_dump()}
+
+
+def _operation_view(operation: Operation, locale: Locale) -> Operation:
+    result = operation.model_copy(deep=True)
+    if result.error is not None:
+        result.error = localize_error(result.error, locale)
+    return result
+
+
+def _case_learning(case_id: str, locale: Locale) -> dict:
+    learning = case_learning_material(case_id)
+    learning.update(
+        learning_goal=t(f"web.case.{case_id}.goal", locale),
+        evidence_boundary=t("web.case.evidence", locale),
+        key_terms=[
+            t(f"web.case.term.{key}", locale)
+            for key in ("task", "evidence", "route", "freeze", "evaluation")
+        ],
+        cannot_prove=[
+            t(f"web.case.cannot.{key}", locale)
+            for key in ("safety", "global", "performance")
+        ],
+    )
+    return learning
 
 
 class _UploadBodyTooLarge(Exception):
@@ -121,13 +151,15 @@ class _UploadBodyLimitMiddleware:
 
     @staticmethod
     async def _reject(scope, receive, send) -> None:
+        request = Request(scope)
         response = JSONResponse(
             status_code=413,
-            content={
-                "error": PublicError(
+            content=_error_payload(
+                PublicError(
                     code="file_too_large", message="文件超过 128 MiB 上传上限。"
-                ).model_dump()
-            },
+                ),
+                request,
+            ),
         )
         await response(scope, receive, send)
 
@@ -158,14 +190,16 @@ class _LocalOriginMiddleware:
         if scope["type"] != "http" or not scope.get("path", "").startswith("/api/"):
             await self.app(scope, receive, send)
             return
-        if not _is_local_request(Request(scope)):
+        request = Request(scope)
+        if not _is_local_request(request):
             response = JSONResponse(
                 status_code=403,
-                content={
-                    "error": PublicError(
+                content=_error_payload(
+                    PublicError(
                         code="origin_rejected", message="请求来源与本地应用不一致。"
-                    ).model_dump()
-                },
+                    ),
+                    request,
+                ),
             )
             await response(scope, receive, send)
             return
@@ -188,19 +222,19 @@ def _request_signature(kind: str, model, task_id: str = "") -> str:
     return hashlib.sha256(encoded.encode()).hexdigest()
 
 
-def _case_card(case_id: str) -> CaseCard:
+def _case_card(case_id: str, locale: Locale = "zh-CN") -> CaseCard:
     try:
         value = public_training_case(case_id)
     except ValueError:
         raise APIError("case_not_found", "未找到此内置案例。", 404) from None
-    learning = case_learning_material(case_id)
+    learning = _case_learning(case_id, locale)
     return CaseCard(
         id=case_id,
-        title=value["label_cn"],
+        title=t(f"web.case.{case_id}.title", locale),
         category="audit" if value.get("case_kind") == "audit" else "engineering",
         description=str(learning["learning_goal"]),
         data_source=str(learning["evidence_boundary"]),
-        scope="用于公开软件案例验证；不代表真实设备测量或硬件安全认证。",
+        scope=t("web.case.scope", locale),
     )
 
 
@@ -240,7 +274,7 @@ def create_app(
 
     app = FastAPI(
         title="CFDC Kernel Web API",
-        version="0.3.13",
+        version="0.3.14",
         lifespan=lifespan,
         responses={
             400: {"model": ErrorResponse},
@@ -263,15 +297,19 @@ def create_app(
     @app.exception_handler(APIError)
     async def api_error(request, exc: APIError):
         return JSONResponse(
-            status_code=exc.status_code, content={"error": exc.public.model_dump()}
+            status_code=exc.status_code, content=_error_payload(exc.public, request)
         )
 
     @app.exception_handler(DraftValidationError)
     async def draft_error(request, exc: DraftValidationError):
         error = PublicError(
-            code="draft_invalid", message="请完成标出的项目后继续。", fields=exc.errors
+            code="draft_invalid",
+            message="请完成标出的项目后继续。",
+            fields=exc.errors,
+            field_message_refs=exc.field_message_refs,
+            message_ref=exc.message_ref,
         )
-        return JSONResponse(status_code=422, content={"error": error.model_dump()})
+        return JSONResponse(status_code=422, content=_error_payload(error, request))
 
     @app.exception_handler(RequestValidationError)
     async def request_error(request, exc: RequestValidationError):
@@ -283,37 +321,40 @@ def create_app(
         }
         return JSONResponse(
             status_code=422,
-            content={
-                "error": PublicError(
+            content=_error_payload(
+                PublicError(
                     code="invalid_request", message="请检查标出的输入。", fields=fields
-                ).model_dump()
-            },
+                ),
+                request,
+            ),
         )
 
     @app.exception_handler(HTTPException)
     async def http_error(request, exc):
         return JSONResponse(
             status_code=exc.status_code,
-            content={
-                "error": PublicError(
+            content=_error_payload(
+                PublicError(
                     code="not_found" if exc.status_code == 404 else "http_error",
                     message="未找到此资源。"
                     if exc.status_code == 404
                     else "请求未完成。",
-                ).model_dump()
-            },
+                ),
+                request,
+            ),
         )
 
     @app.exception_handler(Exception)
     async def unexpected_error(request, exc):
         return JSONResponse(
             status_code=500,
-            content={
-                "error": PublicError(
+            content=_error_payload(
+                PublicError(
                     code="internal_error",
                     message="服务暂时无法完成请求，请刷新后检查任务状态。",
-                ).model_dump()
-            },
+                ),
+                request,
+            ),
         )
 
     def load(task_id: str):
@@ -342,15 +383,15 @@ def create_app(
         return public_action_error(exc, state)
 
     @app.get("/api/v1/config", response_model=ConfigResponse)
-    def configuration():
+    def configuration(locale: Locale = "zh-CN"):
         return ConfigResponse(
             base_url=os.getenv("CFDC_LLM_BASE_URL", ""),
             model=os.getenv("CFDC_LLM_MODEL", ""),
-            rag=rag.status(),
+            rag=rag.status(locale),
         )
 
     @app.post("/api/v1/config/probe", response_model=ProbeResponse)
-    def probe(body: ProbeRequest):
+    def probe(body: ProbeRequest, locale: Locale = "zh-CN"):
         credentials = body.credentials
         if not all(
             (
@@ -360,7 +401,9 @@ def create_app(
             )
         ):
             return ProbeResponse(
-                connected=False, message="请填写模型地址、名称和密钥。"
+                connected=False,
+                message=t("web.probe.required", locale),
+                message_ref=message_ref("web.probe.required"),
             )
         try:
             with OpenAI(
@@ -373,17 +416,23 @@ def create_app(
             if credentials.model not in available:
                 return ProbeResponse(
                     connected=False,
-                    message="服务可连接，但未找到所选模型，请核对模型名称。",
+                    message=t("web.probe.missing_model", locale),
+                    message_ref=message_ref("web.probe.missing_model"),
                 )
         except (OpenAIError, OSError, ValueError):
             return ProbeResponse(
                 connected=False,
-                message="连接探测失败，请检查服务地址、密钥及服务是否启动。",
+                message=t("web.probe.failed", locale),
+                message_ref=message_ref("web.probe.failed"),
             )
-        return ProbeResponse(connected=True, message="已连接服务并找到所选模型。")
+        return ProbeResponse(
+            connected=True,
+            message=t("web.probe.connected", locale),
+            message_ref=message_ref("web.probe.connected"),
+        )
 
     @app.post("/api/v1/config/doctor", response_model=DoctorResponse)
-    def doctor(body: DoctorRequest):
+    def doctor(body: DoctorRequest, locale: Locale = "zh-CN"):
         report = run_doctor(
             session_dir=session_root,
             rag_index_dir=rag.index_dir if body.use_rag else None,
@@ -396,42 +445,49 @@ def create_app(
                 DoctorCheck(
                     name=item.check_id,
                     status=item.status.value,
-                    message=item.message_cn,
+                    message=render_message(item.message_ref, locale)
+                    if item.message_ref
+                    else item.message,
+                    message_ref=item.message_ref,
                 )
                 for item in report.checks
             ]
         )
 
     @app.get("/api/v1/cases", response_model=CaseList)
-    def cases():
-        items = [_case_card(case_id) for case_id in public_case_catalog()]
+    def cases(locale: Locale = "zh-CN"):
+        items = [_case_card(case_id, locale) for case_id in public_case_catalog()]
         return CaseList(items=items)
 
     @app.get("/api/v1/cases/{case_id}", response_model=CaseDetail)
-    def case(case_id: str):
-        card = _case_card(case_id)
+    def case(case_id: str, locale: Locale = "zh-CN"):
+        card = _case_card(case_id, locale)
         return CaseDetail(
             **card.model_dump(),
             draft=case_draft(case_id),
             task=_display_task(public_training_case(case_id)["task"]),
-            learning=case_learning_material(case_id),
+            learning=_case_learning(case_id, locale),
         )
 
     @app.get("/api/v1/drafts/default", response_model=DraftResponse)
-    def default_draft():
+    def default_draft(locale: Locale = "zh-CN"):
         return DraftResponse(draft=empty_draft())
 
     @app.post("/api/v1/drafts/validate", response_model=DraftValidationResponse)
-    def validate_draft(body: DraftRequest):
-        task = _display_task(task_from_draft(body.draft, case_id=body.case_id))
-        return DraftValidationResponse(task=task, summary=task_summary(task))
+    def validate_draft(body: DraftRequest, locale: Locale = "zh-CN"):
+        task = _display_task(
+            task_from_draft(body.draft, case_id=body.case_id, locale=locale)
+        )
+        return DraftValidationResponse(
+            task=task, summary=task_summary(task, locale=locale)
+        )
 
     @app.post("/api/v1/tasks", response_model=Operation, status_code=202)
-    def create_task(body: CreateRequest):
+    def create_task(body: CreateRequest, locale: Locale = "zh-CN"):
         signature = _request_signature("create", body)
         existing = operations.find(str(body.request_id), signature)
         if existing:
-            return existing
+            return _operation_view(existing, locale)
         if body.draft is not None and not body.confirmed:
             raise APIError(
                 "confirmation_required",
@@ -440,7 +496,7 @@ def create_app(
                 fields={"confirmed": "开始前需要确认。"},
             )
         task = (
-            task_from_draft(body.draft, case_id=body.case_id)
+            task_from_draft(body.draft, case_id=body.case_id, locale=locale)
             if body.draft is not None
             else body.task
         )
@@ -471,14 +527,16 @@ def create_app(
             except Exception as exc:
                 raise fresh_error(exc, task_id) from exc
 
-        return operations.submit(str(body.request_id), None, signature, work)
+        return _operation_view(
+            operations.submit(str(body.request_id), None, signature, work), locale
+        )
 
     @app.post("/api/v1/imports", response_model=Operation, status_code=202)
-    def import_history(body: ImportRequest):
+    def import_history(body: ImportRequest, locale: Locale = "zh-CN"):
         signature = _request_signature("import", body)
         existing = operations.find(str(body.request_id), signature)
         if existing:
-            return existing
+            return _operation_view(existing, locale)
         path = files.resolve(str(body.file_id), session_id=None)
         if path.suffix != ".zip":
             raise APIError("import_zip_required", "历史记录导入需要 ZIP 文件。", 422)
@@ -496,21 +554,23 @@ def create_app(
             except Exception as exc:
                 raise fresh_error(exc, None) from exc
 
-        return operations.submit(str(body.request_id), None, signature, work)
+        return _operation_view(
+            operations.submit(str(body.request_id), None, signature, work), locale
+        )
 
     @app.get("/api/v1/tasks/{task_id}", response_model=readmodels.TaskSummary)
-    def task(task_id: str):
+    def task(task_id: str, locale: Locale = "zh-CN"):
         report, _ = load(task_id)
-        return readmodels.summary(report)
+        return readmodels.summary(report, locale=locale)
 
     @app.post(
         "/api/v1/tasks/{task_id}/actions", response_model=Operation, status_code=202
     )
-    def action(task_id: str, body: ActionRequest):
+    def action(task_id: str, body: ActionRequest, locale: Locale = "zh-CN"):
         signature = _request_signature("action", body, task_id)
         existing = operations.find(str(body.request_id), signature)
         if existing:
-            return existing
+            return _operation_view(existing, locale)
         report, _ = load(task_id)
         if body.action in {"pause_managed_workflow", "continue_managed_workflow"}:
             raise APIError(
@@ -525,7 +585,9 @@ def create_app(
                 cache.invalidate(task_id)
                 current, state = load(task_id)
                 check_mutation(current, body.expected_revision, body.action)
-                report, updated_state = execute_action(state, body, files)
+                report, updated_state = execute_action(
+                    state, body, files, locale=locale
+                )
                 result_id = updated_state["kernel_session_id"]
                 if result_id != task_id:
                     context.created_task(result_id)
@@ -535,20 +597,27 @@ def create_app(
             except Exception as exc:
                 raise fresh_error(exc, task_id) from exc
 
-        return operations.submit(str(body.request_id), task_id, signature, work)
+        return _operation_view(
+            operations.submit(str(body.request_id), task_id, signature, work), locale
+        )
 
     @app.get("/api/v1/operations/{operation_id}", response_model=Operation)
-    def operation(operation_id: str):
-        return operations.get(operation_id)
+    def operation(operation_id: str, locale: Locale = "zh-CN"):
+        return _operation_view(operations.get(operation_id), locale)
 
     @app.get("/api/v1/tasks/{task_id}/operations", response_model=OperationList)
-    def task_operations(task_id: str):
-        return OperationList(items=operations.for_task(task_id))
+    def task_operations(task_id: str, locale: Locale = "zh-CN"):
+        return OperationList(
+            items=[
+                _operation_view(item, locale) for item in operations.for_task(task_id)
+            ]
+        )
 
     @app.post("/api/v1/uploads", response_model=UploadResponse)
     async def upload(
         file: Annotated[UploadFile, File()],
         session_id: Annotated[str | None, Form()] = None,
+        locale: Locale = "zh-CN",
     ):
         if session_id:
             report, _ = await run_in_threadpool(load, session_id)
@@ -556,7 +625,7 @@ def create_app(
         return await files.save(file, session_id=session_id)
 
     @app.post("/api/v1/artifacts/validate", response_model=ArtifactValidationResponse)
-    def validate_artifact(body: ArtifactValidationRequest):
+    def validate_artifact(body: ArtifactValidationRequest, locale: Locale = "zh-CN"):
         try:
             return ArtifactValidationResponse(
                 artifact=service.validate_kernel_artifact(body.payload)
@@ -567,8 +636,8 @@ def create_app(
     @app.get(
         "/api/v1/tasks/{task_id}/artifacts", response_model=readmodels.ArtifactCatalog
     )
-    def artifacts(task_id: str):
-        return readmodels.artifact_catalog(load(task_id)[0])
+    def artifacts(task_id: str, locale: Locale = "zh-CN"):
+        return readmodels.artifact_catalog(load(task_id)[0], locale=locale)
 
     @app.get(
         "/api/v1/tasks/{task_id}/artifacts/{artifact_id}/node",
@@ -580,6 +649,7 @@ def create_app(
         pointer: str = Query(default="", max_length=8192),
         offset: int = Query(default=0, ge=0),
         limit: int = Query(default=50, ge=1, le=100),
+        locale: Locale = "zh-CN",
     ):
         try:
             return readmodels.node_page(
@@ -603,6 +673,7 @@ def create_app(
         section: str,
         offset: int = Query(default=0, ge=0),
         limit: int = Query(default=50, ge=1, le=100),
+        locale: Locale = "zh-CN",
     ):
         try:
             return readmodels.section_page(
@@ -612,15 +683,19 @@ def create_app(
             raise APIError("section_unavailable", "此专业记录暂不可用。", 404) from None
 
     @app.get("/api/v1/tasks/{task_id}/protocol", response_model=readmodels.ProtocolView)
-    def protocol(task_id: str):
-        return readmodels.protocol_view(load(task_id)[0])
+    def protocol(task_id: str, locale: Locale = "zh-CN"):
+        return readmodels.protocol_view(load(task_id)[0], locale=locale)
 
     @app.get(
         "/api/v1/tasks/{task_id}/evaluations", response_model=readmodels.EvaluationsView
     )
-    def evaluations(task_id: str, selection: str | None = None):
+    def evaluations(
+        task_id: str, selection: str | None = None, locale: Locale = "zh-CN"
+    ):
         try:
-            return readmodels.evaluations_view(load(task_id)[0], selection=selection)
+            return readmodels.evaluations_view(
+                load(task_id)[0], selection=selection, locale=locale
+            )
         except (ValueError, KeyError, IndexError):
             raise APIError(
                 "evaluation_unavailable", "未找到所选评价，请刷新结果。", 404
@@ -634,6 +709,7 @@ def create_app(
         start: float | None = Query(default=None, allow_inf_nan=False),
         end: float | None = Query(default=None, allow_inf_nan=False),
         control: str | None = None,
+        locale: Locale = "zh-CN",
     ):
         try:
             return readmodels.curve_view(
@@ -643,6 +719,7 @@ def create_app(
                 start=start,
                 end=end,
                 control=control,
+                locale=locale,
             )
         except (ValueError, KeyError, IndexError):
             raise APIError(
@@ -659,6 +736,7 @@ def create_app(
         signal: str,
         start: float | None = Query(default=None, allow_inf_nan=False),
         end: float | None = Query(default=None, allow_inf_nan=False),
+        locale: Locale = "zh-CN",
     ):
         try:
             return readmodels.evidence_curve_view(
@@ -672,7 +750,12 @@ def create_app(
             ) from None
 
     @app.get("/api/v1/tasks/{task_id}/downloads/{kind}")
-    def download(task_id: str, kind: str, artifact_id: str | None = None):
+    def download(
+        task_id: str,
+        kind: str,
+        artifact_id: str | None = None,
+        locale: Locale = "zh-CN",
+    ):
         report, state = load(task_id)
         try:
             if kind in {"artifact", "report"}:
@@ -750,7 +833,7 @@ def create_app(
             ) from None
 
     @app.get("/{path:path}", include_in_schema=False)
-    def frontend(path: str):
+    def frontend(path: str, locale: Locale = "zh-CN"):
         if path == "api" or path.startswith("api/"):
             raise APIError("not_found", "未找到此接口。", 404)
         candidate = (static_root / path).resolve()
@@ -759,7 +842,9 @@ def create_app(
         index = static_root / "index.html"
         if not index.is_file():
             return HTMLResponse(
-                "<html lang='zh'><meta charset='utf-8'><title>CFDC</title><h1>前端尚未构建</h1><p>请进入 cfdc/web/frontend 执行 pnpm install --frozen-lockfile 和 pnpm run build，然后刷新页面。</p></html>",
+                f"<html lang='{locale}'><meta charset='utf-8'><title>CFDC</title>"
+                f"<h1>{t('web.frontend.unbuilt', locale)}</h1>"
+                f"<p>{t('web.frontend.build_help', locale)}</p></html>",
                 status_code=503,
             )
         return FileResponse(index)

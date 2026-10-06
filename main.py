@@ -399,6 +399,7 @@ def _run_kernel_cli(args: argparse.Namespace, safety_bounds: dict[str, float]) -
                 )
             payload = {
                 "description": args.description,
+                "objective": "Generate an auditable software controller",
                 "task_type": args.task_type or "local_setpoint_hold",
                 "measured_signals": args.observed_output or ["output"],
                 "control_input": (args.actuator[0] if args.actuator else "input"),

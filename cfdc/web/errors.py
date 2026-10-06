@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from cfdc.i18n import Locale, has_message, message_ref, render_message
+
+
+class MessageRef(BaseModel):
+    key: str
+    params: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
 
 class PublicError(BaseModel):
@@ -12,6 +19,33 @@ class PublicError(BaseModel):
     latest_revision: int | None = None
     session_id: str | None = None
     receipt_saved: bool = False
+    message_ref: MessageRef | None = None
+    field_message_refs: dict[str, MessageRef] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def bind_message(self):
+        key = f"web.error.{self.code}"
+        if self.message_ref is None and has_message(key):
+            self.message_ref = MessageRef(**message_ref(key))
+        return self
+
+
+def localize_error(error: PublicError, locale: Locale) -> PublicError:
+    """Render a transport copy; durable operation outcomes stay unchanged."""
+    result = error.model_copy(deep=True)
+    ref = result.message_ref
+    if ref is None or not has_message(ref.key):
+        ref = MessageRef(**message_ref("web.error.action_failed"))
+        result.message_ref = ref
+    result.message = render_message(ref.model_dump(), locale)
+    for field in result.fields:
+        field_ref = result.field_message_refs.get(field)
+        if field_ref is None:
+            key = "web.field.confirmed" if field == "confirmed" else "web.field.invalid"
+            field_ref = MessageRef(**message_ref(key))
+            result.field_message_refs[field] = field_ref
+        result.fields[field] = render_message(field_ref.model_dump(), locale)
+    return result
 
 
 class ErrorResponse(BaseModel):

@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { Typography } from "antd";
 import type { Obj } from "./api/types";
 const object = (value: unknown): Obj =>
@@ -5,22 +6,29 @@ const object = (value: unknown): Obj =>
     ? (value as Obj)
     : {};
 export default function ManualRequirements({ value }: { value?: Obj }) {
+  const { t: tr } = useI18n();
+
   if (!value) return null;
   const files = Array.isArray(value.files) ? value.files.map(object) : [];
   return (
     <>
       {typeof value.file_count === "number" && (
-        <Typography.Paragraph
-          strong
-        >{`本轮需回传 ${value.file_count} 个试次文件`}</Typography.Paragraph>
+        <Typography.Paragraph strong>
+          {tr("frontend.manualrequirements.file_count", {
+            count: value.file_count,
+          })}
+        </Typography.Paragraph>
       )}
       {!!value.expected_format && (
         <Typography.Paragraph>
-          数据格式：{String(value.expected_format)}
+          {tr("frontend.manualrequirements.format_prefix")}
+          {String(value.expected_format)}
           {typeof value.repeats === "number"
-            ? `；协议重复次数：${value.repeats}`
+            ? tr("frontend.manualrequirements.repeats", {
+                count: value.repeats,
+              })
             : ""}
-          。请保持请求包指定的文件名、列名和单位。
+          {tr("frontend.manualrequirements.format_help")}
         </Typography.Paragraph>
       )}
       {!!files.length && (
@@ -28,9 +36,11 @@ export default function ManualRequirements({ value }: { value?: Obj }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={{ textAlign: "left", padding: 8 }}>结果文件名</th>
                 <th style={{ textAlign: "left", padding: 8 }}>
-                  所需数据列与单位
+                  {tr("frontend.manualrequirements.filename")}
+                </th>
+                <th style={{ textAlign: "left", padding: 8 }}>
+                  {tr("frontend.manualrequirements.columns")}
                 </th>
               </tr>
             </thead>

@@ -611,8 +611,11 @@ def test_retrieved_prompt_injection_stays_advisory_and_out_of_user_reply(
     assert session.to_dict() == before
 
 
-def test_kernel_agent_audit_preserves_auto_language_and_bilingual_provenance(
-    tmp_path,
+@pytest.mark.parametrize(
+    "response_language,retrieval_language", [("en", "en"), ("zh-CN", "zh")]
+)
+def test_kernel_agent_audit_preserves_language_preference_and_bilingual_provenance(
+    tmp_path, response_language, retrieval_language
 ) -> None:
     service = WorkflowService(tmp_path)
     session = service.start(
@@ -622,6 +625,7 @@ def test_kernel_agent_audit_preserves_auto_language_and_bilingual_provenance(
             "control_input": "输入",
         }
     )
+    original_session = session.to_dict()
 
     class CapturingRetriever:
         index_snapshot = "snapshot-bilingual"
@@ -650,24 +654,57 @@ def test_kernel_agent_audit_preserves_auto_language_and_bilingual_provenance(
                             "license": "AGPL-3.0-only",
                         }
                     ],
-                }
+                },
+                {
+                    "source_id": "source-en",
+                    "content_hash": "d" * 64,
+                    "text": "English reference material.",
+                    "artifact_id": "open_loop_stability.en",
+                    "artifact_group_id": "open_loop_stability",
+                    "source_kind": "curated_pack",
+                    "language": "en",
+                    "authority": "advisory",
+                    "artifact_version": "1.0.0",
+                    "citation_refs": [
+                        {
+                            "source_id": "repo-knowledge-registry-v1",
+                            "url": "https://github.com/yichuan-huang/control-agent",
+                            "license": "AGPL-3.0-only",
+                        }
+                    ],
+                },
             ]
 
     retriever = CapturingRetriever()
     coordinator = KernelAgentCoordinator(
-        lambda request: {"answer": "ok"}, retriever=retriever
+        lambda request: {"answer": "ok"},
+        retriever=retriever,
+        response_language=response_language,
     )
     record = coordinator.execute(
         session, role=AgentRole.DIAGNOSIS, operation="diagnosis"
     )
 
-    assert retriever.request.language == "auto"
-    assert retriever.request.preferred_language() == "zh"
+    assert retriever.request.language == retrieval_language
+    assert retriever.request.preferred_language() == retrieval_language
+    assert retriever.request.inferred_language() == "zh"
     assert record.source_refs[0]["language"] == "zh"
     assert record.source_refs[0]["artifact_group_id"] == "open_loop_stability"
     assert record.source_refs[0]["citation_refs"][0]["source_id"] == (
         "repo-knowledge-registry-v1"
     )
+    assert record.source_ids == ("source-zh", "source-en")
+    assert record.source_refs[1]["language"] == "en"
+    assert record.source_refs[1]["artifact_group_id"] == "open_loop_stability"
+    assert record.source_refs[0]["content_hash"] == "c" * 64
+    assert record.source_refs[1]["content_hash"] == "d" * 64
+    assert (
+        record.source_refs[0]["citation_refs"] == record.source_refs[1]["citation_refs"]
+    )
+    assert "中文参考资料。" in record.messages[1]["content"]
+    assert "English reference material." in record.messages[1]["content"]
+    assert "检查开环稳定性证据。" in record.messages[1]["content"]
+    assert session.to_dict() == original_session
 
 
 def test_diagnostic_revision_invalidates_stale_route_and_controller_artifacts(

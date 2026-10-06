@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Lock, Thread
 
+from cfdc.i18n import Locale, has_message, message_ref, render_message
 from cfdc.web.errors import APIError
 from cfdc.web.rag_startup import (
     BuiltinRAGStartupError,
@@ -20,7 +21,11 @@ class RAGRuntime:
         self.prepared: PreparedRAGIndex | None = None
         self._lock = Lock()
         self._thread: Thread | None = None
-        self._status = RAGStatus(status="error", message="内置知识库尚未准备。")
+        self._status = RAGStatus(
+            status="error",
+            message="内置知识库尚未准备。",
+            message_ref=message_ref("web.rag.pending"),
+        )
 
     def start(self) -> None:
         with self._lock:
@@ -29,6 +34,7 @@ class RAGRuntime:
             self._status = RAGStatus(
                 status="preparing",
                 message="正在准备内置知识库，可先填写草稿或查看任务。",
+                message_ref=message_ref("web.rag.preparing"),
             )
             self._thread = Thread(target=self._prepare, name="cfdc-rag", daemon=True)
             self._thread.start()
@@ -37,9 +43,11 @@ class RAGRuntime:
         try:
             prepared = prepare_builtin_rag_index(self.index_dir)
         except BuiltinRAGStartupError as exc:
+            key = f"web.rag.{exc.reason}"
             status = RAGStatus(
                 status="error",
                 message=exc.public_message,
+                message_ref=message_ref(key if has_message(key) else "web.rag.unknown"),
             )
             with self._lock:
                 self._status = status
@@ -49,19 +57,28 @@ class RAGRuntime:
                 self._status = RAGStatus(
                     status="ready",
                     message="内置知识库已就绪。",
+                    message_ref=message_ref("web.rag.ready"),
                     snapshot=prepared.snapshot,
                 )
 
-    def status(self) -> RAGStatus:
+    def status(self, locale: Locale = "zh-CN") -> RAGStatus:
         with self._lock:
-            return self._status.model_copy(deep=True)
+            result = self._status.model_copy(deep=True)
+        if result.message_ref is not None:
+            result.message = render_message(result.message_ref.model_dump(), locale)
+        return result
 
     def options(self, use_rag: bool) -> dict:
         with self._lock:
             if not use_rag:
                 return {"use_rag": False}
             if self._status.status != "ready" or self.prepared is None:
-                raise APIError("rag_not_ready", self._status.message, 409)
+                raise APIError(
+                    "rag_not_ready",
+                    self._status.message,
+                    409,
+                    message_ref=self._status.message_ref,
+                )
             return {
                 "use_rag": True,
                 "rag_index_dir": str(self.prepared.index_dir),

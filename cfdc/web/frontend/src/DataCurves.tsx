@@ -1,3 +1,4 @@
+import { keepLocaleData, useI18n } from "./i18n";
 import { lazy, Suspense, useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -20,6 +21,8 @@ export default function DataCurves({
   task: Summary;
   options: NonNullable<DTO<"ProtocolView">["evidence_options"]>;
 }) {
+  const { t: tr, locale, errorText } = useI18n();
+
   const read = useTaskReader(task);
   const [show, setShow] = useState(false);
   const [selection, setSelection] = useState("");
@@ -39,9 +42,20 @@ export default function DataCurves({
     : options[0];
   const selectedSignal = signal || selected?.signals[0] || "";
   const curve = useQuery({
+    placeholderData: keepLocaleData(locale, [
+      "task",
+      task.session_id,
+      locale,
+      task.revision,
+      "evidence-curves",
+      selected?.value,
+      selectedSignal,
+      ...window,
+    ]),
     queryKey: [
       "task",
       task.session_id,
+      locale,
       task.revision,
       "evidence-curves",
       selected?.value,
@@ -64,7 +78,7 @@ export default function DataCurves({
   if (!options.length)
     return (
       <Typography.Paragraph type="secondary">
-        暂无当前协议已通过的数据曲线。
+        {tr("frontend.datacurves.empty")}
       </Typography.Paragraph>
     );
   return (
@@ -73,13 +87,15 @@ export default function DataCurves({
       orientation="vertical"
       style={{ width: "100%", marginTop: 20 }}
     >
-      <Typography.Title level={5}>已通过的实验数据</Typography.Title>
+      <Typography.Title level={5}>
+        {tr("frontend.datacurves.title")}
+      </Typography.Title>
       <Typography.Text type="secondary">
-        仅显示当前协议已接受的数据。缩放图形会按所选时间窗口重新读取完整记录的显示采样。
+        {tr("frontend.datacurves.help")}
       </Typography.Text>
       <Space wrap>
         <Select
-          aria-label="实验数据试次"
+          aria-label={tr("frontend.datacurves.trial")}
           showSearch={{ optionFilterProp: "label" }}
           style={{ minWidth: 220, maxWidth: "100%" }}
           value={selected?.value}
@@ -91,7 +107,7 @@ export default function DataCurves({
           }}
         />
         <Select
-          aria-label="实验数据信号"
+          aria-label={tr("frontend.datacurves.signal")}
           style={{ minWidth: 140 }}
           value={selectedSignal}
           options={selected?.signals.map((value) => ({ value, label: value }))}
@@ -100,14 +116,14 @@ export default function DataCurves({
       </Space>
       <Space wrap>
         <InputNumber
-          aria-label="实验窗口开始秒"
-          placeholder="开始 (s)"
+          aria-label={tr("frontend.datacurves.window_start")}
+          placeholder={tr("frontend.datacurves.start")}
           value={start}
           onChange={setStart}
         />
         <InputNumber
-          aria-label="实验窗口结束秒"
-          placeholder="结束 (s)"
+          aria-label={tr("frontend.datacurves.window_end")}
+          placeholder={tr("frontend.datacurves.end")}
           value={end}
           onChange={setEnd}
         />
@@ -118,24 +134,39 @@ export default function DataCurves({
             setShow(true);
           }}
         >
-          查看通过数据曲线
+          {tr("frontend.datacurves.view_curves")}
         </Button>
-        <Button onClick={() => changeWindow([null, null])}>完整实验窗口</Button>
+        <Button onClick={() => changeWindow([null, null])}>
+          {tr("frontend.datacurves.full_window")}
+        </Button>
       </Space>
       {curve.isFetching && <Spin />}
-      {curve.error && <Alert type="error" title={String(curve.error)} />}{" "}
+      {curve.error && (
+        <Alert type="error" title={errorText(curve.error)} />
+      )}{" "}
       {curve.data && (
         <>
           <Typography.Text type="secondary">
-            试次 {curve.data.trial_id} · 原始 {curve.data.original_points} 点 ·
-            显示 {curve.data.display_points} 点 · 修订 {curve.data.revision}
+            {tr("frontend.datacurves.trial_prefix")}
+            {curve.data.trial_id} {tr("frontend.datacurves.original_prefix")}
+            {curve.data.original_points}{" "}
+            {tr("frontend.datacurves.displayed_prefix")}
+            {curve.data.display_points}{" "}
+            {tr("frontend.datacurves.revision_prefix")}
+            {curve.data.revision}
           </Typography.Text>
           <Suspense fallback={<Spin />}>
             <Charts
               curve={curve.data}
+              identity={JSON.stringify([
+                task.session_id,
+                task.revision,
+                selected?.value,
+                selectedSignal,
+              ])}
               window={window}
               onWindowChange={changeWindow}
-              outputTitle="实验数据曲线"
+              outputTitle={tr("frontend.datacurves.chart_title")}
             />
           </Suspense>
         </>

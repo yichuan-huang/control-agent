@@ -18,11 +18,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from cfdc.i18n import Locale, has_message, t
 from cfdc.kernel import WorkflowService
 from cfdc.kernel.tuning import TuningContract
-from cfdc.web.errors import EXTERNAL_ERROR_MESSAGES
+from cfdc.web.errors import PublicError, localize_error
 from cfdc.web.presentation import (
     evaluation_options,
+    input_contract_copy,
     project_workspace,
     protocol_summary,
     result_rows,
@@ -244,22 +246,41 @@ def _bounded(value, *, depth=3, width=32, text=512, budget=None):
     )
 
 
-def _external_candidate_summary(row):
+def _external_candidate_summary(row, locale: Locale = "zh-CN"):
     row = _map(row)
     result = _map(row.get("result"))
     qualified = _map(row.get("qualification")).get("status") == "offline_qualified"
     status = "pending" if qualified else "qualification_failed"
-    reason = "等待外部试次。" if qualified else "候选未通过离线资格审查。"
+    reason = (
+        t("presentation.copy.awaiting_external_trials", locale)
+        if qualified
+        else t("presentation.copy.the_candidate_failed_offline_qualification", locale)
+    )
     if result:
         if result.get("hard_failure") is True or result.get("stable") is not True:
-            status, reason = "hard_failure", "候选试次未通过稳定性或硬约束检查。"
+            status, reason = (
+                "hard_failure",
+                t(
+                    "presentation.copy.candidate_trials_failed_stability_or_hard_constraint_checks",
+                    locale,
+                ),
+            )
         elif result.get("performance_pass") is True:
             status, reason = (
                 "performance_met",
-                "候选试次达到开发评价要求；仍需独立确认。",
+                t(
+                    "presentation.copy.candidate_trials_met_development_evaluation_requirements_independent_confirmation_is_still_required",
+                    locale,
+                ),
             )
         else:
-            status, reason = "performance_not_met", "候选试次尚未达到开发评价要求。"
+            status, reason = (
+                "performance_not_met",
+                t(
+                    "presentation.copy.candidate_trials_have_not_met_development_evaluation_requirements",
+                    locale,
+                ),
+            )
     return {
         "candidate_id": _text(row.get("candidate_id"), 128),
         "status": status,
@@ -268,7 +289,7 @@ def _external_candidate_summary(row):
     }
 
 
-def external_summary(report):
+def external_summary(report, locale: Locale = "zh-CN"):
     raw = _map(report.get("external_workflow"))
     if report.get("registered_case_binding"):
         return None
@@ -305,10 +326,16 @@ def external_summary(report):
         row for row in _seq(raw.get("receipts")) if _map(row).get("accepted") is False
     ]
     reasons = [
-        EXTERNAL_ERROR_MESSAGES.get(
-            str(_map(row).get("reason", "")).split(":", 1)[0],
-            "结果未通过校验，请核对当前请求与上传文件。",
-        )
+        localize_error(
+            PublicError(
+                code=str(_map(row).get("reason", "")).split(":", 1)[0],
+                message=t(
+                    "presentation.copy.results_failed_validation_check_the_current_request_and_uploaded_files",
+                    locale,
+                ),
+            ),
+            locale,
+        ).message
         for row in rejected[-5:]
     ]
     return {
@@ -337,22 +364,33 @@ def external_summary(report):
             "max_feedback_rounds": 1,
             "completed": bool(tuning.get("completed")),
         },
-        "candidates": [_external_candidate_summary(row) for row in candidates[:100]],
+        "candidates": [
+            _external_candidate_summary(row, locale=locale) for row in candidates[:100]
+        ],
         "recovery_available": True,
         "recovery_required": recovery_required,
-        "recovery_reason": ("此记录缺少绑定的实验协议，请创建新任务重新采集证据。")
+        "recovery_reason": (
+            t(
+                "presentation.copy.this_record_has_no_bound_experiment_protocol_create_a_new_task_and_collect_evidence_again",
+                locale,
+            )
+        )
         if recovery_required
         else "",
         "failure_reasons": reasons,
     }
 
 
-def summary(report) -> TaskSummary:
+def summary(report, locale: Locale = "zh-CN") -> TaskSummary:
     from cfdc.web.external_guide import upload_requirements, workflow_guide
 
     task = _bounded(_map(report.get("task")), depth=3, width=32)
-    contract = _bounded(_map(report.get("input_contract")), depth=4, width=32)
-    external = external_summary(report)
+    contract = input_contract_copy(
+        _bounded(_map(report.get("input_contract")), depth=4, width=32),
+        str(report.get("status") or ""),
+        locale=locale,
+    )
+    external = external_summary(report, locale=locale)
     if external and external.get("recovery_required"):
         contract["disabled_reason"] = external["recovery_reason"]
     active = report.get("active_protocol_fingerprint")
@@ -392,7 +430,7 @@ def summary(report) -> TaskSummary:
             }
             for item in _seq(report.get(key))
         ]
-    workspace = project_workspace(projection)
+    workspace = project_workspace(projection, locale=locale)
     if external and external.get("recovery_required"):
         workspace["actionable"] = False
     workspace["task_summary"] = workspace["task_summary"][:16384]
@@ -412,8 +450,8 @@ def summary(report) -> TaskSummary:
         else None,
         registered_case_id=_map(report.get("registered_case_binding")).get("case_id"),
         external_workflow=external,
-        workflow_guide=workflow_guide(report),
-        upload_requirements=upload_requirements(report),
+        workflow_guide=workflow_guide(report, locale=locale),
+        upload_requirements=upload_requirements(report, locale=locale),
     )
 
 
@@ -456,13 +494,22 @@ def _selector(value):
     return value
 
 
-def artifact_catalog(report) -> ArtifactCatalog:
-    items = [CatalogItem(id="report", label="report", kind="object")]
+def artifact_catalog(report, locale: Locale = "zh-CN") -> ArtifactCatalog:
+    items = [
+        CatalogItem(
+            id="report", label=t("presentation.artifact.report", locale), kind="object"
+        )
+    ]
     for key, value in islice(report.items(), 100):
         _selector(key)
         items.append(
             CatalogItem(
-                id=key, label=key, kind=_kind(value), fingerprint=_fingerprint(value)
+                id=key,
+                label=t(f"presentation.artifact.{key}", locale)
+                if has_message(f"presentation.artifact.{key}")
+                else key,
+                kind=_kind(value),
+                fingerprint=_fingerprint(value),
             )
         )
     return ArtifactCatalog(**_identity(report), items=items)
@@ -636,7 +683,7 @@ def _trace_fingerprint(item):
     return _text(value, 256) if value else None
 
 
-def protocol_view(report) -> ProtocolView:
+def protocol_view(report, locale: Locale = "zh-CN") -> ProtocolView:
     active = report.get("active_protocol_fingerprint")
     protocol = next(
         (
@@ -654,7 +701,7 @@ def protocol_view(report) -> ProtocolView:
         trace = _map(item.get("trace"))
         trial_id = _text(item.get("trial_id") or trace.get("trial_id") or "", 200)
         option = EvidenceOption(
-            label=trial_id or f"Trace {index + 1}",
+            label=trial_id or t("presentation.trace_label", locale, index=index + 1),
             value=str(index),
             signals=[
                 _selector(name) for name in islice(_map(trace.get("signals")), 32)
@@ -669,7 +716,7 @@ def protocol_view(report) -> ProtocolView:
         evidence_options.append(option)
     # Kernel report evidence has passed typed validation. Upload attempts are never previews.
     preview_report = {"evidence": evidence[-1:]}
-    headers, rows = trace_preview(preview_report)
+    headers, rows = trace_preview(preview_report, locale=locale)
     headers = [_text(v, 200) for v in headers[:32]]
     rows = [[_bounded(v, depth=0, text=200) for v in row[:32]] for row in rows[:20]]
     units = _map(_map(protocol.get("units")).get("outputs"))
@@ -696,13 +743,15 @@ def protocol_view(report) -> ProtocolView:
                 "protocols": [protocol] if protocol else [],
                 "active_protocol_fingerprint": active,
                 "registered_case_binding": report.get("registered_case_binding"),
-            }
+            },
+            locale=locale,
         )[:8192],
         feedback=upload_feedback(
             {
                 "upload_attempts": attempts[-1:],
                 "registered_case_binding": report.get("registered_case_binding"),
-            }
+            },
+            locale=locale,
         )[:8192],
         columns=columns,
         preview=Preview(columns=headers, rows=rows),
@@ -742,9 +791,11 @@ def _stage(packet):
     )
 
 
-def evaluations_view(report, selection=None) -> EvaluationsView:
+def evaluations_view(
+    report, selection=None, locale: Locale = "zh-CN"
+) -> EvaluationsView:
     options = []
-    for label, value in evaluation_options(report):
+    for label, value in evaluation_options(report, locale=locale):
         try:
             packet, trial = _selected(report, value)
         except ValueError:
@@ -791,15 +842,18 @@ def evaluations_view(report, selection=None) -> EvaluationsView:
         }
         metrics = [
             [_text(cell, 512) for cell in row]
-            for row in result_rows(metric_report)[:200]
+            for row in result_rows(metric_report, locale=locale)[:200]
         ]
     else:
         metrics = [
             [
-                "试次指标",
-                "按冻结的评价合同",
-                "未评估",
-                "未保存与此数据包绑定的评价指标；未从轨迹重新计算。",
+                t("presentation.copy.trial_metrics", locale),
+                t("presentation.copy.under_the_frozen_evaluation_contract", locale),
+                t("presentation.copy.not_evaluated", locale),
+                t(
+                    "presentation.copy.no_evaluation_metrics_bound_to_this_packet_were_saved_trajectories_were_not_used_to_recalculate_them",
+                    locale,
+                ),
             ]
         ]
     return EvaluationsView(
@@ -844,7 +898,14 @@ def _display_indices(values, indices, maximum):
 
 
 def curve_view(
-    report, selection, signal, start=None, end=None, max_points=2000, control=None
+    report,
+    selection,
+    signal,
+    start=None,
+    end=None,
+    max_points=2000,
+    control=None,
+    locale: Locale = "zh-CN",
 ) -> CurveView:
     if (
         not isinstance(max_points, int)
@@ -907,7 +968,9 @@ def curve_view(
     output = [line(signal, outputs[signal], output_unit)]
     reference = _map(trajectory.get("references")).get(signal)
     if reference is not None:
-        output.append(line("目标值", reference, output_unit))
+        output.append(
+            line(t("presentation.copy.target", locale), reference, output_unit)
+        )
     control_lines = (
         [line(control, controls[control], input_unit)] if control is not None else []
     )
@@ -932,6 +995,7 @@ def curve_view(
             end=end,
             max_points=min(max_points - 1, 1300),
             control=control,
+            locale=locale,
         )
     return result
 

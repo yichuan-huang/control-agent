@@ -18,7 +18,7 @@ test("deleted operation releases the wizard after a real 404 and stays cleared o
     if (request.method() === "POST") mutations.push(request.url());
   });
   const missing = page.waitForResponse((response) =>
-    response.url().endsWith(`/operations/${missingId}`),
+    response.url().split("?")[0].endsWith(`/operations/${missingId}`),
   );
   await page.reload();
   expect((await missing).status()).toBe(404);
@@ -83,7 +83,7 @@ for (const recovery of ["button", "poll"] as const) {
     });
     // Keep the real task/receipt and control only when its completion is visible.
     await page.route(
-      `**/api/v1/tasks/${op.session_id}/operations`,
+      `**/api/v1/tasks/${op.session_id}/operations{,?**}`,
       async (route) => {
         const response = await route.fetch();
         const body = await response.json();
@@ -97,7 +97,7 @@ for (const recovery of ["button", "poll"] as const) {
       },
     );
     await page.route(
-      `**/api/v1/operations/${op.operation_id}`,
+      `**/api/v1/operations/${op.operation_id}{,?**}`,
       async (route) => {
         pending = false;
         await route.continue();
@@ -751,7 +751,7 @@ test("old session JSON import shows rejection without changing the current task"
   await page.getByRole("tab", { name: "历史公开包导入" }).click();
   const rejection = page.waitForResponse(
     (response) =>
-      response.url().endsWith("/api/v1/imports") &&
+      response.url().split("?")[0].endsWith("/api/v1/imports") &&
       response.request().method() === "POST",
   );
   await page.locator('input[type="file"]').setInputFiles({

@@ -416,8 +416,13 @@ def test_static_spa_shell_has_safe_api_404(client):
     assert response.headers["content-type"].startswith("application/json")
     shell = client.get("/")
     assert shell.status_code == 503
-    assert "pnpm install --frozen-lockfile" in shell.text
-    assert "pnpm run build" in shell.text
+    assert "docker compose up --build -d app" in shell.text
+    assert "前端尚未构建" in shell.text
+    english = client.get("/?locale=en")
+    assert english.status_code == 503
+    assert "docker compose up --build -d app" in english.text
+    assert "Frontend not built" in english.text
+    assert "lang='en'" in english.text
 
 
 def test_untrusted_host_cannot_make_its_origin_look_like_local_app(client):

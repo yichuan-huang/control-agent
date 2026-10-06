@@ -1,12 +1,66 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import ExternalWorkflow from "./ExternalWorkflow";
+import { I18nProvider } from "./i18n";
 vi.stubGlobal("matchMedia", () => ({
   matches: false,
   addListener: () => {},
   removeListener: () => {},
 }));
 afterEach(cleanup);
+test.each(["en", "zh-CN"] as const)(
+  "candidate statuses are localized in %s without claiming task completion",
+  (locale) => {
+    const statuses = [
+      "pending",
+      "qualification_failed",
+      "hard_failure",
+      "performance_met",
+      "performance_not_met",
+    ];
+    const workflow = {
+      candidates: statuses.map((status, index) => ({
+        candidate_id: `candidate-${index}`,
+        status,
+        reason: `raw-reason-${index}`,
+      })),
+    };
+    render(
+      <I18nProvider initialLocale={locale}>
+        <ExternalWorkflow
+          sessionId="A"
+          action=""
+          workflow={workflow}
+          busy={false}
+          onSubmit={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    const labels =
+      locale === "en"
+        ? [
+            "Awaiting evaluation",
+            "Qualification failed",
+            "Hard constraint failed",
+            "Performance requirements met",
+            "Performance requirements not met",
+          ]
+        : [
+            "待评价",
+            "资格审查未通过",
+            "硬性约束未通过",
+            "性能要求已满足",
+            "性能要求未满足",
+          ];
+    for (const label of labels) expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.queryByText(/Task finished|任务已结束/)).toBeNull();
+    for (const [index, status] of statuses.entries()) {
+      expect(screen.queryByText(status, { exact: true })).toBeNull();
+      expect(screen.getByText(`raw-reason-${index}`)).toBeTruthy();
+      expect(workflow.candidates[index].status).toBe(status);
+    }
+  },
+);
 test("external source selection submits explicit provenance without JSON", () => {
   const submit = vi.fn();
   render(

@@ -35,7 +35,7 @@ test("current external task preserves recovery guidance across reload without ex
     if (request.method() === "POST") mutations.push(request.url());
   });
   // A current task awaiting explicit recovery must never restart on page load.
-  await page.route(`**/api/v1/tasks/${id}`, (route) =>
+  await page.route(`**/api/v1/tasks/${id}{,?**}`, (route) =>
     route.fulfill({
       json: {
         ...original,

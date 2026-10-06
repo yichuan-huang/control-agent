@@ -11,6 +11,8 @@ from typing import Any
 import plotly.graph_objects as go
 
 from cfdc.evidence import GATE_DEFINITIONS
+from cfdc.i18n import Locale, t
+from cfdc.kernel.contracts import DIAGNOSTIC_IDS
 
 _TERMINAL_STATES = frozenset({"performance_met", "capability_gap", "cancelled"})
 _ACTION_ALIASES = {"submit_answer": "answer"}
@@ -50,46 +52,130 @@ _KNOWN_ACTIONS = frozenset(
     }
 )
 _ACTION_COPY = {
-    "select_external_source": ("选择外部数据来源", "选择软件仿真或外部测量数据。"),
-    "prepare_external_run": ("准备外部试验", "下载冻结请求并在外部执行。"),
-    "submit_external_results": ("校验外部结果", "上传与当前请求绑定的结果 ZIP。"),
-    "start_external_tuning": ("开始有界调优", "按冻结合同评估候选。"),
-    "restart_external_acquisition": ("重新采集证据", "创建新任务并重新确认边界。"),
-    "confirm_task": ("确认任务边界", "确认目标、软件试验边界和预算后开始。"),
+    "select_external_source": (
+        "presentation.copy.select_external_data_source",
+        "presentation.copy.choose_software_simulation_or_externally_measured_data",
+    ),
+    "prepare_external_run": (
+        "presentation.copy.prepare_external_experiment",
+        "presentation.copy.download_the_frozen_request_and_execute_it_externally",
+    ),
+    "submit_external_results": (
+        "presentation.copy.validate_external_results",
+        "presentation.copy.upload_the_result_zip_bound_to_the_current_request",
+    ),
+    "start_external_tuning": (
+        "presentation.copy.start_bounded_tuning",
+        "presentation.copy.evaluate_candidates_under_the_frozen_contract",
+    ),
+    "restart_external_acquisition": (
+        "presentation.copy.collect_evidence_again",
+        "presentation.copy.create_a_new_task_and_confirm_its_boundaries_again",
+    ),
+    "confirm_task": (
+        "presentation.copy.confirm_task_boundaries",
+        "presentation.copy.confirm_the_objective_software_experiment_boundaries_and_budget_to_begin",
+    ),
     "answer": (
-        "补充已知现象",
-        "说明已经观察到的对象特征；没有把握的项目可以明确填写不知道。",
+        "presentation.copy.describe_known_observations",
+        "presentation.copy.describe_observed_system_properties_explicitly_mark_uncertain_items_as_unknown",
     ),
-    "relevance": ("说明不相关项", "说明某项诊断为何不适用于当前任务。"),
-    "advance": ("继续下一步", "使用已记录信息进入下一阶段。"),
+    "relevance": (
+        "presentation.copy.explain_irrelevant_items",
+        "presentation.copy.explain_why_a_diagnostic_item_does_not_apply_to_this_task",
+    ),
+    "advance": (
+        "presentation.copy.continue",
+        "presentation.copy.proceed_to_the_next_stage_using_recorded_information",
+    ),
     "evidence": (
-        "需要补充可验证的证据",
-        "准备与本任务和路线要求一致的公开实验记录；打开专业提交查看所需字段。",
+        "presentation.copy.verifiable_evidence_required",
+        "presentation.copy.prepare_public_experiment_records_matching_this_task_and_route_open_advanced_submission_for_required",
     ),
-    "phase": ("确认阶段方案", "检查分阶段目标后继续。"),
-    "features": ("记录特征", "提交由公开证据支持的特征。"),
-    "derive_features": ("提取特征", "从已接受的公开证据提取特征。"),
-    "controller": ("提交控制器", "提交满足当前类型合同的控制器描述。"),
-    "synthesize_controller": ("生成控制器", "根据已确认的特征生成候选控制器。"),
-    "freeze": ("冻结候选方案", "冻结控制器及其评价条件，供独立评价使用。"),
-    "qualify_controller": ("检查控制器资格", "运行冻结前的确定性资格审查。"),
-    "evaluation": ("记录评价", "提交与冻结方案绑定的评价数据。"),
-    "run_evaluation": ("运行开发评价", "按冻结的评价合同运行软件开发评价。"),
-    "replay": ("复核评价记录", "重新读取已记录数据并核对评价结论。"),
-    "confirmation": ("提交独立确认", "提交与已冻结候选绑定的全新确认数据。"),
-    "confirm_result": ("执行独立确认", "使用预留试次对冻结候选做一次独立确认。"),
-    "run_feedback_iteration": ("运行有界调优", "在预先限定的范围内评估候选。"),
-    "compile_protocol": ("生成实验协议", "生成当前取证步骤所需的受限协议。"),
-    "prepare_operator_handoff": ("下载操作包", "下载当前协议和操作说明。"),
+    "phase": (
+        "presentation.copy.confirm_phase_plan",
+        "presentation.copy.check_the_phase_objectives_before_continuing",
+    ),
+    "features": (
+        "presentation.copy.record_features",
+        "presentation.copy.submit_features_supported_by_public_evidence",
+    ),
+    "derive_features": (
+        "presentation.copy.extract_features",
+        "presentation.copy.extract_features_from_accepted_public_evidence",
+    ),
+    "controller": (
+        "presentation.copy.submit_controller",
+        "presentation.copy.submit_a_controller_description_satisfying_the_current_typed_contract",
+    ),
+    "synthesize_controller": (
+        "presentation.copy.generate_controller",
+        "presentation.copy.generate_a_candidate_controller_from_confirmed_features",
+    ),
+    "freeze": (
+        "presentation.copy.freeze_candidate",
+        "presentation.copy.freeze_the_controller_and_its_evaluation_conditions_for_independent_evaluation",
+    ),
+    "qualify_controller": (
+        "presentation.copy.check_controller_qualification",
+        "presentation.copy.run_deterministic_qualification_checks_before_freezing",
+    ),
+    "evaluation": (
+        "presentation.copy.record_evaluation",
+        "presentation.copy.submit_evaluation_data_bound_to_the_frozen_candidate",
+    ),
+    "run_evaluation": (
+        "presentation.copy.run_development_evaluation",
+        "presentation.copy.run_software_development_evaluation_under_the_frozen_evaluation_contract",
+    ),
+    "replay": (
+        "presentation.copy.replay_evaluation_records",
+        "presentation.copy.read_the_recorded_data_again_and_verify_the_evaluation_outcome",
+    ),
+    "confirmation": (
+        "presentation.copy.submit_independent_confirmation",
+        "presentation.copy.submit_fresh_confirmation_data_bound_to_the_frozen_candidate",
+    ),
+    "confirm_result": (
+        "presentation.copy.run_independent_confirmation",
+        "presentation.copy.use_reserved_trials_for_one_independent_confirmation_of_the_frozen_candidate",
+    ),
+    "run_feedback_iteration": (
+        "presentation.copy.run_bounded_tuning",
+        "presentation.copy.evaluate_candidates_within_predefined_bounds",
+    ),
+    "compile_protocol": (
+        "presentation.copy.compile_experiment_protocol",
+        "presentation.copy.compile_the_bounded_protocol_for_the_current_evidence_collection_step",
+    ),
+    "prepare_operator_handoff": (
+        "presentation.copy.download_operator_package",
+        "presentation.copy.download_the_current_protocol_and_operating_instructions",
+    ),
     "prepare_training_exercise_bundle": (
-        "生成练习包",
-        "生成当前教学练习所需的数据包。",
+        "presentation.copy.generate_exercise_bundle",
+        "presentation.copy.generate_the_data_bundle_for_the_current_training_exercise",
     ),
-    "record_operator_report": ("确认操作检查", "记录操作前检查结果。"),
-    "ingest_upload": ("检查上传数据", "按当前协议检查上传文件。"),
-    "run_provider": ("运行当前步骤", "运行当前配置的确定性提供器。"),
-    "revise_diagnostic": ("修订诊断", "根据已记录证据修订诊断。"),
-    "cancel": ("取消任务", "结束当前任务。"),
+    "record_operator_report": (
+        "presentation.copy.confirm_operator_checks",
+        "presentation.copy.record_the_pre_operation_check_results",
+    ),
+    "ingest_upload": (
+        "presentation.copy.check_uploaded_data",
+        "presentation.copy.check_uploaded_files_against_the_current_protocol",
+    ),
+    "run_provider": (
+        "presentation.copy.run_current_step",
+        "presentation.copy.run_the_currently_configured_deterministic_provider",
+    ),
+    "revise_diagnostic": (
+        "presentation.copy.revise_diagnostics",
+        "presentation.copy.revise_diagnostics_using_recorded_evidence",
+    ),
+    "cancel": (
+        "presentation.copy.cancel_task",
+        "presentation.copy.end_the_current_task",
+    ),
 }
 _STAGE_BY_STATUS = {
     "intake": 0,
@@ -111,46 +197,46 @@ _STAGE_BY_STATUS = {
     "cancelled": 3,
 }
 _REQUIREMENT_LABELS = {
-    "final_abs_error_max": "终值绝对误差不超过",
-    "overshoot_max": "超调不超过",
-    "settling_time_max_s": "调节时间不超过",
-    "hold_duration_min_s": "保持时间不少于",
-    "hold_duration_s": "保持时间不少于",
-    "recovery_time_max_s": "恢复时间不超过",
-    "perturbed_success_rate_min": "扰动试次成功率不少于",
-    "success_rate_min": "试次成功率不少于",
-    "worst_trial_violation_max": "最差试次偏差不超过",
-    "required_phase_count_min": "完成阶段数不少于",
-    "verified_handoff_count_min": "已验证阶段切换数不少于",
-    "goal_region_entry_required": "必须进入目标区域",
-    "final_hold_duration_min_s": "最终保持时间不少于",
-    "recovery_abs_error_max": "恢复绝对误差不超过",
-    "post_recovery_hold_duration_min_s": "恢复后保持时间不少于",
-    "iae_max": "绝对误差积分不超过",
-    "peak_abs_input_max": "输入峰值不超过",
-    "peak_abs_output_max": "输出峰值不超过",
-    "saturation_duration_max_s": "饱和持续时间不超过",
-    "saturation_ratio_max": "饱和时间占比不超过",
+    "final_abs_error_max": "presentation.copy.final_absolute_error_at_most",
+    "overshoot_max": "presentation.copy.overshoot_at_most",
+    "settling_time_max_s": "presentation.copy.settling_time_at_most",
+    "hold_duration_min_s": "presentation.copy.hold_duration_at_least",
+    "hold_duration_s": "presentation.copy.hold_duration_at_least",
+    "recovery_time_max_s": "presentation.copy.recovery_time_at_most",
+    "perturbed_success_rate_min": "presentation.copy.perturbed_trial_success_rate_at_least",
+    "success_rate_min": "presentation.copy.trial_success_rate_at_least",
+    "worst_trial_violation_max": "presentation.copy.worst_trial_violation_at_most",
+    "required_phase_count_min": "presentation.copy.completed_phase_count_at_least",
+    "verified_handoff_count_min": "presentation.copy.verified_handoff_count_at_least",
+    "goal_region_entry_required": "presentation.copy.must_enter_the_goal_region",
+    "final_hold_duration_min_s": "presentation.copy.final_hold_duration_at_least",
+    "recovery_abs_error_max": "presentation.copy.recovery_absolute_error_at_most",
+    "post_recovery_hold_duration_min_s": "presentation.copy.post_recovery_hold_duration_at_least",
+    "iae_max": "presentation.copy.integral_absolute_error_at_most",
+    "peak_abs_input_max": "presentation.copy.peak_input_at_most",
+    "peak_abs_output_max": "presentation.copy.peak_output_at_most",
+    "saturation_duration_max_s": "presentation.copy.saturation_duration_at_most",
+    "saturation_ratio_max": "presentation.copy.saturation_fraction_at_most",
 }
 _METRIC_LABELS = {
-    "final_abs_error": "终值绝对误差",
-    "overshoot": "超调",
-    "settling_time_s": "调节时间",
-    "hold_duration_s": "保持时间",
-    "iae": "绝对误差积分",
-    "peak_abs_output": "输出绝对峰值",
-    "peak_abs_input": "输入绝对峰值",
-    "raw_peak_abs_input": "限幅前输入绝对峰值",
-    "saturation_duration_s": "饱和持续时间",
-    "saturation_fraction": "饱和时间占比",
-    "completed_phase_count": "已完成阶段数",
-    "verified_handoff_count": "已验证阶段切换数",
-    "final_hold_duration_s": "最终保持时间",
-    "entered_goal_region": "已进入目标区域",
-    "recovered_to_hold": "已恢复并保持",
-    "recovery_time_s": "恢复时间",
-    "post_recovery_hold_duration_s": "恢复后保持时间",
-    "disturbance_event_verified": "扰动事件已验证",
+    "final_abs_error": "presentation.copy.final_absolute_error",
+    "overshoot": "presentation.copy.overshoot",
+    "settling_time_s": "presentation.copy.settling_time",
+    "hold_duration_s": "presentation.copy.hold_duration",
+    "iae": "presentation.copy.integral_absolute_error",
+    "peak_abs_output": "presentation.copy.peak_absolute_output",
+    "peak_abs_input": "presentation.copy.peak_absolute_input",
+    "raw_peak_abs_input": "presentation.copy.peak_absolute_input_before_clipping",
+    "saturation_duration_s": "presentation.copy.saturation_duration",
+    "saturation_fraction": "presentation.copy.saturation_fraction",
+    "completed_phase_count": "presentation.copy.completed_phases",
+    "verified_handoff_count": "presentation.copy.verified_handoffs",
+    "final_hold_duration_s": "presentation.copy.final_hold_duration",
+    "entered_goal_region": "presentation.copy.entered_goal_region",
+    "recovered_to_hold": "presentation.copy.recovered_and_held",
+    "recovery_time_s": "presentation.copy.recovery_time",
+    "post_recovery_hold_duration_s": "presentation.copy.post_recovery_hold_duration",
+    "disturbance_event_verified": "presentation.copy.disturbance_event_verified",
 }
 _METRIC_REQUIREMENTS = {
     "final_abs_error": ("final_abs_error_max", "recovery_abs_error_max"),
@@ -215,7 +301,9 @@ def _unit_suffix(unit: Any) -> str:
     return f" {_safe(text)}" if text and text != "unspecified" else ""
 
 
-def _named_signals(names: Any, units: Mapping[str, Any]) -> str:
+def _named_signals(
+    names: Any, units: Mapping[str, Any], locale: Locale = "zh-CN"
+) -> str:
     values = []
     for name in _items(names):
         clean_name = str(name).strip()
@@ -226,7 +314,7 @@ def _named_signals(names: Any, units: Mapping[str, Any]) -> str:
         if unit and unit != "unspecified":
             rendered += f"（{_safe(unit)}）"
         values.append(rendered)
-    return "、".join(values) if values else "未提供"
+    return "、".join(values) if values else t("presentation.copy.not_provided", locale)
 
 
 def _criterion_unit(
@@ -251,14 +339,22 @@ def _criterion_unit(
 
 
 def _criterion_value(
-    task: Mapping[str, Any], key: str, value: Any, signal: str | None = None
+    task: Mapping[str, Any],
+    key: str,
+    value: Any,
+    signal: str | None = None,
+    locale: Locale = "zh-CN",
 ) -> str:
     if isinstance(value, bool):
-        return "是" if value else "否"
+        return (
+            t("presentation.copy.yes", locale)
+            if value
+            else t("presentation.copy.no", locale)
+        )
     if {"rate", "ratio"}.intersection(key.split("_")) and isinstance(
         value, int | float
     ):
-        return _percent(value)
+        return _percent(value, locale=locale)
     return f"{_number(value)}{_unit_suffix(_criterion_unit(task, key, signal))}"
 
 
@@ -280,11 +376,14 @@ def _requirement_signals(task: Mapping[str, Any], key: str) -> set[str]:
     return {str(name) for name in names if str(name).strip()}
 
 
-def _requirement_text(requirements: Mapping[str, Any], task: Mapping[str, Any]) -> str:
+def _requirement_text(
+    requirements: Mapping[str, Any], task: Mapping[str, Any], locale: Locale = "zh-CN"
+) -> str:
     rendered = []
     for raw_key, value in requirements.items():
         key = str(raw_key)
-        label = _REQUIREMENT_LABELS.get(key)
+        label_key = _REQUIREMENT_LABELS.get(key)
+        label = t(label_key, locale) if label_key is not None else None
         if label is None or value is None:
             continue
         if isinstance(value, Mapping):
@@ -297,32 +396,34 @@ def _requirement_text(requirements: Mapping[str, Any], task: Mapping[str, Any]) 
             if not safe_values:
                 continue
             shown = "、".join(
-                f"{_safe(signal)} {_criterion_value(task, key, item, signal)}"
+                f"{_safe(signal)} {_criterion_value(task, key, item, signal, locale=locale)}"
                 for signal, item in safe_values
             )
         elif key == "goal_region_entry_required":
             if not isinstance(value, bool):
                 continue
-            shown = _criterion_value(task, key, value)
+            shown = _criterion_value(task, key, value, locale=locale)
         else:
             if not _finite_numeric(value):
                 continue
-            shown = _criterion_value(task, key, value)
+            shown = _criterion_value(task, key, value, locale=locale)
         if key == "goal_region_entry_required" and value is True:
             rendered.append(label)
         else:
             rendered.append(f"{label} {shown}")
-    return "；".join(rendered) if rendered else "未提供"
+    return (
+        "；".join(rendered) if rendered else t("presentation.copy.not_provided", locale)
+    )
 
 
-def task_summary(task: Mapping[str, Any]) -> str:
+def task_summary(task: Mapping[str, Any], locale: Locale = "zh-CN") -> str:
     """Summarize only whitelisted, user-facing task fields."""
 
     task = _mapping(task)
     if not task:
-        return "尚未提供任务说明。"
+        return t("presentation.copy.no_task_description_has_been_provided", locale)
     signal_units = _mapping(task.get("signal_units"))
-    measured = _named_signals(task.get("measured_signals"), signal_units)
+    measured = _named_signals(task.get("measured_signals"), signal_units, locale=locale)
     control_names = task.get("control_inputs")
     if not _items(control_names) and task.get("control_input"):
         control_names = [task["control_input"]]
@@ -330,16 +431,20 @@ def task_summary(task: Mapping[str, Any]) -> str:
     control_units = {
         str(name): input_unit for name in _items(control_names) if input_unit
     }
-    controls = _named_signals(control_names, control_units)
+    controls = _named_signals(control_names, control_units, locale=locale)
 
     input_low = task.get("input_min")
     input_high = task.get("input_max")
     if input_low is None or input_high is None:
         missing = []
         if input_low is None:
-            missing.append("输入下界未提供")
+            missing.append(
+                t("presentation.copy.input_lower_bound_not_provided", locale)
+            )
         if input_high is None:
-            missing.append("输入上界未提供")
+            missing.append(
+                t("presentation.copy.input_upper_bound_not_provided", locale)
+            )
         input_bounds = "；".join(missing)
     else:
         input_bounds = (
@@ -354,14 +459,24 @@ def task_summary(task: Mapping[str, Any]) -> str:
         output_unit = signal_units.get(str(measured_names[0]))
     output_parts = []
     output_parts.append(
-        "输出下界未提供"
+        t("presentation.copy.output_lower_bound_not_provided", locale)
         if output_low is None
-        else f"下界 {_number(output_low)}{_unit_suffix(output_unit)}"
+        else t(
+            "presentation.copy.lower_bound",
+            locale,
+            p0=_number(output_low),
+            p1=_unit_suffix(output_unit),
+        )
     )
     output_parts.append(
-        "输出上界未提供"
+        t("presentation.copy.output_upper_bound_not_provided", locale)
         if output_high is None
-        else f"上界 {_number(output_high)}{_unit_suffix(output_unit)}"
+        else t(
+            "presentation.copy.upper_bound",
+            locale,
+            p0=_number(output_high),
+            p1=_unit_suffix(output_unit),
+        )
     )
 
     reference = task.get("reference")
@@ -376,19 +491,27 @@ def task_summary(task: Mapping[str, Any]) -> str:
             ", ".join(f"{key}={value}" for key, value in control_target.items())
         )
     else:
-        target = "未提供"
+        target = t("presentation.copy.not_provided", locale)
 
-    description = task.get("description") or task.get("objective") or "未提供"
+    description = (
+        task.get("description")
+        or task.get("objective")
+        or t("presentation.copy.not_provided", locale)
+    )
     requirements = _mapping(task.get("success_requirements"))
     return "\n\n".join(
         (
-            f"**目标：** {_safe(description)}",
-            f"**观测量：** {measured}",
-            f"**控制输入：** {controls}",
-            f"**输入范围：** {input_bounds}",
-            f"**输出范围：** {'；'.join(output_parts)}",
-            f"**声明目标：** {target}",
-            f"**验收要求：** {_requirement_text(requirements, task)}",
+            t("presentation.copy.objective", locale, p0=_safe(description)),
+            t("presentation.copy.measured_signals", locale, p0=measured),
+            t("presentation.copy.control_inputs", locale, p0=controls),
+            t("presentation.copy.input_bounds", locale, p0=input_bounds),
+            t("presentation.copy.output_bounds", locale, p0="；".join(output_parts)),
+            t("presentation.copy.declared_target", locale, p0=target),
+            t(
+                "presentation.copy.acceptance_requirements",
+                locale,
+                p0=_requirement_text(requirements, task, locale=locale),
+            ),
         )
     )
 
@@ -421,68 +544,153 @@ def _confirmed_success(report: Mapping[str, Any]) -> bool:
     return packet_bound and replay_bound
 
 
-def _workspace_copy(report: Mapping[str, Any]) -> tuple[str, str]:
+def _workspace_copy(
+    report: Mapping[str, Any], locale: Locale = "zh-CN"
+) -> tuple[str, str]:
     status = str(report.get("status") or "")
     evaluation = _mapping(report.get("evaluation"))
     qualification = _mapping(report.get("qualification"))
     confirmation = _mapping(report.get("confirmation"))
 
     if status == "cancelled":
-        return "任务已取消", "本次工作已结束；如需继续，请创建新的任务。"
+        return t("presentation.copy.task_cancelled", locale), t(
+            "presentation.copy.this_task_has_ended_create_a_new_task_to_continue",
+            locale,
+        )
     if status == "evaluation_recorded_pending_replay":
-        return "评价已记录，等待复核", "复核完成前，已计算的结果不能作为最终结论。"
+        return t("presentation.copy.evaluation_recorded_awaiting_replay", locale), t(
+            "presentation.copy.calculated_results_cannot_be_treated_as_final_until_replay_is_complete",
+            locale,
+        )
     if status == "awaiting_confirmation":
-        return "开发评价完成，等待独立确认", "请用预留的全新试次确认冻结候选。"
+        return t(
+            "presentation.copy.development_evaluation_complete_awaiting_independent_confirmation",
+            locale,
+        ), t(
+            "presentation.copy.confirm_the_frozen_candidate_using_reserved_fresh_trials",
+            locale,
+        )
     if status == "awaiting_provider":
         return (
-            "需要重新选择数据来源",
-            "当前协议已被拒绝，需在受支持入口选择新的数据来源。",
+            t("presentation.copy.choose_a_new_data_source", locale),
+            t(
+                "presentation.copy.the_current_protocol_was_rejected_choose_a_new_data_source_through_a_supported_entry_point",
+                locale,
+            ),
         )
     if _confirmed_success(report):
-        return "独立确认已通过", "冻结方案已通过全新试次的独立确认。"
+        return t("presentation.copy.independent_confirmation_passed", locale), t(
+            "presentation.copy.the_frozen_candidate_passed_independent_confirmation_using_fresh_trials",
+            locale,
+        )
     if confirmation.get("status") == "performance_not_met":
-        return "独立确认未通过", "全新确认试次未达到已声明的要求。"
+        return t("presentation.copy.independent_confirmation_failed", locale), t(
+            "presentation.copy.fresh_confirmation_trials_did_not_meet_the_declared_requirements",
+            locale,
+        )
     if confirmation.get("status") == "replay_mismatch":
-        return "独立确认记录不一致", "评价复核与原记录不一致，不能发布结果。"
+        return t(
+            "presentation.copy.independent_confirmation_records_disagree", locale
+        ), t(
+            "presentation.copy.evaluation_replay_disagrees_with_the_original_record_results_cannot_be_released",
+            locale,
+        )
     if confirmation.get("status") == "pending_replay":
-        return "独立确认待复核", "确认数据已记录，复核完成前不能发布结果。"
+        return t(
+            "presentation.copy.independent_confirmation_awaiting_replay", locale
+        ), t(
+            "presentation.copy.confirmation_data_is_recorded_results_cannot_be_released_before_replay_completes",
+            locale,
+        )
     if status == "capability_gap":
         tuning = _mapping(report.get("tuning"))
         if tuning.get("reason") == "no_strict_development_improvement":
-            return "有界调优未找到可确认方案", "候选均未达到预先声明的改善门槛。"
+            return t(
+                "presentation.copy.bounded_tuning_found_no_candidate_for_confirmation",
+                locale,
+            ), t(
+                "presentation.copy.no_candidate_met_the_predefined_improvement_threshold",
+                locale,
+            )
         if qualification and qualification.get("status") != "offline_qualified":
-            return "控制器资格审查未通过", "候选未通过已记录的离线资格审查。"
-        return "当前能力范围不足", "现有证据或方法不足以安全完成此任务。"
+            return t("presentation.copy.controller_qualification_failed", locale), t(
+                "presentation.copy.the_candidate_did_not_pass_the_recorded_offline_qualification_checks",
+                locale,
+            )
+        return t("presentation.copy.current_capabilities_are_insufficient", locale), t(
+            "presentation.copy.available_evidence_or_methods_are_insufficient_to_complete_this_task_safely",
+            locale,
+        )
     if evaluation.get("status") == "performance_not_met":
         stable = _mapping(evaluation.get("stability_gate")).get("passed") is True
         evidence = _mapping(evaluation.get("evidence_gate")).get("passed", True) is True
         if stable and evidence:
-            return "稳定，但性能尚未达标", "方案保持稳定，但已记录性能未达到目标。"
-        return "评价未通过", "稳定性或证据门未通过，当前方案不能进入结果确认。"
+            return t(
+                "presentation.copy.stable_performance_requirements_not_met", locale
+            ), t(
+                "presentation.copy.the_candidate_remained_stable_but_recorded_performance_did_not_meet_the_target",
+                locale,
+            )
+        return t("presentation.copy.evaluation_failed", locale), t(
+            "presentation.copy.a_stability_or_evidence_gate_failed_this_candidate_cannot_proceed_to_confirmation",
+            locale,
+        )
     if (
         evaluation.get("status") == "performance_met"
         and evaluation.get("evaluation_split") == "development"
     ):
-        return "开发评价达到要求", "这是软件开发评价；尚不等同于全新独立确认。"
+        return t(
+            "presentation.copy.development_evaluation_met_requirements", locale
+        ), t(
+            "presentation.copy.this_is_a_software_development_evaluation_fresh_independent_confirmation_is_still_required",
+            locale,
+        )
     if evaluation.get("status") == "performance_met":
-        return "确认结果尚不能发布", "确认记录尚未完成严格绑定与复核。"
+        return t(
+            "presentation.copy.confirmation_results_cannot_yet_be_released", locale
+        ), t(
+            "presentation.copy.confirmation_records_still_require_strict_binding_and_replay_verification",
+            locale,
+        )
     if qualification and qualification.get("status") != "offline_qualified":
-        return "控制器资格审查未通过", "候选未通过已记录的离线资格审查。"
+        return t("presentation.copy.controller_qualification_failed", locale), t(
+            "presentation.copy.the_candidate_did_not_pass_the_recorded_offline_qualification_checks",
+            locale,
+        )
     if status in {"awaiting_evidence", "protocol_ready", "awaiting_operator_report"}:
-        return "证据不足，需继续准备数据", "请按当前协议准备并提交可审计数据。"
+        return t("presentation.copy.more_evidence_is_required", locale), t(
+            "presentation.copy.prepare_and_submit_auditable_data_under_the_current_protocol",
+            locale,
+        )
     if status == "intake":
-        return "先说明目标和边界", "补全任务目标、信号和安全边界后再继续。"
+        return t("presentation.copy.describe_the_objective_and_boundaries", locale), t(
+            "presentation.copy.complete_the_objective_signals_and_safety_boundaries_before_continuing",
+            locale,
+        )
     if status == "diagnostic":
         return (
-            "补充对象的已知现象",
-            "请说明稳定性、时延、耦合等已观察现象；不知道的项目可以明确标注。",
+            t("presentation.copy.describe_observed_system_behavior", locale),
+            t(
+                "presentation.copy.describe_observed_stability_delay_coupling_and_other_properties_explicitly_mark_unknown_items",
+                locale,
+            ),
         )
     if status in _STAGE_BY_STATUS:
-        return "正在生成并验证方案", "按当前提示完成下一项验证动作。"
-    return "当前状态无法安全识别", "请刷新报告；在状态明确前不会启用操作。"
+        return t(
+            "presentation.copy.generating_and_validating_the_candidate", locale
+        ), t(
+            "presentation.copy.follow_the_current_guidance_to_complete_the_next_validation_step",
+            locale,
+        )
+    return t("presentation.copy.current_state_cannot_be_safely_identified", locale), t(
+        "presentation.copy.refresh_the_report_actions_remain_disabled_until_the_state_is_known",
+        locale,
+    )
 
 
-def project_workspace(report: Mapping[str, Any]) -> dict[str, Any]:
+def project_workspace(
+    report: Mapping[str, Any], locale: Locale = "zh-CN"
+) -> dict[str, Any]:
     """Project an authoritative Kernel report into the novice workspace model."""
 
     report = _mapping(report)
@@ -500,13 +708,23 @@ def project_workspace(report: Mapping[str, Any]) -> dict[str, Any]:
         and not disabled
     )
     modes = [str(item) for item in _items(contract.get("allowed_modes"))]
-    title, explanation = _workspace_copy(report)
+    title, explanation = _workspace_copy(report, locale=locale)
     if report.get("read_only"):
-        title = f"只读 · {title}"
-        explanation = f"{explanation} 此任务是只读记录，因此不能提交动作或取消任务。"
+        title = t("presentation.copy.read_only", locale, p0=title)
+        explanation = t(
+            "presentation.copy.this_task_is_read_only_so_actions_and_cancellation_are_unavailable",
+            locale,
+            p0=explanation,
+        )
     action_title, action_help = _ACTION_COPY.get(
-        action, ("当前动作不可用", "请刷新报告后重试。")
+        action,
+        (
+            t("presentation.copy.current_action_unavailable", locale),
+            t("presentation.copy.refresh_the_report_and_try_again", locale),
+        ),
     )
+    if action in _ACTION_COPY:
+        action_title, action_help = (t(key, locale) for key in _ACTION_COPY[action])
     result_visible = bool(
         isinstance(report.get("evaluation"), Mapping)
         or isinstance(report.get("qualification"), Mapping)
@@ -525,11 +743,104 @@ def project_workspace(report: Mapping[str, Any]) -> dict[str, Any]:
         and modes == ["json"]
         and action not in {"record_operator_report", "ingest_upload"},
         "result_visible": result_visible,
-        "task_summary": task_summary(_mapping(report.get("task"))),
+        "task_summary": task_summary(_mapping(report.get("task")), locale=locale),
     }
 
 
-def steps_html(report: Mapping[str, Any]) -> str:
+def input_contract_copy(
+    contract: Mapping[str, Any], status: str, locale: Locale = "zh-CN"
+) -> dict[str, Any]:
+    """Localize known contract prose without altering action or validation fields."""
+    result = dict(contract)
+    action = str(contract.get("action") or "")
+    canonical = _ACTION_ALIASES.get(action, action)
+    if canonical in _ACTION_COPY:
+        result["title"] = t(_ACTION_COPY[canonical][0], locale)
+        if canonical == "confirm_task":
+            guidance = "confirm_task"
+        elif canonical == "answer":
+            guidance = "answer"
+        elif canonical == "relevance":
+            guidance = "relevance"
+        elif canonical in {
+            "select_external_source",
+            "prepare_external_run",
+            "submit_external_results",
+            "start_external_tuning",
+            "restart_external_acquisition",
+        }:
+            guidance = "dedicated_form"
+        elif not contract.get("allowed_modes"):
+            guidance = "dedicated_button"
+        else:
+            guidance = "structured"
+        result["guidance"] = t(f"presentation.contract.{guidance}", locale)
+    disabled = contract.get("disabled_reason")
+    if disabled:
+        if not action and status in _TERMINAL_STATES:
+            result["disabled_reason"] = t(
+                "presentation.contract.terminal", locale, status=status
+            )
+        elif disabled == "当前没有待处理动作，请刷新页面。":
+            result["disabled_reason"] = t("presentation.contract.no_action", locale)
+        elif disabled == "当前 WebUI 尚未提供该实验动作的执行适配。":
+            result["disabled_reason"] = t(
+                "presentation.contract.unsupported_action", locale
+            )
+        elif disabled == f"未知待处理动作：{action}":
+            result["disabled_reason"] = t(
+                "presentation.contract.unknown_action", locale, action=action
+            )
+    template = _mapping(contract.get("json_template"))
+    if canonical == "answer" and template:
+        template = dict(template)
+        annotations = {
+            "assessment": ("可选字符串", "optional_text"),
+            "evidence": ("用户原文摘录", "original_excerpt"),
+            "confidence": ("0 到 1（可选）", "optional_confidence"),
+        }
+        for dimension in DIAGNOSTIC_IDS:
+            fields = _mapping(template.get(dimension))
+            if not fields:
+                continue
+            localized = dict(fields)
+            for field, (original, key) in annotations.items():
+                if fields.get(field) == original:
+                    localized[field] = t(f"presentation.contract.{key}", locale)
+            template[dimension] = localized
+        candidates = template.get("parameter_candidates")
+        if isinstance(candidates, list):
+            replacements = {
+                "value": ("用户原文中的数值", "original_value"),
+                "unit": ("用户原文中的单位", "original_unit"),
+                "source_text": ("原文摘录", "original_excerpt"),
+            }
+            template["parameter_candidates"] = [
+                {
+                    key: t(f"presentation.contract.{replacements[key][1]}", locale)
+                    if key in replacements and value == replacements[key][0]
+                    else value
+                    for key, value in item.items()
+                }
+                if isinstance(item, Mapping)
+                else item
+                for item in candidates
+            ]
+        result["json_template"] = template
+    elif (
+        canonical == "relevance"
+        and template.get("coupling_underactuation") == "不相关的确定性说明"
+    ):
+        result["json_template"] = {
+            **template,
+            "coupling_underactuation": t(
+                "presentation.contract.irrelevance_explanation", locale
+            ),
+        }
+    return result
+
+
+def steps_html(report: Mapping[str, Any], locale: Locale = "zh-CN") -> str:
     """Render a semantic, noninteractive four-step progress indicator."""
 
     report = _mapping(report)
@@ -560,7 +871,12 @@ def steps_html(report: Mapping[str, Any]) -> str:
         current = 2
     else:
         current = 3
-    labels = ("说明目标", "准备数据", "生成并验证方案", "查看结果")
+    labels = (
+        t("presentation.copy.describe_objective", locale),
+        t("presentation.copy.prepare_data", locale),
+        t("presentation.copy.generate_and_validate_candidate", locale),
+        t("presentation.copy.view_results", locale),
+    )
     rows = []
     for index, label in enumerate(labels):
         state = (
@@ -575,26 +891,33 @@ def steps_html(report: Mapping[str, Any]) -> str:
             f'<li class="guided-step {state}"{current_attr}>'
             f'<span aria-hidden="true">{index + 1}</span><span>{label}</span></li>'
         )
-    return '<ol class="guided-steps" aria-label="任务进度">' + "".join(rows) + "</ol>"
+    return (
+        t("presentation.copy.ol_class_guided_steps_aria_label_task_progress", locale)
+        + "".join(rows)
+        + "</ol>"
+    )
 
 
-def _status_label(status: Any) -> str:
+def _status_label(status: Any, locale: Locale = "zh-CN") -> str:
     return {
-        "performance_met": "已通过",
-        "performance_not_met": "未通过",
-        "pending_replay": "待复核",
-        "replay_mismatch": "复核不一致",
-    }.get(str(status or ""), "未记录")
+        "performance_met": t("presentation.copy.passed", locale),
+        "performance_not_met": t("presentation.copy.failed", locale),
+        "pending_replay": t("presentation.copy.awaiting_replay", locale),
+        "replay_mismatch": t("presentation.copy.replay_mismatch", locale),
+    }.get(str(status or ""), t("presentation.copy.not_recorded", locale))
 
 
-def _percent(value: Any) -> str:
+def _percent(value: Any, locale: Locale = "zh-CN") -> str:
     if isinstance(value, int | float) and not isinstance(value, bool):
         return f"{100 * float(value):g}%"
-    return "未记录"
+    return t("presentation.copy.not_recorded", locale)
 
 
 def _metric_target(
-    report: Mapping[str, Any], metric: str, signal: str | None = None
+    report: Mapping[str, Any],
+    metric: str,
+    signal: str | None = None,
+    locale: Locale = "zh-CN",
 ) -> str:
     requirement_names = _METRIC_REQUIREMENTS.get(metric, ())
     if not requirement_names:
@@ -602,8 +925,8 @@ def _metric_target(
             "recovered_to_hold",
             "disturbance_event_verified",
         }:
-            return "必须为 是"
-        return "未声明"
+            return t("presentation.copy.must_be_yes", locale)
+        return t("presentation.copy.not_declared", locale)
     task = _mapping(report.get("task"))
     requirements = _mapping(task.get("success_requirements"))
     requirement = next(
@@ -611,26 +934,42 @@ def _metric_target(
         None,
     )
     if requirement is None:
-        return "未声明"
+        return t("presentation.copy.not_declared", locale)
     value = requirements[requirement]
     if isinstance(value, Mapping):
         value = value.get(signal) if signal is not None else None
     if value is None:
-        return "未声明"
+        return t("presentation.copy.not_declared", locale)
     if requirement == "goal_region_entry_required":
-        return "必须为 是" if value is True else "未声明"
-    relation = "不少于" if requirement.endswith(("_min", "_min_s")) else "不超过"
-    return f"{relation} {_criterion_value(task, requirement, value, signal)}"
+        return (
+            t("presentation.copy.must_be_yes", locale)
+            if value is True
+            else t("presentation.copy.not_declared", locale)
+        )
+    relation = (
+        t("presentation.copy.at_least", locale)
+        if requirement.endswith(("_min", "_min_s"))
+        else t("presentation.copy.at_most", locale)
+    )
+    return f"{relation} {_criterion_value(task, requirement, value, signal, locale=locale)}"
 
 
 def _metric_value(
-    report: Mapping[str, Any], metric: str, value: Any, signal: str | None = None
+    report: Mapping[str, Any],
+    metric: str,
+    value: Any,
+    signal: str | None = None,
+    locale: Locale = "zh-CN",
 ) -> str:
     if isinstance(value, bool):
-        return "是" if value else "否"
+        return (
+            t("presentation.copy.yes", locale)
+            if value
+            else t("presentation.copy.no", locale)
+        )
     task = _mapping(report.get("task"))
     if metric in {"saturation_fraction"} and isinstance(value, int | float):
-        return _percent(value)
+        return _percent(value, locale=locale)
     if metric in {
         "settling_time_s",
         "hold_duration_s",
@@ -653,17 +992,20 @@ def _metric_value(
 
 
 def _recorded_metric_rows(
-    report: Mapping[str, Any], evaluation: Mapping[str, Any]
+    report: Mapping[str, Any], evaluation: Mapping[str, Any], locale: Locale = "zh-CN"
 ) -> list[list[Any]]:
     rows: list[list[Any]] = []
     for trial_index, trial in enumerate(_items(evaluation.get("trials")), 1):
         if not isinstance(trial, Mapping):
             continue
-        trial_id = _plain(trial.get("trial_id") or f"第 {trial_index} 次")
+        trial_id = _plain(
+            trial.get("trial_id")
+            or t("presentation.copy.trial", locale, p0=trial_index)
+        )
         metrics = _mapping(trial.get("metrics"))
         for group_name, group in (
-            ("输出", _mapping(metrics.get("channels"))),
-            ("输入", _mapping(metrics.get("inputs"))),
+            (t("presentation.copy.output", locale), _mapping(metrics.get("channels"))),
+            (t("presentation.copy.input", locale), _mapping(metrics.get("inputs"))),
         ):
             for signal, values in group.items():
                 if not isinstance(values, Mapping):
@@ -673,27 +1015,38 @@ def _recorded_metric_rows(
                         continue
                     rows.append(
                         [
-                            f"{_plain(signal)} · {_METRIC_LABELS[metric]}",
-                            _metric_target(report, metric, str(signal)),
-                            _metric_value(report, metric, value, str(signal)),
-                            f"{trial_id} 的已记录{group_name}指标",
+                            f"{_plain(signal)} · {t(_METRIC_LABELS[metric], locale)}",
+                            _metric_target(report, metric, str(signal), locale=locale),
+                            _metric_value(
+                                report, metric, value, str(signal), locale=locale
+                            ),
+                            t(
+                                "presentation.copy.recorded_metrics_for",
+                                locale,
+                                p0=trial_id,
+                                p1=group_name,
+                            ),
                         ]
                     )
         for metric in _TOP_LEVEL_METRICS:
             if metrics.get(metric) is not None:
                 rows.append(
                     [
-                        _METRIC_LABELS[metric],
-                        _metric_target(report, metric),
-                        _metric_value(report, metric, metrics[metric]),
-                        f"{trial_id} 的已记录指标",
+                        t(_METRIC_LABELS[metric], locale),
+                        _metric_target(report, metric, locale=locale),
+                        _metric_value(report, metric, metrics[metric], locale=locale),
+                        t(
+                            "presentation.copy.recorded_metrics_for_2",
+                            locale,
+                            p0=trial_id,
+                        ),
                     ]
                 )
     return rows
 
 
 def result_rows(
-    report: Mapping[str, Any], selection: str | None = None
+    report: Mapping[str, Any], selection: str | None = None, locale: Locale = "zh-CN"
 ) -> list[list[Any]]:
     """Return recorded result rows without deriving metrics from trajectories."""
 
@@ -703,7 +1056,11 @@ def result_rows(
     if not evaluation and not confirmation:
         return []
     split = str(evaluation.get("evaluation_split") or "")
-    phase = "独立确认" if split == "fresh_confirmation" or confirmation else "开发评价"
+    phase = (
+        t("presentation.copy.independent_confirmation", locale)
+        if split == "fresh_confirmation" or confirmation
+        else t("presentation.copy.development_evaluation", locale)
+    )
     if report.get("status") == "evaluation_recorded_pending_replay":
         status = "pending_replay"
     else:
@@ -712,10 +1069,13 @@ def result_rows(
         )
     rows: list[list[Any]] = [
         [
-            "结论",
-            "通过已记录的稳定性、证据与性能门",
-            _status_label(status),
-            f"{phase}的已记录判断",
+            t("presentation.copy.outcome", locale),
+            t(
+                "presentation.copy.pass_the_recorded_stability_evidence_and_performance_gates",
+                locale,
+            ),
+            _status_label(status, locale=locale),
+            t("presentation.copy.recorded_outcome_of", locale, p0=phase),
         ]
     ]
     performance = _mapping(evaluation.get("performance_gate"))
@@ -723,26 +1083,31 @@ def result_rows(
         minimum = performance.get("success_rate_min")
         rows.append(
             [
-                "试次成功率",
-                _percent(minimum) if minimum is not None else "未声明",
-                _percent(evaluation.get("success_rate")),
-                f"{phase}的已记录汇总",
+                t("presentation.copy.trial_success_rate", locale),
+                _percent(minimum, locale=locale)
+                if minimum is not None
+                else t("presentation.copy.not_declared", locale),
+                _percent(evaluation.get("success_rate"), locale=locale),
+                t("presentation.copy.recorded_summary_of", locale, p0=phase),
             ]
         )
     if evaluation.get("wilson_lower_bound_95") is not None:
         rows.append(
             [
-                "成功率 95% Wilson 下界",
-                _percent(performance.get("success_rate_min"))
+                t("presentation.copy.95_wilson_lower_bound_for_success_rate", locale),
+                _percent(performance.get("success_rate_min"), locale=locale)
                 if performance.get("success_rate_min") is not None
-                else "未声明",
-                _percent(evaluation.get("wilson_lower_bound_95")),
-                "已记录的保守成功率下界",
+                else t("presentation.copy.not_declared", locale),
+                _percent(evaluation.get("wilson_lower_bound_95"), locale=locale),
+                t(
+                    "presentation.copy.recorded_conservative_lower_bound_for_success_rate",
+                    locale,
+                ),
             ]
         )
     metric_evaluation = evaluation
     if selection is not None:
-        _, selected_trial = _selected_trial(report, selection)
+        _, selected_trial = _selected_trial(report, selection, locale=locale)
         if selected_trial:
             trial_id = str(selected_trial.get("trial_id") or "")
             metric_trial = selected_trial
@@ -757,15 +1122,18 @@ def result_rows(
                     selected_trial,
                 )
             metric_evaluation = {**evaluation, "trials": [metric_trial]}
-    metric_rows = _recorded_metric_rows(report, metric_evaluation)
+    metric_rows = _recorded_metric_rows(report, metric_evaluation, locale=locale)
     rows.extend(metric_rows)
     if evaluation and not metric_rows:
         rows.append(
             [
-                "试次指标",
-                "按冻结的评价合同",
-                "未记录",
-                "当前评价没有提供逐试次指标；未从轨迹重新计算。",
+                t("presentation.copy.trial_metrics", locale),
+                t("presentation.copy.under_the_frozen_evaluation_contract", locale),
+                t("presentation.copy.not_recorded", locale),
+                t(
+                    "presentation.copy.the_current_evaluation_provides_no_per_trial_metrics_trajectories_were_not_used_to_recalculate_them",
+                    locale,
+                ),
             ]
         )
     return rows
@@ -803,28 +1171,41 @@ def _packet_order(report: Mapping[str, Any]) -> list[int]:
     return list(dict.fromkeys(preferred))
 
 
-def evaluation_options(report: Mapping[str, Any]) -> list[tuple[str, str]]:
+def evaluation_options(
+    report: Mapping[str, Any], locale: Locale = "zh-CN"
+) -> list[tuple[str, str]]:
     """List stable packet/trial selections with their true evaluation phase."""
 
     report = _mapping(report)
     packets = _items(report.get("evaluation_packets"))
     labels = {
-        "development": "开发评价",
-        "fresh_confirmation": "独立确认",
-        "replay": "重放检查",
+        "development": t("presentation.copy.development_evaluation", locale),
+        "fresh_confirmation": t("presentation.copy.independent_confirmation", locale),
+        "replay": t("presentation.copy.replay_check", locale),
     }
     options: list[tuple[str, str]] = []
     for packet_index in _packet_order(report):
         packet = packets[packet_index]
         split = str(packet.get("evaluation_split") or "")
-        phase = labels.get(split, "未识别评价")
+        phase = labels.get(
+            split, t("presentation.copy.unrecognized_evaluation", locale)
+        )
         for trial_index, trial in enumerate(_items(packet.get("trials"))):
             if not isinstance(trial, Mapping):
                 continue
-            trial_id = _plain(trial.get("trial_id") or f"第 {trial_index + 1} 次")
+            trial_id = _plain(
+                trial.get("trial_id")
+                or t("presentation.copy.trial", locale, p0=trial_index + 1)
+            )
             options.append(
                 (
-                    f"{phase} · 第 {trial_index + 1} 次（{trial_id}）",
+                    t(
+                        "presentation.copy.trial_2",
+                        locale,
+                        p0=phase,
+                        p1=trial_index + 1,
+                        p2=trial_id,
+                    ),
                     f"{packet_index}:{trial_index}",
                 )
             )
@@ -832,13 +1213,13 @@ def evaluation_options(report: Mapping[str, Any]) -> list[tuple[str, str]]:
 
 
 def _selected_trial(
-    report: Mapping[str, Any], selection: str | None
+    report: Mapping[str, Any], selection: str | None, locale: Locale = "zh-CN"
 ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     packets = _items(report.get("evaluation_packets"))
-    allowed = {value for _, value in evaluation_options(report)}
+    allowed = {value for _, value in evaluation_options(report, locale=locale)}
     chosen = str(selection or "")
     if chosen not in allowed:
-        options = evaluation_options(report)
+        options = evaluation_options(report, locale=locale)
         chosen = options[0][1] if options else ""
     try:
         packet_index, trial_index = (int(item) for item in chosen.split(":"))
@@ -851,10 +1232,12 @@ def _selected_trial(
     return packet, trial
 
 
-def signal_options(report: Mapping[str, Any], selection: str | None) -> list[str]:
+def signal_options(
+    report: Mapping[str, Any], selection: str | None, locale: Locale = "zh-CN"
+) -> list[str]:
     """List output signals present in the selected recorded trial."""
 
-    _, trial = _selected_trial(_mapping(report), selection)
+    _, trial = _selected_trial(_mapping(report), selection, locale=locale)
     outputs = _mapping(_mapping(trial.get("trajectory")).get("outputs"))
     return [str(name) for name, values in outputs.items() if isinstance(values, list)]
 
@@ -878,13 +1261,13 @@ def _signal_unit(
     return "" if text == "unspecified" else _plain(text)
 
 
-def _base_figure(title: str) -> go.Figure:
+def _base_figure(title: str, locale: Locale = "zh-CN") -> go.Figure:
     figure = go.Figure()
     figure.update_layout(
         height=320,
         margin={"l": 48, "r": 18, "t": 48, "b": 42},
         title=title,
-        xaxis_title="时间 (s)",
+        xaxis_title=t("presentation.copy.time_s", locale),
     )
     return figure
 
@@ -893,13 +1276,18 @@ def evaluation_figures(
     report: Mapping[str, Any],
     selection: str | None = None,
     signal: str | None = None,
+    locale: Locale = "zh-CN",
 ) -> tuple[go.Figure, go.Figure]:
     """Plot one recorded output/reference and its recorded control inputs."""
 
     report = _mapping(report)
-    output_figure = _base_figure("输出与目标")
-    control_figure = _base_figure("控制输入")
-    _, trial = _selected_trial(report, selection)
+    output_figure = _base_figure(
+        t("presentation.copy.output_and_target", locale), locale=locale
+    )
+    control_figure = _base_figure(
+        t("presentation.copy.control_inputs_2", locale), locale=locale
+    )
+    _, trial = _selected_trial(report, selection, locale=locale)
     trajectory = _mapping(trial.get("trajectory"))
     time_s = trajectory.get("time_s")
     if not isinstance(time_s, list):
@@ -924,7 +1312,7 @@ def evaluation_figures(
                 y=reference,
                 mode="lines",
                 line={"dash": "dash"},
-                name="目标值",
+                name=t("presentation.copy.target", locale),
             )
         output_unit = _signal_unit(report, trial, selected, control=False)
         output_figure.update_yaxes(
@@ -945,48 +1333,77 @@ def evaluation_figures(
         if unit and unit not in control_units:
             control_units.append(unit)
     control_figure.update_yaxes(
-        title=f"控制输入 ({' / '.join(control_units)})" if control_units else "控制输入"
+        title=t(
+            "presentation.copy.control_inputs_3", locale, p0=" / ".join(control_units)
+        )
+        if control_units
+        else t("presentation.copy.control_inputs_2", locale)
     )
     return output_figure, control_figure
 
 
-def upload_feedback(report: Mapping[str, Any]) -> str:
+def upload_feedback(report: Mapping[str, Any], locale: Locale = "zh-CN") -> str:
     """Explain the latest authoritative upload audit and its next repair."""
 
     attempts = _items(_mapping(report).get("upload_attempts"))
     if not attempts or not isinstance(attempts[-1], Mapping):
-        return "还没有上传检查记录。"
+        return t("presentation.copy.no_upload_inspection_has_been_recorded", locale)
     audit = _mapping(attempts[-1].get("audit")) or attempts[-1]
     gates = [gate for gate in _items(audit.get("gates")) if isinstance(gate, Mapping)]
     passed = sum(gate.get("status") == "passed" for gate in gates)
     unreached = sum(gate.get("status") == "not_reached" for gate in gates)
     status = str(audit.get("status") or "")
     if status == "accepted":
-        return f"上传已接受：已通过 {passed} 项检查，没有把被拒数据计入证据。"
+        return t(
+            "presentation.copy.upload_accepted_checks_passed_rejected_data_was_not_counted_as_evidence",
+            locale,
+            p0=passed,
+        )
     failed_id = str(audit.get("failed_gate") or "")
     definition = GATE_DEFINITIONS.get(failed_id)
     failed_gate = next((gate for gate in gates if gate.get("id") == failed_id), {})
-    label = definition[0] if definition else failed_gate.get("label") or "未知检查项"
-    redo = (
-        definition[1]
+    label = (
+        t(f"presentation.gate.{failed_id}.label", locale)
         if definition
-        else failed_gate.get("redo") or "请按当前协议重新准备数据。"
+        else failed_gate.get("label") or t("presentation.copy.unknown_check", locale)
+    )
+    redo = (
+        t(f"presentation.gate.{failed_id}.redo", locale)
+        if definition
+        else failed_gate.get("redo")
+        or t("presentation.copy.prepare_new_data_under_the_current_protocol", locale)
     )
     binding = _mapping(report.get("registered_case_binding"))
     if failed_id == "file_format" and binding.get("evidence_mode") == "exercise_bundle":
-        redo = "请下载并上传当前协议生成的完整教学练习 ZIP 包，保留包内文件。"
+        redo = t(
+            "presentation.copy.download_and_upload_the_complete_training_exercise_zip_generated_by_the_current_protocol_preserving_",
+            locale,
+        )
     details = str(failed_gate.get("details") or audit.get("message") or "").strip()
     parts = [
-        f"本次上传未接受：在“{_safe(label)}”处未通过。",
-        f"建议：{_safe(redo)}",
-        f"检查进度：已通过 {passed} 项，尚未检查 {unreached} 项。",
+        t(
+            "presentation.copy.upload_rejected_the_check_failed",
+            locale,
+            p0=_safe(label),
+        ),
+        t("presentation.copy.recommended_action", locale, p0=_safe(redo)),
+        t(
+            "presentation.copy.check_progress_passed_not_yet_checked",
+            locale,
+            p0=passed,
+            p1=unreached,
+        ),
     ]
     if details:
-        parts.append(f"技术信息：{_safe(details)}")
+        parts.append(
+            t("presentation.copy.technical_details", locale, p0=_safe(details))
+        )
     return "\n\n".join(parts)
 
 
-def trace_preview(report: Mapping[str, Any]) -> tuple[list[str], list[list[Any]]]:
+def trace_preview(
+    report: Mapping[str, Any], locale: Locale = "zh-CN"
+) -> tuple[list[str], list[list[Any]]]:
     """Preview at most twenty samples from the latest accepted public trace."""
 
     for evidence in reversed(_items(_mapping(report).get("evidence"))):
@@ -1011,18 +1428,26 @@ def trace_preview(report: Mapping[str, Any]) -> tuple[list[str], list[list[Any]]
         if not valid_signals:
             continue
         trial = _plain(
-            evidence.get("trial_id") or trace.get("trial_id") or "未标注试次"
+            evidence.get("trial_id")
+            or trace.get("trial_id")
+            or t("presentation.copy.unlabeled_trial", locale)
         )
-        headers = ["时间 (s)", "试次", *[_plain(name) for name in valid_signals]]
+        headers = [
+            t("presentation.copy.time_s", locale),
+            t("presentation.copy.trial_3", locale),
+            *[_plain(name) for name in valid_signals],
+        ]
         rows = [
             [time_s[index], trial, *[signals[name][index] for name in valid_signals]]
             for index in range(min(20, len(time_s)))
         ]
         return headers, rows
-    return ["时间 (s)"], []
+    return [t("presentation.copy.time_s", locale)], []
 
 
-def protocol_summary(report: Mapping[str, Any], *, request_upload: bool = True) -> str:
+def protocol_summary(
+    report: Mapping[str, Any], *, request_upload: bool = True, locale: Locale = "zh-CN"
+) -> str:
     """Summarize the active protocol without exposing a hardware command."""
 
     report = _mapping(report)
@@ -1039,35 +1464,69 @@ def protocol_summary(report: Mapping[str, Any], *, request_upload: bool = True) 
         None,
     )
     if protocol is None:
-        return "当前还没有可执行的实验协议。"
+        return t(
+            "presentation.copy.no_executable_experiment_protocol_is_available_yet",
+            locale,
+        )
     units = _mapping(protocol.get("units"))
     output_units = _mapping(units.get("outputs"))
-    requested = _named_signals(protocol.get("requested_signals"), output_units)
+    requested = _named_signals(
+        protocol.get("requested_signals"), output_units, locale=locale
+    )
     control_names = protocol.get("control_inputs")
     control_units = {str(name): units.get("input") for name in _items(control_names)}
-    controls = _named_signals(control_names, control_units)
+    controls = _named_signals(control_names, control_units, locale=locale)
     repeats = protocol.get("repeats")
     sample_period = protocol.get("sample_period_s")
     exercise = (
         _mapping(report.get("registered_case_binding")).get("evidence_mode")
         == "exercise_bundle"
     )
-    file_type = "教学练习 ZIP" if exercise else "CSV 或 JSON"
+    file_type = (
+        t("presentation.copy.training_exercise_zip", locale)
+        if exercise
+        else t("presentation.copy.csv_or_json", locale)
+    )
     lines = [
-        f"**观测信号：** {requested}",
-        f"**控制输入记录：** {controls}",
-        f"**独立重复：** {_number(repeats) if repeats is not None else '未提供'} 次",
-        f"**采样间隔：** {_number(sample_period) if sample_period is not None else '未提供'} s",
-        f"**数据类型：** {_safe(protocol.get('data_kind') or '未提供')}；上传文件为 {file_type}",
+        t("presentation.copy.measured_signals_2", locale, p0=requested),
+        t("presentation.copy.control_input_records", locale, p0=controls),
+        t(
+            "presentation.copy.independent_repeats",
+            locale,
+            p0=_number(repeats)
+            if repeats is not None
+            else t("presentation.copy.not_provided", locale),
+        ),
+        t(
+            "presentation.copy.sample_interval_s",
+            locale,
+            p0=_number(sample_period)
+            if sample_period is not None
+            else t("presentation.copy.not_provided", locale),
+        ),
+        t(
+            "presentation.copy.data_kind_upload_format",
+            locale,
+            p0=_safe(
+                protocol.get("data_kind") or t("presentation.copy.not_provided", locale)
+            ),
+            p1=file_type,
+        ),
     ]
     if request_upload:
-        lines.append("请下载当前操作包，按其中的协议采集或准备数据后再上传。")
+        lines.append(
+            t(
+                "presentation.copy.download_the_current_operator_package_collect_or_prepare_data_under_its_protocol_then_upload_it",
+                locale,
+            )
+        )
     return "\n".join(lines)
 
 
 __all__ = [
     "evaluation_figures",
     "evaluation_options",
+    "input_contract_copy",
     "project_workspace",
     "protocol_summary",
     "result_rows",

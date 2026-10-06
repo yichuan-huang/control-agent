@@ -1,3 +1,4 @@
+import { keepLocaleData, useI18n } from "./i18n";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -13,65 +14,68 @@ import {
   Typography,
   Upload,
 } from "antd";
-import { api, download } from "./api/client";
+import { useApi } from "./api/client";
 import { useTaskReader } from "./api/useTaskReader";
 import type { NodePage, DTO, Summary } from "./api/types";
 import { parseObject } from "./safety";
 import { useSettings } from "./context";
 import { useOperation } from "./operations";
 
-const artifactLabels: Record<string, string> = {
-  report: "完整报告",
-  task: "任务合同",
-  diagnostic: "结构诊断",
-  evidence: "公开证据",
-  route: "路线选择",
-  features: "特征",
-  controller: "控制器",
-  qualification: "资格审查",
-  freeze: "冻结快照",
-  evaluation: "开发评价",
-  confirmation: "独立确认",
-  tuning: "有界调优",
-  events: "审计事件",
-  agent_records: "Agent 执行与参考来源",
-  phase_plan: "阶段方案",
-  protocols: "实验协议",
-  operator_handoffs: "操作交接",
-  upload_receipts: "上传回执",
-};
-const downloadLabels: Record<string, string> = {
-  bundle: "完整公开包",
-  report: "原始报告",
-  protocol: "实验协议",
-  controller: "控制器",
-  qualification: "资格审查",
-  freeze: "冻结快照",
-  evaluation: "开发评价",
-  confirmation: "独立确认",
-  exercise: "教学练习包",
-  operator: "操作包",
-  features: "特征",
-  feedback: "调优反馈",
-  result: "最终结果",
-  audit: "审计记录",
-  upload_receipt: "上传回执",
-};
-
 function NodeViewer({ task }: { task: Summary }) {
+  const { t: tr, locale, errorText } = useI18n();
+  const { download } = useApi();
+  const artifactLabels: Record<string, string> = {
+    report: tr("frontend.expert.full_report"),
+    task: tr("frontend.expert.task_contract"),
+    diagnostic: tr("frontend.expert.diagnosis"),
+    evidence: tr("frontend.expert.public_evidence"),
+    route: tr("frontend.expert.route"),
+    features: tr("frontend.expert.features"),
+    controller: tr("frontend.expert.controller"),
+    qualification: tr("frontend.expert.qualification"),
+    freeze: tr("frontend.expert.freeze"),
+    evaluation: tr("frontend.expert.development"),
+    confirmation: tr("frontend.expert.confirmation"),
+    tuning: tr("frontend.expert.tuning"),
+    events: tr("frontend.expert.events"),
+    agent_records: tr("frontend.expert.agent_records"),
+    phase_plan: tr("frontend.expert.phase_plan"),
+    protocols: tr("frontend.expert.protocol"),
+    operator_handoffs: tr("frontend.expert.handoffs"),
+    upload_receipts: tr("frontend.expert.receipts"),
+  };
+
   const read = useTaskReader(task);
   const [artifact, setArtifact] = useState("report");
   const [pointer, setPointer] = useState("");
   const [offset, setOffset] = useState(0);
   const catalog = useQuery({
-    queryKey: ["task", task.session_id, task.revision, "artifacts"],
+    placeholderData: keepLocaleData(locale, [
+      "task",
+      task.session_id,
+      locale,
+      task.revision,
+      "artifacts",
+    ]),
+    queryKey: ["task", task.session_id, locale, task.revision, "artifacts"],
     queryFn: () =>
       read<DTO<"ArtifactCatalog">>(`/tasks/${task.session_id}/artifacts`),
   });
   const page = useQuery({
+    placeholderData: keepLocaleData(locale, [
+      "task",
+      task.session_id,
+      locale,
+      task.revision,
+      "node",
+      artifact,
+      pointer,
+      offset,
+    ]),
     queryKey: [
       "task",
       task.session_id,
+      locale,
       task.revision,
       "node",
       artifact,
@@ -86,7 +90,7 @@ function NodeViewer({ task }: { task: Summary }) {
   return (
     <Space orientation="vertical" style={{ width: "100%" }}>
       <Select
-        aria-label="选择产物"
+        aria-label={tr("frontend.expert.choose_artifact")}
         showSearch={{ optionFilterProp: "label" }}
         style={{ width: "100%" }}
         value={artifact}
@@ -108,14 +112,14 @@ function NodeViewer({ task }: { task: Summary }) {
             setOffset(0);
           }}
         >
-          上一级
+          {tr("frontend.expert.parent")}
         </Button>
         <Typography.Text code>{pointer || "/"}</Typography.Text>
         <a href={download(task.session_id, "artifact", artifact)}>
-          下载完整产物
+          {tr("frontend.expert.download_artifact")}
         </a>
       </Space>
-      {page.error && <Alert type="error" title={String(page.error)} />}
+      {page.error && <Alert type="error" title={errorText(page.error)} />}
       <Table
         size="small"
         scroll={{ x: 480, y: 420 }}
@@ -126,7 +130,7 @@ function NodeViewer({ task }: { task: Summary }) {
         dataSource={page.data?.items}
         columns={[
           {
-            title: "字段",
+            title: tr("frontend.expert.field"),
             dataIndex: "key",
             render: (v, row) => (
               <Button
@@ -141,8 +145,8 @@ function NodeViewer({ task }: { task: Summary }) {
               </Button>
             ),
           },
-          { title: "类型", dataIndex: "kind" },
-          { title: "预览", dataIndex: "preview" },
+          { title: tr("frontend.expert.type"), dataIndex: "kind" },
+          { title: tr("frontend.expert.preview"), dataIndex: "preview" },
         ]}
       />
       {page.data?.kind === "string" && <pre>{page.data.text}</pre>}
@@ -159,16 +163,33 @@ function NodeViewer({ task }: { task: Summary }) {
         }
       />
       <Typography.Text type="secondary">
-        逐层加载当前页；完整原始记录通过下载保留。
+        {tr("frontend.expert.artifact_help")}
       </Typography.Text>
     </Space>
   );
 }
 function Timeline({ task }: { task: Summary }) {
+  const { t: tr, locale, errorText } = useI18n();
+
   const read = useTaskReader(task);
   const [offset, setOffset] = useState(0);
   const q = useQuery({
-    queryKey: ["task", task.session_id, task.revision, "events", offset],
+    placeholderData: keepLocaleData(locale, [
+      "task",
+      task.session_id,
+      locale,
+      task.revision,
+      "events",
+      offset,
+    ]),
+    queryKey: [
+      "task",
+      task.session_id,
+      locale,
+      task.revision,
+      "events",
+      offset,
+    ],
     queryFn: () =>
       read<DTO<"SectionPage">>(
         `/tasks/${task.session_id}/sections/events?offset=${offset}&limit=50`,
@@ -176,10 +197,9 @@ function Timeline({ task }: { task: Summary }) {
   });
   return (
     <>
-      {q.error && <Alert type="error" title={String(q.error)} />}{" "}
+      {q.error && <Alert type="error" title={errorText(q.error)} />}{" "}
       <Typography.Paragraph>
-        任务 → 诊断 → 取证 → 路线／特征 → 控制器 → 冻结 → 评价 → 调优／确认 →
-        结果
+        {tr("frontend.expert.timeline")}
       </Typography.Paragraph>
       <Table
         size="small"
@@ -191,12 +211,12 @@ function Timeline({ task }: { task: Summary }) {
         dataSource={q.data?.items}
         columns={[
           {
-            title: "序号",
+            title: tr("frontend.expert.index"),
             width: 70,
             render: (_, __, index) => offset + index + 1,
           },
           {
-            title: "已记录事件（按原始顺序）",
+            title: tr("frontend.expert.recorded_events"),
             render: (_, row) => (
               <Typography.Text style={{ whiteSpace: "pre-wrap" }}>
                 {JSON.stringify(row)}
@@ -221,9 +241,29 @@ export default function Expert({
   task?: Summary;
   onClose: () => void;
 }) {
+  const { t: tr, errorText } = useI18n();
+  const { api, download } = useApi();
+  const downloadLabels: Record<string, string> = {
+    bundle: tr("frontend.expert.public_bundle"),
+    report: tr("frontend.expert.raw_report"),
+    protocol: tr("frontend.expert.protocol"),
+    controller: tr("frontend.expert.controller"),
+    qualification: tr("frontend.expert.qualification"),
+    freeze: tr("frontend.expert.freeze"),
+    evaluation: tr("frontend.expert.development"),
+    confirmation: tr("frontend.expert.confirmation"),
+    exercise: tr("frontend.expert.exercise_bundle"),
+    operator: tr("frontend.expert.operator_bundle"),
+    features: tr("frontend.expert.features"),
+    feedback: tr("frontend.expert.feedback"),
+    result: tr("frontend.expert.final_result"),
+    audit: tr("frontend.expert.audit_log"),
+    upload_receipt: tr("frontend.expert.receipts"),
+  };
+
   const [tab, setTab] = useState(task ? "artifacts" : "submit");
   const [text, setText] = useState("");
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState<unknown>();
   const [busy, setBusy] = useState(false);
   const { credentials, useRag } = useSettings();
   const taskOperation = useOperation(task?.session_id, tab !== "import");
@@ -233,29 +273,42 @@ export default function Expert({
     setBusy(true);
     try {
       await api("/artifacts/validate", { payload: parseObject(text) });
-      setFeedback("产物合同校验通过；校验不授予执行权限。");
+      setFeedback({ message_ref: { key: "frontend.expert.valid_artifact" } });
     } catch (e) {
-      setFeedback(String(e));
+      setFeedback(e);
     } finally {
       setBusy(false);
     }
   }
   return (
-    <Drawer title="专家工具" open onClose={onClose} size={860} destroyOnHidden>
+    <Drawer
+      title={tr("frontend.expert.title")}
+      open
+      onClose={onClose}
+      size={860}
+      destroyOnHidden
+    >
       <Tabs
         activeKey={tab}
         onChange={setTab}
         items={[
           ...(task
             ? [
-                { key: "artifacts", label: "产物浏览" },
-                { key: "events", label: "九阶段时间线 / 审计" },
+                { key: "artifacts", label: tr("frontend.expert.browse") },
+                { key: "events", label: tr("frontend.expert.timeline_tab") },
               ]
             : []),
-          { key: "submit", label: task ? "JSON 提交" : "完整任务合同" },
-          { key: "validate", label: "产物校验" },
-          { key: "import", label: "历史公开包导入" },
-          ...(task ? [{ key: "downloads", label: "下载" }] : []),
+          {
+            key: "submit",
+            label: task
+              ? tr("frontend.expert.submit_json")
+              : tr("frontend.expert.full_task_contract"),
+          },
+          { key: "validate", label: tr("frontend.expert.validate_tab") },
+          { key: "import", label: tr("frontend.expert.import_tab") },
+          ...(task
+            ? [{ key: "downloads", label: tr("frontend.expert.download") }]
+            : []),
         ]}
       />
       {tab === "artifacts" && task && <NodeViewer task={task} />}{" "}
@@ -264,16 +317,18 @@ export default function Expert({
         <Space orientation="vertical" style={{ width: "100%" }}>
           {task && tab === "submit" && (
             <Alert
-              title={`当前允许动作：${task.workspace.action_title}`}
+              title={tr("frontend.expert.allowed_action", {
+                action: task.workspace.action_title,
+              })}
               description={String(task.input_contract.guidance ?? "")}
             />
           )}
           <Input.TextArea
-            aria-label="专家 JSON"
+            aria-label={tr("frontend.expert.json_label")}
             rows={14}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="粘贴完整 JSON 对象"
+            placeholder={tr("frontend.expert.json_placeholder")}
           />
           {task && tab === "submit" && (
             <Button
@@ -287,7 +342,7 @@ export default function Expert({
                 )
               }
             >
-              载入当前字段模板
+              {tr("frontend.expert.load_template")}
             </Button>
           )}
           <Button
@@ -321,23 +376,23 @@ export default function Expert({
                     )
                     .catch(() => {});
                 } catch (e) {
-                  setFeedback(String(e));
+                  setFeedback(e);
                 }
               }
             }}
           >
             {tab === "validate"
-              ? "校验产物"
+              ? tr("frontend.expert.validate_artifact")
               : task
-                ? "提交当前动作"
-                : "创建未确认任务"}
+                ? tr("frontend.expert.submit_action")
+                : tr("frontend.expert.create_unconfirmed")}
           </Button>
         </Space>
       )}
       {tab === "import" && (
         <>
           <Typography.Paragraph>
-            导入后需重新确认任务边界；不会继承案例执行权限或知识库绑定。
+            {tr("frontend.expert.import_help")}
           </Typography.Paragraph>
           <Upload
             accept=".zip"
@@ -345,17 +400,22 @@ export default function Expert({
             beforeUpload={(file) => {
               const data = new FormData();
               data.append("file", file);
+              setFeedback(undefined);
               setBusy(true);
               void api<DTO<"UploadResponse">>("/uploads", data)
                 .then((r) =>
-                  operation.submit("/imports", { file_id: r.file_id }),
+                  operation
+                    .submit("/imports", { file_id: r.file_id })
+                    .catch(() => {}),
                 )
-                .catch((e) => setFeedback(String(e)))
+                .catch((e) => setFeedback(e))
                 .finally(() => setBusy(false));
               return false;
             }}
           >
-            <Button loading={busy || operation.busy}>选择历史公开 ZIP</Button>
+            <Button loading={busy || operation.busy}>
+              {tr("frontend.expert.select_bundle")}
+            </Button>
           </Upload>
         </>
       )}
@@ -368,7 +428,9 @@ export default function Expert({
           ))}
         </Space>
       )}
-      {feedback && <Alert style={{ marginTop: 16 }} title={feedback} />}{" "}
+      {!!feedback && (
+        <Alert style={{ marginTop: 16 }} title={errorText(feedback)} />
+      )}{" "}
       {operation.view}
     </Drawer>
   );

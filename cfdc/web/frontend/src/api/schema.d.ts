@@ -558,7 +558,7 @@ export interface components {
             rag: components["schemas"]["RAGStatus"];
             /**
              * Version
-             * @default 0.3.13
+             * @default 0.3.14
              */
             version: string;
         };
@@ -665,6 +665,7 @@ export interface components {
             status: string;
             /** Message */
             message: string;
+            message_ref?: components["schemas"]["MessageRef"] | null;
         };
         /** DoctorRequest */
         DoctorRequest: {
@@ -802,6 +803,15 @@ export interface components {
              */
             file_id: string;
         };
+        /** MessageRef */
+        MessageRef: {
+            /** Key */
+            key: string;
+            /** Params */
+            params?: {
+                [key: string]: string | number | boolean | null;
+            };
+        };
         /** NodeItem */
         NodeItem: {
             /** Key */
@@ -899,6 +909,7 @@ export interface components {
             connected: boolean;
             /** Message */
             message: string;
+            message_ref?: components["schemas"]["MessageRef"] | null;
         };
         /** ProtocolView */
         ProtocolView: {
@@ -941,6 +952,11 @@ export interface components {
              * @default false
              */
             receipt_saved: boolean;
+            message_ref?: components["schemas"]["MessageRef"] | null;
+            /** Field Message Refs */
+            field_message_refs?: {
+                [key: string]: components["schemas"]["MessageRef"];
+            };
         };
         /** RAGStatus */
         RAGStatus: {
@@ -953,6 +969,7 @@ export interface components {
             message: string;
             /** Snapshot */
             snapshot?: string | null;
+            message_ref?: components["schemas"]["MessageRef"] | null;
         };
         /** SectionPage */
         SectionPage: {
@@ -1056,7 +1073,9 @@ export type $defs = Record<string, never>;
 export interface operations {
     configuration_api_v1_config_get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1103,7 +1122,9 @@ export interface operations {
     };
     probe_api_v1_config_probe_post: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1154,7 +1175,9 @@ export interface operations {
     };
     doctor_api_v1_config_doctor_post: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1205,7 +1228,9 @@ export interface operations {
     };
     cases_api_v1_cases_get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1252,7 +1277,9 @@ export interface operations {
     };
     case_api_v1_cases__case_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path: {
                 case_id: string;
@@ -1301,7 +1328,9 @@ export interface operations {
     };
     default_draft_api_v1_drafts_default_get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1348,7 +1377,9 @@ export interface operations {
     };
     validate_draft_api_v1_drafts_validate_post: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1399,7 +1430,9 @@ export interface operations {
     };
     create_task_api_v1_tasks_post: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1450,7 +1483,9 @@ export interface operations {
     };
     import_history_api_v1_imports_post: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1501,7 +1536,9 @@ export interface operations {
     };
     task_api_v1_tasks__task_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -1550,7 +1587,9 @@ export interface operations {
     };
     action_api_v1_tasks__task_id__actions_post: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -1603,7 +1642,9 @@ export interface operations {
     };
     operation_api_v1_operations__operation_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path: {
                 operation_id: string;
@@ -1652,7 +1693,9 @@ export interface operations {
     };
     task_operations_api_v1_tasks__task_id__operations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -1701,7 +1744,9 @@ export interface operations {
     };
     upload_api_v1_uploads_post: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1752,7 +1797,9 @@ export interface operations {
     };
     validate_artifact_api_v1_artifacts_validate_post: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1803,7 +1850,9 @@ export interface operations {
     };
     artifacts_api_v1_tasks__task_id__artifacts_get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -1856,6 +1905,7 @@ export interface operations {
                 pointer?: string;
                 offset?: number;
                 limit?: number;
+                locale?: "en" | "zh-CN";
             };
             header?: never;
             path: {
@@ -1909,6 +1959,7 @@ export interface operations {
             query?: {
                 offset?: number;
                 limit?: number;
+                locale?: "en" | "zh-CN";
             };
             header?: never;
             path: {
@@ -1959,7 +2010,9 @@ export interface operations {
     };
     protocol_api_v1_tasks__task_id__protocol_get: {
         parameters: {
-            query?: never;
+            query?: {
+                locale?: "en" | "zh-CN";
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -2010,6 +2063,7 @@ export interface operations {
         parameters: {
             query?: {
                 selection?: string | null;
+                locale?: "en" | "zh-CN";
             };
             header?: never;
             path: {
@@ -2065,6 +2119,7 @@ export interface operations {
                 start?: number | null;
                 end?: number | null;
                 control?: string | null;
+                locale?: "en" | "zh-CN";
             };
             header?: never;
             path: {
@@ -2119,6 +2174,7 @@ export interface operations {
                 signal: string;
                 start?: number | null;
                 end?: number | null;
+                locale?: "en" | "zh-CN";
             };
             header?: never;
             path: {
@@ -2170,6 +2226,7 @@ export interface operations {
         parameters: {
             query?: {
                 artifact_id?: string | null;
+                locale?: "en" | "zh-CN";
             };
             header?: never;
             path: {

@@ -18,6 +18,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-install-project
 COPY . .
+# Windows build contexts synthesize executable bits; Python modules are not executables.
+RUN find /app -type f -name '*.py' -exec chmod 0644 {} +
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-editable && rm -rf /app/build
 
 FROM node:24.21.0-bookworm-slim AS frontend-build
@@ -27,6 +29,7 @@ RUN corepack enable \
     && corepack prepare pnpm@12.4.1 --activate \
     && pnpm --dir cfdc/web/frontend install --frozen-lockfile
 COPY cfdc/web/frontend cfdc/web/frontend
+COPY cfdc/resources/locales cfdc/resources/locales
 RUN pnpm --dir cfdc/web/frontend run build
 
 FROM debian:bookworm-slim AS app

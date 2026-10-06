@@ -1,3 +1,4 @@
+import { keepLocaleData, useI18n } from "./i18n";
 import { lazy, Suspense, useState } from "react";
 import {
   Link,
@@ -21,18 +22,23 @@ import {
   Typography,
 } from "antd";
 import zhCN from "antd/locale/zh_CN";
-import { api } from "./api/client";
+import enUS from "antd/locale/en_US";
+import { useApi } from "./api/client";
 import type { DTO, Config } from "./api/types";
 import Wizard from "./Wizard";
 import Workspace from "./Workspace";
 import Settings from "./Settings";
-import { useSettings, ragLabel } from "./context";
+import { useSettings, ragLabel, connectionLabel } from "./context";
 const Expert = lazy(() => import("./Expert"));
 function Home() {
+  const { t: tr, locale } = useI18n();
+  const { api } = useApi();
+
   const navigate = useNavigate();
   const { connection } = useSettings();
   const config = useQuery({
-    queryKey: ["config"],
+    placeholderData: keepLocaleData(locale, ["config", locale]),
+    queryKey: ["config", locale],
     queryFn: () => api<Config>("/config"),
     refetchInterval: (q) =>
       q.state.data?.rag.status === "preparing" ? 2000 : false,
@@ -42,75 +48,87 @@ function Home() {
     <>
       <section className="hero">
         <Tag color="blue">CFDC · EVIDENCE-DRIVEN CONTROL</Tag>
-        <Typography.Title>把控制目标，变成可验证的结果。</Typography.Title>
+        <Typography.Title>{tr("frontend.app.hero_title")}</Typography.Title>
         <Typography.Paragraph>
-          从任务边界开始，通过证据形成方案，再以独立试验核对结果。每一步都有记录。
+          {tr("frontend.app.hero_description")}
         </Typography.Paragraph>
       </section>
       <div className="entry-grid">
-        <Card title="我的设备与数据">
+        <Card title={tr("frontend.app.my_equipment")}>
           <Typography.Paragraph>
-            定义目标、测量信号和软件试验边界，逐步补全已知信息。
+            {tr("frontend.app.my_equipment_help")}
           </Typography.Paragraph>
           <Button type="primary" size="large" onClick={() => navigate("/new")}>
-            创建我的任务
+            {tr("frontend.app.create_task")}
           </Button>
         </Card>
-        <Card title="体验内置案例">
+        <Card title={tr("frontend.app.built_in_cases")}>
           <Typography.Paragraph>
-            从加热器或电机案例开始，查看证据、控制器和评价如何衔接。
+            {tr("frontend.app.built_in_cases_help")}
           </Typography.Paragraph>
           <Button
             type="primary"
             size="large"
             onClick={() => navigate("/cases")}
           >
-            从案例开始
+            {tr("frontend.app.start_case")}
           </Button>
         </Card>
       </div>
       <Space wrap style={{ marginTop: 24 }}>
-        <Tag>模型：{connection}</Tag>
-        <Tag>知识库：{ragLabel(config.data?.rag.status)}</Tag>
+        <Tag>
+          {tr("frontend.app.model_prefix")}
+          {connectionLabel(connection, tr)}
+        </Tag>
+        <Tag>
+          {tr("frontend.app.knowledge_prefix")}
+          {ragLabel(config.data?.rag.status, tr)}
+        </Tag>
       </Space>
       {last && (
         <Button
           style={{ marginTop: 24 }}
           onClick={() => navigate(`/tasks/${last}`)}
         >
-          继续上次任务
+          {tr("frontend.app.continue_task")}
         </Button>
       )}
     </>
   );
 }
 function Cases() {
+  const { t: tr, locale, errorText } = useI18n();
+  const { api } = useApi();
+
   const [category, setCategory] = useState("engineering");
   const navigate = useNavigate();
   const q = useQuery({
-    queryKey: ["cases"],
+    placeholderData: keepLocaleData(locale, ["cases", locale]),
+    queryKey: ["cases", locale],
     queryFn: () => api<DTO<"CaseList">>("/cases"),
   });
   return (
     <>
-      <Typography.Title level={2}>选择一个案例</Typography.Title>
+      <Typography.Title level={2}>
+        {tr("frontend.app.choose_case")}
+      </Typography.Title>
       <Typography.Paragraph>
-        工程案例展示完整流程；审计案例用于理解边界与拒绝原因。
+        {tr("frontend.app.case_help")}
       </Typography.Paragraph>
       <Segmented
-        aria-label="案例分类"
+        aria-label={tr("frontend.app.case_category")}
         value={category}
         onChange={setCategory}
         options={[
-          { value: "engineering", label: "工程案例" },
-          { value: "audit", label: "审计案例" },
+          { value: "engineering", label: tr("frontend.app.engineering") },
+          { value: "audit", label: tr("frontend.app.audit") },
         ]}
         style={{ marginBottom: 24 }}
       />
       {q.isLoading ? (
         <Spin />
       ) : q.error ? (
-        <Empty description={String(q.error)} />
+        <Empty description={errorText(q.error)} />
       ) : (
         <div className="entry-grid">
           {q.data?.items
@@ -121,7 +139,9 @@ function Cases() {
                 title={c.title}
                 extra={
                   <Tag>
-                    {c.category === "engineering" ? "工程案例" : "审计案例"}
+                    {c.category === "engineering"
+                      ? tr("frontend.app.engineering")
+                      : tr("frontend.app.audit")}
                   </Tag>
                 }
               >
@@ -135,7 +155,7 @@ function Cases() {
                     navigate(`/new?case=${encodeURIComponent(c.id)}`)
                   }
                 >
-                  查看并使用案例
+                  {tr("frontend.app.use_case")}
                 </Button>
               </Card>
             ))}
@@ -145,6 +165,8 @@ function Cases() {
   );
 }
 export default function App() {
+  const { t: tr, locale, setLocale } = useI18n();
+
   const location = useLocation();
   const navigate = useNavigate();
   const [openTask, setOpenTask] = useState(false);
@@ -159,7 +181,7 @@ export default function App() {
   );
   return (
     <ConfigProvider
-      locale={zhCN}
+      locale={locale === "zh-CN" ? zhCN : enUS}
       theme={{
         token: {
           colorPrimary: "#176a73",
@@ -172,19 +194,31 @@ export default function App() {
     >
       <header className="topbar">
         <Link className="brand" to="/">
-          CFDC <span>控制任务工作台</span>
+          CFDC <span>{tr("frontend.app.brand")}</span>
         </Link>
         <Space wrap>
-          <Link to="/new">新建任务</Link>
+          <Segmented
+            aria-label={tr("frontend.app.language")}
+            value={locale}
+            onChange={(value) => setLocale(value as "en" | "zh-CN")}
+            options={[
+              { value: "zh-CN", label: "中文" },
+              { value: "en", label: "English" },
+            ]}
+          />
+          <Link to="/new">{tr("frontend.app.new_task")}</Link>
           <Button type="text" onClick={() => setOpenTask(true)}>
-            打开任务
+            {tr("frontend.app.open_task")}
           </Button>
-          <Link to="/cases">案例</Link>
+          <Link to="/cases">{tr("frontend.app.cases")}</Link>
           <Button type="text" onClick={() => setExpert(true)}>
-            导入 / 专家
+            {tr("frontend.app.import_expert")}
           </Button>
-          <Button aria-label="设置" onClick={() => setSettings(true)}>
-            设置
+          <Button
+            aria-label={tr("frontend.app.settings")}
+            onClick={() => setSettings(true)}
+          >
+            {tr("frontend.app.settings")}
           </Button>
         </Space>
       </header>
@@ -197,19 +231,19 @@ export default function App() {
           <Route
             path="*"
             element={
-              <Empty description="页面不存在">
-                <Link to="/">返回首页</Link>
+              <Empty description={tr("frontend.app.not_found")}>
+                <Link to="/">{tr("frontend.app.home")}</Link>
               </Empty>
             }
           />
         </Routes>
       </div>
-      <footer>CFDC Kernel · 可追溯的证据与软件评价</footer>
+      <footer>{tr("frontend.app.footer")}</footer>
       <Modal
-        title="打开任务"
+        title={tr("frontend.app.open_task")}
         open={openTask}
         onCancel={() => setOpenTask(false)}
-        okText="打开"
+        okText={tr("frontend.app.open")}
         okButtonProps={{ disabled: !taskId.trim() }}
         onOk={() => {
           navigate(`/tasks/${encodeURIComponent(taskId.trim())}`);
@@ -217,8 +251,8 @@ export default function App() {
         }}
       >
         <Input
-          aria-label="任务 ID"
-          placeholder="输入任务 ID"
+          aria-label={tr("frontend.app.task_id")}
+          placeholder={tr("frontend.app.task_id_placeholder")}
           value={taskId}
           onChange={(e) => setTaskId(e.target.value)}
           onPressEnter={() => {

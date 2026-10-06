@@ -700,7 +700,10 @@ def test_kernel_diagnosis_prompt_distinguishes_asserted_and_unknown_facts(tmp_pa
     os.getenv("CFDC_RUN_LIVE_LLM") != "1",
     reason="set CFDC_RUN_LIVE_LLM=1 to run the configured API acceptance test",
 )
-def test_live_llm_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
+@pytest.mark.parametrize("response_language", ["en", "zh-CN"])
+def test_live_llm_dc_motor_flow_fails_closed_after_bounded_tuning(
+    tmp_path, response_language
+):
     base_url = os.environ["CFDC_LLM_BASE_URL"]
     model = os.environ["CFDC_LLM_MODEL"]
     api_key = os.environ["CFDC_LLM_API_KEY"]
@@ -728,6 +731,13 @@ def test_live_llm_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
         "开环稳定；没有反向响应；纯延迟不显著；相对阶数较低；"
         "传感器和执行器足够；工作区内非线性较弱；对象是单输入单输出；"
         "实验间变化较小"
+        if response_language == "en"
+        else (
+            "The open loop is stable; there is no inverse response; pure delay is "
+            "not significant; relative degree is low; sensing and actuation are "
+            "adequate; nonlinearity is weak in the operating region; the plant is "
+            "single input single output; variation between experiments is small."
+        )
     )
     prepared = prepare_kernel_reply_for_ui(
         state,
@@ -736,7 +746,19 @@ def test_live_llm_dc_motor_flow_fails_closed_after_bounded_tuning(tmp_path):
         base_url=base_url,
         model=model,
         api_key=api_key,
+        response_language=response_language,
     )
+    language_label = "English" if response_language == "en" else "Simplified Chinese"
+    assert prepared["source_text"] == source_text
+    assert prepared["agent_records"]
+    for record in prepared["agent_records"]:
+        assert language_label in record.messages[0]["content"]
+        assert "prose" in record.messages[0]["content"]
+        assert "verbatim" in record.messages[0]["content"]
+    for update in prepared["diagnostic_updates"].values():
+        assert update["evidence"] in source_text
+    for candidate in prepared["parameter_candidates"]:
+        assert candidate["source_text"] in source_text
     report, state = continue_kernel_app_run(
         state,
         action="answer",

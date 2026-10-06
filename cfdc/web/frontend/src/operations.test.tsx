@@ -9,10 +9,60 @@ import { afterEach, expect, test, vi } from "vitest";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useOperation } from "./operations";
+import { I18nProvider, useI18n } from "./i18n";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   sessionStorage.clear();
+  localStorage.clear();
+});
+
+test("switching language keeps an active operation and draft without replaying a mutation", async () => {
+  sessionStorage.setItem("cfdc:operation:entry:/", "pending");
+  sessionStorage.setItem("cfdc:draft", "raw user draft");
+  const requests: { url: string; method: string }[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    requests.push({ url: String(url), method: init?.method ?? "GET" });
+    return new Response(
+      JSON.stringify({
+        operation_id: "pending",
+        status: "running",
+        session_id: null,
+        result: null,
+        error: null,
+      }),
+    );
+  });
+  function LocaleSwitch() {
+    const { setLocale } = useI18n();
+    return <button onClick={() => setLocale("en")}>English</button>;
+  }
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <MemoryRouter>
+        <I18nProvider initialLocale="zh-CN">
+          <LocaleSwitch />
+          <Subject />
+        </I18nProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await screen.findByText("操作：执行中");
+  fireEvent.click(screen.getByText("English"));
+  await screen.findByText("Operation: Running");
+  expect(screen.getByText("Submit").hasAttribute("disabled")).toBe(true);
+  expect(sessionStorage.getItem("cfdc:operation:entry:/")).toBe("pending");
+  expect(sessionStorage.getItem("cfdc:draft")).toBe("raw user draft");
+  await waitFor(() =>
+    expect(requests.some((request) => request.url.endsWith("locale=en"))).toBe(
+      true,
+    ),
+  );
+  expect(requests.every((request) => request.method === "GET")).toBe(true);
 });
 function Subject() {
   const op = useOperation();
@@ -141,7 +191,7 @@ test("a late missing-operation response cannot clear the new page's operation", 
   sessionStorage.setItem("cfdc:operation:entry:/other", "pending");
   let finishMissing!: (response: Response) => void;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-    if (String(url).endsWith("/missing"))
+    if (String(url).split("?")[0].endsWith("/missing"))
       return new Promise<Response>((resolve) => {
         finishMissing = resolve;
       });

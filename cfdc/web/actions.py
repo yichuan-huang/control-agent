@@ -7,6 +7,7 @@ from typing import Any
 
 from openai import OpenAIError
 
+from cfdc.i18n import Locale
 from cfdc.kernel.replies import _NO_INPUT_ACTIONS
 from cfdc.web import service
 from cfdc.web.errors import EXTERNAL_ERROR_MESSAGES, IMPORT_ERROR_MESSAGES, APIError
@@ -126,7 +127,7 @@ def public_action_error(exc: Exception, state: dict[str, Any]) -> APIError:
 
 
 def execute_action(
-    state: dict, request: ActionRequest, files: FileStore
+    state: dict, request: ActionRequest, files: FileStore, *, locale: Locale = "zh-CN"
 ) -> tuple[dict, dict]:
     action = service._normalise_kernel_action(request.action)
     data = request.input
@@ -206,6 +207,7 @@ def execute_action(
             base_url=credentials.base_url,
             model=credentials.model,
             api_key=credentials.api_key,
+            response_language=locale,
         )
         prepared_action = service._normalise_kernel_action(
             str(prepared.get("action") or "")

@@ -19,7 +19,7 @@ def test_doctor_reports_required_checks_and_never_echoes_api_key(
 
     payload = report.to_dict()
     assert report.status in {DoctorStatus.PASS, DoctorStatus.WARN}
-    assert payload["doctor_version"] == "cfdc-doctor/v1"
+    assert payload["doctor_version"] == "cfdc-doctor/v2"
     assert {item["id"] for item in payload["checks"]} >= {
         "python",
         "resources",
@@ -30,6 +30,11 @@ def test_doctor_reports_required_checks_and_never_echoes_api_key(
     }
     assert "super-secret-key" not in json.dumps(payload, ensure_ascii=False)
     assert not payload["required_failures"]
+    for check in payload["checks"]:
+        assert check["message"].isascii()
+        assert "message_cn" not in check
+        assert check["message_ref"]["key"].startswith("doctor.")
+        assert check["message_ref"]["params"] == {}
 
 
 def test_doctor_does_not_probe_non_loopback_ollama(tmp_path: Path) -> None:

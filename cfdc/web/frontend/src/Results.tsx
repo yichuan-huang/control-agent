@@ -1,3 +1,4 @@
+import { keepLocaleData, useI18n } from "./i18n";
 import { lazy, Suspense, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -13,12 +14,15 @@ import {
   Typography,
 } from "antd";
 import { Link } from "react-router-dom";
-import { download } from "./api/client";
+import { useApi } from "./api/client";
 import { useTaskReader } from "./api/useTaskReader";
 import type { Curve, Evaluations, Summary } from "./api/types";
 import type { WindowRange } from "./plotWindow";
 const Charts = lazy(() => import("./Charts"));
 export default function Results({ task }: { task: Summary }) {
+  const { t: tr, locale, errorText } = useI18n();
+  const { download } = useApi();
+
   const read = useTaskReader(task);
   const [selection, setSelection] = useState("");
   const [signal, setSignal] = useState("");
@@ -38,9 +42,18 @@ export default function Results({ task }: { task: Summary }) {
     );
   }, []);
   const evaluation = useQuery({
+    placeholderData: keepLocaleData(locale, [
+      "task",
+      task.session_id,
+      locale,
+      task.revision,
+      "evaluations",
+      selection,
+    ]),
     queryKey: [
       "task",
       task.session_id,
+      locale,
       task.revision,
       "evaluations",
       selection,
@@ -56,9 +69,21 @@ export default function Results({ task }: { task: Summary }) {
   const signalValue = signal || selected?.signals[0] || "";
   const controlValue = control || selected?.control_signals?.[0] || "";
   const curve = useQuery({
+    placeholderData: keepLocaleData(locale, [
+      "task",
+      task.session_id,
+      locale,
+      task.revision,
+      "curves",
+      selected?.value,
+      signalValue,
+      controlValue,
+      ...window,
+    ]),
     queryKey: [
       "task",
       task.session_id,
+      locale,
       task.revision,
       "curves",
       selected?.value,
@@ -79,7 +104,7 @@ export default function Results({ task }: { task: Summary }) {
     },
   });
   return (
-    <Card title="评价结果">
+    <Card title={tr("frontend.results.title")}>
       <Space orientation="vertical" style={{ width: "100%" }}>
         <Alert
           title={task.workspace.title}
@@ -87,38 +112,40 @@ export default function Results({ task }: { task: Summary }) {
           type="info"
         />
         <Typography.Paragraph>
-          <strong>下一步：</strong>
+          <strong>{tr("frontend.results.next_prefix")}</strong>
           {task.workspace.actionable
-            ? "回到当前步骤，按主要动作继续。"
+            ? tr("frontend.results.next_action")
             : task.status === "performance_met"
-              ? "导出本次软件验证记录；如需验证其他目标或边界，可创建新任务。"
+              ? tr("frontend.results.next_success")
               : task.status === "capability_gap"
-                ? "携带本次记录，在新任务中补充证据或重新定义目标与边界。"
+                ? tr("frontend.results.next_gap")
                 : task.status === "cancelled"
-                  ? "导出已有记录，按需创建新任务。"
-                  : "查看已记录结果，并按当前步骤继续。"}
+                  ? tr("frontend.results.next_cancelled")
+                  : tr("frontend.results.next_default")}
         </Typography.Paragraph>
         <Space wrap>
           {task.workspace.actionable ? (
-            <Button href="#current-action">回到当前动作</Button>
+            <Button href="#current-action">
+              {tr("frontend.results.current_action")}
+            </Button>
           ) : (
             <>
               <Button href={download(task.session_id, "bundle")}>
-                导出软件验证记录
+                {tr("frontend.results.export_validation")}
               </Button>
-              <Link to="/new">创建新任务</Link>
+              <Link to="/new">{tr("frontend.results.create_new")}</Link>
             </>
           )}
         </Space>
         {evaluation.error && (
-          <Alert type="error" title={String(evaluation.error)} />
+          <Alert type="error" title={errorText(evaluation.error)} />
         )}
         <Select
-          aria-label="评价阶段与试次"
+          aria-label={tr("frontend.results.stage_trial")}
           showSearch={{ optionFilterProp: "label" }}
           style={{ width: "100%" }}
           value={selected?.value}
-          placeholder="暂无已记录评价"
+          placeholder={tr("frontend.results.empty")}
           options={evaluation.data?.options.map((o) => ({
             value: o.value,
             label: o.label,
@@ -137,8 +164,8 @@ export default function Results({ task }: { task: Summary }) {
           <>
             <Tag>
               {evaluation.data?.selected_stage === "confirmation"
-                ? "独立确认"
-                : "开发评价"}
+                ? tr("frontend.expert.confirmation")
+                : tr("frontend.expert.development")}
             </Tag>
             <Table
               size="small"
@@ -146,14 +173,19 @@ export default function Results({ task }: { task: Summary }) {
               pagination={false}
               rowKey={(_, i) => String(i)}
               dataSource={evaluation.data?.metrics}
-              columns={["指标", "要求", "记录值", "说明"].map((title, i) => ({
+              columns={[
+                tr("frontend.results.metric"),
+                tr("frontend.results.requirement"),
+                tr("frontend.results.recorded_value"),
+                tr("frontend.results.description"),
+              ].map((title, i) => ({
                 title,
                 render: (_: unknown, row: string[]) => row[i] ?? "",
               }))}
             />
             <Space wrap>
               <Select
-                aria-label="输出信号"
+                aria-label={tr("frontend.results.output_signal")}
                 style={{ minWidth: 140 }}
                 value={signalValue}
                 options={selected.signals.map((value) => ({
@@ -166,7 +198,7 @@ export default function Results({ task }: { task: Summary }) {
                 }}
               />
               <Select
-                aria-label="控制输入信号"
+                aria-label={tr("frontend.results.control_signal")}
                 style={{ minWidth: 140 }}
                 value={controlValue}
                 options={selected.control_signals?.map((value) => ({
@@ -179,14 +211,14 @@ export default function Results({ task }: { task: Summary }) {
                 }}
               />
               <InputNumber
-                aria-label="窗口开始秒"
-                placeholder="开始 (s)"
+                aria-label={tr("frontend.results.window_start")}
+                placeholder={tr("frontend.datacurves.start")}
                 value={start}
                 onChange={setStart}
               />
               <InputNumber
-                aria-label="窗口结束秒"
-                placeholder="结束 (s)"
+                aria-label={tr("frontend.results.window_end")}
+                placeholder={tr("frontend.datacurves.end")}
                 value={end}
                 onChange={setEnd}
               />
@@ -194,7 +226,7 @@ export default function Results({ task }: { task: Summary }) {
                 disabled={start !== null && end !== null && start >= end}
                 onClick={() => setWindow([start, end])}
               >
-                应用窗口
+                {tr("frontend.results.apply_window")}
               </Button>
               <Button
                 onClick={() => {
@@ -205,21 +237,36 @@ export default function Results({ task }: { task: Summary }) {
                   setEnd(null);
                 }}
               >
-                完整窗口
+                {tr("frontend.results.full_window")}
               </Button>
             </Space>
-            {curve.error && <Alert type="error" title={String(curve.error)} />}{" "}
+            {curve.error && (
+              <Alert type="error" title={errorText(curve.error)} />
+            )}{" "}
             {curve.data && (
               <>
                 <Typography.Text type="secondary">
-                  原始 {curve.data.original_points} 点 · 显示{" "}
-                  {curve.data.display_points} 点 · 修订 {curve.data.revision}
+                  {tr("frontend.results.original_prefix")}
+                  {curve.data.original_points}{" "}
+                  {tr("frontend.datacurves.displayed_prefix")}{" "}
+                  {curve.data.display_points}{" "}
+                  {tr("frontend.datacurves.revision_prefix")}
+                  {curve.data.revision}
                 </Typography.Text>
-                <Button onClick={() => setShowChart(true)}>查看评价曲线</Button>
+                <Button onClick={() => setShowChart(true)}>
+                  {tr("frontend.results.view_curves")}
+                </Button>
                 {showChart && (
                   <Suspense fallback={<Spin />}>
                     <Charts
                       curve={curve.data}
+                      identity={JSON.stringify([
+                        task.session_id,
+                        task.revision,
+                        selected.value,
+                        signalValue,
+                        controlValue,
+                      ])}
                       window={window}
                       onWindowChange={changeWindow}
                     />

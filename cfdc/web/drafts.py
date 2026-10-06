@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
+from cfdc.i18n import Locale, message_ref, t
 from cfdc.kernel.cases import public_training_case
 from cfdc.kernel.contracts import TaskContract
 from cfdc.kernel.session import registered_task_scope_fingerprint
@@ -30,9 +31,31 @@ BUDGETS = {
 
 
 class DraftValidationError(ValueError):
-    def __init__(self, errors: Mapping[str, str]):
-        self.errors = dict(errors)
-        super().__init__("请完成标出的项目后继续。")
+    def __init__(
+        self,
+        errors: Mapping[str, str | Mapping[str, Any]],
+        *,
+        locale: Locale = "zh-CN",
+        field_message_refs: Mapping[str, Mapping[str, Any]] | None = None,
+    ):
+        self.field_message_refs = {
+            field: dict(value)
+            for field, value in errors.items()
+            if isinstance(value, Mapping) and "key" in value
+        }
+        self.field_message_refs.update(dict(field_message_refs or {}))
+        self.errors = {
+            field: t(
+                str(self.field_message_refs[field]["key"]),
+                locale,
+                **dict(self.field_message_refs[field].get("params") or {}),
+            )
+            if field in self.field_message_refs
+            else str(value)
+            for field, value in errors.items()
+        }
+        self.message_ref = message_ref("presentation.draft.complete_fields")
+        super().__init__(t(self.message_ref["key"], locale))
 
 
 def empty_draft() -> dict[str, Any]:
@@ -121,12 +144,14 @@ PAGE_FIELDS = (
 )
 
 
-def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, Any]:
+def task_from_draft(
+    form: Mapping[str, Any], *, case_id: str = "", locale: Locale = "zh-CN"
+) -> dict[str, Any]:
     """Build the existing task contract; UI defaults never become evidence."""
     values = {**empty_draft(), **EXTERNAL_DRAFT_DEFAULTS, **dict(form)}
-    errors: dict[str, str] = {}
+    errors: dict[str, Mapping[str, Any]] = {}
 
-    def required_text(key: str, message: str) -> str:
+    def required_text(key: str, message: Mapping[str, Any]) -> str:
         value = str(values.get(key) or "").strip()
         if not value:
             errors[key] = message
@@ -143,12 +168,12 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
             if not math.isfinite(value):
                 raise ValueError
         except (ValueError, TypeError):
-            errors[key] = "请填写有限数字。"
+            errors[key] = message_ref("presentation.draft.finite_number")
             return None
         if positive and value <= 0:
-            errors[key] = "请填写大于 0 的数字。"
+            errors[key] = message_ref("presentation.draft.positive_number")
         if nonnegative and value < 0:
-            errors[key] = "请填写大于或等于 0 的数字。"
+            errors[key] = message_ref("presentation.draft.nonnegative_number")
         return value
 
     def names(key: str, width: int) -> list[list[str]]:
@@ -157,23 +182,25 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
         seen = set()
         for row in rows if isinstance(rows, (list, tuple)) else ():
             if not isinstance(row, (list, tuple)) or len(row) != width:
-                errors[key] = "请为每一行填写名称和对应单位。"
+                errors[key] = message_ref("presentation.draft.row_name_unit")
                 continue
             cells = [str(item or "").strip() for item in row]
             if not any(cells):
                 continue
             if not cells[0] or cells[0] in seen:
-                errors[key] = "每一项需要一个不重复的名称。"
+                errors[key] = message_ref("presentation.draft.unique_name")
             seen.add(cells[0])
             result.append(cells)
         if not result:
-            errors[key] = "请至少填写一个名称。"
+            errors[key] = message_ref("presentation.draft.at_least_one_name")
         return result
 
-    description = required_text("description", "请描述设备和希望达到的目标。")
+    description = required_text(
+        "description", message_ref("presentation.draft.description")
+    )
     task_type = values["task_type"]
     if task_type not in {value for _, value in TASK_TYPES}:
-        errors["task_type"] = "请选择当前支持的任务类型。"
+        errors["task_type"] = message_ref("presentation.draft.task_type")
     outputs = names("outputs", 2)
     inputs = names("inputs", 1)
     task = {
@@ -204,10 +231,12 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
             and task[upper] is not None
             and task[lower] >= task[upper]
         ):
-            errors[upper] = "上限必须大于下限。"
+            errors[upper] = message_ref("presentation.draft.ordered_bounds")
     for key in values["success_requirement_fields"] or ():
         if key not in REQUIREMENTS:
-            errors["success_requirement_fields"] = "包含不支持的性能要求。"
+            errors["success_requirement_fields"] = message_ref(
+                "presentation.draft.unsupported_requirements"
+            )
             continue
         value = number(
             key,
@@ -219,24 +248,28 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
             and value is not None
             and not 0 < value <= 1
         ):
-            errors[key] = "成功率应大于 0 且不超过 1。"
+            errors[key] = message_ref("presentation.draft.success_rate")
         task["success_requirements"][key] = value
     for key in values["budget_fields"] or ():
         if key not in BUDGETS:
-            errors["budget_fields"] = "包含不支持的预算项目。"
+            errors["budget_fields"] = message_ref(
+                "presentation.draft.unsupported_budgets"
+            )
             continue
         value = number(key, positive=True)
         if key == "distinct_experiments" and value is not None:
             if not value.is_integer():
-                errors[key] = "实验次数必须是正整数。"
+                errors[key] = message_ref("presentation.draft.experiment_count")
             else:
                 value = int(value)
         task["budgets"][key] = value
     if task_type == "transition_then_hold":
         task["initial_region"] = required_text(
-            "initial_region", "请描述开始时所在的区域。"
+            "initial_region", message_ref("presentation.draft.initial_region")
         )
-        task["goal_region"] = required_text("goal_region", "请描述需要到达的目标区域。")
+        task["goal_region"] = required_text(
+            "goal_region", message_ref("presentation.draft.goal_region")
+        )
         task["initial_output_value"] = (
             number("initial_output_value")
             if values["initial_output_value_enabled"]
@@ -255,27 +288,35 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
                 raise ValueError
             task["intermediate_targets"] = targets
         except (ValueError, TypeError):
-            errors["intermediate_targets"] = "请用逗号分隔有限数字，例如 3, 6。"
+            errors["intermediate_targets"] = message_ref(
+                "presentation.draft.intermediate_targets"
+            )
     elif task_type == "disturbance_recovery_to_hold":
-        for key, label in (
-            ("disturbance_event", "扰动事件"),
-            ("recovery_start_condition", "恢复起点"),
-            ("disturbance_hold_region", "恢复后保持区域"),
+        for key in (
+            "disturbance_event",
+            "recovery_start_condition",
+            "disturbance_hold_region",
         ):
-            task[key] = required_text(key, f"请描述{label}。")
+            task[key] = required_text(key, message_ref(f"presentation.draft.{key}"))
     if values["external_data_enabled"] and not case_id:
-        task["operating_region"] = required_text("region_label", "请填写工作区域。")
+        task["operating_region"] = required_text(
+            "region_label", message_ref("presentation.draft.operating_region")
+        )
         if task["reference"] is None:
-            errors["reference"] = "外部评价需要明确的目标参考值。"
+            errors["reference"] = message_ref("presentation.draft.external_reference")
         if "final_abs_error_max" not in task["success_requirements"]:
-            errors["success_requirement_fields"] = "请至少填写稳定后的最大允许误差。"
+            errors["success_requirement_fields"] = message_ref(
+                "presentation.draft.external_error_requirement"
+            )
         dt = number("evaluation_dt_s", positive=True)
         horizon = number("evaluation_horizon_s", positive=True)
         repeats = number("evaluation_repeats", positive=True)
         if repeats is not None and (not repeats.is_integer() or repeats > 100):
-            errors["evaluation_repeats"] = "重复次数应为 1 到 100 的整数。"
+            errors["evaluation_repeats"] = message_ref("presentation.draft.repeats")
         if horizon is not None and dt is not None and horizon <= dt:
-            errors["evaluation_horizon_s"] = "实验时长应大于采样周期。"
+            errors["evaluation_horizon_s"] = message_ref(
+                "presentation.draft.horizon_sample_period"
+            )
         task["budgets"].update(
             evaluation_sample_time_s=dt,
             evaluation_horizon_s=horizon,
@@ -283,13 +324,17 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
         )
         if task_type == "transition_then_hold":
             if task["initial_output_value"] is None:
-                errors["initial_output_value"] = "请填写初始输出的数值。"
+                errors["initial_output_value"] = message_ref(
+                    "presentation.draft.initial_output"
+                )
             handoffs = number("handoff_count_min", positive=True)
             phase_count = len(task.get("intermediate_targets", ())) + 2
             if handoffs is not None and (
                 not handoffs.is_integer() or handoffs != phase_count - 1
             ):
-                errors["handoff_count_min"] = "交接次数需要等于阶段数减一。"
+                errors["handoff_count_min"] = message_ref(
+                    "presentation.draft.handoff_count"
+                )
             deadline = number("transition_deadline_s", positive=True)
             task["success_requirements"].update(
                 required_phase_count_min=phase_count,
@@ -303,22 +348,29 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
                 ),
             )
         elif task_type == "disturbance_recovery_to_hold":
-            channel = required_text("disturbance_channel", "请填写扰动输入通道。")
+            channel = required_text(
+                "disturbance_channel",
+                message_ref("presentation.draft.disturbance_channel"),
+            )
             if channel not in task["control_inputs"]:
-                errors["disturbance_channel"] = "请选择已声明的控制输入通道。"
+                errors["disturbance_channel"] = message_ref(
+                    "presentation.draft.declared_channel"
+                )
             start = number("disturbance_start_s", nonnegative=True)
             duration = number("disturbance_duration_s", positive=True)
             amplitude = number("disturbance_amplitude")
             if amplitude == 0:
-                errors["disturbance_amplitude"] = "扰动幅度不能为 0。"
+                errors["disturbance_amplitude"] = message_ref(
+                    "presentation.draft.disturbance_amplitude"
+                )
             recovery = number("recovery_deadline_s", positive=True)
             hold = task["success_requirements"].get("hold_duration_min_s", 1.0)
             if (
                 all(value is not None for value in (start, duration, horizon, recovery))
                 and start + duration + recovery + hold > horizon
             ):
-                errors["evaluation_horizon_s"] = (
-                    "实验时长需要覆盖扰动、恢复及保持时间。"
+                errors["evaluation_horizon_s"] = message_ref(
+                    "presentation.draft.horizon_coverage"
                 )
             task["disturbance_contract"] = {
                 "channel": channel,
@@ -336,11 +388,11 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
     if values.get("execution_mode") not in (None, "", "manual") or any(
         values.get(key) for key in ("runner_id", "model_id")
     ):
-        errors["execution_mode"] = (
-            "自动仿真入口已移除；请使用通用外部数据流程重新确认任务。"
+        errors["execution_mode"] = message_ref(
+            "presentation.draft.removed_execution_mode"
         )
     if errors:
-        raise DraftValidationError(errors)
+        raise DraftValidationError(errors, locale=locale)
     if case_id:
         canonical = public_training_case(case_id)["task"]
         task = {
@@ -357,7 +409,8 @@ def task_from_draft(form: Mapping[str, Any], *, case_id: str = "") -> dict[str, 
             TaskContract.from_user_input(task)
         ) != registered_task_scope_fingerprint(TaskContract.from_user_input(canonical)):
             raise DraftValidationError(
-                {"case_id": "案例参数已发生变化。请重新选择案例，或转为自己的任务。"}
+                {"case_id": message_ref("presentation.draft.case_changed")},
+                locale=locale,
             )
     return task
 

@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { useState } from "react";
 import {
   Alert,
@@ -10,7 +11,7 @@ import {
   Typography,
   Upload,
 } from "antd";
-import { api, download } from "./api/client";
+import { useApi } from "./api/client";
 import ManualRequirements from "./ManualRequirements";
 import type { DTO, Obj } from "./api/types";
 
@@ -41,11 +42,25 @@ export default function ExternalWorkflow({
   busy: boolean;
   onSubmit: (action: string, input: Obj) => void;
 }) {
+  const { t: tr, errorText } = useI18n();
+  const { api, download } = useApi();
+  const candidateStatuses: Record<string, string> = {
+    pending: tr("frontend.externalworkflow.candidate_pending"),
+    qualification_failed: tr(
+      "frontend.externalworkflow.candidate_qualification_failed",
+    ),
+    hard_failure: tr("frontend.externalworkflow.candidate_hard_failure"),
+    performance_met: tr("frontend.externalworkflow.candidate_performance_met"),
+    performance_not_met: tr(
+      "frontend.externalworkflow.candidate_performance_not_met",
+    ),
+  };
+
   const [source, setSource] = useState<string>();
   const [confirmed, setConfirmed] = useState(false);
   const [files, setFiles] = useState<DTO<"UploadResponse">[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>();
   const run = object(workflow.run ?? workflow.active_request);
   const tuning = object(workflow.tuning);
   const proposed = object(workflow.proposed_tuning ?? workflow.tuning);
@@ -62,18 +77,20 @@ export default function ExternalWorkflow({
     <Space orientation="vertical" style={{ width: "100%" }}>
       {!!sourceKind && (
         <Typography.Paragraph>
-          数据来源：
-          {sourceKind === "software" ? "外部软件仿真" : "外部实测数据"}
-          。仅用于离线软件评价，任务不会操作硬件。
+          {tr("frontend.externalworkflow.source_prefix")}
+          {sourceKind === "software"
+            ? tr("frontend.externalworkflow.software")
+            : tr("frontend.externalworkflow.measured")}
+          {tr("frontend.externalworkflow.offline_only")}
         </Typography.Paragraph>
       )}
       {workflow.recovery_required === true && (
         <Alert
           type="warning"
-          title="当前证据需要重新采集"
+          title={tr("frontend.externalworkflow.recovery_title")}
           description={String(
             workflow.recovery_reason ??
-              "使用下方入口创建新任务，并按新协议采集数据。原始记录保留。",
+              tr("frontend.externalworkflow.recovery_help"),
           )}
         />
       )}
@@ -87,27 +104,37 @@ export default function ExternalWorkflow({
           items={[
             {
               key: "stage",
-              label: "本轮阶段",
+              label: tr("frontend.externalworkflow.stage"),
               children:
                 (
                   {
-                    acquisition: "采集证据",
-                    development: "开发评价",
-                    tuning_probe: "调优候选评价",
-                    confirmation: "独立确认",
-                    fresh_confirmation: "独立确认",
+                    acquisition: tr("frontend.externalworkflow.acquisition"),
+                    development: tr("frontend.expert.development"),
+                    tuning_probe: tr("frontend.externalworkflow.tuning_probe"),
+                    confirmation: tr("frontend.expert.confirmation"),
+                    fresh_confirmation: tr("frontend.expert.confirmation"),
                   } as Record<string, string>
-                )[String(stage)] ?? String(stage ?? "待准备"),
+                )[String(stage)] ??
+                String(
+                  stage ?? tr("frontend.externalworkflow.pending_preparation"),
+                ),
             },
             {
               key: "candidate",
-              label: "候选控制器",
-              children: String(run.candidate_id ?? "待生成"),
+              label: tr("frontend.externalworkflow.candidate_controller"),
+              children: String(
+                run.candidate_id ??
+                  tr("frontend.externalworkflow.pending_generation"),
+              ),
             },
             {
               key: "request",
-              label: "运行标识",
-              children: String(run.request_id ?? run.run_id ?? "待生成"),
+              label: tr("frontend.externalworkflow.run_id"),
+              children: String(
+                run.request_id ??
+                  run.run_id ??
+                  tr("frontend.externalworkflow.pending_generation"),
+              ),
             },
           ]}
         />
@@ -118,8 +145,10 @@ export default function ExternalWorkflow({
           Number(tuning.attempts_used ?? 0) > 0 ||
           Number(tuning.feedback_rounds_used ?? 0) > 0) && (
           <Typography.Paragraph>
-            候选预算：{String(tuning.attempts_used ?? 0)} /{" "}
-            {String(tuning.max_attempts ?? "—")}；反馈轮次：
+            {tr("frontend.externalworkflow.candidate_budget_prefix")}
+            {String(tuning.attempts_used ?? 0)} /{" "}
+            {String(tuning.max_attempts ?? "—")}
+            {tr("frontend.externalworkflow.feedback_budget_prefix")}
             {String(tuning.feedback_rounds_used ?? 0)} /{" "}
             {String(tuning.max_feedback_rounds ?? "—")}
           </Typography.Paragraph>
@@ -131,10 +160,17 @@ export default function ExternalWorkflow({
           rowKey={(_, i) => String(i)}
           dataSource={candidates}
           columns={[
-            { title: "候选", dataIndex: "candidate_id" },
-            { title: "状态", dataIndex: "status" },
             {
-              title: "结果 / 原因",
+              title: tr("frontend.externalworkflow.candidate"),
+              dataIndex: "candidate_id",
+            },
+            {
+              title: tr("frontend.externalworkflow.status"),
+              dataIndex: "status",
+              render: (status: string) => candidateStatuses[status] ?? status,
+            },
+            {
+              title: tr("frontend.externalworkflow.result_reason"),
               render: (_, row) =>
                 String(row.reason ?? row.failure_reason ?? ""),
             },
@@ -144,16 +180,22 @@ export default function ExternalWorkflow({
       {action === "select_external_source" && (
         <>
           <Radio.Group
-            aria-label="外部数据来源"
+            aria-label={tr("frontend.externalworkflow.source")}
             value={source}
             onChange={(event) => setSource(event.target.value)}
             options={[
-              { label: "外部软件仿真", value: "software" },
-              { label: "外部实测数据", value: "measured" },
+              {
+                label: tr("frontend.externalworkflow.software"),
+                value: "software",
+              },
+              {
+                label: tr("frontend.externalworkflow.measured"),
+                value: "measured",
+              },
             ]}
           />
           <Typography.Paragraph>
-            选择本任务实际使用的数据来源；这只记录证据来源，不选择执行工具。实际试验在应用外部完成，您负责使用自己的仿真环境或实验设施执行，随后回到此页上传数据。每份运行记录必须保留来源与协议标识。
+            {tr("frontend.externalworkflow.source_help")}
           </Typography.Paragraph>
           <Button
             type="primary"
@@ -167,21 +209,21 @@ export default function ExternalWorkflow({
               })
             }
           >
-            确认数据来源
+            {tr("frontend.externalworkflow.confirm_source")}
           </Button>
         </>
       )}
       {action === "freeze" && (
         <>
           <Alert
-            title="冻结后按同一约定评价"
-            description="核对任务侧栏中的参考目标、区域、采样间隔、时长、重复次数、性能要求，以及条件适用的阶段切换和扰动设置。"
+            title={tr("frontend.externalworkflow.freeze_title")}
+            description={tr("frontend.externalworkflow.freeze_help")}
           />
           <Checkbox
             checked={confirmed}
             onChange={(event) => setConfirmed(event.target.checked)}
           >
-            我已核对冻结约定，确认进入开发评价
+            {tr("frontend.externalworkflow.freeze_confirm")}
           </Checkbox>
           <Button
             type="primary"
@@ -189,7 +231,7 @@ export default function ExternalWorkflow({
             disabled={!confirmed}
             onClick={() => onSubmit(action, { confirmed: true })}
           >
-            确认并冻结评价约定
+            {tr("frontend.externalworkflow.freeze_submit")}
           </Button>
         </>
       )}
@@ -199,58 +241,55 @@ export default function ExternalWorkflow({
           loading={busy}
           onClick={() => onSubmit(action, {})}
         >
-          准备本轮外部运行包
+          {tr("frontend.externalworkflow.prepare_run")}
         </Button>
       )}
       {action === "submit_external_results" &&
         workflow.resume_pending === true && (
           <>
             <Alert
-              title="结果已接收，处理尚未完成"
-              description="继续处理已保存的结果；无需再次上传轨迹。"
+              title={tr("frontend.externalworkflow.resume_title")}
+              description={tr("frontend.externalworkflow.resume_help")}
             />
             <Button
               type="primary"
               loading={busy}
               onClick={() => onSubmit(action, {})}
             >
-              完成已接收结果处理
+              {tr("frontend.externalworkflow.resume")}
             </Button>
           </>
         )}
       {action === "submit_external_results" &&
         workflow.resume_pending !== true && (
           <>
-            <Typography.Text strong>步骤 1 · 下载运行请求</Typography.Text>
+            <Typography.Text strong>
+              {tr("frontend.externalworkflow.download_step")}
+            </Typography.Text>
             <a href={download(sessionId, "external_run")}>
-              下载本轮完整运行包 ZIP
+              {tr("frontend.externalworkflow.download_run")}
             </a>
             <Typography.Paragraph>
-              请求包不含已完成的试验结果。由您在外部环境按照清单运行每条轨迹，填写模板中的完整时间序列、输入输出、运行标识与停止记录。下载文件不会推进任务。
+              {tr("frontend.externalworkflow.download_help")}
             </Typography.Paragraph>
             {["confirmation", "fresh_confirmation"].includes(String(stage)) && (
               <Alert
-                title="独立确认需要全新轨迹"
-                description="使用本轮确认包重新运行，不能复用开发评价或调优的数据。"
+                title={tr("frontend.externalworkflow.fresh_title")}
+                description={tr("frontend.externalworkflow.fresh_help")}
               />
             )}
             <ManualRequirements value={requirements} />
             <Typography.Text strong>
-              步骤 2 · 在外部执行并打包结果
+              {tr("frontend.externalworkflow.run_step")}
             </Typography.Text>
             <Typography.Paragraph>
-              由您使用自己的运行环境，按照本轮清单应用候选控制器、输入和停止条件，逐次保存完整记录。将填写完成的试次
-              JSON 与原始 manifest.json 放在结果 ZIP
-              根目录；不要直接回传请求包，也不要仅提交汇总指标。文件中的列和单位按本轮请求保持一致。实际试验在应用外部完成；本页只管理请求、数据和评价，不执行您的环境。
+              {tr("frontend.externalworkflow.run_help")}
             </Typography.Paragraph>
             <Typography.Text strong>
-              步骤 3 · 回到此页上传结果并校验
+              {tr("frontend.externalworkflow.upload_step")}
             </Typography.Text>
             <Typography.Paragraph>
-              下一步：系统核对整包文件及协议绑定、计算评价结果并记录拒绝原因。评价
-              ZIP 中任何试次未通过，整包均不接收；按回执修正并重新上传完整结果
-              ZIP。通过后按当前阶段进入调优、全新独立确认或最终报告；无需提交特征或控制器
-              JSON。
+              {tr("frontend.externalworkflow.upload_help")}
             </Typography.Paragraph>
             <Upload
               accept=".zip"
@@ -263,19 +302,21 @@ export default function ExternalWorkflow({
                 setError("");
                 void api<DTO<"UploadResponse">>("/uploads", body)
                   .then((value) => setFiles([value]))
-                  .catch((value) => setError(String(value)))
+                  .catch((value) => setError(value))
                   .finally(() => setUploading(false));
                 return false;
               }}
             >
               <Button loading={uploading} disabled={busy}>
-                选择完整结果 ZIP
+                {tr("frontend.externalworkflow.choose_results")}
               </Button>
             </Upload>
             {files.map((file) => (
               <Space key={file.file_id}>
                 {file.filename}
-                <Button onClick={() => setFiles([])}>移除</Button>
+                <Button onClick={() => setFiles([])}>
+                  {tr("frontend.externalworkflow.remove")}
+                </Button>
               </Space>
             ))}
             <Button
@@ -288,30 +329,30 @@ export default function ExternalWorkflow({
                 })
               }
             >
-              校验并提交本轮轨迹
+              {tr("frontend.externalworkflow.submit_results")}
             </Button>
           </>
         )}
       {action === "start_external_tuning" && (
         <>
           <Typography.Paragraph>
-            最多 {String(proposed.max_probes ?? proposed.max_attempts ?? 6)}{" "}
-            个候选；相对改进至少{" "}
-            {Number(
-              proposed.minimum_relative_improvement ??
-                proposed.min_relative_improvement ??
-                0.02,
-            ) * 100}
-            %。开发评价与独立确认按冻结约定重复{" "}
-            {String(workflow.evaluation_repeats ?? proposed.repeats ?? 20)}{" "}
-            次。每个候选使用独立运行包，独立确认需要全新轨迹。系统记录性能、失败原因与剩余预算，再决定下一步。
+            {tr("frontend.externalworkflow.tuning_summary", {
+              count: proposed.max_probes ?? proposed.max_attempts ?? 6,
+              improvement:
+                Number(
+                  proposed.minimum_relative_improvement ??
+                    proposed.min_relative_improvement ??
+                    0.02,
+                ) * 100,
+              repeats: workflow.evaluation_repeats ?? proposed.repeats ?? 20,
+            })}
           </Typography.Paragraph>
           <Button
             type="primary"
             loading={busy}
             onClick={() => onSubmit(action, {})}
           >
-            开始有界外部调优
+            {tr("frontend.externalworkflow.start_tuning")}
           </Button>
         </>
       )}
@@ -319,17 +360,17 @@ export default function ExternalWorkflow({
         action === "restart_external_acquisition") && (
         <>
           <Typography.Paragraph>
-            重新采集会创建新任务。当前任务及其证据、失败原因和审计记录保留。
+            {tr("frontend.externalworkflow.restart_help")}
           </Typography.Paragraph>
           <Button
             loading={busy}
             onClick={() => onSubmit("restart_external_acquisition", {})}
           >
-            重新采集并创建新任务
+            {tr("frontend.externalworkflow.restart")}
           </Button>
         </>
       )}
-      {error && <Alert type="error" title={error} />}
+      {!!error && <Alert type="error" title={errorText(error)} />}
     </Space>
   );
 }

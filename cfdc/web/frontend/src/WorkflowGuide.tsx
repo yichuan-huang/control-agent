@@ -1,3 +1,4 @@
+import { useI18n } from "./i18n";
 import { Alert, Descriptions, Space, Typography } from "antd";
 import type { Obj } from "./api/types";
 
@@ -7,6 +8,8 @@ const object = (value: unknown): Obj =>
     : {};
 
 export default function WorkflowGuide({ value }: { value?: Obj }) {
+  const { t: tr } = useI18n();
+
   if (!value) return null;
   const steps = Array.isArray(value.steps) ? value.steps.map(object) : [];
   return (
@@ -20,12 +23,12 @@ export default function WorkflowGuide({ value }: { value?: Obj }) {
         items={[
           {
             key: "purpose",
-            label: "本步目的",
+            label: tr("frontend.workflowguide.purpose"),
             children: String(value.purpose ?? ""),
           },
           {
             key: "actor",
-            label: "由谁完成",
+            label: tr("frontend.workflowguide.actor"),
             children: String(value.actor ?? ""),
           },
         ]}
@@ -35,7 +38,12 @@ export default function WorkflowGuide({ value }: { value?: Obj }) {
           {steps.map((step, index) => (
             <li key={index}>
               <Typography.Text strong>
-                {String(step.title ?? `步骤 ${index + 1}`)}
+                {String(
+                  step.title ??
+                    tr("frontend.workflowguide.step_number", {
+                      number: index + 1,
+                    }),
+                )}
               </Typography.Text>
               <Typography.Paragraph className="preserve">
                 {String(step.description ?? "")}
@@ -46,7 +54,7 @@ export default function WorkflowGuide({ value }: { value?: Obj }) {
       )}
       {!!value.next_step && (
         <Alert
-          title="完成后进入"
+          title={tr("frontend.workflowguide.next_stage")}
           description={String(value.next_step)}
           type="info"
         />

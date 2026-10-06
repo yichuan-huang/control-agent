@@ -26,18 +26,18 @@ afterEach(() => {
 function Reader() {
   const cache = useQueryClient();
   const task = useQuery({
-    queryKey: ["task", "A"],
+    queryKey: ["task", "A", "zh-CN"],
     queryFn: () => api<Summary>("/tasks/A"),
   });
   const other = useQuery({
-    queryKey: ["task", "B"],
+    queryKey: ["task", "B", "zh-CN"],
     queryFn: () => api<Summary>("/tasks/B"),
   });
   return (
     <>
       <button
         onClick={() =>
-          void cache.invalidateQueries({ queryKey: ["task", "A"] })
+          void cache.invalidateQueries({ queryKey: ["task", "A", "zh-CN"] })
         }
       >
         Refresh
@@ -52,7 +52,7 @@ function Detail({ task }: { task: Summary }) {
   const read = useTaskReader(task);
   const [rejected, setRejected] = useState(0);
   const detail = useQuery({
-    queryKey: ["task", "A", task.revision, "detail"],
+    queryKey: ["task", "A", "zh-CN", task.revision, "detail"],
     queryFn: () => read<{ revision: number; text: string }>("/tasks/A/detail"),
   });
   return (
@@ -82,21 +82,25 @@ function setup() {
   const details: Array<(response: Response) => void> = [];
   const otherReads = vi.fn();
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-    if (String(url).endsWith("/check")) return response({ revision: 8 });
-    if (String(url).endsWith("/tasks/B")) {
+    if (String(url).split("?")[0].endsWith("/check"))
+      return response({ revision: 8 });
+    if (String(url).split("?")[0].endsWith("/tasks/B")) {
       otherReads();
       return response({ session_id: "B", revision: 4 });
     }
     return new Promise<Response>((resolve) => {
-      (String(url).endsWith("/detail") ? details : summaries).push(resolve);
+      (String(url).split("?")[0].endsWith("/detail")
+        ? details
+        : summaries
+      ).push(resolve);
     });
   });
   const cache = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  cache.setQueryData(["task", "A"], { session_id: "A", revision: 7 });
-  cache.setQueryData(["task", "B"], { session_id: "B", revision: 3 });
-  cache.setQueryData(["task", "A", 7, "detail"], {
+  cache.setQueryData(["task", "A", "zh-CN"], { session_id: "A", revision: 7 });
+  cache.setQueryData(["task", "B", "zh-CN"], { session_id: "B", revision: 3 });
+  cache.setQueryData(["task", "A", "zh-CN", 7, "detail"], {
     revision: 7,
     text: "Previous detail",
   });
