@@ -44,4 +44,6 @@ function path=exchange_relative(path,root)
 prefix=[root,filesep];
 assert(startsWith(path,prefix),'cfdcSim:ExchangePath','Result escaped the exchange root.');
 path=char(extractAfter(string(path),strlength(string(prefix))));
+% Exchange metadata is consumed by Linux containers as well as native MATLAB.
+path=strrep(path,filesep,'/');
 end
